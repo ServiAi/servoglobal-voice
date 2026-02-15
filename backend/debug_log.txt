@@ -1,0 +1,41 @@
+
+--- New Request ---
+Target URL: https://api.ultravox.ai/api/agents/17c4ee26-460d-42a1-b755-d43b92eed62c/calls
+Payload: {
+  "medium": {
+    "sip": {
+      "outgoing": {
+        "to": "sip:+573106666709@54.243.24.145:5060",
+        "username": "ultrabox-inmobot",
+        "password": "Seguridad2026*+"
+      }
+    }
+  },
+  "firstSpeaker": "FIRST_SPEAKER_AGENT",
+  "templateContext": {
+    "user_name": "pedro",
+    "user_email": "alyconr473@gmail.com"
+  }
+}
+
+--- New Request ---
+Target URL: https://api.ultravox.ai/api/agents/17c4ee26-460d-42a1-b755-d43b92eed62c/calls
+Payload: {
+  "medium": {
+    "sip": {
+      "outgoing": {
+        "to": "sip:+573106666709@54.243.24.145:5060",
+        "username": "ultrabox-inmobot",
+        "password": "Seguridad2026*+"
+      }
+    }
+  },
+  "firstSpeaker": "FIRST_SPEAKER_AGENT",
+  "templateContext": {
+    "user_name": "pedro",
+    "user_email": "alyconr473@gmail.com"
+  }
+}
+--- Error Response ---
+Status: 400
+Body: ["Message type \"ultravox.v1.StartAgentCallRequest\" has no field named \"firstSpeaker\" at \"StartAgentCallRequest\".\n Available Fields(except extensions): \"['templateContext', 'initialMessages', 'metadata', 'medium', 'joinTimeout', 'maxDuration', 'recordingEnabled', 'initialOutputMedium', 'firstSpeakerSettings', 'dataConnection', 'experimentalSettings', 'callbacks']\""]

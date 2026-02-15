@@ -8,7 +8,7 @@ export function useUltravox() {
   const [demoState, setDemoState] = useState<DemoState>('idle');
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [volumeLevels, setVolumeLevels] = useState<number[]>(new Array(5).fill(10));
-  const sessionRef = useRef<UltravoxSession | null>(null);
+  const sessionRef = useRef<UltravoxSession | null>(null); 
 
   // Initialize session
   useEffect(() => {
@@ -77,7 +77,7 @@ export function useUltravox() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-            template_context: context || {}
+            template_context: context || {}  
         }),
       });
 

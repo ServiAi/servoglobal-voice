@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Headphones, LifeBuoy, DollarSign, Target, Briefcase, Calendar, ShoppingBag, ArrowRight } from 'lucide-react';
+import { Headphones, LifeBuoy, DollarSign, Target, Briefcase, Calendar, ShoppingBag, ArrowRight, Sparkles } from 'lucide-react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { useTranslations } from 'next-intl';
@@ -99,13 +99,21 @@ export function UseCases() {
                    </div>
                 </div>
 
-                <div className="mt-auto">
+                {/* CTAs — Primary + Secondary (Regla 3.3, B3.1) */}
+                <div className="mt-auto flex flex-col sm:flex-row gap-3">
                    <Link
                      href="#agendar"
                      className="inline-flex items-center gap-2 px-6 py-3 rounded-lg bg-black dark:bg-white text-white dark:text-black font-bold hover:bg-violet-800 dark:hover:bg-violet-100 transition-colors"
                    >
                      {t('scheduleFor')} {t(`verticals.${activeId}.title`)}
                      <ArrowRight className="size-4" />
+                   </Link>
+                   <Link
+                     href="#demos"
+                     className="inline-flex items-center gap-2 px-6 py-3 rounded-lg border border-violet-300 dark:border-violet-500/30 text-violet-700 dark:text-violet-300 font-semibold hover:bg-violet-50 dark:hover:bg-violet-950/30 transition-colors"
+                   >
+                     <Sparkles className="size-4" />
+                     {t('tryIAFor')} {t(`verticals.${activeId}.title`)}
                    </Link>
                 </div>
               </motion.div>

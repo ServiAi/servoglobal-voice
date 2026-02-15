@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { ArrowRight, Play } from 'lucide-react';
+import { ArrowRight, Sparkles } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { useTranslations } from 'next-intl';
 
@@ -65,11 +65,27 @@ export function Hero() {
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.6, delay: 0.2 }}
-            className="text-sm sm:text-base md:text-xl text-zinc-600 dark:text-neutral-400 mb-8 md:mb-10 max-w-xl leading-relaxed px-4 sm:px-0"
+            className="text-sm sm:text-base md:text-xl text-zinc-600 dark:text-neutral-400 mb-4 md:mb-6 max-w-xl leading-relaxed px-4 sm:px-0"
           >
             <span className="hidden sm:inline">{t('descriptionFull')}</span>
             <span className="sm:hidden">{t('descriptionShort')}</span>
           </motion.p>
+
+          {/* Microcopy: Setup + Super Plus (Regla 2.2, 8.2, 8.3) */}
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.6, delay: 0.25 }}
+            className="mb-8 md:mb-10 max-w-xl px-4 sm:px-0 space-y-2"
+          >
+            <p className="text-xs text-zinc-500 dark:text-neutral-500 leading-relaxed">
+              {t('microcopySetup')}
+            </p>
+            <p className="text-xs text-violet-600 dark:text-violet-400 leading-relaxed flex items-start gap-1.5">
+              <Sparkles className="size-3.5 mt-0.5 shrink-0" />
+              {t('microcopySuperPlus')}
+            </p>
+          </motion.div>
 
           <motion.div
              initial={{ opacity: 0, x: -20 }}
@@ -88,41 +104,9 @@ export function Hero() {
                 href="#demos"
                 className="px-8 py-4 rounded-full bg-violet-100 dark:bg-white/5 border border-violet-200 dark:border-white/10 text-violet-900 dark:text-white font-semibold hover:bg-violet-200 dark:hover:bg-white/10 transition-colors flex items-center justify-center gap-2 text-lg backdrop-blur-sm"
               >
-                <Play className="size-5 fill-violet-900 dark:fill-white" />
+                <Sparkles className="size-5 text-violet-600 dark:text-violet-400" />
                 {t('ctaSecondary')}
               </Link>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 1, delay: 0.8 }}
-            className="mt-8 md:mt-16 pt-6 md:pt-8 border-t border-black/5 dark:border-white/5 w-full max-w-xl overflow-hidden"
-          >
-             <p className="text-sm text-zinc-500 dark:text-neutral-500 mb-4 uppercase tracking-widest font-semibold">{t('integrationsLabel')}</p>
-             <div className="relative">
-               <div className="flex animate-marquee gap-x-10 opacity-70 text-base text-zinc-500 dark:text-neutral-300 font-mono whitespace-nowrap">
-                   <span>Asterisk</span>
-                   <span>WhatsApp</span>
-                   <span>HubSpot</span>
-                   <span>Salesforce</span>
-                   <span>Cal.com</span>
-                   <span>n8n</span>
-                   <span>Twilio</span>
-                   <span>Make</span>
-                   <span>Go High Level</span>
-                   {/* Duplicados para loop infinito */}
-                   <span>Asterisk</span>
-                   <span>WhatsApp</span>
-                   <span>HubSpot</span>
-                   <span>Salesforce</span>
-                   <span>Cal.com</span>
-                   <span>n8n</span>
-                   <span>Twilio</span>
-                   <span>Make</span>
-                   <span>Go High Level</span>
-               </div>
-             </div>
           </motion.div>
         </div>
 

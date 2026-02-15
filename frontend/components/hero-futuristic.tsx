@@ -160,7 +160,12 @@ const Scene = () => {
   useFrame((state) => {
     if (materialRef.current) {
         materialRef.current.uniforms.uTime.value = state.clock.getElapsedTime();
-        materialRef.current.uniforms.uMouse.value.set(state.pointer.x, state.pointer.y);
+        // Auto-movement: Gentle circular motion
+        const time = state.clock.getElapsedTime();
+        materialRef.current.uniforms.uMouse.value.set(
+          Math.sin(time * 0.5) * 4.0, // X movement (4x intensity)
+          Math.cos(time * 0.3) * 4.0  // Y movement (4x intensity)
+        ); 
         
         // Mantenemos opacidad al 1.0 para evitar parpadeos
         materialRef.current.uniforms.uOpacity.value = 1.0;
@@ -170,7 +175,7 @@ const Scene = () => {
   });
 
   return (
-    <mesh scale={scale}>
+    <mesh scale={[scale[0] * 0.95, scale[1] * 0.95, scale[2] * 0.95]}>
       <planeGeometry args={[1, 1]} />
       <shaderMaterial
         ref={materialRef}

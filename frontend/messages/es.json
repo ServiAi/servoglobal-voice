@@ -1,41 +1,41 @@
 {
   "metadata": {
     "title": "ServiGlobal · IA - Agentes de Voz e IA Omnicanal",
-    "description": "Implementamos agentes de voz y omnicanal a medida. Integramos WhatsApp, telefonía VoIP/Asterisk, CRM y calendarios."
+    "description": "Implementamos agentes de voz y omnicanal a medida. Integramos telefonía, mensajería, CRM y calendarios."
   },
   "whyUs": {
-    "title": "Por qué nos necesitas",
-    "subtitle": "Precios fijos, tiempos transparentes, y código listo para producción.",
+    "title": "¿Por qué confiar en nosotros?",
+    "subtitle": "Experiencia, integración y acompañamiento real en cada paso.",
     "features": {
-      "clearHonest": {
-        "title": "Claros. Honestos.",
-        "subtitle": "Construido para durar.",
-        "description": "Precios fijos, tiempos transparentes, y código listo para producción. Sin sorpresas."
+      "voiceExperience": {
+        "title": "Experiencia sólida en voz",
+        "subtitle": "+25 años de trayectoria.",
+        "description": "Más de 25 años de experiencia implementando operación de voz crítica para empresas, call centers y telcos."
       },
-      "shipFast": {
-        "title": "Entrega rápida.",
-        "subtitle": "Entrega real.",
-        "description": "6-10 semanas desde el inicio hasta el despliegue. No 6 meses."
+      "existingInfra": {
+        "title": "Tu infraestructura, potenciada",
+        "subtitle": "Integración real.",
+        "description": "Nos conectamos con tu PBX, telefonía, CRM y calendarios existentes. No necesitas cambiar lo que ya funciona."
       },
-      "builtByBuilders": {
-        "title": "Construido por",
-        "subtitle": "Constructores.",
-        "description": "Un equipo de ingenieros, diseñadores y creadores de producto que entienden los problemas reales — porque los hemos vivido."
+      "guidedImplementation": {
+        "title": "Implementación acompañada",
+        "subtitle": "No es autoservicio.",
+        "description": "Diagnóstico, diseño, piloto y producción con nuestro equipo. No desaparecemos después del lanzamiento."
       },
-      "aiThatWorks": {
-        "title": "IA que realmente",
-        "subtitle": "Funciona.",
-        "description": "No es otro wrapper de ChatGPT. Automatización real que resuelve problemas reales."
+      "clickToIACall": {
+        "title": "Click-to-IA-Call Omnicanal",
+        "subtitle": "Filtra y cierra desde Redes, Web o Email.",
+        "description": "Implementable como embudo en Facebook/Instagram Ads, Email Marketing o Web. Filtra leads para que la IA llame con contexto y cierre rápido."
       },
-      "youOwnEverything": {
-        "title": "Tú eres dueño de",
-        "subtitle": "Todo.",
-        "description": "Propiedad total del código. Documentación completa. Cero dependencia del proveedor."
+      "customVoiceInfra": {
+        "title": "Infraestructura de voz",
+        "subtitle": "A tu medida.",
+        "description": "Configuramos u optimizamos tu infraestructura de voz para habilitar agentes de IA, o la implementamos desde cero."
       },
-      "supportPartner": {
-        "title": "Acompañamiento",
-        "subtitle": "Continuo.",
-        "description": "No desaparecemos después del lanzamiento. Soporte continuo, optimización y escalamiento a medida que creces."
+      "continuousSupport": {
+        "title": "Acompañamiento continuo",
+        "subtitle": "Soporte real.",
+        "description": "Monitoreo, ajustes, mejoras y optimización constante. Soporte que crece contigo."
       }
     }
   },
@@ -44,72 +44,123 @@
     "howItWorks": "Cómo funciona",
     "integrations": "Integraciones",
     "demo": "Demo",
+    "pricing": "Precios",
     "cta": "Agendar preconsultoría"
   },
   "hero": {
     "badge": "Tecnología de Voz IA + Omnicanalidad",
-    "titlePart1": "Tu mejor agente",
-    "titlePart2": "no duerme.",
-    "titlePart3": "Atiende 24/7.",
-    "descriptionFull": "Implementamos agentes de voz y omnicanal a medida. Integramos WhatsApp, telefonía (VoIP/Asterisk), CRM y calendarios.",
-    "descriptionShort": "Agentes de voz y omnicanal integrados con WhatsApp, CRM y calendarios.",
+    "titlePart1": "Atiende el",
+    "titlePart2": "100% de tus llamadas,",
+    "titlePart3": "24/7.",
+    "descriptionFull": "Captura datos, entiende intención y ejecuta acciones: cita, visita, ticket, pago o promesa de pago.",
+    "descriptionShort": "Captura datos, entiende y ejecuta acciones 24/7.",
+    "microcopySetup": "Implementación personalizada (setup) + operación mensual + consumo variable según canales y volumen.",
+    "microcopySuperPlus": "Activa Click-to-IA-Call: formulario inteligente → llamada con IA con contexto → cierre más rápido.",
     "ctaPrimary": "Agendar Preconsultoría",
-    "ctaSecondary": "Probar Demo",
-    "integrationsLabel": "Integraciones Nativas"
+    "ctaSecondary": "Probar IA Ahora"
+  },
+  "demoCommon": {
+    "fields": {
+      "name": "Nombre Completo",
+      "company": "Nombre de la Empresa",
+      "phone": "Teléfono / WhatsApp",
+      "industry": "Industria (Sector de la Empresa)",
+      "useCase": "Caso de Uso (¿Qué hará la IA?)",
+      "volume": "Volumen Estimado de Llamadas Mensuales",
+      "painPoint": "Diagnóstico del Dolor"
+    },
+    "options": {
+      "industry": {
+        "health": "Salud y Bienestar",
+        "realEstate": "Real Estate",
+        "automotive": "Automotriz",
+        "financial": "Servicios Financieros",
+        "education": "Educación",
+        "logistics": "Logística y Transporte",
+        "tourism": "Turismo y Hospitalidad",
+        "legal": "Legal y Consultoría",
+        "government": "Gobierno y Sector Público",
+        "other": "Otro"
+      },
+      "useCase": {
+        "customerService": "Atención al Cliente",
+        "support": "Call Centers y Soporte Técnico",
+        "collections": "Cobranza y Recuperación de Pagos",
+        "sales": "Ventas y Generación de Leads",
+        "recruitment": "Reclutamiento y Selección",
+        "booking": "Reservaciones y Agendamiento",
+        "ecommerce": "E-commerce y Tiendas Online",
+        "other": "Otro"
+      },
+      "volume": {
+        "tier1": "0 - 500 llamadas",
+        "tier2": "501 - 2,000 llamadas",
+        "tier3": "2,001 - 10,000 llamadas",
+        "tier4": "Más de 10,000 llamadas"
+      },
+      "painPoint": {
+        "lostCalls": "Se pierden muchas llamadas por falta de personal.",
+        "repetitiveTasks": "Los agentes humanos pierden tiempo en tareas repetitivas.",
+        "highCost": "El costo de operación del Call Center es demasiado alto.",
+        "slowResponse": "La respuesta a los nuevos leads es muy lenta (se enfrían).",
+        "qualityControl": "Dificultad para estandarizar la calidad de la atención."
+      }
+    }
   },
   "useCases": {
-    "title": "Eligiendo tu caso de uso",
+    "title": "Elige tu caso de uso",
     "subtitle": "Nuestros agentes se adaptan a tu modelo de negocio. Selecciona tu industria para ver cómo podemos ayudarte.",
     "automates": "Automatiza",
     "typicalIntegrations": "Integraciones Típicas",
     "scheduleFor": "Agendar diagnóstico para",
+    "tryIAFor": "Probar IA ahora para",
     "verticals": {
       "atencion": {
         "title": "Atención al Cliente",
         "promise": "Resuelve consultas 24/7 y reduce tiempos de espera.",
-        "tasks": ["Automatiza FAQs y estado de pedidos", "Escalamiento inteligente a humano", "Disponibilidad inmediata"],
-        "integrations": ["WhatsApp, Web, CRM"]
+        "tasks": ["Automatiza FAQs y estado de pedidos", "Escalamiento inteligente a humano", "Disponibilidad inmediata en voz y mensajería"],
+        "integrations": ["Mensajería", "Web Chat", "CRM", "Email"]
       },
       "soporte": {
-        "title": "Soporte Técnico",
+        "title": "Call Centers y Soporte Técnico",
         "promise": "Disminuye tickets repetitivos y estandariza tu soporte.",
-        "tasks": ["Triage automático de incidentes", "Diagnóstico guiado básico", "Creación de tickets en sistema"],
-        "integrations": ["Zendesk, Jira, VoIP"]
+        "tasks": ["Triage automático de incidentes", "Diagnóstico guiado básico", "Creación y seguimiento de tickets"],
+        "integrations": ["Sistemas de tickets", "CRM", "Telefonía/VoIP"]
       },
       "cobranza": {
-        "title": "Cobranza",
+        "title": "Cobranza y Recuperación de Pagos",
         "promise": "Más promesas de pago, menos fricción operativa.",
-        "tasks": ["Recordatorios de pago preventivos", "Negociación de acuerdos simples", "Validación de identidad"],
-        "integrations": ["Pasarelas, CRM, SMS/WhatsApp"]
+        "tasks": ["Recordatorios de pago preventivos", "Negociación de acuerdos simples", "Validación de identidad y registro en CRM"],
+        "integrations": ["Pasarelas de pago", "CRM", "Email", "Mensajería", "Telefonía"]
       },
       "ventas": {
-        "title": "Ventas y Leads",
+        "title": "Ventas y Generación de Leads",
         "promise": "Filtra prospectos y agenda citas con leads calificados.",
-        "tasks": ["Calificación de prospectos (BANT)", "Manejo de objeciones comunes", "Agendamiento directo en calendario"],
-        "integrations": ["Salesforce, HubSpot, Go High Level, Cal.com"]
+        "tasks": ["Calificación de prospectos", "Manejo de objeciones comunes", "Agendamiento directo en calendario"],
+        "integrations": ["Calendarios", "CRM", "Mensajería", "Email"]
       },
       "reclutamiento": {
-        "title": "Reclutamiento",
-        "promise": "Pre-filtra candidatos y agenda entrevistas automáticamente.",
+        "title": "Reclutamiento y Selección",
+        "promise": "Pre-filtra candidatos y agenda entrevistas sin intervención humana.",
         "tasks": ["Screening inicial de requisitos", "Coordinación de entrevistas", "Respuestas a dudas de vacantes"],
-        "integrations": ["ATS, Calendar, Email"]
+        "integrations": ["ATS/CRM", "Calendarios", "Email", "Mensajería"]
       },
       "reservas": {
-        "title": "Reservas",
+        "title": "Reservaciones y Agendamiento",
         "promise": "Tu agenda se llena sola y sin errores.",
-        "tasks": ["Consulta de disponibilidad", "Confirmación y recordatorios", "Reprogramación automática"],
-        "integrations": ["Google Calendar, OpenTable, AirTable, Cal.com"]
+        "tasks": ["Consulta de disponibilidad en tiempo real", "Confirmación y recordatorios automáticos", "Reprogramación y cancelación automática"],
+        "integrations": ["Calendarios", "Mensajería", "Email"]
       },
       "ecommerce": {
-        "title": "E-commerce",
+        "title": "E-commerce y Tiendas Online",
         "promise": "Convierte más con soporte y ventas automatizadas.",
-        "tasks": ["Recuperación de carritos abandonados", "Recomendación de productos", "Seguimiento de envíos"],
-        "integrations": ["Shopify, WooCommerce"]
+        "tasks": ["Recuperación de carritos abandonados", "Recomendación de productos", "Seguimiento de envíos y devoluciones"],
+        "integrations": ["Plataformas e-commerce", "Mensajería", "CRM", "Email"]
       }
     }
   },
   "benefits": {
-    "title": "¿Cómo un Agente de IA te beneficia?",
+    "title": "¿Cómo un Agente de IA Puede Beneficiarte?",
     "subtitle": "Resultados tangibles desde el primer mes de implementación.",
     "items": {
       "sales": {
@@ -125,136 +176,244 @@
         "desc": "Flujos consistentes y auditables: menos fallos humanos en tareas repetitivas."
       },
       "costs": {
-        "title": "Ahorra Costos",
+        "title": "Ahorra Costos Operativos",
         "desc": "Automatiza volumen sin contratar más personal para lo rutinario."
       },
       "stack": {
         "title": "Integra tu Stack",
-        "desc": "Conecta CRM, calendarios, email, WhatsApp, telefonía y herramientas internas."
+        "desc": "Conecta calendarios, email, mensajería, telefonía y herramientas internas."
       },
       "time": {
         "title": "Tiempo Récord",
         "desc": "Implementación guiada con entregables claros: diagnóstico → piloto → puesta en producción."
+      },
+      "superPlus": {
+        "title": "Cierre más Rápido con Contexto",
+        "desc": "La llamada inicia con información del formulario, reduciendo preguntas repetidas y acelerando el agendamiento, la venta o la resolución."
+      },
+      "security": {
+        "title": "Seguridad Empresarial",
+        "desc": "Cumplimiento normativo (Banca, Salud). Despliegue en tu infraestructura o nube privada para control total."
       }
     }
   },
   "process": {
     "title": "No vendemos una plataforma.",
-    "subtitle": "Implementamos un sistema que encaja.",
-    "description": "Nuestro enfoque consultivo garantiza que la tecnología se adapte a tu operación, y no al revés.",
-    "cta": "Comenzar con Fase 1 (Gratis)",
+    "subtitle": "Implementamos un sistema que encaja con tu operación.",
+    "description": "Implementación personalizada con setup según alcance: integraciones, flujos y canales. Ofrecemos Click-to-IA-Call para aumentar conversiones con contexto previo.",
+    "microcopySetup": "Implementación personalizada (setup) según alcance.",
+    "cta": "Comenzar con Fase 1",
     "phases": {
       "phase1": {
         "number": "1",
-        "title": "Preconsultoría",
-        "description": "Analizamos tus procesos, volumen y canales actuales.",
+        "title": "Preconsultoría (Diagnóstico)",
+        "description": "Analizamos procesos, volumen, canales, integraciones, riesgos y métricas de tu operación.",
         "deliverableLabel": "Entregable:",
         "deliverable": "Mapa de flujos + Propuesta técnica"
       },
       "phase2": {
         "number": "2",
-        "title": "Implementación",
-        "description": "Desarrollamos el agente (Python/LangGraph) e integramos canales.",
-        "deliverableLabel": "Tecnología:",
-        "deliverable": "Backend a medida + Integraciones"
+        "title": "Implementación (Piloto)",
+        "description": "Construimos tu agente, integramos canales (voz + mensajería + CRM + calendarios) y entrenamos flujos.",
+        "deliverableLabel": "Resultado:",
+        "deliverable": "Agente funcional + Integraciones configuradas"
       },
       "phase3": {
         "number": "3",
-        "title": "Producción",
-        "description": "Despliegue, monitoreo y optimización continua.",
+        "title": "Producción y Optimización",
+        "description": "Despliegue, monitoreo, ajustes, mejoras continuas y soporte constante.",
         "deliverableLabel": "Soporte:",
-        "deliverable": "Mantenimiento y mejoras"
+        "deliverable": "Mantenimiento + Optimización + Métricas"
       }
     }
   },
   "integrations": {
     "title": "Conectamos con lo que",
     "titleHighlight": "ya usas",
-    "description": "No necesitas cambiar tu infraestructura. Nuestros agentes se integran nativamente con tu PBX, CRM y calendarios existentes.",
-    "description2": "Desde infraestructuras locales con Asterisk hasta stacks modernos en la nube.",
+    "description": "No necesitas cambiar tu infraestructura. Nuestros agentes se integran nativamente con tu operación existente.",
+    "description2": "El traspaso a humano es configurable según tu operación: por llamada, por mensajería, o sin handoff.",
     "categories": {
       "channels": "Canales",
-      "agenda": "Agenda",
-      "crm": "CRM & Soporte",
+      "agenda": "Agenda y Comunicación",
+      "crm": "Atención y Operación",
       "infrastructure": "Infraestructura"
     }
   },
-  "booking": {
-    "title": "Agenda tu diagnóstico gratuito",
-    "description": "En 15-30 minutos analizaremos tus flujos de comunicación y te entregaremos un plan inicial de implementación. Sin costo, sin compromiso.",
-    "cta": "Agendar Cita Ahora"
+  "pricing": {
+    "title": "Planes y Precios",
+    "subtitle": "Setup obligatorio (implementación personalizada) + operación mensual + consumo variable.",
+    "monthly": "Mensual",
+    "setup": "Setup",
+    "from": "Desde",
+    "cta": "Agendar preconsultoría",
+    "plans": {
+      "conecta": {
+        "name": "Plan Starter",
+        "idealFor": "Validar canal de voz / bajo volumen",
+        "includes": "1,000 min WebRTC + 300 min DID",
+        "monthly": "$299",
+        "setup": "$900"
+      },
+      "integra": {
+        "name": "Plan Growth",
+        "idealFor": "Escalar operaciones / omnicanalidad",
+        "includes": "3,000 min WebRTC + 1,000 min DID + 1 DID (Local/USA)",
+        "monthly": "$699",
+        "setup": "$1.800"
+      },
+      "escala": {
+        "name": "Plan Enterprise",
+        "idealFor": "Altos volúmenes / misión crítica",
+        "includes": "8,000 min WebRTC + 2,500 min DID + Programador Saliente",
+        "monthly": "$1.499",
+        "setup": "$3.500"
+      }
+    },
+    "excess": {
+      "title": "Tarifas por Excesos y Adicionales (Mensual)",
+      "webrtc": "Click-to-Call IA (Web): $0.09/min",
+      "didIn": "Entrante DID: $0.10/min",
+      "outbound": "Saliente: $0.14/min",
+      "didExtra": "DID Extra: USA $20 / CO $30 / Celular $39"
+    },
+    "addon": {
+      "name": "Super Plus: Click-to-IA-Call",
+      "description": "Formulario inteligente → Llamada con IA con contexto para acelerar cierres.",
+      "monthly": "$199",
+      "setup": "$600"
+    },
+    "services": {
+      "byopbx": {
+        "name": "Servicios Profesionales (BYO PBX)",
+        "description": "Implementación en infraestructura del cliente.",
+        "assessment": "Assessment previo obligatorio (revisión de infraestructura): $500",
+        "setup": "Setup variable bajo cotización."
+      }
+    },
+    "consumptionNote": "Los minutos se calculan sobre duración real. El setup depende del alcance. Los costos de minutos/DID adicionales se facturan según consumo."
   },
-  "demo": {
-    "title": "Escucha cómo suena tu próximo agente.",
-    "subtitle": "Simulación de llamada entrante real.",
-    "callNow": "Llamar Ahora",
-    "incomingCall": "Llamada Entrante",
-    "tapToAnswer": "Desliza para contestar"
+  "faq": {
+    "title": "Preguntas Frecuentes",
+    "subtitle": "Resolvemos tus dudas antes de la preconsultoría.",
+    "items": {
+      "replaceTeam": {
+        "question": "¿Esto reemplaza a mi equipo?",
+        "answer": "No. Automatiza lo repetitivo y libera a tu equipo para tareas de mayor valor. El agente escala a humano cuando corresponde."
+      },
+      "changeOperation": {
+        "question": "¿Necesito cambiar mi operación actual?",
+        "answer": "No. Nos integramos con tu infraestructura existente (CRM, calendarios, telefonía, mensajería). No necesitas reemplazar nada."
+      },
+      "voiceInfra": {
+        "question": "¿Ustedes configuran mi infraestructura de voz?",
+        "answer": "Sí. Si lo requieres, ofrecemos acompañamiento y configuración de tu infraestructura de voz como servicio personalizado."
+      },
+      "howLong": {
+        "question": "¿Cuánto tarda la implementación?",
+        "answer": "Depende del alcance. Tras el diagnóstico, definimos un piloto funcional en tiempo récord. Cada proyecto es a medida."
+      },
+      "omnichannel": {
+        "question": "¿Funciona con mensajería y llamadas?",
+        "answer": "Sí. Nuestros agentes son omnicanal: voz (telefonía), mensajería y web chat, integrados según tu operación."
+      },
+      "handoffRequired": {
+        "question": "¿El handoff a humano es obligatorio?",
+        "answer": "No. El traspaso a humano es configurable: por llamada, por mensajería, o sin handoff. Lo defines tú según tu operación."
+      },
+      "ownMetrics": {
+        "question": "¿Puedo tener mis propias métricas?",
+        "answer": "Sí. Exportación de métricas, acceso a dashboards y reportes periódicos están disponibles bajo solicitud."
+      },
+      "whatIsClickToIA": {
+        "question": "¿Qué es Click-to-IA-Call?",
+        "answer": "Es una experiencia donde el usuario completa un formulario rápido y queda conectado con un agente de IA que ya tiene el contexto para cerrar más rápido."
+      },
+      "whatIsCallback": {
+        "question": "¿Qué es 'IA te llama ahora'?",
+        "answer": "Es la variante donde el usuario deja su número con consentimiento y el sistema dispara una llamada con IA con el contexto del formulario."
+      },
+      "dataPrivacy": {
+        "question": "¿Manejan datos sensibles (Salud, Banca, Gobierno) y normativas estrictas?",
+        "answer": "Sí. Para sectores regulados, desplegamos toda la solución (incluyendo LLMs de código abierto) en su propia infraestructura on-premise o nube privada, garantizando soberanía total de sus datos y cumplimiento normativo."
+      }
+    }
+  },
+  "booking": {
+    "title": "Agenda tu diagnóstico",
+    "description": "Agenda una llamada de diagnóstico (15–30 min). Recibe un plan inicial de automatización según tu caso.",
+    "microcopy": "Implementación personalizada con setup (sin precios publicados).",
+    "postSchedule": "Ten a mano: procesos actuales, CRM, canales, volumen mensual.",
+    "cta": "Agendar Preconsultoría"
   },
   "voiceDemo": {
-    "title": "Pruébalo ahora mismo",
-    "subtitle": "Elige una experiencia y descubre cómo nuestros agentes interactúan en tiempo real.",
-    "disclaimer": "(Simulación interactiva sin audio real para esta demo web)",
-    "inboundTab": "Inbound (Llamada Web)",
-    "outboundTab": "Outbound (Te llamamos)"
+    "title": "Prueba Click-to-IA-Call ahora",
+    "subtitle": "Tu embudo en redes/web: Formulario → Contexto al Agente → Cierre inmediato.",
+    "disclaimer": "Esta demo es un ejemplo. En la preconsultoría se diseña tu flujo real con tus reglas e integraciones.",
+    "inboundTab": "Click-to-IA-Call (Web)",
+    "outboundTab": "IA te llama ahora"
   },
   "demoInbound": {
-    "callEnded": "¡Llamada finalizada!",
-    "callEndedDesc": "Gracias. Nuestro equipo está listo para ayudarte a crecer.",
+    "callEnded": "¡Interacción finalizada!",
+    "callEndedDesc": "Así funciona Click-to-IA-Call. ¿Listo para diseñar tu flujo real?",
     "scheduleConsultation": "Agendar Preconsultoría",
-    "tryAgain": "Volver a llamar",
-    "simulatorVersion": "Línea de Ventas ServiGlobal",
+    "tryAgain": "Volver a probar",
+    "simulatorVersion": "Demo Click-to-IA-Call",
     "online": "En línea",
-    "webCall": "Llamada Directa (Ventas)",
-    "selectAgentDesc": "Conecta directamente con nuestro equipo de ventas para agendar tu cita.",
-    "agentType": "Equipo",
-    "agentSales": "Equipo de Ventas",
+    "webCall": "Llamada con IA (Demo)",
+    "selectAgentDesc": "Completa el formulario y conecta con un agente IA con contexto.",
+    "agentType": "Vertical",
+    "agentSales": "Ventas",
     "agentSupport": "Soporte",
     "agentCollections": "Cobranza",
     "agentBookings": "Reservas",
-    "callNow": "Llamar a Ventas",
-    "connecting": "Conectando con un asesor...",
-    "agent": "Conectado con",
-    "establishingConnection": "Estableciendo conexión prioritaria...",
+    "callNow": "Conectar con IA",
+    "connecting": "Preparando contexto...",
+    "agent": "Conectado con IA",
+    "establishingConnection": "Generando Context Pack...",
     "namePlaceholder": "Nombre completo",
     "emailPlaceholder": "Correo electrónico",
     "phonePlaceholder": "Teléfono"
   },
   "demoOutbound": {
     "requestCompleted": "Solicitud enviada",
-    "requestCompletedDesc": "Hemos recibido tus datos. Un asesor de ventas te contactará a la brevedad para confirmar tu cita.",
-    "scheduleConsultation": "Agendar directamente",
+    "requestCompletedDesc": "Hemos recibido tus datos. El agente de IA te contactará con el contexto de tu formulario.",
+    "scheduleConsultation": "Agendar preconsultoría",
     "back": "Volver",
-    "weCallYou": "Te llamamos nosotros",
-    "weCallYouDesc": "Déjanos tus datos y nuestro equipo de ventas te contactará.",
+    "weCallYou": "IA te llama ahora",
+    "weCallYouDesc": "Deja tus datos, completa el formulario y el agente de IA te llama con contexto.",
     "name": "Nombre",
     "namePlaceholder": "Tu nombre",
     "email": "Correo Electrónico",
     "emailPlaceholder": "tu@email.com",
     "phone": "Teléfono",
     "phonePlaceholder": "Teléfono",
-    "wantCall": "Solicitar llamada de ventas",
-    "submitDisclaimer": "Al enviar, aceptas ser contactado por nuestro equipo de ventas.",
-    "processingRequest": "Enviando solicitud...",
+    "wantCall": "Solicitar llamada con IA",
+    "submitDisclaimer": "Al enviar, aceptas ser contactado. Tus datos serán utilizados únicamente para esta interacción.",
+    "processingRequest": "Generando Context Pack...",
     "simulatingCall": "Solicitud Recibida",
-    "agentDialing": "Tu solicitud ha sido asignada a un asesor de ventas.",
+    "agentDialing": "El agente de IA te llamará con el contexto de tu formulario.",
     "hangUp": "Finalizar",
-    "callScheduled": "¡Llamada Agendada!",
+    "callScheduled": "¡Callback Agendado!",
     "callScheduledDesc": "Te llamaremos el",
     "scheduleAnother": "Agendar otra",
     "callNow": "Llamar Ahora",
     "scheduleLater": "Agendar para después",
     "preferredTime": "Hora preferida",
-    "scheduleCall": "Agendar Llamada"
+    "scheduleCall": "Agendar Callback"
   },
   "floatingCta": {
     "scheduleButton": "Agendar Ahora",
-    "demoButton": "Probar Demo"
+    "demoButton": "Probar IA"
   },
   "footer": {
     "tagline": "Agentes de IA que trabajan mientras tú descansas.",
     "product": "Producto",
     "services": "Servicios",
+    "servicesItems": {
+      "implementation": "Implementación",
+      "voiceConsulting": "Consultoría de voz",
+      "customDev": "Desarrollo a medida"
+    },
     "contact": "Contacto",
     "copyright": "© 2026 ServiGlobal · IA. Todos los derechos reservados."
   },
@@ -263,3 +422,4 @@
     "en": "EN"
   }
 }
+

@@ -38,6 +38,7 @@ export function FloatingCTA() {
           <span className="absolute inset-0 rounded-full bg-zinc-500 dark:bg-white animate-ping opacity-30" />
           <span className="absolute inset-0 rounded-full bg-zinc-400 dark:bg-white/50 animate-pulse opacity-20" />
           <button
+            suppressHydrationWarning
             onClick={() => setIsDemoOpen(true)}
             className="relative size-14 rounded-full bg-zinc-900 dark:bg-white text-white dark:text-black shadow-xl shadow-black/30 dark:shadow-white/20 flex items-center justify-center hover:scale-110 transition-transform z-10"
             title={t('demoButton')}
@@ -57,6 +58,7 @@ export function FloatingCTA() {
           <span className="absolute inset-0 rounded-full bg-gradient-to-r from-violet-500 to-fuchsia-500 animate-ping opacity-40" />
           <span className="absolute -inset-1 rounded-full bg-gradient-to-r from-violet-600 to-fuchsia-600 animate-pulse opacity-30 blur-sm" />
           <button
+            suppressHydrationWarning
             data-cal-namespace="agendamiento-de-citas-serviglobal-ai"
             data-cal-link="jeysson-aly-contreras-asxwla/agendamiento-de-citas-serviglobal-ai"
             data-cal-config='{"layout":"month_view"}'

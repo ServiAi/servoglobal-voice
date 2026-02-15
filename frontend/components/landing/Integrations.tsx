@@ -3,10 +3,10 @@
 import { useTranslations } from 'next-intl';
 
 const INTEGRATIONS = {
-  "channels": ["Telefonía / VoIP", "WhatsApp Business", "Instagram DM", "FB Messenger", "Web Chat"],
-  "agenda": ["Google Calendar", "Cal.com", "Outlook"],
-  "crm": ["HubSpot", "Salesforce", "Zoho", "Chatwoot", "Zendesk"],
-  "infrastructure": ["Asterisk", "Issabel", "SIP Trunks", "APIs Internas"]
+  "channels": ["Telefonía / VoIP", "Mensajería", "Web Chat"],
+  "agenda": ["Calendarios", "Email", "Notificaciones"],
+  "crm": ["CRM / Helpdesk", "Sistemas de tickets", "Herramientas internas"],
+  "infrastructure": ["PBX", "SIP Trunks", "Sistemas internos", "APIs"]
 };
 
 const CATEGORY_IDS = ['channels', 'agenda', 'crm', 'infrastructure'] as const;
@@ -23,9 +23,10 @@ export function Integrations() {
              <h2 className="text-3xl font-bold text-zinc-900 dark:text-white mb-6 text-left">
                {t('title')} <span className="text-violet-600 dark:text-violet-500">{t('titleHighlight')}</span>.
              </h2>
-             <p className="text-zinc-600 dark:text-neutral-400 mb-8 leading-relaxed">
+             <p className="text-zinc-600 dark:text-neutral-400 mb-4 leading-relaxed">
                {t('description')}
-               <br /><br />
+             </p>
+             <p className="text-sm text-violet-600 dark:text-violet-400 leading-relaxed font-medium">
                {t('description2')}
              </p>
           </div>
@@ -50,4 +51,3 @@ export function Integrations() {
     </section>
   );
 }
-

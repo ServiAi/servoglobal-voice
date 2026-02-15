@@ -30,6 +30,7 @@ export function Booking() {
 
         <div className="flex justify-center">
           <button 
+            suppressHydrationWarning
             data-cal-namespace="agendamiento-de-citas-serviglobal-ai"
             data-cal-link="jeysson-aly-contreras-asxwla/agendamiento-de-citas-serviglobal-ai"
             data-cal-config='{"layout":"month_view","useSlotsViewOnSmallScreen":"true"}'

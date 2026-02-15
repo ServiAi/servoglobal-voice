@@ -1,425 +1,371 @@
-# SPECS.md — Landing Page “Agentes de Voz + Omnicanal” (Sin precios, enfoque en preconsultoría)
+# SPEC — Agentes de Voz + Omnicanal + Click-to-IA-Call (Producto + Landing)
 
-## 0) Nombre de la funcionalidad
-Landing Page Marketing + Demos (Agentes de Voz IA + Omnicanal) + Captura de Leads (Cal.com)
-
-## 1) Objetivo (User Goal)
-Permitir que un prospecto:
-1) entienda en pocos segundos qué resolvemos y cómo trabajamos (servicio consultivo, no autoservicio),
-2) pruebe una **demo** (simulada) y/o
-3) **agende una preconsultoría** (CTA principal) o deje sus datos para contacto,
-todo sin mostrar precios y reforzando integración con infraestructura existente (VoIP/PBX/Asterisk, CRM, WhatsApp, Calendar, email).
-
-## 2) Flujo paso a paso (User Flow)
-1. Usuario llega al landing y ve el **Hero** con mensaje principal + 2 CTAs: **Agendar preconsultoría** y **Probar demo**.
-2. Usuario explora rápidamente:
-   - Casos de uso (7 modelos de negocio),
-   - Beneficios,
-   - Cómo trabajamos (3 fases),
-   - Integraciones/tecnología,
-   - Confianza + FAQ.
-3. Usuario hace clic en **Probar demo** (scroll a sección “Demos”).
-4. Usuario elige 1 de 2 demos:
-   - **Demo A (Inbound web call):** “Llamar al agente desde el navegador” (simulación UI).
-   - **Demo B (Outbound):** “Dejar datos y el agente me llama” (simulación UI).
-5. En cualquiera de las demos, el cierre dirige a:
-   - **Agendar preconsultoría** (Cal.com embebido) o
-   - **Formulario de contacto** (si no agenda).
-6. Usuario agenda (Cal.com) o deja datos; se muestra confirmación y siguiente paso.
+> Documento único que consolida: (A) Especificación de Producto/Servicio y (B) Especificación de Landing Page.
+> Restricciones aplicadas: no mencionar herramientas específicas, no explicar implementación, no mencionar multitenancy.
 
 ---
 
-# A) Reglas de negocio (deben cumplirse sí o sí)
-Estas reglas son **criterios de aceptación** del contenido y del UX.
+# A) SPEC (Producto) — Agentes de Voz + Omnicanal + Click-to-IA-Call
 
-## A1) Objetivo del landing
-- **Primario:** agendar reunión de preconsultoría (diagnóstico + propuesta).
-- **Secundario:** activar demo y convertir en agendamiento o captura de datos.
-- **Terciario:** educar: no es autoservicio; es implementación consultiva con integración.
+## A0) Enfoque del servicio
 
-## A2) Propuesta de valor “above the fold” (7 segundos)
-Debe quedar claro que:
-- Agentes de voz + omnicanal (voz, WhatsApp, Instagram, Messenger, web).
-- Servicio consultivo (no DIY).
-- Preconsultoría para diagnosticar y diseñar.
-- Integración con stack e infraestructura existente (CRM, calendar, email, VoIP/PBX/Asterisk).
-- Respaldo de experiencia (20+ años VoIP/call centers).
-
-## A3) Verticales (7 modelos de negocio)
-La sección “Casos de uso” debe incluir exactamente:
-1) Atención al Cliente  
-2) Call Centers y Soporte Técnico  
-3) Cobranza y Recuperación de Pagos  
-4) Ventas y Generación de Leads  
-5) Reclutamiento y Selección  
-6) Reservaciones y Agendamiento  
-7) E-commerce y Tiendas Online  
-
-Cada caso debe tener:
-- 1 promesa,
-- 3 tareas automatizables,
-- integraciones típicas,
-- CTA contextual: “Agendar diagnóstico para [vertical]”.
-
-## A4) Beneficios (formato obligatorio)
-Los beneficios deben expresarse como **Resultado + por qué** con estos 6 claims:
-1. Incrementa ventas (filtrado/calificación).
-2. Servicio 24/7 (mensajería + voz con traspaso a humano).
-3. Reduce errores (flujos consistentes/auditables).
-4. Ahorra costos (menos carga repetitiva).
-5. Integra tu stack (CRM, calendarios, email, WhatsApp, telefonía).
-6. Tiempo récord (diagnóstico → piloto → producción).
-
-## A5) Modelo de servicio (no autoservicio)
-Sección “Cómo trabajamos” con 3 fases:
-- Preconsultoría (entregable mínimo: mapa de flujos + propuesta técnica),
-- Implementación piloto (Python puro / LangGraph si multiagente),
-- Producción y optimización (monitoreo + soporte).
-
-## A6) Tecnología (sin abrumar)
-- No listar herramientas arriba del fold.
-- Sección “Tecnología” después de beneficios y casos de uso.
-- Tecnología siempre traducida a ventaja: integración, robustez, control, evitar lock-in cuando aplique.
-
-## A7) Integraciones (por categorías)
-Mostrar por categorías:
-- Canales: Voz, WhatsApp, Instagram, Messenger, Web.
-- Agenda/comunicación: Google Calendar, Email.
-- CRM/Atención: Chatwoot, GoHighLevel, otros.
-- Infra: PBX/Asterisk, SIP trunks, sistemas internos.
-
-## A8) CTAs (conversión)
-- CTA primario persistente: **Agendar preconsultoría** (header, hero, después de casos, después de “cómo trabajamos”, footer).
-- CTA secundario: **Probar demo (llamar ahora)** (hero + sección demo).
-- CTA terciario: **Quiero que me contacten** (conduce a formulario/Cal.com).
-Todo CTA refuerza diagnóstico: “15–30 min” + “plan inicial”.
-
-## A9) Cal.com (captura y agenda)
-- Formularios mínimos definidos (ver sección F).
-- Post-submit: confirmación + llamada a agendar si no lo hizo.
-- Post-agendamiento: checklist de preparación.
-
-## A10) Demo (simulada) con cierre obligatorio
-- Demo guiada (no genérica).
-- Termina siempre en agendamiento o captura de datos.
-- Disclaimer: demo es ejemplo; flujo real se diseña en preconsultoría.
+- **Tipo de oferta:** consultoría + implementación personalizada (no autoservicio).
+- **Mercados:** Colombia / LATAM / USA.
+- **Objetivo:** habilitar agentes de voz/omnicanal integrados al negocio del cliente, con énfasis en **cierre** (agendamiento, venta, resolución de tickets, cobranza).
 
 ---
 
-# B) Alcance del producto (Scope)
+## A1) Definiciones clave
 
-## B1) IN-SCOPE (lo que sí se construye ahora)
-1. Landing page completa (una sola página) con secciones definidas.
-2. UX/UI de **selector de demos** con 2 experiencias:
-   - Demo A: “Llamar al agente desde navegador” (simulación de UI de llamada).
-   - Demo B: “Dejar datos y el agente me llama” (simulación de estado de llamada saliente).
-3. Animaciones y microinteracciones con:
-   - Tailwind v4,
-   - Framer Motion,
-   - (Opcional) R3F + Drei + GSAP para hero/background (sin comprometer performance).
-4. Integración de **Cal.com** (embed) para agendamiento.
-5. Formularios (UI + validación básica) para:
-   - contacto,
-   - demo B.
-6. Accesibilidad y responsive (mobile-first).
-7. Instrumentación de eventos (analytics) a nivel de UI (ver sección I).
-
-## B2) OUT-OF-SCOPE (por ahora)
-- Integración real con Ultravox/Retell/LiveKit/Vapi (solo simulación visual).
-- Llamadas reales VoIP/SIP.
-- Persistencia en backend/CRM real (solo UI).
-- Automatizaciones reales con n8n (solo se describe como capacidad).
-- Pricing, planes y checkout (prohibido en este landing).
+- **Click-to-IA-Call (Core):** experiencia donde el usuario abre una URL/widget, completa un formulario por embudo, y queda conectado con un agente de IA **con contexto previo**.
+- **IA te llama ahora (Modo Callback):** variante donde el usuario deja su número y el sistema dispara una llamada para iniciar conversación con contexto.
+- **Context Pack:** paquete estructurado con los datos del formulario + metadata (vertical, campaña, idioma, intención) entregado al agente antes de hablar.
+- **Outcome (Resultado de llamada):** estado final verificable de la interacción (agendado, ticket, escalado, etc.).
 
 ---
 
-# C) Público objetivo y tono
-- Audiencia: dueños/gerentes/operaciones de negocios que buscan automatizar atención, ventas, cobranza, reclutamiento, reservas o e-commerce.
-- Tono: profesional, directo, con autoridad técnica, cercano; sin promesas numéricas absolutas.
-- Posicionamiento: “servicio consultivo + implementación” (no plataforma autoservicio).
+## A2) Oferta base (qué se entrega)
+
+### A2.1 Preconsultoría (Diagnóstico)
+
+- Levantamiento de proceso (AS-IS), objetivos (TO-BE), riesgos, métricas y restricciones.
+- Entregables mínimos:
+  - Mapa de flujo (alto nivel + variantes)
+  - Lista de campos del embudo (formulario) por vertical
+  - Definición de outcomes y handoff
+  - Propuesta técnica/operativa (alto nivel)
+
+### A2.2 Implementación (Setup + Piloto)
+
+- **Setup es obligatorio y siempre se cobra** (trabajo personalizado).
+- Piloto funcional con:
+  - Flujos conversacionales por vertical (alcance acordado)
+  - Embudo Click-to-IA-Call con Context Pack
+  - Reglas de handoff humano (voz o mensajería) según decisión del cliente
+  - Registro de outcomes
+
+### A2.3 Producción y Optimización
+
+- Monitoreo de calidad, iteración de flujos y optimización por métricas.
+- Soporte según plan.
 
 ---
 
-# D) Estructura de información (IA / Secciones del landing)
-La página debe seguir esta estructura y orden recomendado (se permiten ajustes menores sin violar reglas A).
+## A3) Reglas funcionales del Core: Click-to-IA-Call
 
-## D1) Header (sticky)
-- Logo + navegación ancla: “Casos”, “Cómo funciona”, “Integraciones”, “Demo”, “Agendar”.
-- CTA primario: **Agendar preconsultoría** (botón).
-- En mobile: menú compacto + CTA fijo inferior (ver D10).
+### A3.1 Regla: “Formulario antes de llamada”
 
-## D2) Hero (above the fold)
-### Mensaje creativo (obligatorio)
-- Headline recomendado (puede variar pero debe mantener esencia):
-  - “Tu mejor agente no duerme: atiende, vende y cobra 24/7 — conectado a tu operación.”
-- Subheadline:
-  - “Implementamos agentes de voz y omnicanal a medida. Integramos WhatsApp, telefonía, CRM y calendarios. Agenda una preconsultoría y recibe un plan inicial.”
+- Toda llamada originada desde Click-to-IA-Call **debe** iniciar con un formulario.
+- El formulario **no puede** omitirse salvo autorización explícita del cliente.
 
-### CTAs en hero (obligatorios)
-- CTA primario: **Agendar preconsultoría** → scroll/anchor a sección Cal.com.
-- CTA secundario: **Probar demo** → scroll/anchor a sección Demos.
+### A3.2 Regla: embudo por vertical
 
-### Visual / Motion
-- Fondo animado sutil (R3F/GSAP opcional) o gradientes + motion.
-- No usar video pesado arriba del fold.
+- El sistema debe tener embudos configurables por modelo de negocio (vertical).
+- Cada embudo define:
+  - **Campos obligatorios (3–7)**
+  - Campos condicionales
+  - Intención primaria (agendar / vender / ticket / cobranza / reclutamiento)
+  - Validaciones mínimas (formato, obligatoriedad, consistencia)
 
-## D3) Sección: “Casos de uso” (7 verticales)
-- UI: tabs o grid de tarjetas.
-- Cada tarjeta contiene: promesa + 3 bullets + integraciones + CTA contextual.
-- Selector debe reordenar/actualizar CTA contextual (Regla A8).
+### A3.3 Regla: Context Pack obligatorio
 
-## D4) Sección: “Beneficios”
-- 6 beneficios obligatorios (Regla A4).
-- Formato: cards con título + explicación breve (resultado + por qué).
+- Antes de iniciar conversación, el agente recibe el **Context Pack**.
+- El agente debe:
+  - Confirmar 1–2 datos clave (sin repetir todo el formulario)
+  - Ir directo al objetivo (cierre) con mínima fricción
 
-## D5) Sección: “Cómo trabajamos” (3 fases)
-- Fase 1: Preconsultoría (entregable: mapa de flujos + propuesta técnica).
-- Fase 2: Implementación piloto (Python puro/LangGraph según complejidad).
-- Fase 3: Producción/optimización (soporte continuo).
-- CTA primario al final: **Agendar preconsultoría**.
+### A3.4 Regla: duración promedio de conversación (operativo)
 
-## D6) Sección: “Integraciones”
-- Mostrar por categorías (Regla A7).
-- Enfatizar: “conectamos lo que ya usas”.
-
-## D7) Sección: “Tecnología” (sin abrumar)
-- Explicar enfoque:
-  - “Seleccionamos el stack adecuado: open source + herramientas premium según tu caso.”
-  - “Lógica pesada en backend Python; multiagente con LangGraph si aplica.”
-  - “Integración con PBX/Asterisk y SIP si ya existe infraestructura.”
-- Presentar logos opcionalmente, pero sin saturar.
-
-## D8) Sección: “Demos” (obligatoria)
-### D8.1 Selector de demo (2 opciones)
-- UI: toggle/tabs “Demo A” y “Demo B”.
-- Ambas opciones deben incluir:
-  - 1 frase: qué prueba.
-  - 3 bullets: qué hace.
-  - Botón primario: “Iniciar demo”.
-  - Disclaimer: “Demo simulada; el flujo real se define en preconsultoría.”
-
-### D8.2 Demo A — “Llamar al agente desde el navegador” (SIMULACIÓN)
-**Objetivo UX:** que el usuario “sienta” una llamada tipo agente de voz.
-
-**Pantalla/Componente de llamada:**
-- Estado inicial:
-  - Selección de agente (dropdown):
-    - “Agente Ventas”
-    - “Agente Soporte”
-    - “Agente Cobranza”
-    - “Agente Reclutamiento”
-    - “Agente Reservas”
-  - Botón: **Llamar ahora**
-- Al iniciar llamada:
-  - Mostrar panel “AI Voice Agent” con:
-    - indicador “Conectando…” → “En llamada”
-    - ícono micrófono
-    - visualizador de ondas/voz (sound waves) que responde a input simulado:
-      - si el usuario mantiene presionado “Hablar” o activa micrófono (simulado), las ondas aumentan.
-  - Botón: **Colgar** (rojo / alto contraste)
-  - Timer de llamada (mm:ss) opcional.
-- Al colgar:
-  - Estado final con:
-    - “Gracias. ¿Quieres implementarlo en tu negocio?”
-    - CTA: **Agendar preconsultoría**
-    - CTA secundario: “Ver casos de uso”
-
-**Nota:** No se implementa audio real. Todo es simulado visualmente.
-
-### D8.3 Demo B — “Dejar datos y el agente me llama” (SIMULACIÓN)
-**Formulario mínimo:**
-- Nombre
-- Correo
-- Teléfono
-- (Opcional) empresa
-- Botón: **Quiero que me llamen**
-
-**Comportamiento simulado:**
-- Tras enviar:
-  - Estado “Solicitud recibida”
-  - Animación: “El agente está llamando…” (ringing UI)
-  - Mostrar panel “AI Voice Agent” con:
-    - ondas/voz simuladas
-    - botón **Colgar**
-  - Luego mostrar “Te contactaremos en la implementación real. Agenda una preconsultoría para acelerar el proceso.”
-  - CTA: **Agendar preconsultoría**
-- Validación: campos requeridos, formato email, teléfono numérico.
-
-## D9) Sección: “Confianza” + “FAQ”
-- Bloque “Por qué confiar” (Regla A11.1).
-- FAQ mínimo (Regla A11.2).
-
-## D10) Sección: “Agendar” (Cal.com embed)
-- Embed de Cal.com visible.
-- Copy de apoyo:
-  - “Llamada de diagnóstico (15–30 min). Te entregamos un plan inicial.”
-- Checklist de preparación (post-agenda recomendado).
-- Repetir CTA primario en footer.
-
-## D11) Footer
-- Repetir navegación ancla.
-- CTA primario.
-- Disclaimer básico (si aplica): “No mostramos precios porque depende de alcance e integraciones.”
+- El diseño conversacional debe apuntar a **interacciones promedio de 3–5 minutos** para el flujo estándar (sin sacrificar calidad).
 
 ---
 
-# E) Requisitos funcionales (FR)
+## A4) Outcomes (resultados) y trazabilidad
 
-## E1) Navegación y anclas
-- FR-1: Header sticky con enlaces ancla a secciones.
-- FR-2: Botón “Probar demo” en hero hace scroll a Demos.
-- FR-3: CTAs “Agendar preconsultoría” llevan a sección Agendar (Cal.com).
+**A4.1 — Outcomes mínimos soportados (obligatorio):**
 
-## E2) Selector de vertical / casos de uso
-- FR-4: UI permite explorar 7 verticales sin recargar.
-- FR-5: Cada vertical tiene CTA contextual que scroll a Agendar con prefiltro visual (si aplica).
+1. Agendado
+2. Lead calificado (no agenda)
+3. Ticket creado/actualizado
+4. Pago / promesa de pago
+5. Escalado a humano
+6. No contactado / abandono
 
-## E3) Demos (simuladas)
-- FR-6: Selector de demo alterna Demo A y Demo B.
-- FR-7: Demo A presenta estados: idle → conectando → en llamada → final.
-- FR-8: Demo A incluye: selección de agente, indicador micrófono, ondas de sonido, botón colgar.
-- FR-9: Demo B presenta estados: form → enviando → “llamando” → “en llamada” → final.
-- FR-10: Demo B incluye validación básica de formulario.
-- FR-11: En ambos finales debe existir CTA primario a Agendar.
+**A4.2 — Registro mínimo por interacción:**
 
-## E4) Cal.com
-- FR-12: Se debe integrar embed de Cal.com (iframe o embed oficial).
-- FR-13: Se deben mapear campos mínimos (ver sección F) a Cal.com cuando aplique (si el embed permite prefill; si no, mantener como copy/UX).
-
-## E5) Formularios (no-Cal)
-- FR-14: Formulario “Quiero que me contacten” (si se incluye adicional) debe:
-  - validar campos,
-  - mostrar confirmación,
-  - invitar a agendar.
+- Fecha/hora, vertical, campaña, duración, outcome final, razón de escalamiento (si aplica).
 
 ---
 
-# F) Datos y formularios (campos mínimos)
+## A5) Mensajería para agendamiento (confirmación + recordatorio)
 
-## F1) Cal.com (agenda)
-Campos mínimos a solicitar (si Cal.com lo permite en el embed o en el flujo):
+**A5.1 — Secuencia mínima:**
+
+- 1. Confirmación inmediata del agendamiento
+- 2. Recordatorio (configurable: 24h / 2h antes u otra regla del cliente)
+
+**A5.2 — Mensaje con contexto:**
+
+- Debe incluir: fecha/hora, canal de contacto, opción de reprogramación/cancelación (si el cliente lo requiere).
+
+> Nota: En mercados como USA, las reglas de consentimiento pueden ser más estrictas. Siempre capturar consentimiento cuando aplique.
+
+---
+
+## A6) Handoff a humano (decisión del cliente)
+
+**A6.1 — Modalidades:**
+
+- Handoff por **llamada** (infraestructura del cliente o equivalente)
+- Handoff por **mensajería/CRM** (según preferencia del cliente)
+
+**A6.2 — Transferencia con contexto:**
+
+- Todo handoff debe adjuntar:
+  - Resumen corto (1–3 bullets)
+  - Datos del embudo (Context Pack)
+  - Motivo del handoff
+
+---
+
+## A7) Analítica y exportación (opcional)
+
+**A7.1 — Es opcional por cliente:**
+
+- Si el cliente lo solicita, se habilita exportación de métricas para análisis propio.
+
+**A7.2 — Métricas recomendadas:**
+
+- Conversión formulario→llamada, llamada→outcome, tasa de agendamiento, tasa de handoff, duración promedio, razones de abandono.
+
+---
+
+## A8) Servicio adicional: habilitación/configuración de infraestructura de voz del cliente
+
+**A8.1 — Servicio consultivo adicional:**
+
+- Si el cliente tiene infraestructura de voz propia, se ofrece acompañamiento/configuración para integrarla con los agentes.
+
+**A8.2 — Alcance siempre por diagnóstico:**
+
+- El alcance depende del estado actual, restricciones, seguridad y objetivos operativos del cliente.
+
+---
+
+## A9) “Super Plus” (Add-On Premium) — definición
+
+**Super Plus** es un paquete premium orientado a aumentar conversión y control del embudo Click-to-IA-Call.
+
+**A9.1 — Incluye (mínimo):**
+
+- Widget/URL Click-to-IA-Call con personalización por campañas
+- Embudos avanzados por vertical (ramificación, scoring, campos dinámicos)
+- Tracking de conversión por campaña (campaign_id / UTM)
+- Controles anti-abuso (rate limit, validaciones, protección de spam)
+- Ruteo inteligente hacia humano (según reglas del cliente)
+
+---
+
+## A10) Precios (Carta de precios) — Setup + mensual + consumo
+
+> El pricing debe presentarse siempre como: **Setup (obligatorio) + Mensualidad + Consumo variable**.
+
+### A10.1 Reglas de cobro
+
+- **Setup obligatorio:** se cobra siempre (implementación personalizada).
+- **Mensualidad:** operación, soporte, mantenimiento y mejoras menores (según plan).
+- **Consumo variable:** minutos de conversación y mensajería (según canal y país).
+
+### A10.2 Tabla recomendada (editable)
+
+| Plan    | Ideal para                | Incluye (resumen)                                    |      Mensual |        Setup |
+| ------- | ------------------------- | ---------------------------------------------------- | -----------: | -----------: |
+| Starter | 1 vertical / bajo volumen | Click-to-IA-Call base + flujos esenciales + outcomes |   Desde $299 |   Desde $900 |
+| Growth  | 2–3 verticales            | + automatizaciones + reporting                       |   Desde $699 | Desde $1.800 |
+| Scale   | alto volumen              | + optimización continua + soporte avanzado           | Desde $1.499 | Desde $3.500 |
+
+**Add-On Super Plus:**
+
+- Mensual: Desde $199
+- Setup adicional: Desde $600
+
+**Overage (consumo):**
+
+- Minutos extra y mensajería adicional se facturan por encima del bundle del plan.
+
+---
+
+## A11) Cumplimiento y consentimiento (especialmente USA)
+
+**A11.1 — Consentimiento explícito:**
+
+- Para callbacks (“IA te llama ahora”) el formulario debe capturar consentimiento del usuario final para ser contactado.
+- Debe registrar el origen del consentimiento (fecha/hora + evidencia disponible).
+
+**A11.2 — Preferencias de contacto:**
+
+- El usuario final debe poder elegir canal (llamada/mensajería) si el cliente lo exige por compliance.
+
+---
+
+---
+
+# B) SPEC (Landing) — Página comercial con Pricing + Demo Click-to-IA-Call
+
+## B1) Objetivo del landing
+
+1. **Convertir a preconsultoría** (diagnóstico + propuesta).
+2. **Demostrar el core:** Click-to-IA-Call (formulario → llamada IA con contexto).
+3. **Convertir demo → agendamiento o lead calificado**.
+
+---
+
+## B2) Mensaje principal (above the fold)
+
+**B2.1 — En 7 segundos el usuario entiende:**
+
+- Implementación de **Agentes de Voz + Omnicanal**.
+- Servicio **personalizado** (no autoservicio).
+- **Click-to-IA-Call:** formulario inteligente → llamada con IA con contexto → cierre.
+- Integración con operación existente del cliente.
+
+**B2.2 — Hero (copy recomendado):**
+
+- Titular: “Agentes de Voz con IA para atender, vender y resolver — integrados a tu operación.”
+- Subtítulo: “Activa Click-to-IA-Call: formulario inteligente → llamada con IA con contexto → cierre (agenda/venta/ticket).”
+- CTAs visibles:
+  1. “Agendar preconsultoría”
+  2. “Probar IA ahora”
+
+---
+
+## B3) Sección “Elige tu caso de uso” (7 verticales)
+
+Tarjetas o tabs (obligatorio):
+
+1. Atención al Cliente
+2. Call Centers y Soporte Técnico
+3. Cobranza y Recuperación de Pagos
+4. Ventas y Generación de Leads
+5. Reclutamiento y Selección
+6. Reservaciones y Agendamiento
+7. E-commerce y Tiendas Online
+
+**B3.1 — Cada tarjeta incluye:**
+
+- Resultado esperado (1 línea)
+- 3 tareas automatizables
+- CTA “Agendar diagnóstico para [vertical]”
+- Botón “Probar IA ahora para [vertical]” (abre formulario específico)
+
+---
+
+## B4) Demo: Click-to-IA-Call (sección obligatoria)
+
+**B4.1 — El demo NO es genérico:**
+
+- Siempre es un embudo por vertical.
+- Siempre captura contexto mínimo y luego inicia llamada IA.
+
+**B4.2 — Formulario del demo (mínimo común):**
+
 - Nombre
 - Empresa
-- Rol
-- País/Ciudad (opcional)
-- Canal principal (voz/WhatsApp/omnicanal)
-- Modelo de negocio (7 opciones)
-- Volumen aproximado (4 rangos)
-- Integraciones requeridas (checkbox):
-  - CRM, WhatsApp, Calendar, Email, PBX/Asterisk, Otros
-- Objetivo principal (ventas/soporte/cobranza/reclutamiento/reservas/e-commerce)
+- Objetivo (agendar/venta/ticket/cobranza/otro)
+- Canal preferido (llamada o mensajería)
+- Detalle breve (1–2 frases)
+- Consentimiento de contacto (especialmente para callback)
 
-## F2) Demo B (form simple)
-- Nombre (requerido)
-- Correo (requerido)
-- Teléfono (requerido)
-- Consentimiento/aceptación simple (opcional, según legal)
+**B4.3 — Cierre obligatorio del demo:**
 
----
+- Al terminar la interacción:
+  - “Agendar preconsultoría” (primario)
+  - o “Dejar datos para contacto” (fallback)
 
-# G) Requisitos no funcionales (NFR)
+**B4.4 — Mensaje de expectativa:**
 
-## G1) Performance
-- NFR-1: First Load rápido; evitar assets pesados arriba del fold.
-- NFR-2: Si se usa R3F/Three, debe ser opcional o degradar en mobile/bajo rendimiento.
-
-## G2) Accesibilidad
-- NFR-3: Contraste AA; botones y focus visibles.
-- NFR-4: Navegación por teclado para tabs, formularios y CTAs.
-- NFR-5: Aria-labels en controles de demo (micrófono, colgar).
-
-## G3) Responsive
-- NFR-6: Mobile-first; CTA fijo inferior en mobile (“Agendar preconsultoría”).
-- NFR-7: Demos usables en pantallas pequeñas.
-
-## G4) Seguridad/Privacidad (UI)
-- NFR-8: Copys claros indicando que demos son simuladas y que los datos se usan para contacto/agendamiento.
+- “Esto es un ejemplo. En la preconsultoría diseñamos tu flujo real con tus reglas e integraciones.”
 
 ---
 
-# H) Stack y restricciones técnicas (contexto del proyecto)
-Este proyecto ya está preconfigurado con:
-- Next.js
-- Tailwind CSS v4
-- Framer Motion
-- Three.js
-- GSAP
-- React Three Fiber (R3F) + Drei
+## B5) Beneficios (bloque obligatorio)
 
-**Restricciones:**
-- No implementar backend real de llamadas.
-- No implementar SDK real de Ultravox/Retell en esta fase.
-- No implementar CRM real; solo UI/UX.
+**B5.1 — Formato:** Resultado + por qué
 
----
+- “Reduce tiempos de resolución porque el agente inicia con contexto del formulario.”
+- “Mejora conversiones porque elimina fricción y acelera el cierre.”
+- “Escala sin aumentar personal en tareas repetitivas.”
 
-# I) Eventos de analítica (instrumentación recomendada)
-Registrar (al menos como funciones/handlers, aunque el proveedor de analytics aún no esté definido):
+**B5.2 — Datos operativos (permitido):**
 
-- EVT-1: `cta_agendar_click` (origen: hero/header/casos/como_trabajamos/demo/footer)
-- EVT-2: `cta_demo_click` (hero/demo)
-- EVT-3: `vertical_selected` (vertical_id)
-- EVT-4: `demo_selected` (demo=A|B)
-- EVT-5: `demo_call_start` (agent_type)
-- EVT-6: `demo_call_end` (duration, ended_by=user)
-- EVT-7: `demo_form_submit` (success|error)
-- EVT-8: `cal_embed_view` (viewport_enter)
-- EVT-9: `faq_expand` (question_id)
+- “Interacciones promedio: 3–5 minutos (según caso).”
+- “Agendamiento por mensajería: confirmación + recordatorio.”
 
 ---
 
-# J) Copys mínimos por sección (lista de contenido obligatorio)
+## B6) Confianza y objeciones (obligatorio)
 
-## J1) Hero
-- Headline creativo (obligatorio):
-  - “Tu mejor agente no duerme: atiende, vende y cobra 24/7 — conectado a tu operación.”
-- Subheadline:
-  - “Implementamos agentes de voz y omnicanal a medida. Integramos WhatsApp, telefonía, CRM y calendarios. Agenda una preconsultoría y recibe un plan inicial.”
-- CTAs:
-  - “Agendar preconsultoría”
-  - “Probar demo”
+**B6.1 — “Por qué confiar” (mínimo):**
 
-## J2) Beneficios (6)
-Usar exactamente estos conceptos, con redacción equivalente:
-1) Incrementa ventas (leads calificados)
-2) Servicio 24/7 (voz + mensajería)
-3) Reduce errores (automatización auditable)
-4) Ahorra costos (menos tareas repetitivas)
-5) Integración con múltiples plataformas (CRM, Calendar, email, WhatsApp)
-6) Tiempo récord (diagnóstico → piloto → producción)
+- Experiencia comprobable en soluciones de voz/call centers.
+- Integración con infraestructura existente del cliente.
+- Implementación acompañada (no DIY).
 
-## J3) Modelo de servicio (3 fases)
-- “No vendemos una plataforma: implementamos un sistema que encaja con tu operación.”
-- “Seleccionamos herramientas open source y premium según tus requerimientos.”
+**B6.2 — FAQ mínimo:**
 
-## J4) Demos (disclaimer)
-- “Demo simulada. El flujo real se define en la preconsultoría según tu negocio.”
+- ¿Esto reemplaza a mi equipo?
+- ¿Se integra con lo que ya tengo?
+- ¿Cuánto tarda?
+- ¿Qué pasa si el caso es complejo?
+- ¿Puedo escalar a humano por llamada o mensajería?
 
 ---
 
-# K) Criterios de aceptación (Definition of Done)
+## B7) Pricing (carta de precios en landing) — Setup + mensual + consumo
 
-1. El landing incluye todas las secciones D1–D11.
-2. No se muestran precios en ninguna parte.
-3. El hero cumple la regla de claridad en 7 segundos (A2).
-4. Los 7 casos de uso están presentes con estructura completa (A3).
-5. Beneficios incluyen los 6 claims (A4).
-6. “Cómo trabajamos” incluye 3 fases y entregables (A5).
-7. Integraciones por categorías (A7) y tecnología sin saturar (A6).
-8. Sección demos permite elegir Demo A o B y ambas simulan:
-   - UI de agente de voz,
-   - ondas de sonido al hablar (simulado),
-   - botón de colgar,
-   - cierre con CTA a agendar.
-9. Cal.com embed visible y accesible; CTAs anclan correctamente.
-10. Responsive mobile-first con CTA fijo en mobile.
-11. Accesibilidad básica: keyboard nav + focus + labels.
-12. Eventos analíticos listos a nivel de handlers (aunque no haya proveedor).
+**B7.1 — La landing sí muestra pricing:**
+
+- Debe incluir:
+  - Setup obligatorio (desde)
+  - mensualidad (desde)
+  - consumo (minutos/mensajería) como variable
+
+**B7.2 — Tabla recomendada (editable):**
+| Plan | Ideal para | Mensual | Setup |
+|------|------------|--------:|------:|
+| Starter | 1 vertical / bajo volumen | Desde $299 | Desde $900 |
+| Growth | 2–3 verticales | Desde $699 | Desde $1.800 |
+| Scale | alto volumen | Desde $1.499 | Desde $3.500 |
+
+**B7.3 — Add-On “Super Plus” (sección destacada):**
+
+- “Super Plus: Click-to-IA-Call avanzado para campañas y embudos complejos”
+- Mensual: Desde $199
+- Setup adicional: Desde $600
+
+**B7.4 — Nota de consumo (sin detalles técnicos):**
+
+- “El consumo (minutos y mensajería) varía por país y volumen. Se factura según el plan y uso real.”
 
 ---
 
-# L) Notas para el LLM (instrucción maestra)
-- Construir primero la estructura y contenido del landing conforme a reglas A.
-- Implementar demos SOLO como simulación visual; no integrar llamadas reales.
-- Priorizar claridad y conversión: CTA primario “Agendar preconsultoría” siempre visible en momentos clave.
-- Mantener el enfoque “servicio consultivo + implementación” y “integración a infraestructura existente (incluye Asterisk/PBX/VoIP)”.
+## B8) CTAs (reglas estrictas)
+
+1. CTA primario persistente: “Agendar preconsultoría”
+2. CTA secundario persistente: “Probar IA ahora”
+3. CTA terciario: “Quiero que me contacten”
+
+**B8.1 — Microcopy obligatorio:**
+
+- “Diagnóstico 15–30 min.”
+- “Prueba el embudo: formulario → llamada IA con contexto → cierre.”
+
+---
+
+## B9) Reglas de diseño UX (alto impacto)
+
+- Sticky header con anchors: Casos / Demo / Pricing / Agendar
+- Mobile-first: CTA fijo inferior
+- Evitar fricción: demo en 30–60 segundos máximo para iniciar llamada
+
+---

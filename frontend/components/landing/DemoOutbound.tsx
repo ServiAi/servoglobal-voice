@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
 import { useAudioSimulation } from '@/hooks/useAudioSimulation';
-import { PhoneIncoming, Loader2, CheckCircle2, PhoneOff, ChevronDown } from 'lucide-react';
+import { PhoneIncoming, Loader2, CheckCircle2, PhoneOff, ChevronDown, Calendar, Clock } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
@@ -20,8 +20,9 @@ const COUNTRY_CODES = [
 
 export function DemoOutbound() {
   const t = useTranslations('demoOutbound');
+  const tCommon = useTranslations('demoCommon');
   const { demoState, startCall, endCall, resetDemo } = useAudioSimulation();
-  const [formStep, setFormStep] = useState<'form' | 'submitting' | 'calling'>('form');
+  const [formStep, setFormStep] = useState<'form' | 'submitting' | 'calling' | 'scheduled'>('form');
   const [countryCode, setCountryCode] = useState('+57');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   
@@ -29,6 +30,15 @@ export function DemoOutbound() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
+  const [company, setCompany] = useState('');
+  const [industry, setIndustry] = useState('');
+  const [useCase, setUseCase] = useState('');
+  const [volume, setVolume] = useState('');
+  const [painPoint, setPainPoint] = useState('');
+
+  // Scheduling State
+  const [callMode, setCallMode] = useState<'now' | 'schedule'>('now');
+  const [scheduleTime, setScheduleTime] = useState('');
   
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -52,13 +62,27 @@ export function DemoOutbound() {
         const fullPhone = `${countryCode}${phone}`;
         const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
         
+        const payload: any = { 
+            name, 
+            email, 
+            phone: fullPhone,
+            company,
+            industry,
+            useCase,
+            volume,
+            painPoint
+        };
+        if (callMode === 'schedule' && scheduleTime) {
+            payload.schedule_time = new Date(scheduleTime).toISOString();
+        }
+
         console.log("Submitting to:", `${API_URL}/api/v1/call-outbound`);
-        console.log("Payload:", { name, email, phone: fullPhone });
+        console.log("Payload:", payload);
 
         const response = await fetch(`${API_URL}/api/v1/call-outbound`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, email, phone: fullPhone })
+            body: JSON.stringify(payload)
         });
 
         if (!response.ok) {
@@ -69,9 +93,13 @@ export function DemoOutbound() {
         const data = await response.json();
         console.log("Success:", data);
 
-        // Transition to calling state
-        setFormStep('calling');
-        startCall();
+        // Transition based on mode
+        if (callMode === 'schedule') {
+             setFormStep('scheduled');
+        } else {
+             setFormStep('calling');
+             startCall();
+        }
         
     } catch (error) {
         console.error("Error initiating call:", error);
@@ -84,17 +112,25 @@ export function DemoOutbound() {
     endCall();
   };
 
-  if (demoState === 'ended') {
+  if (demoState === 'ended' || formStep === 'scheduled') {
+      const isScheduled = formStep === 'scheduled';
       return (
         <div className="h-full flex flex-col items-center justify-center p-8 text-center bg-zinc-50 dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-white/5 shadow-2xl">
           <CheckCircle2 className="size-16 text-green-500 mb-4" />
-          <h3 className="text-2xl font-bold text-zinc-900 dark:text-white mb-2">{t('requestCompleted')}</h3>
-          <p className="text-zinc-600 dark:text-zinc-400 mb-6 max-w-sm">{t('requestCompletedDesc')}</p>
+          <h3 className="text-2xl font-bold text-zinc-900 dark:text-white mb-2">
+              {isScheduled ? t('callScheduled') : t('requestCompleted')}
+          </h3>
+          <p className="text-zinc-600 dark:text-zinc-400 mb-6 max-w-sm">
+              {isScheduled 
+                ? `${t('callScheduledDesc')} ${new Date(scheduleTime).toLocaleString()}` 
+                : t('requestCompletedDesc')
+              }
+          </p>
           <button 
-            onClick={() => { resetDemo(); setFormStep('form'); setName(''); setEmail(''); setPhone(''); }} // Reset form as well
+            onClick={() => { resetDemo(); setFormStep('form'); setName(''); setEmail(''); setPhone(''); setScheduleTime(''); }} // Reset form as well
             className="w-full max-w-xs py-3 bg-zinc-900 dark:bg-white text-white dark:text-black font-bold rounded-lg hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-colors text-center"
           >
-             {t('scheduleConsultation')}
+             {t('scheduleAnother')}
           </button>
           <button 
              onClick={() => { resetDemo(); setFormStep('form'); }}
@@ -107,7 +143,7 @@ export function DemoOutbound() {
   }
 
   return (
-    <div className="relative h-[500px] w-full bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-white/10 shadow-2xl flex flex-col p-6 transition-colors duration-300">
+    <div className="relative h-auto min-h-[600px] w-full bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-white/10 shadow-2xl flex flex-col p-6 transition-colors duration-300">
        {/* Decorative Wrapper */}
        <div className="absolute inset-0 rounded-2xl overflow-hidden pointer-events-none">
           <div className="absolute top-0 right-0 w-32 h-32 bg-green-500/10 rounded-full blur-3xl" />
@@ -118,38 +154,77 @@ export function DemoOutbound() {
             <h3 className="text-2xl font-bold text-zinc-900 dark:text-white mb-1">{t('weCallYou')}</h3>
             <p className="text-sm text-zinc-600 dark:text-zinc-400 mb-6">{t('weCallYouDesc')}</p>
             
-            <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Call Mode Toggle */}
+            <div className="flex bg-zinc-100 dark:bg-zinc-800 p-1 rounded-lg mb-4">
+                <button
+                    onClick={() => setCallMode('now')}
+                    className={cn(
+                        "flex-1 py-1.5 text-sm font-medium rounded-md transition-all flex items-center justify-center gap-2",
+                        callMode === 'now' 
+                            ? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white shadow-sm" 
+                            : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300"
+                    )}
+                >
+                    <PhoneIncoming className="size-3.5" />
+                    {t('callNow')}
+                </button>
+                <button
+                    onClick={() => setCallMode('schedule')}
+                    className={cn(
+                        "flex-1 py-1.5 text-sm font-medium rounded-md transition-all flex items-center justify-center gap-2",
+                        callMode === 'schedule' 
+                            ? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white shadow-sm" 
+                            : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300"
+                    )}
+                >
+                    <Calendar className="size-3.5" />
+                    {t('scheduleLater')}
+                </button>
+            </div>
+
+            <form onSubmit={handleSubmit} className="space-y-2">
                <div>
-                  <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">{t('name')}</label>
+                  <label className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">{t('name')}</label>
                   <input 
                     required 
                     type="text" 
                     placeholder={t('namePlaceholder')} 
-                    className="w-full bg-zinc-100 dark:bg-black/50 border border-zinc-200 dark:border-white/10 rounded-lg p-3 text-zinc-900 dark:text-white focus:outline-none focus:border-green-500/50 transition-colors"
+                    className="w-full bg-zinc-100 dark:bg-black/50 border border-zinc-200 dark:border-white/10 rounded-lg p-2 text-zinc-900 dark:text-white focus:outline-none focus:border-green-500/50 transition-colors text-xs"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                   />
                </div>
                <div>
-                  <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">{t('email')}</label>
+                  <label className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">{tCommon('fields.company')}</label>
+                  <input 
+                    required 
+                    type="text" 
+                    placeholder={tCommon('fields.company')} 
+                    className="w-full bg-zinc-100 dark:bg-black/50 border border-zinc-200 dark:border-white/10 rounded-lg p-2 text-zinc-900 dark:text-white focus:outline-none focus:border-green-500/50 transition-colors text-xs"
+                    value={company}
+                    onChange={(e) => setCompany(e.target.value)}
+                  />
+               </div>
+               <div>
+                  <label className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">{t('email')}</label>
                   <input 
                     required 
                     type="email" 
                     placeholder={t('emailPlaceholder')} 
-                    className="w-full bg-zinc-100 dark:bg-black/50 border border-zinc-200 dark:border-white/10 rounded-lg p-3 text-zinc-900 dark:text-white focus:outline-none focus:border-green-500/50 transition-colors" 
+                    className="w-full bg-zinc-100 dark:bg-black/50 border border-zinc-200 dark:border-white/10 rounded-lg p-2 text-zinc-900 dark:text-white focus:outline-none focus:border-green-500/50 transition-colors text-xs" 
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                   />
                </div>
                <div>
-                  <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">{t('phone')}</label>
+                  <label className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">{t('phone')}</label>
                   <div className="flex gap-2 relative">
                     {/* Custom Country Dropdown */}
                     <div className="relative" ref={dropdownRef}>
                       <button
                         type="button"
                         onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                        className="h-[46px] px-3 rounded-lg bg-zinc-100 dark:bg-black/50 border border-zinc-200 dark:border-white/10 focus:outline-none focus:border-green-500/50 transition-all text-sm flex items-center gap-2 min-w-[80px] text-zinc-900 dark:text-white"
+                        className="h-[34px] px-2 rounded-lg bg-zinc-100 dark:bg-black/50 border border-zinc-200 dark:border-white/10 focus:outline-none focus:border-green-500/50 transition-all text-xs flex items-center gap-1 min-w-[70px] text-zinc-900 dark:text-white"
                       >
                         {(() => {
                           const selected = COUNTRY_CODES.find(c => c.code === countryCode) || COUNTRY_CODES[0];
@@ -202,16 +277,111 @@ export function DemoOutbound() {
                         required 
                         type="tel" 
                         placeholder={t('phonePlaceholder')} 
-                        className="flex-1 bg-zinc-100 dark:bg-black/50 border border-zinc-200 dark:border-white/10 rounded-lg p-3 text-zinc-900 dark:text-white focus:outline-none focus:border-green-500/50 transition-colors"
+                        className="flex-1 bg-zinc-100 dark:bg-black/50 border border-zinc-200 dark:border-white/10 rounded-lg p-2 text-zinc-900 dark:text-white focus:outline-none focus:border-green-500/50 transition-colors text-xs"
                         value={phone}
                         onChange={(e) => setPhone(e.target.value)}
                     />
                   </div>
                </div>
+
+                {/* New Fields */}
+                <div className="grid grid-cols-2 gap-2">
+                    <div>
+                         <select
+                             required
+                             value={industry}
+                             onChange={(e) => setIndustry(e.target.value)}
+                             className="w-full bg-zinc-100 dark:bg-black/50 border border-zinc-200 dark:border-white/10 rounded-lg px-2 py-1.5 text-zinc-900 dark:text-white focus:outline-none focus:border-green-500/50 transition-colors text-[10px] appearance-none"
+                         >
+                             <option value="" disabled>{tCommon('fields.industry')}</option>
+                             <option value="health">{tCommon('options.industry.health')}</option>
+                             <option value="realEstate">{tCommon('options.industry.realEstate')}</option>
+                             <option value="automotive">{tCommon('options.industry.automotive')}</option>
+                             <option value="financial">{tCommon('options.industry.financial')}</option>
+                             <option value="education">{tCommon('options.industry.education')}</option>
+                             <option value="logistics">{tCommon('options.industry.logistics')}</option>
+                             <option value="tourism">{tCommon('options.industry.tourism')}</option>
+                             <option value="legal">{tCommon('options.industry.legal')}</option>
+                             <option value="government">{tCommon('options.industry.government')}</option>
+                             <option value="other">{tCommon('options.industry.other')}</option>
+                         </select>
+                    </div>
+                    <div>
+                          <select
+                             required
+                             value={useCase}
+                             onChange={(e) => setUseCase(e.target.value)}
+                             className="w-full bg-zinc-100 dark:bg-black/50 border border-zinc-200 dark:border-white/10 rounded-lg px-2 py-1.5 text-zinc-900 dark:text-white focus:outline-none focus:border-green-500/50 transition-colors text-[10px] appearance-none"
+                         >
+                             <option value="" disabled>{tCommon('fields.useCase')}</option>
+                              <option value="customerService">{tCommon('options.useCase.customerService')}</option>
+                             <option value="support">{tCommon('options.useCase.support')}</option>
+                             <option value="collections">{tCommon('options.useCase.collections')}</option>
+                             <option value="sales">{tCommon('options.useCase.sales')}</option>
+                             <option value="recruitment">{tCommon('options.useCase.recruitment')}</option>
+                             <option value="booking">{tCommon('options.useCase.booking')}</option>
+                             <option value="ecommerce">{tCommon('options.useCase.ecommerce')}</option>
+                             <option value="other">{tCommon('options.useCase.other')}</option>
+                         </select>
+                    </div>
+                </div>
+
+               <div className="grid grid-cols-2 gap-2">
+                   <div>
+                        <select
+                            required
+                            value={volume}
+                            onChange={(e) => setVolume(e.target.value)}
+                            className="w-full bg-zinc-100 dark:bg-black/50 border border-zinc-200 dark:border-white/10 rounded-lg px-2 py-1.5 text-zinc-900 dark:text-white focus:outline-none focus:border-green-500/50 transition-colors text-[10px] appearance-none"
+                        >
+                            <option value="" disabled>{tCommon('fields.volume')}</option>
+                            <option value="tier1">{tCommon('options.volume.tier1')}</option>
+                            <option value="tier2">{tCommon('options.volume.tier2')}</option>
+                            <option value="tier3">{tCommon('options.volume.tier3')}</option>
+                            <option value="tier4">{tCommon('options.volume.tier4')}</option>
+                        </select>
+                   </div>
+ 
+                   <div>
+                        <select
+                            required
+                            value={painPoint}
+                            onChange={(e) => setPainPoint(e.target.value)}
+                            className="w-full bg-zinc-100 dark:bg-black/50 border border-zinc-200 dark:border-white/10 rounded-lg px-2 py-1.5 text-zinc-900 dark:text-white focus:outline-none focus:border-green-500/50 transition-colors text-[10px] appearance-none"
+                        >
+                            <option value="" disabled>{tCommon('fields.painPoint')}</option>
+                             <option value="lostCalls">{tCommon('options.painPoint.lostCalls')}</option>
+                            <option value="repetitiveTasks">{tCommon('options.painPoint.repetitiveTasks')}</option>
+                            <option value="highCost">{tCommon('options.painPoint.highCost')}</option>
+                            <option value="slowResponse">{tCommon('options.painPoint.slowResponse')}</option>
+                            <option value="qualityControl">{tCommon('options.painPoint.qualityControl')}</option>
+                        </select>
+                   </div>
+               </div>
+
+               {callMode === 'schedule' && (
+                   <motion.div 
+                     initial={{ opacity: 0, height: 0 }}
+                     animate={{ opacity: 1, height: 'auto' }}
+                     className="overflow-hidden"
+                   >
+                        <div>
+                            <label className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">{t('preferredTime')}</label>
+                            <input 
+                                required={callMode === 'schedule'}
+                                type="datetime-local" 
+                                className="w-full bg-zinc-100 dark:bg-black/50 border border-zinc-200 dark:border-white/10 rounded-lg p-2 text-zinc-900 dark:text-white focus:outline-none focus:border-green-500/50 transition-colors [color-scheme:light] dark:[color-scheme:dark] text-xs"
+                                value={scheduleTime}
+                                onChange={(e) => setScheduleTime(e.target.value)}
+                                min={new Date().toISOString().slice(0, 16)}
+                            />
+                        </div>
+                   </motion.div>
+               )}
                
-               <button type="submit" disabled={formStep === 'submitting'} className="w-full py-4 bg-green-600 hover:bg-green-500 text-white font-bold rounded-lg transition-all shadow-lg shadow-green-900/20 flex items-center justify-center gap-2 mt-2 disabled:opacity-50">
-                 <PhoneIncoming className="size-5" />
-                 {t('wantCall')}
+               <button type="submit" className="w-full py-4 bg-green-600 hover:bg-green-500 text-white font-bold rounded-lg transition-all shadow-lg shadow-green-900/20 flex items-center justify-center gap-2 mt-2 disabled:opacity-50">
+                 {callMode === 'now' ? <PhoneIncoming className="size-5" /> : <Clock className="size-5" />}
+                 {callMode === 'now' ? t('wantCall') : t('scheduleCall')}
                </button>
                <p className="text-[10px] text-zinc-600 text-center">
                   {t('submitDisclaimer')}

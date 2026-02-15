@@ -15,6 +15,7 @@ export function Process() {
           <h2 className="text-3xl font-bold mb-4 text-zinc-900 dark:text-white">{t('title')}</h2>
           <p className="text-xl text-violet-600 dark:text-violet-400 font-medium mb-4">{t('subtitle')}</p>
           <p className="text-zinc-600 dark:text-neutral-400">{t('description')}</p>
+          <p className="text-xs text-zinc-500 dark:text-neutral-500 mt-3">{t('microcopySetup')}</p>
         </div>
 
         <div className="relative grid md:grid-cols-3 gap-8">
@@ -50,4 +51,3 @@ export function Process() {
     </section>
   );
 }
-

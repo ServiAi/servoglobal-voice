@@ -1,16 +1,16 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { CheckCircle, Rocket, Users, Sparkles, Code } from 'lucide-react';
+import { Phone, Plug, Users, Sparkles, Server, HeartHandshake } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 const FEATURES = [
-  { key: 'clearHonest', icon: CheckCircle, color: 'emerald' },
-  { key: 'shipFast', icon: Rocket, color: 'blue' },
-  { key: 'builtByBuilders', icon: Users, color: 'violet' },
-  { key: 'aiThatWorks', icon: Sparkles, color: 'amber' },
-  { key: 'youOwnEverything', icon: Code, color: 'rose' },
-  { key: 'supportPartner', icon: CheckCircle, color: 'cyan' },
+  { key: 'voiceExperience', icon: Phone, color: 'emerald' },
+  { key: 'existingInfra', icon: Plug, color: 'blue' },
+  { key: 'guidedImplementation', icon: Users, color: 'violet' },
+  { key: 'clickToIACall', icon: Sparkles, color: 'amber' },
+  { key: 'customVoiceInfra', icon: Server, color: 'rose' },
+  { key: 'continuousSupport', icon: HeartHandshake, color: 'cyan' },
 ] as const;
 
 const containerVariants = {

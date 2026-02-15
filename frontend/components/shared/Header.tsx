@@ -22,6 +22,7 @@ export function Header() {
     { name: t('cases'), href: '#casos' },
     { name: t('howItWorks'), href: '#como-funciona' },
     { name: t('integrations'), href: '#integraciones' },
+    { name: t('pricing'), href: '#precios' },
     { name: t('demo'), href: '#demos' },
   ];
 

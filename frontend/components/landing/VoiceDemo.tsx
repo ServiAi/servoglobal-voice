@@ -29,6 +29,7 @@ export function VoiceDemo() {
         <div className="flex justify-center mb-12">
             <div className="flex p-1 bg-white dark:bg-neutral-900/50 border border-zinc-200 dark:border-white/10 rounded-xl backdrop-blur-sm shadow-sm dark:shadow-none">
                 <button
+                    suppressHydrationWarning
                     onClick={() => setActiveTab('inbound')}
                     className={cn(
                         "px-6 py-3 rounded-lg text-sm font-semibold transition-all duration-300",
@@ -40,6 +41,7 @@ export function VoiceDemo() {
                     {t('inboundTab')}
                 </button>
                 <button
+                    suppressHydrationWarning
                     onClick={() => setActiveTab('outbound')}
                     className={cn(
                         "px-6 py-3 rounded-lg text-sm font-semibold transition-all duration-300",
