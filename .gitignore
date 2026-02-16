@@ -51,3 +51,9 @@ Thumbs.db
 *.tsbuildinfo
 
 
+
+# User requested ignores
+landing_content.md
+specs.md
+references/
+*log.txt
