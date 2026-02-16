@@ -82,7 +82,9 @@ export function useUltravox() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to get join URL');
+        const errorText = await response.text();
+        console.error('Failed to get join URL:', errorText);
+        throw new Error(`Failed to get join URL: ${errorText}`);
       }
 
       const data = await response.json();
