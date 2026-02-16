@@ -71,7 +71,8 @@ export function useUltravox() {
 
     try {
       // Fetch the Join URL from our backend
-      const response = await fetch('http://localhost:8000/api/v1/calls', {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
+      const response = await fetch(`${API_URL}/api/v1/calls`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
