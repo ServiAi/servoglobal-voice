@@ -55,9 +55,9 @@
     "descriptionFull": "Captura datos, entiende intención y ejecuta acciones: cita, visita, ticket, pago o promesa de pago.",
     "descriptionShort": "Captura datos, entiende y ejecuta acciones 24/7.",
     "microcopySetup": "Implementación personalizada (setup) + operación mensual + consumo variable según canales y volumen.",
-    "microcopySuperPlus": "Activa Click-to-IA-Call: formulario inteligente → llamada con IA con contexto → cierre más rápido.",
+    "microcopySuperPlus": "Activa Click-to-Servi-IA-Call: formulario inteligente → llamada con Servi-IA con contexto → cierre más rápido.",
     "ctaPrimary": "Agendar Preconsultoría",
-    "ctaSecondary": "Probar IA Ahora"
+    "ctaSecondary": "Probar Servi-IA Ahora"
   },
   "demoCommon": {
     "fillAllFields": "Por favor, completa todos los campos para continuar.",
@@ -66,7 +66,7 @@
       "company": "Nombre de la Empresa",
       "phone": "Teléfono / WhatsApp",
       "industry": "Industria (Sector de la Empresa)",
-      "useCase": "Caso de Uso (¿Qué hará la IA?)",
+      "useCase": "Caso de Uso (¿Qué hará Servi-IA?)",
       "volume": "Volumen Estimado de Llamadas Mensuales",
       "painPoint": "Diagnóstico del Dolor"
     },
@@ -110,11 +110,11 @@
   },
   "useCases": {
     "title": "Elige tu caso de uso",
-    "subtitle": "Nuestros agentes se adaptan a tu modelo de negocio. Selecciona tu industria para ver cómo podemos ayudarte.",
+    "subtitle": "Nuestros agentes Servi-IA se adaptan a tu modelo de negocio. Selecciona tu industria para ver cómo podemos ayudarte.",
     "automates": "Automatiza",
     "typicalIntegrations": "Integraciones Típicas",
     "scheduleFor": "Agendar diagnóstico para",
-    "tryIAFor": "Probar IA ahora para",
+    "tryIAFor": "Probar Servi-IA ahora para",
     "verticals": {
       "atencion": {
         "title": "Atención al Cliente",
@@ -161,7 +161,7 @@
     }
   },
   "benefits": {
-    "title": "¿Cómo un Agente de IA Puede Beneficiarte?",
+    "title": "¿Cómo Servi-IA Puede Beneficiarte?",
     "subtitle": "Resultados tangibles desde el primer mes de implementación.",
     "items": {
       "sales": {
@@ -201,7 +201,7 @@
   "process": {
     "title": "No vendemos una plataforma.",
     "subtitle": "Implementamos un sistema que encaja con tu operación.",
-    "description": "Implementación personalizada con setup según alcance: integraciones, flujos y canales. Ofrecemos Click-to-IA-Call para aumentar conversiones con contexto previo.",
+    "description": "Implementación personalizada con setup según alcance: integraciones, flujos y canales. Ofrecemos Click-to-Servi-IA-Call para aumentar conversiones con contexto previo.",
     "microcopySetup": "Implementación personalizada (setup) según alcance.",
     "cta": "Comenzar con Fase 1",
     "phases": {
@@ -215,9 +215,9 @@
       "phase2": {
         "number": "2",
         "title": "Implementación (Piloto)",
-        "description": "Construimos tu agente, integramos canales (voz + mensajería + CRM + calendarios) y entrenamos flujos.",
+        "description": "Construimos tu Servi-IA, integramos canales (voz + mensajería + CRM + calendarios) y entrenamos flujos.",
         "deliverableLabel": "Resultado:",
-        "deliverable": "Agente funcional + Integraciones configuradas"
+        "deliverable": "Servi-IA funcional + Integraciones configuradas"
       },
       "phase3": {
         "number": "3",
@@ -249,21 +249,21 @@
     "cta": "Agendar preconsultoría",
     "plans": {
       "conecta": {
-        "name": "Plan Starter",
+        "name": "Servi-IA Starter",
         "idealFor": "Validar canal de voz / bajo volumen",
         "includes": "1,000 min WebRTC + 300 min DID",
         "monthly": "$299",
         "setup": "$900"
       },
       "integra": {
-        "name": "Plan Growth",
+        "name": "Servi-IA Growth",
         "idealFor": "Escalar operaciones / omnicanalidad",
         "includes": "3,000 min WebRTC + 1,000 min DID + 1 DID (Local/USA)",
         "monthly": "$699",
         "setup": "$1.800"
       },
       "escala": {
-        "name": "Plan Enterprise",
+        "name": "Servi-IA Enterprise",
         "idealFor": "Altos volúmenes / misión crítica",
         "includes": "8,000 min WebRTC + 2,500 min DID + Programador Saliente",
         "monthly": "$1.499",
@@ -272,14 +272,14 @@
     },
     "excess": {
       "title": "Tarifas por Excesos y Adicionales (Mensual)",
-      "webrtc": "Click-to-Call IA (Web): $0.09/min",
+      "webrtc": "Click-to-Call Servi-IA (Web): $0.09/min",
       "didIn": "Entrante DID: $0.10/min",
       "outbound": "Saliente: $0.14/min",
       "didExtra": "DID Extra: USA $20 / CO $30 / Celular $39"
     },
     "addon": {
-      "name": "Super Plus: Click-to-IA-Call",
-      "description": "Formulario inteligente → Llamada con IA con contexto para acelerar cierres.",
+      "name": "Super Plus: Click-to-Servi-IA-Call",
+      "description": "Formulario inteligente → Llamada con Servi-IA con contexto para acelerar cierres.",
       "monthly": "$199",
       "setup": "$600"
     },
@@ -300,7 +300,7 @@
     "items": {
       "replaceTeam": {
         "question": "¿Esto reemplaza a mi equipo?",
-        "answer": "No. Automatiza lo repetitivo y libera a tu equipo para tareas de mayor valor. El agente escala a humano cuando corresponde."
+        "answer": "No. Automatiza lo repetitivo y libera a tu equipo para tareas de mayor valor. Servi-IA escala a humano cuando corresponde."
       },
       "changeOperation": {
         "question": "¿Necesito cambiar mi operación actual?",
@@ -316,7 +316,7 @@
       },
       "omnichannel": {
         "question": "¿Funciona con mensajería y llamadas?",
-        "answer": "Sí. Nuestros agentes son omnicanal: voz (telefonía), mensajería y web chat, integrados según tu operación."
+        "answer": "Sí. Servi-IA es omnicanal: voz (telefonía), mensajería y web chat, integrados según tu operación."
       },
       "handoffRequired": {
         "question": "¿El handoff a humano es obligatorio?",
@@ -327,12 +327,12 @@
         "answer": "Sí. Exportación de métricas, acceso a dashboards y reportes periódicos están disponibles bajo solicitud."
       },
       "whatIsClickToIA": {
-        "question": "¿Qué es Click-to-IA-Call?",
-        "answer": "Es una experiencia donde el usuario completa un formulario rápido y queda conectado con un agente de IA que ya tiene el contexto para cerrar más rápido."
+        "question": "¿Qué es Click-to-Servi-IA-Call?",
+        "answer": "Es una experiencia donde el usuario completa un formulario rápido y queda conectado con Servi-IA que ya tiene el contexto para cerrar más rápido."
       },
       "whatIsCallback": {
-        "question": "¿Qué es 'IA te llama ahora'?",
-        "answer": "Es la variante donde el usuario deja su número con consentimiento y el sistema dispara una llamada con IA con el contexto del formulario."
+        "question": "¿Qué es 'Servi-IA te llama ahora'?",
+        "answer": "Es la variante donde el usuario deja su número con consentimiento y el sistema dispara una llamada con Servi-IA con el contexto del formulario."
       },
       "dataPrivacy": {
         "question": "¿Manejan datos sensibles (Salud, Banca, Gobierno) y normativas estrictas?",
@@ -348,29 +348,29 @@
     "cta": "Agendar Preconsultoría"
   },
   "voiceDemo": {
-    "title": "Prueba Click-to-IA-Call ahora",
+    "title": "Prueba Click-to-Servi-IA-Call ahora",
     "subtitle": "Tu embudo en redes/web: Formulario → Contexto al Agente → Cierre inmediato.",
     "disclaimer": "Esta demo es un ejemplo. En la preconsultoría se diseña tu flujo real con tus reglas e integraciones.",
-    "inboundTab": "Click-to-IA-Call (Web)",
-    "outboundTab": "IA te llama ahora"
+    "inboundTab": "Click-to-Servi-IA-Call (Web)",
+    "outboundTab": "Servi-IA te llama ahora"
   },
   "demoInbound": {
     "callEnded": "¡Interacción finalizada!",
-    "callEndedDesc": "Así funciona Click-to-IA-Call. ¿Listo para diseñar tu flujo real?",
+    "callEndedDesc": "Así funciona Click-to-Servi-IA-Call. ¿Listo para diseñar tu flujo real?",
     "scheduleConsultation": "Agendar Preconsultoría",
     "tryAgain": "Volver a probar",
-    "simulatorVersion": "Demo Click-to-IA-Call",
+    "simulatorVersion": "Demo Click-to-Servi-IA-Call",
     "online": "En línea",
-    "webCall": "Llamada con IA (Demo)",
-    "selectAgentDesc": "Completa el formulario y conecta con un agente IA con contexto.",
+    "webCall": "Llamada con Servi-IA (Demo)",
+    "selectAgentDesc": "Completa el formulario y conecta con Servi-IA con contexto.",
     "agentType": "Vertical",
     "agentSales": "Ventas",
     "agentSupport": "Soporte",
     "agentCollections": "Cobranza",
     "agentBookings": "Reservas",
-    "callNow": "Conectar con IA",
+    "callNow": "Conectar con Servi-IA",
     "connecting": "Preparando contexto...",
-    "agent": "Conectado con IA",
+    "agent": "Conectado con Servi-IA",
     "establishingConnection": "Generando Context Pack...",
     "namePlaceholder": "Nombre completo",
     "emailPlaceholder": "Correo electrónico",
@@ -378,22 +378,22 @@
   },
   "demoOutbound": {
     "requestCompleted": "Solicitud enviada",
-    "requestCompletedDesc": "Hemos recibido tus datos. El agente de IA te contactará con el contexto de tu formulario.",
+    "requestCompletedDesc": "Hemos recibido tus datos. Servi-IA te contactará con el contexto de tu formulario.",
     "scheduleConsultation": "Agendar preconsultoría",
     "back": "Volver",
-    "weCallYou": "IA te llama ahora",
-    "weCallYouDesc": "Deja tus datos, completa el formulario y el agente de IA te llama con contexto.",
+    "weCallYou": "Servi-IA te llama ahora",
+    "weCallYouDesc": "Deja tus datos, completa el formulario y Servi-IA te llama con contexto.",
     "name": "Nombre",
     "namePlaceholder": "Tu nombre",
     "email": "Correo Electrónico",
     "emailPlaceholder": "tu@email.com",
     "phone": "Teléfono",
     "phonePlaceholder": "Teléfono",
-    "wantCall": "Solicitar llamada con IA",
+    "wantCall": "Solicitar llamada con Servi-IA",
     "submitDisclaimer": "Al enviar, aceptas ser contactado. Tus datos serán utilizados únicamente para esta interacción.",
     "processingRequest": "Generando Context Pack...",
     "simulatingCall": "Solicitud Recibida",
-    "agentDialing": "El agente de IA te llamará con el contexto de tu formulario.",
+    "agentDialing": "Servi-IA te llamará con el contexto de tu formulario.",
     "hangUp": "Finalizar",
     "callScheduled": "¡Callback Agendado!",
     "callScheduledDesc": "Te llamaremos el",
@@ -405,10 +405,10 @@
   },
   "floatingCta": {
     "scheduleButton": "Agendar Ahora",
-    "demoButton": "Probar IA"
+    "demoButton": "Probar Servi-IA"
   },
   "footer": {
-    "tagline": "Agentes de IA que trabajan mientras tú descansas.",
+    "tagline": "Agentes Servi-IA que trabajan mientras tú descansas.",
     "product": "Producto",
     "services": "Servicios",
     "servicesItems": {

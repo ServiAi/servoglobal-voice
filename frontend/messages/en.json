@@ -55,9 +55,9 @@
     "descriptionFull": "Capture data, understand intent, and execute actions: appointments, visits, tickets, payments, or payment promises.",
     "descriptionShort": "Answer, understand, and execute actions 24/7.",
     "microcopySetup": "Custom implementation (setup) + monthly operation + variable consumption by channels and volume.",
-    "microcopySuperPlus": "Activate Click-to-IA-Call: smart form → AI call with context → faster closing.",
+    "microcopySuperPlus": "Activate Click-to-Servi-IA-Call: smart form → Servi-IA call with context → faster closing.",
     "ctaPrimary": "Book Consultation",
-    "ctaSecondary": "Try AI Now"
+    "ctaSecondary": "Try Servi-IA Now"
   },
   "demoCommon": {
     "fillAllFields": "Please complete all fields to continue.",
@@ -66,7 +66,7 @@
       "company": "Company Name",
       "phone": "Phone / WhatsApp",
       "industry": "Industry (Company Sector)",
-      "useCase": "Use Case (What will the AI do?)",
+      "useCase": "Use Case (What will Servi-IA do?)",
       "volume": "Estimated Monthly Call Volume",
       "painPoint": "Pain Point Diagnosis"
     },
@@ -110,11 +110,11 @@
   },
   "useCases": {
     "title": "Choose your use case",
-    "subtitle": "Our agents adapt to your business model. Select your industry to see how we can help.",
+    "subtitle": "Our Servi-IA agents adapt to your business model. Select your industry to see how we can help.",
     "automates": "Automates",
     "typicalIntegrations": "Typical Integrations",
     "scheduleFor": "Schedule diagnosis for",
-    "tryIAFor": "Try AI now for",
+    "tryIAFor": "Try Servi-IA now for",
     "verticals": {
       "atencion": {
         "title": "Customer Service",
@@ -161,7 +161,7 @@
     }
   },
   "benefits": {
-    "title": "How can an AI Agent benefit you?",
+    "title": "How can Servi-IA benefit you?",
     "subtitle": "Tangible results from the first month of implementation.",
     "items": {
       "sales": {
@@ -201,7 +201,7 @@
   "process": {
     "title": "We don't sell a platform.",
     "subtitle": "We implement a system that fits your operation.",
-    "description": "Custom implementation with setup based on scope: integrations, flows and channels. We offer Click-to-IA-Call to boost conversions with prior context.",
+    "description": "Custom implementation with setup based on scope: integrations, flows and channels. We offer Click-to-Servi-IA-Call to boost conversions with prior context.",
     "microcopySetup": "Custom implementation (setup) based on scope.",
     "cta": "Start with Phase 1",
     "phases": {
@@ -215,9 +215,9 @@
       "phase2": {
         "number": "2",
         "title": "Implementation (Pilot)",
-        "description": "We build your agent, integrate channels (voice + messaging + CRM + calendars) and train flows.",
+        "description": "We build your Servi-IA, integrate channels (voice + messaging + CRM + calendars) and train flows.",
         "deliverableLabel": "Result:",
-        "deliverable": "Functional agent + Configured integrations"
+        "deliverable": "Functional Servi-IA + Configured integrations"
       },
       "phase3": {
         "number": "3",
@@ -249,21 +249,21 @@
     "cta": "Book consultation",
     "plans": {
       "conecta": {
-        "name": "Servi-IA Conecta",
+        "name": "Servi-IA Starter",
         "idealFor": "1 vertical / low volume",
-        "includes": "Click-to-IA-Call base + essential flows + outcomes",
+        "includes": "Click-to-Servi-IA-Call base + essential flows + outcomes",
         "monthly": "$299",
         "setup": "$900"
       },
       "integra": {
-        "name": "Servi-IA Integra",
+        "name": "Servi-IA Growth",
         "idealFor": "2–3 verticals",
         "includes": "+ advanced automations + reporting",
         "monthly": "$699",
         "setup": "$1,800"
       },
       "escala": {
-        "name": "Servi-IA Escala",
+        "name": "Servi-IA Enterprise",
         "idealFor": "High volume / complex operation",
         "includes": "+ continuous optimization + advanced support",
         "monthly": "$1,499",
@@ -272,7 +272,7 @@
     },
     "addon": {
       "name": "Servi-IA Turbo",
-      "description": "Advanced Click-to-IA-Call for campaigns and complex funnels",
+      "description": "Advanced Click-to-Servi-IA-Call for campaigns and complex funnels",
       "monthly": "$199",
       "setup": "$600"
     },
@@ -293,7 +293,7 @@
     "items": {
       "replaceTeam": {
         "question": "Does this replace my team?",
-        "answer": "No. It automates repetitive tasks and frees your team for higher-value work. The agent escalates to human when needed."
+        "answer": "No. It automates repetitive tasks and frees your team for higher-value work. Servi-IA escalates to human when needed."
       },
       "changeOperation": {
         "question": "Do I need to change my current operation?",
@@ -309,7 +309,7 @@
       },
       "omnichannel": {
         "question": "Does it work with messaging and calls?",
-        "answer": "Yes. Our agents are omnichannel: voice (telephony), messaging, and web chat, integrated based on your operation."
+        "answer": "Yes. Servi-IA is omnichannel: voice (telephony), messaging, and web chat, integrated based on your operation."
       },
       "handoffRequired": {
         "question": "Is human handoff mandatory?",
@@ -320,12 +320,12 @@
         "answer": "Yes. Metric exports, dashboard access, and periodic reports are available upon request."
       },
       "whatIsClickToIA": {
-        "question": "What is Click-to-IA-Call?",
-        "answer": "It's an experience where the user fills a quick form and connects with an AI agent that already has the context to close faster."
+        "question": "What is Click-to-Servi-IA-Call?",
+        "answer": "It's an experience where the user fills a quick form and connects with Servi-IA that already has the context to close faster."
       },
       "whatIsCallback": {
-        "question": "What is 'AI calls you now'?",
-        "answer": "It's the variant where the user leaves their number with consent and the system triggers an AI call with the form's context."
+        "question": "What is 'Servi-IA calls you now'?",
+        "answer": "It's the variant where the user leaves their number with consent and the system triggers a Servi-IA call with the form's context."
       },
       "dataPrivacy": {
         "question": "Do you handle sensitive data (Health, Banking, Gov) and strict regulations?",
@@ -341,29 +341,29 @@
     "cta": "Book Consultation"
   },
   "voiceDemo": {
-    "title": "Try Click-to-IA-Call now",
-    "subtitle": "Try the funnel: form → AI call with context → close.",
+    "title": "Try Click-to-Servi-IA-Call now",
+    "subtitle": "Try the funnel: form → Servi-IA call with context → close.",
     "disclaimer": "This demo is an example. In the consultation we design your real flow with your rules and integrations.",
-    "inboundTab": "Click-to-IA-Call (Web)",
-    "outboundTab": "AI calls you now"
+    "inboundTab": "Click-to-Servi-IA-Call (Web)",
+    "outboundTab": "Servi-IA calls you now"
   },
   "demoInbound": {
     "callEnded": "Interaction ended!",
-    "callEndedDesc": "That's how Click-to-IA-Call works. Ready to design your real flow?",
+    "callEndedDesc": "That's how Click-to-Servi-IA-Call works. Ready to design your real flow?",
     "scheduleConsultation": "Book Consultation",
     "tryAgain": "Try again",
-    "simulatorVersion": "Click-to-IA-Call Demo",
+    "simulatorVersion": "Click-to-Servi-IA-Call Demo",
     "online": "Online",
-    "webCall": "AI Call (Demo)",
-    "selectAgentDesc": "Fill the form and connect with an AI agent with context.",
+    "webCall": "Servi-IA Call (Demo)",
+    "selectAgentDesc": "Fill the form and connect with Servi-IA with context.",
     "agentType": "Vertical",
     "agentSales": "Sales",
     "agentSupport": "Support",
     "agentCollections": "Collections",
     "agentBookings": "Bookings",
-    "callNow": "Connect with AI",
+    "callNow": "Connect with Servi-IA",
     "connecting": "Preparing context...",
-    "agent": "Connected with AI",
+    "agent": "Connected with Servi-IA",
     "establishingConnection": "Generating Context Pack...",
     "namePlaceholder": "Full name",
     "emailPlaceholder": "Email address",
@@ -371,22 +371,22 @@
   },
   "demoOutbound": {
     "requestCompleted": "Request sent",
-    "requestCompletedDesc": "We received your data. The AI agent will contact you with your form's context.",
+    "requestCompletedDesc": "We received your data. Servi-IA will contact you with your form's context.",
     "scheduleConsultation": "Book consultation",
     "back": "Back",
-    "weCallYou": "AI calls you now",
-    "weCallYouDesc": "Leave your details, fill the form and the AI agent calls you with context.",
+    "weCallYou": "Servi-IA calls you now",
+    "weCallYouDesc": "Leave your details, fill the form and Servi-IA calls you with context.",
     "name": "Name",
     "namePlaceholder": "Your name",
     "email": "Email",
     "emailPlaceholder": "you@email.com",
     "phone": "Phone",
     "phonePlaceholder": "Phone",
-    "wantCall": "Request AI call",
+    "wantCall": "Request Servi-IA call",
     "submitDisclaimer": "By submitting, you agree to be contacted. Your data will only be used for this interaction.",
     "processingRequest": "Generating Context Pack...",
     "simulatingCall": "Request Received",
-    "agentDialing": "The AI agent will call you with your form's context.",
+    "agentDialing": "Servi-IA will call you with your form's context.",
     "hangUp": "End",
     "callScheduled": "Callback Scheduled!",
     "callScheduledDesc": "We will call you at",
@@ -398,10 +398,10 @@
   },
   "floatingCta": {
     "scheduleButton": "Schedule Now",
-    "demoButton": "Try AI"
+    "demoButton": "Try Servi-IA"
   },
   "footer": {
-    "tagline": "AI Agents that work while you rest.",
+    "tagline": "Servi-IA Agents that work while you rest.",
     "product": "Product",
     "services": "Services",
     "servicesItems": {
