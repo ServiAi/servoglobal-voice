@@ -57,7 +57,8 @@ class CreateOutboundCallRequest(BaseModel):
 async def create_outbound_call(request: CreateOutboundCallRequest):
     try:
         # Pass name/email as context if needed
-        context = {}
+        # Pass name/email as context if needed
+        context = {"user_phone": request.phone}
         if request.name:
             context["user_name"] = request.name
         if request.email:

@@ -60,6 +60,7 @@
     "ctaSecondary": "Try AI Now"
   },
   "demoCommon": {
+    "fillAllFields": "Please complete all fields to continue.",
     "fields": {
       "name": "Full Name",
       "company": "Company Name",

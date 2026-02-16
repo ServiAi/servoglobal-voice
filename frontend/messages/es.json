@@ -60,6 +60,7 @@
     "ctaSecondary": "Probar IA Ahora"
   },
   "demoCommon": {
+    "fillAllFields": "Por favor, completa todos los campos para continuar.",
     "fields": {
       "name": "Nombre Completo",
       "company": "Nombre de la Empresa",

@@ -296,6 +296,11 @@ export function DemoInbound() {
                 <Phone className="size-4" />
                 {t('callNow')}
               </button>
+              {(!formData.name || !formData.email || !formData.phone || !formData.company || !formData.industry || !formData.useCase || !formData.volume || !formData.painPoint) && (
+                  <p className="text-[10px] text-amber-600 dark:text-amber-500 text-center animate-pulse">
+                      {tCommon('fillAllFields')}
+                  </p>
+              )}
                <p className="text-[10px] text-zinc-400 text-center">
                   * Powered by ServiGlobal AI Voice Engine
                </p>
