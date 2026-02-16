@@ -275,7 +275,16 @@
       "monthly": "$199",
       "setup": "$600"
     },
-    "consumptionNote": "Consumption (minutes and messaging) varies by country and volume. Billed based on plan and actual usage."
+    "consumptionNote": "Consumption (minutes and messaging) varies by country and volume. Billed based on plan and actual usage.",
+    "services": {
+      "byopbx": {
+        "header": "Infrastructure Professional Services",
+        "name": "Professional Services (BYO PBX)",
+        "description": "Implementation on client infrastructure.",
+        "assessment": "Mandatory prior assessment (infrastructure review): $500",
+        "setup": "Variable setup subject to quote."
+      }
+    }
   },
   "faq": {
     "title": "Frequently Asked Questions",

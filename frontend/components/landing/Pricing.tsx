@@ -193,7 +193,7 @@ export function Pricing() {
            className="max-w-4xl mx-auto"
         >
            <h3 className="text-2xl font-bold text-center text-zinc-900 dark:text-white mb-8">
-             Servicios Profesionales de Infraestructura
+            {t('services.byopbx.header')}
            </h3>
            <div className="bg-blue-100 dark:bg-blue-900/40 rounded-2xl border border-blue-200 dark:border-blue-800 p-8 shadow-sm">
               <div className="flex flex-col md:flex-row gap-6 items-start">

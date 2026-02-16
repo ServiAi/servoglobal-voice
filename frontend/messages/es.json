@@ -284,6 +284,7 @@
     },
     "services": {
       "byopbx": {
+        "header": "Servicios Profesionales de Infraestructura",
         "name": "Servicios Profesionales (BYO PBX)",
         "description": "Implementación en infraestructura del cliente.",
         "assessment": "Assessment previo obligatorio (revisión de infraestructura): $500",

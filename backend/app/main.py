@@ -40,13 +40,17 @@ def health_check():
     return {"status": "ok"}
 
 
-
 class CreateOutboundCallRequest(BaseModel):
     name: str | None = None
     email: str | None = None
     phone: str
     agent_id: str | None = None
     schedule_time: str | None = None  # ISO 8601 string
+    company: str | None = None
+    industry: str | None = None
+    useCase: str | None = None
+    volume: str | None = None
+    painPoint: str | None = None
 
 
 @app.post("/api/v1/call-outbound")
@@ -58,9 +62,20 @@ async def create_outbound_call(request: CreateOutboundCallRequest):
             context["user_name"] = request.name
         if request.email:
             context["user_email"] = request.email
+        if request.company:
+            context["user_company"] = request.company
+        if request.industry:
+            context["user_industry"] = request.industry
+        if request.useCase:
+            context["user_use_case"] = request.useCase
+        if request.volume:
+            context["user_volume"] = request.volume
+        if request.painPoint:
+            context["user_pain_point"] = request.painPoint
 
         if request.schedule_time:
             from app.services.voice_service import create_scheduled_sip_call_via_pbx
+
             result = await create_scheduled_sip_call_via_pbx(
                 phone=request.phone,
                 schedule_time=request.schedule_time,
