@@ -61,7 +61,7 @@ def normalize_e164_colombia(phone: str) -> str:
 
     digits = re.sub(r"\D", "", phone)
 
-    # If 10 digits starting with 3 (e.g. 3001234567), prepend 57
+    # If 10 digits starting with 3 (e.g. 3001234567), 
     if len(digits) == 10 and digits.startswith("3"):
         return f"57{digits}"
     # If already has 57 (12 digits), return as is
