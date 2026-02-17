@@ -8,6 +8,7 @@ import { Globe, Menu, X, Phone } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTranslations, useLocale } from 'next-intl';
 import { ThemeToggle } from '../ui/ThemeToggle';
+import { ContactModal } from './ContactModal';
 
 export function Header() {
   const t = useTranslations('header');
@@ -49,14 +50,14 @@ export function Header() {
       )}
     >
       <div className="container mx-auto px-4 md:px-6 flex items-center justify-between">
-        <Link href={`/${locale}`} className="flex items-center gap-2 group">
-          <div className="relative size-9 rounded-full bg-gradient-to-tr from-blue-500 to-violet-500 flex items-center justify-center overflow-hidden shadow-lg shadow-violet-500/20 group-hover:shadow-violet-500/40 transition-all">
-             <Globe className="absolute size-5 text-white/40 animate-spin-slow" strokeWidth={1.5} />
-             <Phone className="absolute size-4 text-white fill-white/20 z-10" strokeWidth={2.5} />
+        <Link href={`/${locale}`} className="flex items-center gap-3 group">
+          <div className="relative size-11 rounded-xl bg-gradient-to-tr from-blue-500 to-violet-500 flex items-center justify-center overflow-hidden shadow-lg shadow-violet-500/20 group-hover:shadow-violet-500/40 transition-all transform group-hover:scale-105">
+             <Globe className="absolute size-6 text-white/40 animate-spin-slow" strokeWidth={1.5} />
+             <Phone className="absolute size-5 text-white fill-white/20 z-10" strokeWidth={2.5} />
           </div>
-          <span className="text-lg font-bold tracking-tight text-zinc-900 dark:text-white transition-colors flex items-center gap-1.5">
+          <span className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-white transition-colors flex items-center gap-1.5">
             ServiGlobal
-            <span className="flex items-center justify-center size-2 rounded-[1px] bg-violet-600 dark:bg-violet-500 animate-pulse" />
+            <span className="flex items-center justify-center size-2.5 rounded-[1px] bg-violet-600 dark:bg-violet-500 animate-pulse" />
             <span className="text-violet-600 dark:text-violet-500">IA</span>
           </span>
         </Link>
@@ -76,6 +77,12 @@ export function Header() {
 
         {/* Desktop CTA + Language Switcher */}
         <div className="hidden md:flex items-center gap-4">
+          <ContactModal>
+            <button className="text-sm font-medium text-zinc-600 dark:text-white/70 hover:text-zinc-900 dark:hover:text-white transition-colors">
+              Contáctanos
+            </button>
+          </ContactModal>
+
           <ThemeToggle />
           
           {/* Language Switcher */}
@@ -171,6 +178,14 @@ export function Header() {
                   {link.name}
                 </Link>
               ))}
+              <ContactModal>
+                <button 
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="w-full text-left text-zinc-800 dark:text-white/80 hover:text-violet-600 dark:hover:text-white font-medium py-2 border-b border-zinc-100 dark:border-white/5"
+                >
+                  Contáctanos
+                </button>
+              </ContactModal>
               <Link
                 href="#agendar"
                 onClick={() => setMobileMenuOpen(false)}

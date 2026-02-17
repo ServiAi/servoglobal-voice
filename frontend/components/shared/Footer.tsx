@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
+import { ContactModal } from './ContactModal';
 
 export function Footer() {
   const t = useTranslations('footer');
@@ -21,6 +22,9 @@ export function Footer() {
             </h3>
             <p className="text-sm text-zinc-500 dark:text-neutral-500">
               {t('tagline')}
+            </p>
+            <p className="text-xs text-zinc-400 dark:text-neutral-600 mt-2 font-medium">
+              Respaldado por +25 años en voz
             </p>
           </div>
 
@@ -45,7 +49,13 @@ export function Footer() {
               <li><Link href="#casos" className="hover:text-violet-600 transition-colors">Casos</Link></li>
               <li><Link href="#precios" className="hover:text-violet-600 transition-colors">Precios</Link></li>
               <li><Link href="#demos" className="hover:text-violet-600 transition-colors">Demo</Link></li>
-              <li><Link href="#agendar" className="hover:text-violet-600 transition-colors">{t('contact')}</Link></li>
+              <li>
+                <ContactModal>
+                  <button className="hover:text-violet-600 transition-colors text-left">
+                    {t('contact')}
+                  </button>
+                </ContactModal>
+              </li>
             </ul>
           </div>
         </div>
