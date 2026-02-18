@@ -61,6 +61,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       index: true,
       follow: true,
     },
+    verification: {
+      google: 'RyDrOMFBi4qFU_P6L7F1p3jTyvWLmdH236qnQILKRR8',
+    },
   };
 }
 
