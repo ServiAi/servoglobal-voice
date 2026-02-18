@@ -1,11 +1,17 @@
 "use client"
 
 import React from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from '@/components/ui/dialog';
 import { Mail, MapPin, Phone, Globe, Facebook, Linkedin, Instagram } from 'lucide-react';
 import Image from 'next/image';
 
-export function ContactModal({ children }: { children: React.ReactNode }) {
+interface ContactModalProps {
+  children?: React.ReactNode;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+}
+
+export function ContactModal({ children, open, onOpenChange }: ContactModalProps) {
 
   const contactInfo = [
     {
@@ -53,13 +59,18 @@ export function ContactModal({ children }: { children: React.ReactNode }) {
   ];
 
   return (
-    <Dialog>
-      <DialogTrigger asChild>
-        {children}
-      </DialogTrigger>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      {children && (
+        <DialogTrigger asChild>
+          {children}
+        </DialogTrigger>
+      )}
       <DialogContent className="sm:max-w-md bg-white dark:bg-zinc-950 border-zinc-200 dark:border-white/10">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold text-center mb-4 text-zinc-900 dark:text-white">Contáctanos</DialogTitle>
+          <DialogDescription className="text-center text-zinc-500 dark:text-zinc-400 mb-4">
+             Estamos listos para ayudarte. Encuentra nuestros canales de contacto a continuación.
+          </DialogDescription>
         </DialogHeader>
         
         <div className="space-y-6">
