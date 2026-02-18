@@ -60,7 +60,7 @@ export function FloatingCTA() {
           <button
             suppressHydrationWarning
             data-cal-namespace="agendamiento-de-citas-serviglobal-ai"
-            data-cal-link="jeysson-aly-contreras-asxwla/agendamiento-de-citas-serviglobal-ai"
+            data-cal-link="ventas-ia/agendamiento-de-citas-serviglobal-ai"
             data-cal-config='{"layout":"month_view"}'
             className="relative size-14 rounded-full bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white shadow-xl shadow-violet-500/40 flex items-center justify-center hover:scale-110 transition-transform z-10"
             title={t('scheduleButton')}

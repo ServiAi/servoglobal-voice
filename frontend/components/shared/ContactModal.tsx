@@ -17,8 +17,8 @@ export function ContactModal({ children, open, onOpenChange }: ContactModalProps
     {
       icon: <Mail className="size-5 text-violet-600" />,
       label: 'Correo electrónico',
-      value: 'comercial@serviglobal.co',
-      href: 'mailto:comercial@serviglobal.co'
+      value: 'ventas-ia@serviglobal.co',
+      href: 'mailto:ventas-ia@serviglobal.co'
     },
     {
       icon: <MapPin className="size-5 text-violet-600" />,
