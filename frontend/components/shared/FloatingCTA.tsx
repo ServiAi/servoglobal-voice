@@ -61,7 +61,7 @@ export function FloatingCTA() {
             suppressHydrationWarning
             data-cal-namespace="serviglobal-ventas-ia"
             data-cal-link="serviglobal/serviglobal-ventas-ia"
-            data-cal-config='{"layout":"month_view"}'
+            data-cal-config='{"layout":"month_view","useSlotsViewOnSmallScreen":"true"}'
             className="relative size-14 rounded-full bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white shadow-xl shadow-violet-500/40 flex items-center justify-center hover:scale-110 transition-transform z-10"
             title={t('scheduleButton')}
           >
