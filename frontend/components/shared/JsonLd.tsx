@@ -5,8 +5,8 @@ export function JsonLd() {
     '@context': 'https://schema.org',
     '@type': 'Organization',
     name: 'ServiGlobal · IA',
-    url: 'https://serviglobal.ai', // Replace with actual domain
-    logo: 'https://serviglobal.ai/logo.png', // Replace with actual logo URL
+    url: 'https://www.serviglobal-ia.com',
+    logo: 'https://www.serviglobal-ia.com/logo.png', // Replace with actual logo URL
     description: 'Implementación de agentes de voz con IA y soluciones omnicanal.',
     contactPoint: {
       '@type': 'ContactPoint',

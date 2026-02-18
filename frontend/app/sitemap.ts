@@ -1,7 +1,7 @@
 import { MetadataRoute } from 'next';
 import { locales } from '@/i18n';
 
-const BASE_URL = 'https://serviglobal.ai'; // Replace with actual domain
+const BASE_URL = 'https://www.serviglobal-ia.com';
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const sitemapEntries: MetadataRoute.Sitemap = [];

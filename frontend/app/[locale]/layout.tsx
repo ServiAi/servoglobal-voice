@@ -40,7 +40,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     openGraph: {
       title: t.ogTitle,
       description: t.ogDescription,
-      url: `https://serviglobal.ai/${locale}`,
+      url: `https://www.serviglobal-ia.com/${locale}`,
       siteName: 'ServiGlobal · IA',
       locale: locale,
       type: 'website',
@@ -51,10 +51,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       description: t.twitterDescription,
     },
     alternates: {
-      canonical: `https://serviglobal.ai/${locale}`,
+      canonical: `https://www.serviglobal-ia.com/${locale}`,
       languages: {
-        'es': 'https://serviglobal.ai/es',
-        'en': 'https://serviglobal.ai/en',
+        'es': 'https://www.serviglobal-ia.com/es',
+        'en': 'https://www.serviglobal-ia.com/en',
       },
     },
     robots: {
