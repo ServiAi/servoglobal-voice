@@ -90,54 +90,56 @@ export function Pricing() {
 
                 {/* Pricing */}
                 <div className="mb-6">
-                  <div className="flex items-baseline gap-1 mb-1">
-                    <span className="text-sm text-zinc-500 dark:text-neutral-500">{t('from')}</span>
-                    <span className="text-4xl font-bold text-zinc-900 dark:text-white">
-                      {t(`plans.${planId}.monthly`)}
-                    </span>
-                    <span className="text-sm text-zinc-500 dark:text-neutral-500">/ {t('monthly').toLowerCase()}</span>
-                  </div>
-                  {planId === 'escala' ? (
-                    <p className="text-sm text-violet-600 dark:text-violet-400 font-medium italic">
+                  {planId !== 'escala' && (
+                    <div className="flex items-baseline gap-1 mb-1">
+                      <span className="text-sm text-zinc-500 dark:text-neutral-500">{t('from')}</span>
+                      <span className="text-4xl font-bold text-zinc-900 dark:text-white">
+                        {t(`plans.${planId}.monthly`)}
+                      </span>
+                      <span className="text-sm text-zinc-500 dark:text-neutral-500">/ {t('monthly').toLowerCase()}</span>
+                    </div>
+                  )}
+                  {planId === 'escala' && (
+                    <p className="text-sm text-violet-600 dark:text-violet-400 font-medium italic mt-2">
                       {t(`plans.${planId}.setupLabel`)}
-                    </p>
-                  ) : (
-                    <p className="text-sm text-zinc-500 dark:text-neutral-500">
-                      {t('setup')}: {t('from')} {t(`plans.${planId}.setup`)}
                     </p>
                   )}
                 </div>
 
-                {/* Features */}
-                <ul className="space-y-3 mb-8 flex-1">
-                  {PLAN_HIGHLIGHTS[planId].map((feat, i) => (
-                    <li key={i} className="flex items-start gap-2 text-sm text-zinc-700 dark:text-neutral-300">
-                      <Check className="size-4 text-violet-500 mt-0.5 shrink-0" />
-                      {feat}
-                    </li>
-                  ))}
-                </ul>
+                {/* Features & ExcessRates */}
+                {planId !== 'escala' ? (
+                  <ul className="space-y-3 mb-8 flex-1">
+                    {PLAN_HIGHLIGHTS[planId].map((feat, i) => (
+                      <li key={i} className="flex items-start gap-2 text-sm text-zinc-700 dark:text-neutral-300">
+                        <Check className="size-4 text-violet-500 mt-0.5 shrink-0" />
+                        {feat}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <ul className="space-y-3 mb-8 flex-1 mt-4">
+                    {(t.raw(`plans.${planId}.hooks`) as string[]).map((hook: string, i: number) => (
+                      <li key={i} className="flex items-start gap-2 text-sm text-zinc-700 dark:text-neutral-300 font-medium">
+                        <Check className="size-4 text-violet-500 mt-0.5 shrink-0" />
+                        {hook}
+                      </li>
+                    ))}
+                  </ul>
+                )}
 
-                {/* Excess Rates Mini-Table per Plan (Optional, but user asked for it in card? No, "linea final: Excesos") */}
-                <div className="border-t border-zinc-100 dark:border-white/5 pt-4 mb-6">
-                    <p className="text-xs text-zinc-500 dark:text-neutral-500 font-semibold mb-1">Excesos:</p>
-                    <div className="text-xs text-zinc-500 dark:text-neutral-500 space-y-0.5">
-                        <div className="flex justify-between"><span>Web:</span><span>$0.09/min</span></div>
-                        <div className="flex justify-between"><span>DID:</span><span>$0.10/min</span></div>
-                        <div className="flex justify-between"><span>Out:</span><span>$0.14/min</span></div>
-                    </div>
-                </div>
 
 
                 {/* CTA */}
                 {planId === 'escala' ? (
-                  <Link
-                    href="#contact"
-                    className="w-full text-center py-3 px-6 rounded-xl font-bold transition-all flex items-center justify-center gap-2 bg-violet-600 text-white hover:bg-violet-700 shadow-lg shadow-violet-500/20"
+                  <button
+                    data-cal-namespace="serviglobal-ventas-ia"
+                    data-cal-link="serviglobal/serviglobal-ventas-ia"
+                    data-cal-config='{"layout":"month_view","useSlotsViewOnSmallScreen":"true"}'
+                    className="w-full text-center py-3 px-6 rounded-xl font-bold transition-all flex items-center justify-center gap-2 bg-violet-600 text-white hover:bg-violet-700 shadow-lg shadow-violet-500/20 cursor-pointer"
                   >
                     <Phone className="size-4" />
                     Contactar Ventas
-                  </Link>
+                  </button>
                 ) : (
                   <Link
                     href="#agendar"

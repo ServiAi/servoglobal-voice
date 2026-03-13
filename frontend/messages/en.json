@@ -257,15 +257,13 @@
         "name": "Servi-IA Starter",
         "idealFor": "1 vertical / low volume",
         "includes": "Click-to-Servi-IA-Call base + essential flows + outcomes",
-        "monthly": "$299",
-        "setup": "$550"
+        "monthly": "$550"
       },
       "integra": {
         "name": "Servi-IA Growth",
         "idealFor": "2–3 verticals",
         "includes": "+ advanced automations + reporting",
-        "monthly": "$699",
-        "setup": "$950"
+        "monthly": "$950"
       },
       "escala": {
         "name": "Servi-IA Enterprise",
@@ -273,7 +271,12 @@
         "includes": "+ continuous optimization + advanced support",
         "monthly": "$1,499",
         "setup": "custom",
-        "setupLabel": "We evaluate your requirements and present you with an offer tailored to your needs"
+        "setupLabel": "We evaluate your requirements and present you with an offer tailored to your needs",
+        "hooks": [
+          "Custom architecture (Multi-agent)",
+          "Native integration (PBX, CRM, APIs)",
+          "Dedicated support & onboarding"
+        ]
       }
     },
     "addon": {
