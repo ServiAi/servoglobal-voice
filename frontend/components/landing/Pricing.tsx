@@ -97,9 +97,15 @@ export function Pricing() {
                     </span>
                     <span className="text-sm text-zinc-500 dark:text-neutral-500">/ {t('monthly').toLowerCase()}</span>
                   </div>
-                  <p className="text-sm text-zinc-500 dark:text-neutral-500">
-                    {t('setup')}: {t('from')} {t(`plans.${planId}.setup`)}
-                  </p>
+                  {planId === 'escala' ? (
+                    <p className="text-sm text-violet-600 dark:text-violet-400 font-medium italic">
+                      {t(`plans.${planId}.setupLabel`)}
+                    </p>
+                  ) : (
+                    <p className="text-sm text-zinc-500 dark:text-neutral-500">
+                      {t('setup')}: {t('from')} {t(`plans.${planId}.setup`)}
+                    </p>
+                  )}
                 </div>
 
                 {/* Features */}
@@ -124,18 +130,28 @@ export function Pricing() {
 
 
                 {/* CTA */}
-                <Link
-                  href="#agendar"
-                  className={cn(
-                    'w-full text-center py-3 px-6 rounded-xl font-bold transition-all flex items-center justify-center gap-2',
-                    isPopular
-                      ? 'bg-violet-600 text-white hover:bg-violet-700 shadow-lg shadow-violet-500/20'
-                      : 'bg-zinc-100 dark:bg-white/5 text-zinc-900 dark:text-white border border-zinc-200 dark:border-white/10 hover:bg-violet-50 dark:hover:bg-violet-950/30'
-                  )}
-                >
-                  {t('cta')}
-                  <ArrowRight className="size-4" />
-                </Link>
+                {planId === 'escala' ? (
+                  <Link
+                    href="#contact"
+                    className="w-full text-center py-3 px-6 rounded-xl font-bold transition-all flex items-center justify-center gap-2 bg-violet-600 text-white hover:bg-violet-700 shadow-lg shadow-violet-500/20"
+                  >
+                    <Phone className="size-4" />
+                    Contactar Ventas
+                  </Link>
+                ) : (
+                  <Link
+                    href="#agendar"
+                    className={cn(
+                      'w-full text-center py-3 px-6 rounded-xl font-bold transition-all flex items-center justify-center gap-2',
+                      isPopular
+                        ? 'bg-violet-600 text-white hover:bg-violet-700 shadow-lg shadow-violet-500/20'
+                        : 'bg-zinc-100 dark:bg-white/5 text-zinc-900 dark:text-white border border-zinc-200 dark:border-white/10 hover:bg-violet-50 dark:hover:bg-violet-950/30'
+                    )}
+                  >
+                    {t('cta')}
+                    <ArrowRight className="size-4" />
+                  </Link>
+                )}
               </motion.div>
             );
           })}

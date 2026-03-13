@@ -258,21 +258,22 @@
         "idealFor": "Validar canal de voz / bajo volumen",
         "includes": "1,000 min Llamadas Web + 300 min Número Virtual",
         "monthly": "$299",
-        "setup": "$900"
+        "setup": "$550"
       },
       "integra": {
         "name": "Servi-IA Growth",
         "idealFor": "Escalar operaciones / omnicanalidad",
         "includes": "3,000 min Llamadas Web + 1,000 min Número Virtual + 1 Número Virtual (Local/USA)",
         "monthly": "$699",
-        "setup": "$1.800"
+        "setup": "$950"
       },
       "escala": {
         "name": "Servi-IA Enterprise",
-        "idealFor": "Altos volúmenes / misión crítica",
+        "idealFor": "Soluciones a medida para altos volúmenes y operaciones críticas",
         "includes": "8,000 min Llamadas Web + 2,500 min Número Virtual + Programador Saliente",
         "monthly": "$1.499",
-        "setup": "$3.500"
+        "setup": "custom",
+        "setupLabel": "Evaluamos tus requerimientos y te presentamos una oferta ajustada a tus necesidades"
       }
     },
     "excess": {
