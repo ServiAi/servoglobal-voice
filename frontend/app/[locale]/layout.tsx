@@ -7,6 +7,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { getMessages } from 'next-intl/server';
 import { locales } from '@/i18n';
 import { ThemeProvider } from '@/components/providers/ThemeProvider';
+import { JsonLd } from '@/components/shared/JsonLd';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -22,11 +23,47 @@ export function generateStaticParams() {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { locale } = await params;
   const messages = await getMessages();
-  const t = messages.metadata as { title: string; description: string };
+  const t = messages.metadata as {
+    title: string;
+    description: string;
+    keywords: string;
+    ogTitle: string;
+    ogDescription: string;
+    twitterTitle: string;
+    twitterDescription: string;
+  };
   
   return {
     title: t.title,
     description: t.description,
+    keywords: t.keywords,
+    openGraph: {
+      title: t.ogTitle,
+      description: t.ogDescription,
+      url: `https://www.serviglobal-ia.com/${locale}`,
+      siteName: 'ServiGlobal · IA',
+      locale: locale,
+      type: 'website',
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: t.twitterTitle,
+      description: t.twitterDescription,
+    },
+    alternates: {
+      canonical: `https://www.serviglobal-ia.com/${locale}`,
+      languages: {
+        'es': 'https://www.serviglobal-ia.com/es',
+        'en': 'https://www.serviglobal-ia.com/en',
+      },
+    },
+    robots: {
+      index: true,
+      follow: true,
+    },
+    verification: {
+      google: 'RyDrOMFBi4qFU_P6L7F1p3jTyvWLmdH236qnQILKRR8',
+    },
   };
 }
 
@@ -44,6 +81,7 @@ export default async function LocaleLayout({ children, params }: Props) {
             enableSystem
             disableTransitionOnChange
           >
+            <JsonLd />
             {children}
             <Footer />
           </ThemeProvider>

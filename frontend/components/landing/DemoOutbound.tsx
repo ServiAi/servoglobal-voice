@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { Turnstile } from '@marsidev/react-turnstile';
 import Image from 'next/image';
 import { useAudioSimulation } from '@/hooks/useAudioSimulation';
 import { PhoneIncoming, Loader2, CheckCircle2, PhoneOff, ChevronDown, Calendar, Clock } from 'lucide-react';
@@ -25,6 +26,7 @@ export function DemoOutbound() {
   const [formStep, setFormStep] = useState<'form' | 'submitting' | 'calling' | 'scheduled'>('form');
   const [countryCode, setCountryCode] = useState('+57');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [token, setToken] = useState<string | null>(null);
   
   // Form State
   const [name, setName] = useState('');
@@ -70,7 +72,8 @@ export function DemoOutbound() {
             industry,
             useCase,
             volume,
-            painPoint
+            painPoint,
+            turnstile_token: token
         };
         if (callMode === 'schedule' && scheduleTime) {
             payload.schedule_time = new Date(scheduleTime).toISOString();
@@ -384,7 +387,15 @@ export function DemoOutbound() {
                         {tCommon('fillAllFields')}
                     </p>
                 )}
-               <button type="submit" className="w-full py-4 bg-green-600 hover:bg-green-500 text-white font-bold rounded-lg transition-all shadow-lg shadow-green-900/20 flex items-center justify-center gap-2 mt-2 disabled:opacity-50">
+               <div className="flex justify-center my-2">
+                  <Turnstile 
+                      siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || 'SITE_KEY_PLACEHOLDER'} 
+                      onSuccess={setToken} 
+                      options={{ theme: 'auto', size: 'flexible' }}
+                  />
+               </div>
+
+               <button type="submit" disabled={!token} className="w-full py-4 bg-green-600 hover:bg-green-500 text-white font-bold rounded-lg transition-all shadow-lg shadow-green-900/20 flex items-center justify-center gap-2 mt-2 disabled:opacity-50 disabled:cursor-not-allowed">
                  {callMode === 'now' ? <PhoneIncoming className="size-5" /> : <Clock className="size-5" />}
                  {callMode === 'now' ? t('wantCall') : t('scheduleCall')}
                </button>

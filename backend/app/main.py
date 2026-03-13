@@ -16,14 +16,42 @@ app.add_middleware(
 )
 
 
+import os
+import httpx
+
+# ... imports ...
+
+
 class CreateCallRequest(BaseModel):
     agent_id: str | None = None
     system_prompt: str | None = None
     template_context: dict | None = None
+    turnstile_token: str | None = None
+
+
+async def verify_turnstile(token: str):
+    secret_key = os.getenv("TURNSTILE_SECRET_KEY")
+    if not secret_key:
+        print("WARNING: TURNSTILE_SECRET_KEY not set. Skipping verification.")
+        return
+
+    async with httpx.AsyncClient() as client:
+        response = await client.post(
+            "https://challenges.cloudflare.com/turnstile/v0/siteverify",
+            data={"secret": secret_key, "response": token},
+        )
+        result = response.json()
+        if not result.get("success"):
+            raise HTTPException(status_code=400, detail="Invalid Turnstile token")
 
 
 @app.post("/api/v1/calls")
 async def create_call(request: CreateCallRequest):
+    if not request.turnstile_token:
+        raise HTTPException(status_code=400, detail="Turnstile token missing")
+
+    await verify_turnstile(request.turnstile_token)
+
     try:
         join_url = await create_call_session(
             agent_id=request.agent_id,
@@ -51,12 +79,17 @@ class CreateOutboundCallRequest(BaseModel):
     useCase: str | None = None
     volume: str | None = None
     painPoint: str | None = None
+    turnstile_token: str | None = None
 
 
 @app.post("/api/v1/call-outbound")
 async def create_outbound_call(request: CreateOutboundCallRequest):
+    if not request.turnstile_token:
+        raise HTTPException(status_code=400, detail="Turnstile token missing")
+
+    await verify_turnstile(request.turnstile_token)
+
     try:
-        # Pass name/email as context if needed
         # Pass name/email as context if needed
         context = {"user_phone": request.phone}
         if request.name:

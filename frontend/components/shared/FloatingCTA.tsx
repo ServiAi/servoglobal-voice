@@ -18,7 +18,7 @@ export function FloatingCTA() {
   // Initialize Cal.com
   useEffect(() => {
     (async function () {
-      const cal = await getCalApi({"namespace":"agendamiento-de-citas-serviglobal-ai"});
+      const cal = await getCalApi({"namespace":"serviglobal-ventas-ia"});
       cal("ui", {"hideEventTypeDetails":false,"layout":"month_view"});
     })();
   }, []);
@@ -59,9 +59,9 @@ export function FloatingCTA() {
           <span className="absolute -inset-1 rounded-full bg-gradient-to-r from-violet-600 to-fuchsia-600 animate-pulse opacity-30 blur-sm" />
           <button
             suppressHydrationWarning
-            data-cal-namespace="agendamiento-de-citas-serviglobal-ai"
-            data-cal-link="jeysson-aly-contreras-asxwla/agendamiento-de-citas-serviglobal-ai"
-            data-cal-config='{"layout":"month_view"}'
+            data-cal-namespace="serviglobal-ventas-ia"
+            data-cal-link="serviglobal/serviglobal-ventas-ia"
+            data-cal-config='{"layout":"month_view","useSlotsViewOnSmallScreen":"true"}'
             className="relative size-14 rounded-full bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white shadow-xl shadow-violet-500/40 flex items-center justify-center hover:scale-110 transition-transform z-10"
             title={t('scheduleButton')}
           >

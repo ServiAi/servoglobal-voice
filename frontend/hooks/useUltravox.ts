@@ -63,7 +63,7 @@ export function useUltravox() {
     return () => clearInterval(interval);
   }, [isSpeaking]);
 
-  const startCall = useCallback(async (context?: Record<string, any>) => {
+  const startCall = useCallback(async (context?: Record<string, any>, token?: string) => {
     if (!sessionRef.current) return;
     
     // TODO: url de fast api
@@ -71,18 +71,22 @@ export function useUltravox() {
 
     try {
       // Fetch the Join URL from our backend
-      const response = await fetch('http://localhost:8000/api/v1/calls', {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
+      const response = await fetch(`${API_URL}/api/v1/calls`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-            template_context: context || {}  
+            template_context: context || {},
+            turnstile_token: token
         }),
       });
 
       if (!response.ok) {
-        throw new Error('Failed to get join URL');
+        const errorText = await response.text();
+        console.error('Failed to get join URL:', errorText);
+        throw new Error(`Failed to get join URL: ${errorText}`);
       }
 
       const data = await response.json();

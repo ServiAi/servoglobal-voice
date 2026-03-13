@@ -11,7 +11,7 @@ export function Booking() {
   
   useEffect(() => {
     (async function () {
-      const cal = await getCalApi({"namespace":"agendamiento-de-citas-serviglobal-ai"});
+      const cal = await getCalApi({"namespace":"serviglobal-ventas-ia"});
       cal("ui", {"hideEventTypeDetails":false,"layout":"month_view"});
     })();
   }, []);
@@ -31,8 +31,8 @@ export function Booking() {
         <div className="flex justify-center">
           <button 
             suppressHydrationWarning
-            data-cal-namespace="agendamiento-de-citas-serviglobal-ai"
-            data-cal-link="jeysson-aly-contreras-asxwla/agendamiento-de-citas-serviglobal-ai"
+            data-cal-namespace="serviglobal-ventas-ia"
+            data-cal-link="serviglobal/serviglobal-ventas-ia"
             data-cal-config='{"layout":"month_view","useSlotsViewOnSmallScreen":"true"}'
             className="inline-flex items-center gap-3 px-10 py-5 bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white rounded-full font-bold text-lg hover:from-violet-700 hover:to-fuchsia-700 transition-all hover:scale-105 active:scale-95 shadow-xl shadow-violet-500/30"
           >

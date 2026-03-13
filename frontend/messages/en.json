@@ -1,7 +1,12 @@
 {
   "metadata": {
-    "title": "ServiGlobal · IA - Voice AI & Omnichannel Agents",
-    "description": "We implement custom voice and omnichannel agents. We integrate telephony, messaging, CRM and calendars."
+    "title": "Voice AI Agents & Virtual Assistants | ServiGlobal",
+    "description": "Implement AI voice agents that handle calls 24/7. Automate appointments, sales, and support with our omnichannel voice assistants for your business.",
+    "keywords": "voice agents, artificial intelligence, virtual assistants, call automation, real estate AI, voice chatbots, call center ai, sales automation",
+    "ogTitle": "ServiGlobal - Voice AI Agents for your Business",
+    "ogDescription": "Handle 100% of your calls. Automate scheduling, sales, and support with Artificial Intelligence.",
+    "twitterTitle": "ServiGlobal - Voice AI Agents",
+    "twitterDescription": "Transform your customer service with AI voice agents that work 24/7."
   },
   "whyUs": {
     "title": "Why trust us?",
@@ -253,21 +258,22 @@
         "idealFor": "1 vertical / low volume",
         "includes": "Click-to-Servi-IA-Call base + essential flows + outcomes",
         "monthly": "$299",
-        "setup": "$900"
+        "setup": "$550"
       },
       "integra": {
         "name": "Servi-IA Growth",
         "idealFor": "2–3 verticals",
         "includes": "+ advanced automations + reporting",
         "monthly": "$699",
-        "setup": "$1,800"
+        "setup": "$950"
       },
       "escala": {
         "name": "Servi-IA Enterprise",
-        "idealFor": "High volume / complex operation",
+        "idealFor": "Custom solutions for high-volume and business-critical operations",
         "includes": "+ continuous optimization + advanced support",
         "monthly": "$1,499",
-        "setup": "$3,500"
+        "setup": "custom",
+        "setupLabel": "We evaluate your requirements and present you with an offer tailored to your needs"
       }
     },
     "addon": {

@@ -1,5 +1,7 @@
 'use client';
 
+import { Turnstile } from '@marsidev/react-turnstile';
+
 import React from 'react';
 import Image from 'next/image';
 import { useUltravox } from '@/hooks/useUltravox';
@@ -38,6 +40,7 @@ export function DemoInbound() {
     painPoint: ''
   });
   const [isDropdownOpen, setIsDropdownOpen] = React.useState(false);
+  const [token, setToken] = React.useState<string | null>(null);
   const dropdownRef = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
@@ -53,7 +56,7 @@ export function DemoInbound() {
   }, []);
 
   const handleStartCall = () => {
-    if (!formData.name || !formData.email || !formData.phone) return;
+    if (!formData.name || !formData.email || !formData.phone || !token) return;
     
     startCall({
       user_name: formData.name,
@@ -64,7 +67,7 @@ export function DemoInbound() {
       user_use_case: formData.useCase,
       user_volume: formData.volume,
       user_pain_point: formData.painPoint
-    });
+    }, token);
   };
 
   React.useEffect(() => {
@@ -112,7 +115,7 @@ export function DemoInbound() {
   }
 
   return (
-    <div className="relative h-[500px] w-full bg-white dark:bg-zinc-950 rounded-2xl border border-zinc-200 dark:border-white/10 shadow-2xl flex flex-col transition-colors duration-300">
+    <div className="relative min-h-[500px] h-auto w-full bg-white dark:bg-zinc-950 rounded-2xl border border-zinc-200 dark:border-white/10 shadow-2xl flex flex-col transition-colors duration-300">
       {/* Background Wrapper to clip decorative elements without clipping dropdowns */}
       <div className="absolute inset-0 rounded-2xl overflow-hidden pointer-events-none">
           {/* Background Gradients */}
@@ -131,7 +134,7 @@ export function DemoInbound() {
       <div className="flex-1 flex flex-col items-center justify-center relative p-6 z-10">
 
         {demoState === 'idle' && (
-          <div className="w-full max-w-sm flex flex-col gap-4 z-10 px-4 h-full overflow-y-auto py-4 custom-scrollbar">
+          <div className="w-full max-w-sm flex flex-col gap-4 z-10 px-4 py-6">
             <div className="text-center space-y-1 shrink-0">
               <h3 className="text-xl font-semibold text-zinc-900 dark:text-white">{t('webCall')}</h3>
               <p className="text-xs text-zinc-500">{t('selectAgentDesc')}</p>
@@ -288,9 +291,17 @@ export function DemoInbound() {
                     <option value="qualityControl">{tCommon('options.painPoint.qualityControl')}</option>
                 </select>
 
+              <div className="flex justify-center my-2">
+                  <Turnstile 
+                      siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || 'SITE_KEY_PLACEHOLDER'} 
+                      onSuccess={setToken}
+                      options={{ theme: 'auto', size: 'flexible' }}
+                  />
+              </div>
+
               <button
                 onClick={handleStartCall}
-                disabled={!formData.name || !formData.email || !formData.phone || !formData.company || !formData.industry || !formData.useCase || !formData.volume || !formData.painPoint}
+                disabled={!formData.name || !formData.email || !formData.phone || !formData.company || !formData.industry || !formData.useCase || !formData.volume || !formData.painPoint || !token}
                 className="w-full py-2.5 bg-zinc-900 dark:bg-white text-white dark:text-black font-bold rounded-lg hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-all active:scale-[0.98] shadow-xl shadow-black/5 dark:shadow-white/5 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed text-xs"
               >
                 <Phone className="size-4" />
