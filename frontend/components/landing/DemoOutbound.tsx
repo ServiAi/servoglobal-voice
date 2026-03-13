@@ -64,15 +64,20 @@ export function DemoOutbound() {
         const fullPhone = `${countryCode}${phone}`;
         const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
         
+        const industryTranslated = industry ? tCommon(`options.industry.${industry}`) : '';
+        const useCaseTranslated = useCase ? tCommon(`options.useCase.${useCase}`) : '';
+        const volumeTranslated = volume ? tCommon(`options.volume.${volume}`) : '';
+        const painPointTranslated = painPoint ? tCommon(`options.painPoint.${painPoint}`) : '';
+
         const payload: any = { 
             name, 
             email, 
             phone: fullPhone,
             company,
-            industry,
-            useCase,
-            volume,
-            painPoint,
+            industry: industryTranslated,
+            useCase: useCaseTranslated,
+            volume: volumeTranslated,
+            painPoint: painPointTranslated,
             turnstile_token: token
         };
         if (callMode === 'schedule' && scheduleTime) {

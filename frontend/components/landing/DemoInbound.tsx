@@ -58,15 +58,20 @@ export function DemoInbound() {
   const handleStartCall = () => {
     if (!formData.name || !formData.email || !formData.phone || !token) return;
     
+    const industryTranslated = formData.industry ? tCommon(`options.industry.${formData.industry}`) : '';
+    const useCaseTranslated = formData.useCase ? tCommon(`options.useCase.${formData.useCase}`) : '';
+    const volumeTranslated = formData.volume ? tCommon(`options.volume.${formData.volume}`) : '';
+    const painPointTranslated = formData.painPoint ? tCommon(`options.painPoint.${formData.painPoint}`) : '';
+
     startCall({
       user_name: formData.name,
       user_email: formData.email,
       user_phone: `${formData.countryCode}${formData.phone}`,
       user_company: formData.company,
-      user_industry: formData.industry,
-      user_use_case: formData.useCase,
-      user_volume: formData.volume,
-      user_pain_point: formData.painPoint
+      user_industry: industryTranslated,
+      user_use_case: useCaseTranslated,
+      user_volume: volumeTranslated,
+      user_pain_point: painPointTranslated
     }, token);
   };
 
