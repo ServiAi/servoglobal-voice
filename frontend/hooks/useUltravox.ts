@@ -31,9 +31,7 @@ export function useUltravox() {
         case UltravoxSessionStatus.DISCONNECTED:
           // differentiating between initial idle and ended requires context, 
           // but for simple flow we can handle 'ended' manually on hangup
-          if (demoState !== 'idle') {
-             setDemoState('ended');
-          }
+          setDemoState(prev => prev !== 'idle' ? 'ended' : prev);
           break;
       }
       
