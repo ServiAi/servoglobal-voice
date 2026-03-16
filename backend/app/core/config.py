@@ -12,6 +12,12 @@ class Settings(BaseSettings):
     UVX_SIP_USERNAME: str | None = None
     UVX_SIP_PASSWORD: str | None = None
 
+    # Cal.com Configuration
+    CAL_API_KEY: str = ""
+    CAL_EVENT_TYPE_ID: str = ""
+    CAL_USERNAME: str = ""
+    CAL_TIMEZONE: str = "America/Bogota"
+
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", extra="ignore"
     )

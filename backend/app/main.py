@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from app.services.voice_service import create_call_session, create_sip_call_via_pbx
+from app.services.calcom_service import get_available_slots
 from app.core.config import settings
 import uvicorn
 
@@ -66,6 +67,47 @@ async def create_call(request: CreateCallRequest):
 @app.get("/health")
 def health_check():
     return {"status": "ok"}
+
+
+# ─── Cal.com Availability ───────────────────────────────────────────────────
+
+class AvailabilityRequest(BaseModel):
+    date: str                   # Accepts "YYYY-MM-DD" or full ISO 8601 timestamp
+    jornada: str | None = None  # 'mañana' (09:00–11:30) | 'tarde' (12:00–16:30) | None = all
+
+
+@app.get("/api/v1/availability")
+async def check_availability_get(date: str, jornada: str | None = None):
+    """
+    GET version for quick browser/curl testing.
+    Examples:
+      /api/v1/availability?date=2026-04-20
+      /api/v1/availability?date=2026-04-20&jornada=mañana
+      /api/v1/availability?date=2026-04-20&jornada=tarde
+    """
+    try:
+        result = await get_available_slots(date, jornada)
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al consultar disponibilidad: {str(e)}")
+
+
+@app.post("/api/v1/availability")
+async def check_availability(request: AvailabilityRequest):
+    """
+    Query Cal.com for available appointment slots on a given date and jornada.
+    The voice agent sends { "date": "YYYY-MM-DD", "jornada": "mañana" | "tarde" | null }
+    and receives a list of slots plus a voice-friendly summary string.
+    """
+    try:
+        result = await get_available_slots(request.date, request.jornada)
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al consultar disponibilidad: {str(e)}")
 
 
 class CreateOutboundCallRequest(BaseModel):
