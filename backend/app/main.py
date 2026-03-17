@@ -53,11 +53,22 @@ async def create_call(request: CreateCallRequest):
 
     await verify_turnstile(request.turnstile_token)
 
+    from datetime import datetime
+    
+    # Preparamos contexto global (fecha y hora)
+    import locale
+    ahora = datetime.now()
+    dias_es = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
+    
+    context = request.template_context or {}
+    context["fecha_ejecucion"] = ahora.strftime("%Y-%m-%d %H:%M:%S")
+    context["dia_semana"] = dias_es[ahora.weekday()]
+
     try:
         join_url = await create_call_session(
             agent_id=request.agent_id,
             system_prompt=request.system_prompt,
-            template_context=request.template_context,
+            template_context=context,
         )
         return {"joinUrl": join_url}
     except Exception as e:
@@ -132,8 +143,18 @@ async def create_outbound_call(request: CreateOutboundCallRequest):
     await verify_turnstile(request.turnstile_token)
 
     try:
-        # Pass name/email as context if needed
-        context = {"user_phone": request.phone}
+        from datetime import datetime
+        
+        ahora = datetime.now()
+        dias_es = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
+
+        # Pass name/email/date as context
+        context = {
+            "user_phone": request.phone,
+            "fecha_ejecucion": ahora.strftime("%Y-%m-%d %H:%M:%S"),
+            "dia_semana": dias_es[ahora.weekday()]
+        }
+        
         if request.name:
             context["user_name"] = request.name
         if request.email:
@@ -156,7 +177,7 @@ async def create_outbound_call(request: CreateOutboundCallRequest):
                 phone=request.phone,
                 schedule_time=request.schedule_time,
                 agent_id=request.agent_id,
-                template_context=context if context else None,
+                template_context=context,
             )
         else:
             result = await create_sip_call_via_pbx(

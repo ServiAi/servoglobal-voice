@@ -73,6 +73,9 @@ async def get_available_slots(date_input: str, jornada: str | None = None) -> di
     """
     start_date, end_date = _parse_date(date_input)
 
+    if not settings.CAL_API_KEY:
+        raise ValueError("CAL_API_KEY no está configurada en las variables de entorno.")
+
     # NOTE: When using eventTypeId, do NOT include 'username' — they are mutually exclusive.
     params = {
         "eventTypeId": settings.CAL_EVENT_TYPE_ID,
@@ -130,7 +133,22 @@ async def get_available_slots(date_input: str, jornada: str | None = None) -> di
 
     summary = _build_summary(slots_raw, start_date, jornada)
 
+    from datetime import datetime
+    import locale
+
+    # Obtener el timestamp actual
+    ahora = datetime.now()
+    
+    # Mapeo manual de días en lugar de depender del locale del sistema
+    dias_semana_es = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
+    nombre_dia = dias_semana_es[ahora.weekday()]
+
     return {
+        "metadata_consulta": {
+            "fecha_ejecucion": ahora.strftime("%Y-%m-%d %H:%M:%S"),
+            "dia_semana": nombre_dia,
+            "jornada_solicitada": jornada or "todas"
+        },
         "date": start_date,
         "jornada": jornada or "all",
         "available_slots": slots_raw,
