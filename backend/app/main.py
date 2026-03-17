@@ -54,10 +54,12 @@ async def create_call(request: CreateCallRequest):
     await verify_turnstile(request.turnstile_token)
 
     from datetime import datetime
-    
-    # Preparamos contexto global (fecha y hora)
+    import pytz
     import locale
-    ahora = datetime.now()
+    
+    # Configure timezone
+    bogota_tz = pytz.timezone('America/Bogota')
+    ahora = datetime.now(bogota_tz)
     dias_es = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
     
     context = request.template_context or {}
@@ -144,8 +146,10 @@ async def create_outbound_call(request: CreateOutboundCallRequest):
 
     try:
         from datetime import datetime
+        import pytz
         
-        ahora = datetime.now()
+        bogota_tz = pytz.timezone('America/Bogota')
+        ahora = datetime.now(bogota_tz)
         dias_es = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
 
         # Pass name/email/date as context

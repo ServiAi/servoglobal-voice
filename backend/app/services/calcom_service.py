@@ -134,10 +134,12 @@ async def get_available_slots(date_input: str, jornada: str | None = None) -> di
     summary = _build_summary(slots_raw, start_date, jornada)
 
     from datetime import datetime
+    import pytz
     import locale
 
-    # Obtener el timestamp actual
-    ahora = datetime.now()
+    # Obtener el timestamp actual con zona horaria de Bogotá
+    bogota_tz = pytz.timezone('America/Bogota')
+    ahora = datetime.now(bogota_tz)
     
     # Mapeo manual de días en lugar de depender del locale del sistema
     dias_semana_es = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
