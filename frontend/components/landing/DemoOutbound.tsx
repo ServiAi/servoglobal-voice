@@ -394,7 +394,11 @@ export function DemoOutbound() {
                 )}
                <div className="flex justify-center my-2 w-full min-h-[65px]">
                   <Turnstile 
-                      siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || '1x00000000000000000000AA'} 
+                      siteKey={
+                        typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+                          ? '1x00000000000000000000AA'
+                          : (process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || '1x00000000000000000000AA')
+                      } 
                       onSuccess={setToken} 
                       options={{ theme: 'auto' }}
                   />
