@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from app.services.voice_service import create_call_session, create_sip_call_via_pbx
-from app.services.calcom_service import get_available_slots
+from app.services.calcom_service import get_available_slots, create_booking
 from app.core.config import settings
 import uvicorn
 
@@ -121,6 +121,35 @@ async def check_availability(request: AvailabilityRequest):
         raise HTTPException(status_code=502, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al consultar disponibilidad: {str(e)}")
+
+
+class CreateBookingRequest(BaseModel):
+    date_str: str
+    time_str: str
+    name: str
+    email: str
+    phone: str | None = None
+
+
+@app.post("/api/v1/bookings")
+async def create_new_booking(request: CreateBookingRequest):
+    """
+    Endpoint para crear una nueva reserva en Cal.com
+    (usualmente llamado por el agente o el frontend después de confirmar la fecha y hora)
+    """
+    try:
+        result = await create_booking(
+            date_str=request.date_str,
+            time_str=request.time_str,
+            name=request.name,
+            email=request.email,
+            phone=request.phone,
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al crear reserva: {str(e)}")
 
 
 class CreateOutboundCallRequest(BaseModel):
