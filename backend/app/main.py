@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from app.services.voice_service import create_call_session, create_sip_call_via_pbx
+from app.services.calcom_service import get_available_slots, create_booking
 from app.core.config import settings
 import uvicorn
 
@@ -30,7 +31,7 @@ class CreateCallRequest(BaseModel):
 
 
 async def verify_turnstile(token: str):
-    secret_key = os.getenv("TURNSTILE_SECRET_KEY")
+    secret_key = settings.TURNSTILE_SECRET_KEY
     if not secret_key:
         print("WARNING: TURNSTILE_SECRET_KEY not set. Skipping verification.")
         return
@@ -52,11 +53,24 @@ async def create_call(request: CreateCallRequest):
 
     await verify_turnstile(request.turnstile_token)
 
+    from datetime import datetime
+    import pytz
+    import locale
+    
+    # Configure timezone
+    bogota_tz = pytz.timezone('America/Bogota')
+    ahora = datetime.now(bogota_tz)
+    dias_es = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
+    
+    context = request.template_context or {}
+    context["fecha_ejecucion"] = ahora.strftime("%Y-%m-%d %H:%M:%S")
+    context["dia_semana"] = dias_es[ahora.weekday()]
+
     try:
         join_url = await create_call_session(
             agent_id=request.agent_id,
             system_prompt=request.system_prompt,
-            template_context=request.template_context,
+            template_context=context,
         )
         return {"joinUrl": join_url}
     except Exception as e:
@@ -66,6 +80,76 @@ async def create_call(request: CreateCallRequest):
 @app.get("/health")
 def health_check():
     return {"status": "ok"}
+
+
+# ─── Cal.com Availability ───────────────────────────────────────────────────
+
+class AvailabilityRequest(BaseModel):
+    date: str                   # Accepts "YYYY-MM-DD" or full ISO 8601 timestamp
+    jornada: str | None = None  # 'mañana' (09:00–11:30) | 'tarde' (12:00–16:30) | None = all
+
+
+@app.get("/api/v1/availability")
+async def check_availability_get(date: str, jornada: str | None = None):
+    """
+    GET version for quick browser/curl testing.
+    Examples:
+      /api/v1/availability?date=2026-04-20
+      /api/v1/availability?date=2026-04-20&jornada=mañana
+      /api/v1/availability?date=2026-04-20&jornada=tarde
+    """
+    try:
+        result = await get_available_slots(date, jornada)
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al consultar disponibilidad: {str(e)}")
+
+
+@app.post("/api/v1/availability")
+async def check_availability(request: AvailabilityRequest):
+    """
+    Query Cal.com for available appointment slots on a given date and jornada.
+    The voice agent sends { "date": "YYYY-MM-DD", "jornada": "mañana" | "tarde" | null }
+    and receives a list of slots plus a voice-friendly summary string.
+    """
+    try:
+        result = await get_available_slots(request.date, request.jornada)
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al consultar disponibilidad: {str(e)}")
+
+
+class CreateBookingRequest(BaseModel):
+    date_str: str
+    time_str: str
+    name: str
+    email: str
+    phone: str | None = None
+
+
+@app.post("/api/v1/bookings")
+async def create_new_booking(request: CreateBookingRequest):
+    """
+    Endpoint para crear una nueva reserva en Cal.com
+    (usualmente llamado por el agente o el frontend después de confirmar la fecha y hora)
+    """
+    try:
+        result = await create_booking(
+            date_str=request.date_str,
+            time_str=request.time_str,
+            name=request.name,
+            email=request.email,
+            phone=request.phone,
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al crear reserva: {str(e)}")
 
 
 class CreateOutboundCallRequest(BaseModel):
@@ -90,8 +174,20 @@ async def create_outbound_call(request: CreateOutboundCallRequest):
     await verify_turnstile(request.turnstile_token)
 
     try:
-        # Pass name/email as context if needed
-        context = {"user_phone": request.phone}
+        from datetime import datetime
+        import pytz
+        
+        bogota_tz = pytz.timezone('America/Bogota')
+        ahora = datetime.now(bogota_tz)
+        dias_es = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
+
+        # Pass name/email/date as context
+        context = {
+            "user_phone": request.phone,
+            "fecha_ejecucion": ahora.strftime("%Y-%m-%d %H:%M:%S"),
+            "dia_semana": dias_es[ahora.weekday()]
+        }
+        
         if request.name:
             context["user_name"] = request.name
         if request.email:
@@ -114,7 +210,7 @@ async def create_outbound_call(request: CreateOutboundCallRequest):
                 phone=request.phone,
                 schedule_time=request.schedule_time,
                 agent_id=request.agent_id,
-                template_context=context if context else None,
+                template_context=context,
             )
         else:
             result = await create_sip_call_via_pbx(
