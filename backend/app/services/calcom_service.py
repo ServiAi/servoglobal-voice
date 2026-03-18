@@ -196,7 +196,7 @@ async def create_booking(date_str: str, time_str: str, name: str, email: str, ph
         
     headers = {
         "Authorization": f"Bearer {settings.CAL_API_KEY}",
-        "cal-api-version": CAL_API_VERSION_HEADER,
+        "cal-api-version": "2024-08-13",  # Booking v2 operations require this specific version
         "Content-Type": "application/json"
     }
     
