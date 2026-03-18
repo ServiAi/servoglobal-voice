@@ -31,7 +31,7 @@ class CreateCallRequest(BaseModel):
 
 
 async def verify_turnstile(token: str):
-    secret_key = os.getenv("TURNSTILE_SECRET_KEY")
+    secret_key = settings.TURNSTILE_SECRET_KEY
     if not secret_key:
         print("WARNING: TURNSTILE_SECRET_KEY not set. Skipping verification.")
         return
