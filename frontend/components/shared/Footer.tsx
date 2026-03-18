@@ -1,11 +1,12 @@
 'use client';
 
 import Link from 'next/link';
-import { useTranslations } from 'next-intl';
+import { useTranslations, useLocale } from 'next-intl';
 import { ContactModal } from './ContactModal';
 
 export function Footer() {
   const t = useTranslations('footer');
+  const locale = useLocale();
 
   return (
     <footer className="bg-zinc-100 dark:bg-zinc-950 border-t border-zinc-200 dark:border-white/5 transition-colors duration-300">
@@ -63,7 +64,7 @@ export function Footer() {
         <div className="flex flex-col md:flex-row justify-between items-center pt-8 border-t border-zinc-200 dark:border-white/10 text-xs text-zinc-500 dark:text-neutral-600 gap-4">
           <div>{t('copyright')}</div>
           <div className="flex gap-4">
-            <Link href="/politica-de-privacidad" className="hover:text-zinc-900 dark:hover:text-white transition-colors">
+            <Link href={`/${locale}/politica-de-privacidad`} className="hover:text-zinc-900 dark:hover:text-white transition-colors">
               Política de Privacidad
             </Link>
           </div>
