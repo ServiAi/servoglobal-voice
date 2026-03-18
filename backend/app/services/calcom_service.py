@@ -5,7 +5,8 @@ Handles all communication with the Cal.com v2 API to fetch available slots.
 
 import httpx
 import logging
-from datetime import date, timedelta
+import pytz
+from datetime import date, timedelta, datetime
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -133,8 +134,6 @@ async def get_available_slots(date_input: str, jornada: str | None = None) -> di
 
     summary = _build_summary(slots_raw, start_date, jornada)
 
-    from datetime import datetime
-    import pytz
     import locale
 
     # Obtener el timestamp actual con zona horaria de Bogotá
@@ -156,3 +155,65 @@ async def get_available_slots(date_input: str, jornada: str | None = None) -> di
         "available_slots": slots_raw,
         "summary": summary,
     }
+
+
+async def create_booking(date_str: str, time_str: str, name: str, email: str, phone: str = None) -> dict:
+    """
+    Crea una nueva reserva en Cal.com usando la API v2.
+    
+    Args:
+        date_str: Fecha en formato 'YYYY-MM-DD'
+        time_str: Hora de inicio en formato 'HH:MM' (ej. '09:00')
+        name: Nombre del asistente
+        email: Correo del asistente
+        phone: Teléfono del asistente (opcional)
+        
+    Returns:
+        dict con el resultado de la reserva (status, data)
+    """
+    if not settings.CAL_API_KEY:
+        raise ValueError("CAL_API_KEY no está configurada en las variables de entorno.")
+        
+    # Ensure start_datetime is ISO 8601 with timezone
+    tz = pytz.timezone(settings.CAL_TIMEZONE)
+    base_dt = datetime.fromisoformat(f"{date_str}T{time_str}:00")
+    aware_dt = tz.localize(base_dt)
+    start_datetime = aware_dt.isoformat()
+    
+    payload = {
+        "eventTypeId": int(settings.CAL_EVENT_TYPE_ID) if settings.CAL_EVENT_TYPE_ID else 0,
+        "start": start_datetime,
+        "attendee": {
+            "name": name,
+            "email": email,
+            "timeZone": settings.CAL_TIMEZONE,
+            "language": "es"
+        }
+    }
+    
+    if phone:
+        payload["attendee"]["phoneNumber"] = phone
+        
+    headers = {
+        "Authorization": f"Bearer {settings.CAL_API_KEY}",
+        "cal-api-version": CAL_API_VERSION_HEADER,
+        "Content-Type": "application/json"
+    }
+    
+    logger.info(f"[Cal.com] POST {CAL_API_BASE}/bookings | start={start_datetime} | email={email}")
+    
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        response = await client.post(
+            f"{CAL_API_BASE}/bookings",
+            json=payload,
+            headers=headers
+        )
+        
+    logger.info(f"[Cal.com] POST Response {response.status_code}: {response.text[:300]}")
+    
+    if response.status_code not in (200, 201):
+        raise ValueError(
+            f"Cal.com API error {response.status_code} al crear reserva: {response.text}"
+        )
+        
+    return response.json()
