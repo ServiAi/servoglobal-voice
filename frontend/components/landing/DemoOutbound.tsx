@@ -392,11 +392,11 @@ export function DemoOutbound() {
                         {tCommon('fillAllFields')}
                     </p>
                 )}
-               <div className="flex justify-center my-2">
+               <div className="flex justify-center my-2 w-full min-h-[65px]">
                   <Turnstile 
-                      siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || 'SITE_KEY_PLACEHOLDER'} 
+                      siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || '1x00000000000000000000AA'} 
                       onSuccess={setToken} 
-                      options={{ theme: 'auto', size: 'flexible' }}
+                      options={{ theme: 'auto' }}
                   />
                </div>
 
