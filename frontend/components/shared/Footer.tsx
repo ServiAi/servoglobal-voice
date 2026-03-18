@@ -60,8 +60,13 @@ export function Footer() {
           </div>
         </div>
 
-        <div className="text-center pt-8 border-t border-zinc-200 dark:border-white/10 text-xs text-zinc-500 dark:text-neutral-600">
-          {t('copyright')}
+        <div className="flex flex-col md:flex-row justify-between items-center pt-8 border-t border-zinc-200 dark:border-white/10 text-xs text-zinc-500 dark:text-neutral-600 gap-4">
+          <div>{t('copyright')}</div>
+          <div className="flex gap-4">
+            <Link href="/politica-de-privacidad" className="hover:text-zinc-900 dark:hover:text-white transition-colors">
+              Política de Privacidad
+            </Link>
+          </div>
         </div>
       </div>
     </footer>
