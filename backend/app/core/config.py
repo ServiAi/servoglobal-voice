@@ -12,6 +12,20 @@ class Settings(BaseSettings):
     UVX_SIP_USERNAME: str | None = None
     UVX_SIP_PASSWORD: str | None = None
 
+    # Cal.com Configuration
+    CAL_API_KEY: str = ""
+    CAL_EVENT_TYPE_ID: str = ""
+    CAL_USERNAME: str = ""
+    CAL_TIMEZONE: str = "America/Bogota"
+
+    # Turnstile
+    TURNSTILE_SECRET_KEY: str | None = None
+
+    # WhatsApp Configuration
+    WHATSAPP_API_TOKEN: str = ""
+    WHATSAPP_PHONE_NUMBER_ID: str = ""
+    WHATSAPP_VERIFY_TOKEN: str = "serviglobal_whatsapp_webhook_token"
+
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", extra="ignore"
     )
