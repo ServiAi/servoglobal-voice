@@ -21,6 +21,11 @@ class Settings(BaseSettings):
     # Turnstile
     TURNSTILE_SECRET_KEY: str | None = None
 
+    # WhatsApp Configuration
+    WHATSAPP_API_TOKEN: str = ""
+    WHATSAPP_PHONE_NUMBER_ID: str = ""
+    WHATSAPP_VERIFY_TOKEN: str = "serviglobal_whatsapp_webhook_token"
+
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", extra="ignore"
     )

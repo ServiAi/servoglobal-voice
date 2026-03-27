@@ -16,6 +16,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from app.api.endpoints import notifications
+app.include_router(notifications.router)
+
 
 import os
 import httpx

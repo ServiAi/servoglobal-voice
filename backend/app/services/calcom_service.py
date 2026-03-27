@@ -8,6 +8,7 @@ import logging
 import pytz
 from datetime import date, timedelta, datetime
 from app.core.config import settings
+from app.services.whatsapp_service import whatsapp_service
 
 logger = logging.getLogger(__name__)
 
@@ -216,4 +217,27 @@ async def create_booking(date_str: str, time_str: str, name: str, email: str, ph
             f"Cal.com API error {response.status_code} al crear reserva: {response.text}"
         )
         
-    return response.json()
+    result_data = response.json()
+
+    if phone:
+        import asyncio
+        components = [
+            {
+                "type": "body",
+                "parameters": [
+                    {"type": "text", "text": name},
+                    {"type": "text", "text": date_str},
+                    {"type": "text", "text": time_str}
+                ]
+            }
+        ]
+        
+        asyncio.create_task(
+            whatsapp_service.send_template_message(
+                to=phone,
+                template_name="cita_confirmada",
+                components=components
+            )
+        )
+
+    return result_data
