@@ -10,7 +10,7 @@ class WhatsAppService:
         self.phone_number_id = settings.WHATSAPP_PHONE_NUMBER_ID
         self.base_url = f"https://graph.facebook.com/v23.0/{self.phone_number_id}/messages"
 
-    async def send_template_message(self, to: str, template_name: str, language_code: str = "es", components: list = None):
+    async def send_template_message(self, to: str, template_name: str, language_code: str = "es-CO", components: list = None):
         """
         Envía un mensaje usando una plantilla pre-aprobada de WhatsApp.
         """
@@ -23,9 +23,11 @@ class WhatsAppService:
             "Content-Type": "application/json"
         }
 
+        to_clean = to.replace("+", "").replace(" ", "").strip() 
+
         payload = {
             "messaging_product": "whatsapp",
-            "to": to,
+            "to": to_clean,
             "type": "template",
             "template": {
                 "name": template_name,

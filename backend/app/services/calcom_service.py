@@ -216,26 +216,36 @@ async def create_booking(date_str: str, time_str: str, name: str, email: str, ph
         raise ValueError(
             f"Cal.com API error {response.status_code} al crear reserva: {response.text}"
         )
-        
     result_data = response.json()
 
+    import asyncio
+    components = [
+        {
+            "type": "body",
+            "parameters": [
+                {"type": "text", "text": name},
+                {"type": "text", "text": date_str},
+                {"type": "text", "text": time_str}
+            ]
+        }
+    ]
+
     if phone:
-        import asyncio
-        components = [
-            {
-                "type": "body",
-                "parameters": [
-                    {"type": "text", "text": name},
-                    {"type": "text", "text": date_str},
-                    {"type": "text", "text": time_str}
-                ]
-            }
-        ]
-        
         asyncio.create_task(
             whatsapp_service.send_template_message(
                 to=phone,
-                template_name="cita_confirmada",
+                template_name="cita_confirmada_cliente",
+                components=components
+            )
+        )
+
+    # Notificar a los owners de Serviglobal
+    owners_numbers = ["573014023104", "573178193641", "573106666709"]
+    for owner_phone in owners_numbers:
+        asyncio.create_task(
+            whatsapp_service.send_template_message(
+                to=owner_phone,
+                template_name="alerta_lead_owner",
                 components=components
             )
         )
