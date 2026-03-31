@@ -26,6 +26,10 @@ class Settings(BaseSettings):
     WHATSAPP_PHONE_NUMBER_ID: str = ""
     WHATSAPP_VERIFY_TOKEN: str = "serviglobal_whatsapp_webhook_token"
 
+    # Chatwoot CRM
+    CHATWOOT_API_TOKEN: str = ""
+    CHATWOOT_ACCOUNT_ID: int = 1
+
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", extra="ignore"
     )

@@ -17,7 +17,10 @@ app.add_middleware(
 )
 
 from app.api.endpoints import notifications
+from app.api.endpoints import chatwoot_webhook
+
 app.include_router(notifications.router)
+app.include_router(chatwoot_webhook.router)
 
 
 import os
