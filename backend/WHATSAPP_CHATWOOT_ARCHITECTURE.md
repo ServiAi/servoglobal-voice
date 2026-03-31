@@ -415,20 +415,39 @@ CHATWOOT_INBOX_ID=1                    # Settings → Inboxes → URL del inbox
 
 ## 9. Referencia de Endpoints
 
-### Python Backend
+### Endpoints Modulares (API v1)
 
+La capa de transporte (endpoints) está estructurada por dominios de negocio dentro del directorio `app/api/endpoints/`:
+
+#### 📞 Módulo `voice.py`
 | Método | Ruta | Descripción |
 |---|---|---|
-| `GET` | `/api/v1/notifications/webhook` | Verificación handshake Meta |
-| `POST` | `/api/v1/notifications/webhook` | Recibe eventos de estado de Meta (delivery/read) |
-| `POST` | `/api/v1/notifications/booking` | **🆕 Dispara alerta_lead_owner + cita_confirmada_cliente** |
-| `POST` | `/api/v1/chatwoot/webhook` | Recibe eventos de Chatwoot → IA responde |
-| `POST` | `/api/v1/calls` | Crea sesión de llamada de voz (Ultravox) |
-| `POST` | `/api/v1/call-outbound` | Llamada saliente vía PBX/SIP |
+| `POST` | `/api/v1/calls` | Crea sesión para llamada de voz (IA) |
+| `POST` | `/api/v1/call-outbound` | Dispara llamada de salida (Outbound) vía PBX/SIP |
+
+#### 📅 Módulo `calcom.py`
+| Método | Ruta | Descripción |
+|---|---|---|
 | `GET`  | `/api/v1/availability` | Consulta slots disponibles en Cal.com |
 | `POST` | `/api/v1/availability` | Consulta slots (versión POST) |
-| `POST` | `/api/v1/bookings` | Crea reserva en Cal.com |
-| `GET`  | `/health` | Health check del backend |
+| `POST` | `/api/v1/bookings` | Crea una nueva reserva usando Cal.com |
+
+#### 🔔 Módulo `notifications.py`
+| Método | Ruta | Descripción |
+|---|---|---|
+| `GET`  | `/api/v1/notifications/webhook` | Verificación (handshake) Meta Cloud API |
+| `POST` | `/api/v1/notifications/webhook` | Recibe eventos de estado Meta (delivery/read) |
+| `POST` | `/api/v1/notifications/booking` | Dispara `alerta_lead_owner` + `cita_confirmada_cliente` |
+
+#### 💬 Módulo `chatwoot_webhook.py`
+| Método | Ruta | Descripción |
+|---|---|---|
+| `POST` | `/api/v1/chatwoot/webhook` | Escucha nuevos mensajes vía CRM para dar respuesta con IA |
+
+#### ⚙️ Central `main.py`
+| Método | Ruta | Descripción |
+|---|---|---|
+| `GET`  | `/health` | Endpoint simple para health checks |
 
 ### Servicios Python (uso interno)
 
@@ -553,4 +572,4 @@ curl -X POST https://api.serviglobal-ia.com/api/v1/chatwoot/webhook \
 ---
 
 *Documentación actualizada — Serviglobal IA — Marzo 2026*  
-*Commit: `13520a1` — feat(notifications): booking templates + Chatwoot CRM logging*
+*Commit: `cb91418` — refactor(backend): agrupar lógica de endpoints en modulos e importar dependencias*
