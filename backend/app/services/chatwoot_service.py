@@ -1,6 +1,37 @@
+"""
+services/chatwoot_service.py
+============================
+Cliente HTTP de bajo nivel para la API de Chatwoot CRM.
+
+RESPONSABILIDAD ÚNICA: Hablar con Chatwoot API y devolver el resultado.
+No sabe nada de Meta, ni de lógica de notificaciones de negocio.
+
+Métodos disponibles:
+  Contactos:
+    search_contact(phone)                  → dict | None
+    create_contact(phone, name, email)     → dict | None
+    get_or_create_contact(phone, ...)      → int | None   (retorna contact_id)
+
+  Conversaciones:
+    get_open_conversation(contact_id)      → int | None   (retorna conversation_id)
+    create_conversation(contact_id, ...)   → int | None
+    get_or_create_conversation(contact_id) → int | None
+
+  Mensajes:
+    send_message(conversation_id, content, private=False)  → bool
+    # private=True → nota interna (solo agentes la ven, cliente NO)
+    # private=False → mensaje normal que llega al cliente
+
+  Utilidades:
+    assign_conversation(conv_id, assignee_id) → bool
+    update_conversation_status(conv_id, status) → bool
+    add_label(conv_id, labels) → bool
+    get_conversation(conv_id) → dict | None
+"""
+
 import httpx
-from app.core.config import settings
 import logging
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -8,24 +39,15 @@ CHATWOOT_BASE_URL = "https://crm.serviglobal-ia.com"
 
 
 class ChatwootService:
-    """
-    Servicio para interactuar con la API de Chatwoot.
-
-    Flujo para notificaciones salientes (visible en CRM):
-        1. get_or_create_contact(phone, name)  → contact_id
-        2. get_or_create_conversation(contact_id, inbox_id) → conversation_id
-        3. send_message(conversation_id, texto)  → Chatwoot → WhatsApp
-
-    Flujo para responder a mensajes entrantes:
-        1. Chatwoot webhook llega a /api/v1/chatwoot/webhook
-        2. send_message(conversation_id, respuesta_ia)
-    """
+    """Cliente HTTP para la API de Chatwoot CRM."""
 
     def __init__(self):
-        self.api_token   = getattr(settings, "CHATWOOT_API_TOKEN", "")
-        self.account_id  = getattr(settings, "CHATWOOT_ACCOUNT_ID", 1)
-        self.inbox_id    = getattr(settings, "CHATWOOT_INBOX_ID", 1)   # ID del inbox de WhatsApp
-        self.base_url    = CHATWOOT_BASE_URL
+        self.api_token  = getattr(settings, "CHATWOOT_API_TOKEN", "")
+        self.account_id = getattr(settings, "CHATWOOT_ACCOUNT_ID", 1)
+        self.inbox_id   = getattr(settings, "CHATWOOT_INBOX_ID", 1)
+        self.base_url   = CHATWOOT_BASE_URL
+
+    # ── Helpers internos ─────────────────────────────────────────────────────
 
     def _headers(self) -> dict:
         return {
@@ -33,41 +55,41 @@ class ChatwootService:
             "Content-Type": "application/json",
         }
 
-    def _api(self, path: str) -> str:
+    def _url(self, path: str) -> str:
         return f"{self.base_url}/api/v1/accounts/{self.account_id}/{path}"
+
+    def _ready(self) -> bool:
+        if not self.api_token:
+            logger.error("[Chatwoot] CHATWOOT_API_TOKEN no configurado en .env")
+            return False
+        return True
 
     # ══════════════════════════════════════════════════════════════════════════
     # CONTACTOS
     # ══════════════════════════════════════════════════════════════════════════
 
     async def search_contact(self, phone: str) -> dict | None:
-        """
-        Busca un contacto por número de teléfono.
-        Retorna el primer resultado o None si no existe.
-        """
+        """Busca un contacto por teléfono. Retorna el primer resultado o None."""
         phone_clean = phone.strip().replace(" ", "")
         async with httpx.AsyncClient(timeout=10.0) as client:
             try:
                 resp = await client.get(
-                    self._api("contacts/search"),
+                    self._url("contacts/search"),
                     headers=self._headers(),
                     params={"q": phone_clean, "include_contacts": True},
                 )
                 resp.raise_for_status()
-                data = resp.json()
-                contacts = data.get("payload", [])
+                contacts = resp.json().get("payload", [])
                 if contacts:
-                    logger.info(f"Contacto encontrado para {phone_clean}: id={contacts[0]['id']}")
+                    logger.info(f"[Chatwoot] Contacto encontrado: id={contacts[0]['id']} phone={phone_clean}")
                     return contacts[0]
                 return None
             except Exception as e:
-                logger.error(f"Error buscando contacto {phone}: {e}")
+                logger.error(f"[Chatwoot] Error buscando contacto {phone}: {e}")
                 return None
 
     async def create_contact(self, phone: str, name: str = "", email: str = "") -> dict | None:
-        """
-        Crea un contacto nuevo en Chatwoot.
-        """
+        """Crea un contacto nuevo en Chatwoot."""
         phone_clean = phone.strip().replace(" ", "")
         payload: dict = {"phone_number": phone_clean}
         if name:
@@ -78,26 +100,25 @@ class ChatwootService:
         async with httpx.AsyncClient(timeout=10.0) as client:
             try:
                 resp = await client.post(
-                    self._api("contacts"),
+                    self._url("contacts"),
                     headers=self._headers(),
                     json=payload,
                 )
                 resp.raise_for_status()
                 contact = resp.json()
-                logger.info(f"Contacto creado: id={contact.get('id')} phone={phone_clean}")
+                logger.info(f"[Chatwoot] Contacto creado: id={contact.get('id')} phone={phone_clean}")
                 return contact
             except httpx.HTTPStatusError as e:
-                logger.error(f"Error HTTP creando contacto {phone}: {e.response.text}")
+                logger.error(f"[Chatwoot] Error HTTP creando contacto {phone}: {e.response.text}")
                 return None
             except Exception as e:
-                logger.error(f"Error creando contacto {phone}: {e}")
+                logger.error(f"[Chatwoot] Error creando contacto {phone}: {e}")
                 return None
 
-    async def get_or_create_contact(self, phone: str, name: str = "", email: str = "") -> int | None:
-        """
-        Busca el contacto por teléfono; si no existe, lo crea.
-        Retorna el contact_id o None si falla.
-        """
+    async def get_or_create_contact(
+        self, phone: str, name: str = "", email: str = ""
+    ) -> int | None:
+        """Busca el contacto; si no existe, lo crea. Retorna contact_id o None."""
         contact = await self.search_contact(phone)
         if contact:
             return contact["id"]
@@ -109,62 +130,49 @@ class ChatwootService:
     # ══════════════════════════════════════════════════════════════════════════
 
     async def get_open_conversation(self, contact_id: int) -> int | None:
-        """
-        Busca si el contacto ya tiene una conversación abierta.
-        Si existe, la reutiliza para no crear conversaciones duplicadas.
-        """
+        """Busca una conversación abierta o pendiente del contacto."""
         async with httpx.AsyncClient(timeout=10.0) as client:
             try:
                 resp = await client.get(
-                    self._api(f"contacts/{contact_id}/conversations"),
+                    self._url(f"contacts/{contact_id}/conversations"),
                     headers=self._headers(),
                 )
                 resp.raise_for_status()
-                convs = resp.json().get("payload", [])
-                # Preferir conversación abierta o pendiente
-                for conv in convs:
+                for conv in resp.json().get("payload", []):
                     if conv.get("status") in ("open", "pending"):
-                        logger.info(f"Conversacion abierta reutilizada: id={conv['id']}")
+                        logger.info(f"[Chatwoot] Conversación abierta reutilizada: id={conv['id']}")
                         return conv["id"]
                 return None
             except Exception as e:
-                logger.error(f"Error buscando conversaciones del contacto {contact_id}: {e}")
+                logger.error(f"[Chatwoot] Error buscando conversaciones del contacto {contact_id}: {e}")
                 return None
 
     async def create_conversation(
         self,
         contact_id: int,
         inbox_id: int | None = None,
-        initial_message: str = "",
     ) -> int | None:
-        """
-        Crea una nueva conversación en Chatwoot para el contacto.
-        Opcionalmente envía un primer mensaje.
-        """
-        payload: dict = {
-            "contact_id": contact_id,
-            "inbox_id": inbox_id or self.inbox_id,
-        }
-        if initial_message:
-            payload["additional_attributes"] = {}
-
+        """Crea una nueva conversación en Chatwoot para el contacto."""
         async with httpx.AsyncClient(timeout=10.0) as client:
             try:
                 resp = await client.post(
-                    self._api("conversations"),
+                    self._url("conversations"),
                     headers=self._headers(),
-                    json=payload,
+                    json={
+                        "contact_id": contact_id,
+                        "inbox_id": inbox_id or self.inbox_id,
+                    },
                 )
                 resp.raise_for_status()
                 conv = resp.json()
                 conv_id = conv.get("id")
-                logger.info(f"Conversacion creada: id={conv_id} contact_id={contact_id}")
+                logger.info(f"[Chatwoot] Conversación creada: id={conv_id} contact_id={contact_id}")
                 return conv_id
             except httpx.HTTPStatusError as e:
-                logger.error(f"Error HTTP creando conversacion: {e.response.text}")
+                logger.error(f"[Chatwoot] Error HTTP creando conversación: {e.response.text}")
                 return None
             except Exception as e:
-                logger.error(f"Error creando conversacion: {e}")
+                logger.error(f"[Chatwoot] Error creando conversación: {e}")
                 return None
 
     async def get_or_create_conversation(
@@ -172,9 +180,7 @@ class ChatwootService:
         contact_id: int,
         inbox_id: int | None = None,
     ) -> int | None:
-        """
-        Reutiliza conversación abierta o crea una nueva.
-        """
+        """Reutiliza conversación abierta; si no hay, crea una nueva."""
         conv_id = await self.get_open_conversation(contact_id)
         if conv_id:
             return conv_id
@@ -191,17 +197,24 @@ class ChatwootService:
         private: bool = False,
     ) -> bool:
         """
-        Envía un mensaje de texto en una conversación.
-        Chatwoot lo reenvía automáticamente al canal (WhatsApp, etc.).
+        Envía un mensaje en una conversación.
+
+        Args:
+            conversation_id: ID de la conversación en Chatwoot
+            content:         Texto del mensaje (soporta markdown básico)
+            private:         False → el cliente lo recibe por WhatsApp
+                             True  → nota interna, solo visible para agentes en CRM
+
+        Returns:
+            True si Chatwoot aceptó el mensaje.
         """
-        if not self.api_token:
-            logger.error("CHATWOOT_API_TOKEN no configurado en .env")
+        if not self._ready():
             return False
 
         async with httpx.AsyncClient(timeout=10.0) as client:
             try:
                 resp = await client.post(
-                    self._api(f"conversations/{conversation_id}/messages"),
+                    self._url(f"conversations/{conversation_id}/messages"),
                     headers=self._headers(),
                     json={
                         "content": content,
@@ -210,138 +223,83 @@ class ChatwootService:
                     },
                 )
                 resp.raise_for_status()
-                logger.info(f"Mensaje enviado → conversacion {conversation_id}")
+                tipo = "nota interna" if private else "mensaje"
+                logger.info(f"[Chatwoot] {tipo.capitalize()} enviado → conversación {conversation_id}")
                 return True
             except httpx.HTTPStatusError as e:
-                logger.error(f"Error HTTP Chatwoot send_message: {e.response.status_code} — {e.response.text}")
+                logger.error(
+                    f"[Chatwoot] Error HTTP send_message conv={conversation_id}: "
+                    f"{e.response.status_code} — {e.response.text}"
+                )
                 return False
             except Exception as e:
-                logger.error(f"Error enviando mensaje Chatwoot: {e}")
+                logger.error(f"[Chatwoot] Error send_message conv={conversation_id}: {e}")
                 return False
 
     # ══════════════════════════════════════════════════════════════════════════
-    # NOTIFICACIÓN SALIENTE (todo en uno)
-    # ══════════════════════════════════════════════════════════════════════════
-
-    async def send_notification(
-        self,
-        phone: str,
-        message: str,
-        name: str = "",
-        email: str = "",
-        labels: list[str] | None = None,
-        inbox_id: int | None = None,
-    ) -> bool:
-        """
-        Envía una notificación saliente a un contacto por WhatsApp
-        y la deja registrada en el CRM de Chatwoot.
-
-        Flujo interno:
-            1. Busca o crea el contacto por teléfono
-            2. Busca o crea la conversación (reutiliza si ya hay una abierta)
-            3. Envía el mensaje (Chatwoot → WhatsApp)
-            4. Agrega etiquetas opcionales
-
-        Args:
-            phone:    Número en formato +573201234567
-            message:  Texto del mensaje (puede incluir emojis y saltos de línea)
-            name:     Nombre del contacto (para crear si no existe)
-            email:    Email opcional del contacto
-            labels:   Etiquetas Chatwoot a aplicar (ej. ['notificacion', 'cita'])
-            inbox_id: ID del inbox de WhatsApp (usa CHATWOOT_INBOX_ID por defecto)
-
-        Returns:
-            True si el mensaje se envió correctamente, False si hubo error.
-        """
-        if not self.api_token:
-            logger.error("CHATWOOT_API_TOKEN no configurado — notificacion cancelada")
-            return False
-
-        # 1. Contacto
-        contact_id = await self.get_or_create_contact(phone, name, email)
-        if not contact_id:
-            logger.error(f"No se pudo obtener/crear contacto para {phone}")
-            return False
-
-        # 2. Conversación
-        conv_id = await self.get_or_create_conversation(contact_id, inbox_id)
-        if not conv_id:
-            logger.error(f"No se pudo obtener/crear conversacion para contact_id={contact_id}")
-            return False
-
-        # 3. Mensaje
-        sent = await self.send_message(conv_id, message)
-
-        # 4. Etiquetas (opcional)
-        if sent and labels:
-            await self.add_label(conv_id, labels)
-
-        return sent
-
-    # ══════════════════════════════════════════════════════════════════════════
-    # UTILIDADES
+    # UTILIDADES DE CONVERSACIÓN
     # ══════════════════════════════════════════════════════════════════════════
 
     async def assign_conversation(self, conversation_id: int, assignee_id: int) -> bool:
-        """Asigna una conversacion a un agente humano."""
+        """Asigna una conversación a un agente humano (por su ID en Chatwoot)."""
         async with httpx.AsyncClient(timeout=10.0) as client:
             try:
                 resp = await client.post(
-                    self._api(f"conversations/{conversation_id}/assignments"),
+                    self._url(f"conversations/{conversation_id}/assignments"),
                     headers=self._headers(),
                     json={"assignee_id": assignee_id},
                 )
                 resp.raise_for_status()
                 return True
             except Exception as e:
-                logger.error(f"Error asignando conversacion {conversation_id}: {e}")
+                logger.error(f"[Chatwoot] Error asignando conversación {conversation_id}: {e}")
                 return False
 
     async def update_conversation_status(self, conversation_id: int, status: str) -> bool:
         """
-        Cambia el estado de una conversacion.
+        Cambia el estado de una conversación.
         status: 'open' | 'resolved' | 'pending' | 'snoozed'
         """
         async with httpx.AsyncClient(timeout=10.0) as client:
             try:
                 resp = await client.patch(
-                    self._api(f"conversations/{conversation_id}"),
+                    self._url(f"conversations/{conversation_id}"),
                     headers=self._headers(),
                     json={"status": status},
                 )
                 resp.raise_for_status()
                 return True
             except Exception as e:
-                logger.error(f"Error actualizando estado conversacion {conversation_id}: {e}")
+                logger.error(f"[Chatwoot] Error actualizando estado conv={conversation_id}: {e}")
                 return False
 
     async def add_label(self, conversation_id: int, labels: list[str]) -> bool:
-        """Agrega etiquetas a una conversacion. Ej: ['lead-caliente', 'agendado']"""
+        """Agrega etiquetas a una conversación. Ej: ['lead-caliente', 'cita-confirmada']"""
         async with httpx.AsyncClient(timeout=10.0) as client:
             try:
                 resp = await client.post(
-                    self._api(f"conversations/{conversation_id}/labels"),
+                    self._url(f"conversations/{conversation_id}/labels"),
                     headers=self._headers(),
                     json={"labels": labels},
                 )
                 resp.raise_for_status()
                 return True
             except Exception as e:
-                logger.error(f"Error agregando etiqueta a conversacion {conversation_id}: {e}")
+                logger.error(f"[Chatwoot] Error agregando etiquetas a conv={conversation_id}: {e}")
                 return False
 
     async def get_conversation(self, conversation_id: int) -> dict | None:
-        """Obtiene los detalles de una conversacion."""
+        """Obtiene los detalles completos de una conversación."""
         async with httpx.AsyncClient(timeout=10.0) as client:
             try:
                 resp = await client.get(
-                    self._api(f"conversations/{conversation_id}"),
+                    self._url(f"conversations/{conversation_id}"),
                     headers=self._headers(),
                 )
                 resp.raise_for_status()
                 return resp.json()
             except Exception as e:
-                logger.error(f"Error obteniendo conversacion {conversation_id}: {e}")
+                logger.error(f"[Chatwoot] Error obteniendo conversación {conversation_id}: {e}")
                 return None
 
 

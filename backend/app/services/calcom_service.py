@@ -8,7 +8,7 @@ import logging
 import pytz
 from datetime import date, timedelta, datetime
 from app.core.config import settings
-from app.services.whatsapp_service import whatsapp_service
+from app.services.notification_service import notification_service
 
 logger = logging.getLogger(__name__)
 
@@ -218,36 +218,17 @@ async def create_booking(date_str: str, time_str: str, name: str, email: str, ph
         )
     result_data = response.json()
 
+    # Enviar notificaciones de cita (al cliente + al equipo Serviglobal)
+    # notification_service se encarga de las plantillas Meta + notas en CRM
     import asyncio
-    components = [
-        {
-            "type": "body",
-            "parameters": [
-                {"type": "text", "text": name},
-                {"type": "text", "text": date_str},
-                {"type": "text", "text": time_str}
-            ]
-        }
-    ]
-
-    if phone:
-        asyncio.create_task(
-            whatsapp_service.send_template_message(
-                to=phone,
-                template_name="cita_confirmada_cliente",
-                components=components
-            )
+    asyncio.create_task(
+        notification_service.notify_new_booking(
+            client_phone=phone or "",
+            client_name=name,
+            date_str=date_str,
+            time_str=time_str,
+            client_email=email,
         )
-
-    # Notificar a los owners de Serviglobal
-    owners_numbers = ["573014023104", "573178193641", "573106666709"]
-    for owner_phone in owners_numbers:
-        asyncio.create_task(
-            whatsapp_service.send_template_message(
-                to=owner_phone,
-                template_name="alerta_lead_owner",
-                components=components
-            )
-        )
+    )
 
     return result_data
