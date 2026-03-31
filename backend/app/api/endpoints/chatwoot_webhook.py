@@ -25,7 +25,7 @@ async def chatwoot_webhook(request: Request):
     }
     """
     try:
-        payload = await request.json()
+        payload = await request.json() 
     except Exception:
         logger.warning("Chatwoot webhook: payload no es JSON válido")
         return {"status": "ignored"}
