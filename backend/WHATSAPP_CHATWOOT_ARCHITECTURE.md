@@ -76,16 +76,19 @@ WhatsApp ←──── Meta Cloud API ────── Chatwoot CRM ──�
                           │ Webhook POST (eventos) / API REST (mensajes)
                           ▼
 ┌──────────────────────────────────────────────────────────────────────┐
-│                  PYTHON BACKEND (IA)                                  │
+|                  PYTHON BACKEND (IA)                                  │
 │              api.serviglobal-ia.com                                  │
 │                                                                      │
-│  notification_service.py  ← NUEVO — hub de plantillas                │
+│  Lógica de Negocio (Capa 2):                                         │
+│  notification_service.py   — hub de plantillas (citas, alertas)      │
 │    • alerta_lead_owner    → equipo Serviglobal (3 números)           │
 │    • cita_confirmada      → número del cliente                       │
 │    • Nota interna en CRM tras cada envío                             │
 │                                                                      │
-│  chatwoot_service.py — gestión de contactos y conversaciones         │
-│  whatsapp_service.py — envío de texto libre via Chatwoot             │
+│  Clientes HTTP (Capa 1):                                             │
+│  meta_client.py            — API Graph Meta (plantillas, texto)      │
+│  chatwoot_service.py       — gestión de contactos y CRM              │
+│                                                                      │
 │  chatwoot_webhook.py — IA responde mensajes entrantes                │
 └──────────────────────────────────────────────────────────────────────┘
 ```
@@ -321,8 +324,8 @@ Después de cada envío de plantilla, aparece una **nota privada** como esta:
 | Responder en <24h al cliente | Texto libre | `chatwoot_service.send_message()` |
 | Confirmación de cita nueva | ✅ Plantilla | `notification_service.notify_new_booking()` |
 | Alerta al equipo por nuevo lead | ✅ Plantilla | `notification_service.notify_new_booking()` |
-| Recordatorio pasadas 24h | ✅ Plantilla | `whatsapp_service.send_template_message()` |
-| Nota informativa ad-hoc | Texto libre | `whatsapp_service.send_notification()` |
+| Recordatorio pasadas 24h | ✅ Plantilla | `meta_client.send_template()` |
+| Nota informativa ad-hoc | Texto libre | `meta_client.send_text()` |
 
 ### Componentes de plantilla (formato Meta)
 
@@ -431,9 +434,9 @@ CHATWOOT_INBOX_ID=1                    # Settings → Inboxes → URL del inbox
 
 | Servicio | Archivo | Responsabilidad |
 |---|---|---|
-| `notification_service` | `services/notification_service.py` | **🆕 Plantillas de citas (templates Meta + notas CRM)** |
-| `chatwoot_service` | `services/chatwoot_service.py` | Contactos, conversaciones, mensajes en CRM |
-| `whatsapp_service` | `services/whatsapp_service.py` | Texto libre → Chatwoot o Meta (fallback) |
+| `notification_service` | `services/notification_service.py` | Lógica de negocio (plantillas de citas + notas CRM) |
+| `meta_client` | `services/meta_client.py` | **🆕 Cliente HTTP puro para Meta Cloud API** |
+| `chatwoot_service` | `services/chatwoot_service.py` | Cliente HTTP puro para la API de Chatwoot CRM |
 
 ### Chatwoot API (usada por Python)
 
