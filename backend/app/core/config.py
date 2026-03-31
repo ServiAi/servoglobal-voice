@@ -29,6 +29,7 @@ class Settings(BaseSettings):
     # Chatwoot CRM
     CHATWOOT_API_TOKEN: str = ""
     CHATWOOT_ACCOUNT_ID: int = 1
+    CHATWOOT_INBOX_ID: int = 1    # ID del inbox WhatsApp en Chatwoot
 
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", extra="ignore"
