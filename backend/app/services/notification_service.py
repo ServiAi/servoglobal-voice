@@ -124,7 +124,7 @@ class NotificationService:
         ok = await meta_client.send_template(
             to=phone,
             template_name="alerta_lead_owner",
-            language_code="es",
+            language_code="es-CO",
             components=self._body_components(client_name, date_str, time_str),
         )
         if ok:
@@ -156,7 +156,7 @@ class NotificationService:
         ok = await meta_client.send_template(
             to=phone,
             template_name="cita_confirmada_cliente",
-            language_code="es",
+            language_code="es-CO",
             components=self._body_components(name, date_str, time_str),
         )
         if ok:
