@@ -106,13 +106,19 @@ async def receive_calcom_webhook(request: Request, background_tasks: BackgroundT
             client_name = responses.get("name") or (attendees[0].get("name") if attendees else "Desconocido")
             client_email = responses.get("email") or (attendees[0].get("email") if attendees else "")
             
-            # Teléfono generalmente está en las respuestas
+            # Teléfono generalmente está en las respuestas. Búsqueda robusta:
             client_phone = responses.get("phone") or ""
-            
+            if not client_phone:
+                # Buscar en todas las llaves de responses por si le cambiaron el ID al campo en Cal.com
+                for key, val in responses.items():
+                    if isinstance(val, str) and ("phone" in key.lower() or "tel" in key.lower() or "cel" in key.lower() or "+" in val):
+                        client_phone = val
+                        break
+                        
             start_time_iso = payload.get("startTime")
             if not start_time_iso or not client_phone:
-                logger.warning("[Cal.com] Faltan datos críticos (startTime o phone) ignorando.")
-                return {"status": "ignored", "reason": "missing_data"}
+                logger.warning(f"[Cal.com] Faltan datos críticos (startTime o phone). Respuestas extraídas: {responses}")
+                return {"status": "ignored", "reason": "missing_data_or_no_phone"}
 
             try:
                 date_str, time_str = format_calcom_datetime(start_time_iso)
