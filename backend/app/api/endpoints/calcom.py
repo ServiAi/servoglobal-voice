@@ -162,26 +162,35 @@ async def receive_calcom_webhook(
             attendees = payload.get("attendees", [])
             responses = payload.get("responses", {})
 
+            # Función auxiliar rápida para extraer el valor manejando diccionarios o strings
+            def get_res_value(key):
+                val = responses.get(key)
+                if isinstance(val, dict):
+                    return val.get("value", "")
+                return val if isinstance(val, str) else ""
+
             # Nombre y email preferimos sacarlos del primer attendee o responses
-            client_name = responses.get("name") or (
+            client_name = get_res_value("name") or (
                 attendees[0].get("name") if attendees else "Desconocido"
             )
-            client_email = responses.get("email") or (
+            client_email = get_res_value("email") or (
                 attendees[0].get("email") if attendees else ""
             )
 
             # Teléfono generalmente está en las respuestas. Búsqueda robusta:
-            client_phone = responses.get("phone") or ""
+            client_phone = get_res_value("phone") or get_res_value("attendeePhoneNumber")
+            
             if not client_phone:
                 # Buscar en todas las llaves de responses por si le cambiaron el ID al campo en Cal.com
                 for key, val in responses.items():
-                    if isinstance(val, str) and (
+                    str_val = val.get("value", "") if isinstance(val, dict) else val
+                    if isinstance(str_val, str) and (
                         "phone" in key.lower()
                         or "tel" in key.lower()
                         or "cel" in key.lower()
-                        or "+" in val
+                        or "+" in str_val
                     ):
-                        client_phone = val
+                        client_phone = str_val
                         break
 
             start_time_iso = payload.get("startTime")
