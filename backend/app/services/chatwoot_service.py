@@ -105,7 +105,14 @@ class ChatwootService:
                     json=payload,
                 )
                 resp.raise_for_status()
-                contact = resp.json()
+                contact_resp = resp.json()
+                
+                # Chatwoot envuelve la creación de contacto en {"payload": {"contact": {...}}}
+                if "payload" in contact_resp and "contact" in contact_resp["payload"]:
+                    contact = contact_resp["payload"]["contact"]
+                else:
+                    contact = contact_resp.get("payload", contact_resp)
+
                 logger.info(f"[Chatwoot] Contacto creado: id={contact.get('id')} phone={phone_clean}")
                 return contact
             except httpx.HTTPStatusError as e:
