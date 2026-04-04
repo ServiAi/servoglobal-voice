@@ -1,5 +1,8 @@
-from fastapi import APIRouter, HTTPException, Request, BackgroundTasks
+from fastapi import APIRouter, HTTPException, Request, BackgroundTasks, Header, status
 from pydantic import BaseModel
+import hmac
+import hashlib
+import os
 from app.services.calcom_service import get_available_slots, create_booking
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -8,9 +11,13 @@ import logging
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1", tags=["Cal.com"])
 
+
 class AvailabilityRequest(BaseModel):
-    date: str                   # Accepts "YYYY-MM-DD" or full ISO 8601 timestamp
-    jornada: str | None = None  # 'mañana' (09:00–11:30) | 'tarde' (12:00–16:30) | None = all
+    date: str  # Accepts "YYYY-MM-DD" or full ISO 8601 timestamp
+    jornada: str | None = (
+        None  # 'mañana' (09:00–11:30) | 'tarde' (12:00–16:30) | None = all
+    )
+
 
 class CreateBookingRequest(BaseModel):
     date_str: str
@@ -18,6 +25,7 @@ class CreateBookingRequest(BaseModel):
     name: str
     email: str
     phone: str | None = None
+
 
 @router.get("/availability")
 async def check_availability_get(date: str, jornada: str | None = None):
@@ -27,7 +35,9 @@ async def check_availability_get(date: str, jornada: str | None = None):
     except ValueError as e:
         raise HTTPException(status_code=502, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error al consultar disponibilidad: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error al consultar disponibilidad: {str(e)}"
+        )
 
 
 @router.post("/availability")
@@ -38,7 +48,10 @@ async def check_availability(request: AvailabilityRequest):
     except ValueError as e:
         raise HTTPException(status_code=502, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error al consultar disponibilidad: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error al consultar disponibilidad: {str(e)}"
+        )
+
 
 @router.post("/bookings")
 async def create_new_booking(request: CreateBookingRequest):
@@ -60,36 +73,83 @@ async def create_new_booking(request: CreateBookingRequest):
 # ── Webhook Nativo de Cal.com ────────────────────────────────────────────────
 
 MESES = {
-    1: "enero", 2: "febrero", 3: "marzo", 4: "abril",
-    5: "mayo", 6: "junio", 7: "julio", 8: "agosto",
-    9: "septiembre", 10: "octubre", 11: "noviembre", 12: "diciembre"
+    1: "enero",
+    2: "febrero",
+    3: "marzo",
+    4: "abril",
+    5: "mayo",
+    6: "junio",
+    7: "julio",
+    8: "agosto",
+    9: "septiembre",
+    10: "octubre",
+    11: "noviembre",
+    12: "diciembre",
 }
 DIAS = {
-    0: "Lunes", 1: "Martes", 2: "Miércoles", 3: "Jueves",
-    4: "Viernes", 5: "Sábado", 6: "Domingo"
+    0: "Lunes",
+    1: "Martes",
+    2: "Miércoles",
+    3: "Jueves",
+    4: "Viernes",
+    5: "Sábado",
+    6: "Domingo",
 }
+
 
 def format_calcom_datetime(iso_string: str) -> tuple[str, str]:
     """Convierte ISO 8601 UTC a la hora de Colombia con el formato amigable de Serviglobal."""
     # Reemplazamos 'Z' para compatibilidad con fromisoformat()
-    dt_utc = datetime.fromisoformat(iso_string.replace('Z', '+00:00'))
+    dt_utc = datetime.fromisoformat(iso_string.replace("Z", "+00:00"))
     # Convertimos a hora local Colombia
     dt_bogota = dt_utc.astimezone(ZoneInfo("America/Bogota"))
-    
+
     dia_semana = DIAS[dt_bogota.weekday()]
     mes = MESES[dt_bogota.month]
     date_str = f"{dia_semana} {dt_bogota.day} de {mes} de {dt_bogota.year}"
     time_str = dt_bogota.strftime("%I:%M %p").lstrip("0")
-    
+
     return date_str, time_str
 
+
 @router.post("/calcom/webhook")
-async def receive_calcom_webhook(request: Request, background_tasks: BackgroundTasks):
+async def receive_calcom_webhook(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    x_cal_signature_256: str | None = Header(None)
+):
     """
-    Recibe el Webhook nativo desde Cal.com. 
+    Recibe el Webhook nativo desde Cal.com.
     Intercepta el evento BOOKING_CREATED y envía las notificaciones y notas al CRM de Chatwoot.
     """
     from app.services.notification_service import notification_service
+
+    # --- VALIDACIÓN CRIPTOGRÁFICA DE SEGURIDAD (Bypass BFM) ---
+    calcom_secret = os.getenv("CALCOM_WEBHOOK_SECRET")
+    
+    if calcom_secret:
+        if not x_cal_signature_256:
+            logger.warning("[Cal.com] Rechazado: Falta la firma X-Cal-Signature-256")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Missing cryptographic signature"
+            )
+
+        raw_body = await request.body()
+        expected_signature = hmac.new(
+            key=calcom_secret.encode('utf-8'),
+            msg=raw_body,
+            digestmod=hashlib.sha256
+        ).hexdigest()
+
+        if not hmac.compare_digest(expected_signature, x_cal_signature_256):
+            logger.warning("[Cal.com] Rechazado: Firma HMAC de webhook inválida")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Invalid signature integrity"
+            )
+    else:
+        logger.warning("[Cal.com] SEGURO INACTIVO: CALCOM_WEBHOOK_SECRET no configurado en entorno.")
 
     try:
         payload_data = await request.json()
@@ -97,27 +157,38 @@ async def receive_calcom_webhook(request: Request, background_tasks: BackgroundT
 
         if payload_data.get("triggerEvent") == "BOOKING_CREATED":
             payload = payload_data.get("payload", {})
-            
+
             # Extraer datos de los asistentes / respuestas
             attendees = payload.get("attendees", [])
             responses = payload.get("responses", {})
-            
+
             # Nombre y email preferimos sacarlos del primer attendee o responses
-            client_name = responses.get("name") or (attendees[0].get("name") if attendees else "Desconocido")
-            client_email = responses.get("email") or (attendees[0].get("email") if attendees else "")
-            
+            client_name = responses.get("name") or (
+                attendees[0].get("name") if attendees else "Desconocido"
+            )
+            client_email = responses.get("email") or (
+                attendees[0].get("email") if attendees else ""
+            )
+
             # Teléfono generalmente está en las respuestas. Búsqueda robusta:
             client_phone = responses.get("phone") or ""
             if not client_phone:
                 # Buscar en todas las llaves de responses por si le cambiaron el ID al campo en Cal.com
                 for key, val in responses.items():
-                    if isinstance(val, str) and ("phone" in key.lower() or "tel" in key.lower() or "cel" in key.lower() or "+" in val):
+                    if isinstance(val, str) and (
+                        "phone" in key.lower()
+                        or "tel" in key.lower()
+                        or "cel" in key.lower()
+                        or "+" in val
+                    ):
                         client_phone = val
                         break
-                        
+
             start_time_iso = payload.get("startTime")
             if not start_time_iso or not client_phone:
-                logger.warning(f"[Cal.com] Faltan datos críticos (startTime o phone). Respuestas extraídas: {responses}")
+                logger.warning(
+                    f"[Cal.com] Faltan datos críticos (startTime o phone). Respuestas extraídas: {responses}"
+                )
                 return {"status": "ignored", "reason": "missing_data_or_no_phone"}
 
             try:
@@ -126,7 +197,9 @@ async def receive_calcom_webhook(request: Request, background_tasks: BackgroundT
                 logger.error(f"[Cal.com] Error parseando fecha {start_time_iso}: {e}")
                 date_str, time_str = "Fecha", "Hora"
 
-            logger.info(f"[Cal.com] Agendamiento recibido. Cliente: {client_name}, {date_str} {time_str}. Tel: {client_phone}")
+            logger.info(
+                f"[Cal.com] Agendamiento recibido. Cliente: {client_name}, {date_str} {time_str}. Tel: {client_phone}"
+            )
 
             # Lanzamos la notificación en background para que Cal.com reciba el OK rápidamente (200)
             background_tasks.add_task(
@@ -135,9 +208,9 @@ async def receive_calcom_webhook(request: Request, background_tasks: BackgroundT
                 client_name=client_name,
                 date_str=date_str,
                 time_str=time_str,
-                client_email=client_email
+                client_email=client_email,
             )
-            
+
             return {"status": "processing_notifications"}
         else:
             return {"status": "ignored", "reason": "not_booking_created"}
