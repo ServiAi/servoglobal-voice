@@ -218,17 +218,8 @@ async def create_booking(date_str: str, time_str: str, name: str, email: str, ph
         )
     result_data = response.json()
 
-    # Enviar notificaciones de cita (al cliente + al equipo Serviglobal)
-    # notification_service se encarga de las plantillas Meta + notas en CRM
-    import asyncio
-    asyncio.create_task(
-        notification_service.notify_new_booking(
-            client_phone=phone or "",
-            client_name=name,
-            date_str=date_str,
-            time_str=time_str,
-            client_email=email,
-        )
-    )
+    # Las notificaciones al cliente y al equipo Serviglobal
+    # ahora se envían exclusivamente a través del webhook de Cal.com (/calcom/webhook).
+    # Se ha eliminado el envío duplicado desde aquí.
 
     return result_data
