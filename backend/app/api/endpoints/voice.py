@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from app.services.voice_service import create_call_session, create_sip_call_via_pbx
+from app.services.notification_service import notification_service
 from app.api.deps import verify_turnstile
 
 router = APIRouter(prefix="/api/v1", tags=["Voice"])
@@ -48,6 +49,11 @@ async def create_call(request: CreateCallRequest):
             system_prompt=request.system_prompt,
             template_context=context,
         )
+        
+        # Registrar el inicio de la demo en el CRM
+        if context:
+            await notification_service.notify_demo_start(context)
+
         return {"joinUrl": join_url}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -104,6 +110,10 @@ async def create_outbound_call(request: CreateOutboundCallRequest):
                 agent_id=request.agent_id,
                 template_context=context if context else None,
             )
+            
+        # Registrar el inicio de la demo en el CRM
+        await notification_service.notify_demo_start(context)
+        
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

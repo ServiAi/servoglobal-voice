@@ -110,6 +110,44 @@ class NotificationService:
         logger.info(f"[Notif] notify_new_booking completado → {results}")
         return results
 
+    async def notify_demo_start(self, context: dict) -> None:
+        """
+        Registra el inicio de una llamada de demostración (Web o SIP) en el CRM 
+        junto con el contexto del negocio capturado en el formulario frontend.
+        """
+        phone = context.get("user_phone")
+        if not phone:
+            logger.warning("[Notif] Demo start call without user_phone, skipping CRM logging.")
+            return
+
+        name = context.get("user_name", "Usuario Demo")
+        email = context.get("user_email", "")
+
+        industry = context.get("user_industry", "No especificada")
+        use_case = context.get("user_use_case", "No especificado")
+        volume = context.get("user_volume", "No especificado")
+        pain_point = context.get("user_pain_point", "No especificado")
+
+        note = (
+            f"📞 *Demostración de Agente IA Iniciada*\n"
+            f"• Industria: {industry}\n"
+            f"• Caso de Uso: {use_case}\n"
+            f"• Dolor / Reto: {pain_point}\n"
+            f"• Volumen de Op: {volume}\n"
+        )
+
+        logger.info(f"[Notif] Registrando demo iniciada para {phone} en CRM.")
+        import asyncio
+        asyncio.create_task(
+            self._crm_private_note(
+                phone=phone,
+                note=note,
+                contact_name=name,
+                contact_email=email,
+                labels=["demo-iniciada"]
+            )
+        )
+
     # ══════════════════════════════════════════════════════════════════════════
     # MÉTODOS PRIVADOS — un método por plantilla
     # ══════════════════════════════════════════════════════════════════════════
