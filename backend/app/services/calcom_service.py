@@ -8,6 +8,11 @@ import logging
 import pytz
 from datetime import date, timedelta, datetime
 from app.core.config import settings
+from app.services.date_resolution_service import (
+    is_iso_like_date,
+    parse_reference_datetime,
+    resolve_temporal_expression,
+)
 from app.services.notification_service import notification_service
 
 logger = logging.getLogger(__name__)
@@ -62,7 +67,27 @@ def _parse_date(date_input: str) -> tuple[str, str]:
     return day_str, end_str
 
 
-async def get_available_slots(date_input: str, jornada: str | None = None) -> dict:
+def _resolve_date_input(
+    date_input: str,
+    reference_datetime: str | None = None,
+) -> tuple[str, str, dict | None]:
+    if is_iso_like_date(date_input):
+        start_date, end_date = _parse_date(date_input)
+        return start_date, end_date, None
+
+    resolution = resolve_temporal_expression(
+        expression=date_input,
+        reference_datetime=reference_datetime,
+    )
+    start_date, end_date = _parse_date(resolution.date)
+    return start_date, end_date, resolution.as_dict()
+
+
+async def get_available_slots(
+    date_input: str,
+    jornada: str | None = None,
+    reference_datetime: str | None = None,
+) -> dict:
     """
     Query Cal.com for available slots on the given date, optionally filtered by jornada.
 
@@ -73,7 +98,10 @@ async def get_available_slots(date_input: str, jornada: str | None = None) -> di
     Returns:
         dict with keys: date, jornada, available_slots (list), summary (str)
     """
-    start_date, end_date = _parse_date(date_input)
+    start_date, end_date, temporal_resolution = _resolve_date_input(
+        date_input,
+        reference_datetime,
+    )
 
     if not settings.CAL_API_KEY:
         raise ValueError("CAL_API_KEY no está configurada en las variables de entorno.")
@@ -138,8 +166,7 @@ async def get_available_slots(date_input: str, jornada: str | None = None) -> di
     import locale
 
     # Obtener el timestamp actual con zona horaria de Bogotá
-    bogota_tz = pytz.timezone('America/Bogota')
-    ahora = datetime.now(bogota_tz)
+    ahora = parse_reference_datetime(reference_datetime)
     
     # Mapeo manual de días en lugar de depender del locale del sistema
     dias_semana_es = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
@@ -149,7 +176,8 @@ async def get_available_slots(date_input: str, jornada: str | None = None) -> di
         "metadata_consulta": {
             "fecha_ejecucion": ahora.strftime("%Y-%m-%d %H:%M:%S"),
             "dia_semana": nombre_dia,
-            "jornada_solicitada": jornada or "todas"
+            "jornada_solicitada": jornada or "todas",
+            "temporal_resolution": temporal_resolution
         },
         "date": start_date,
         "jornada": jornada or "all",
