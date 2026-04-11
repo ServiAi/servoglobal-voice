@@ -51,7 +51,7 @@ export function Hero() {
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.6, delay: 0.1 }}
-            className="text-[1.75rem] sm:text-4xl md:text-6xl lg:text-7xl font-bold tracking-tight text-zinc-900 dark:text-white mb-6 leading-tight"
+            className="text-[1.75rem] sm:text-4xl md:text-5xl lg:text-5xl xl:text-6xl font-bold tracking-tight text-zinc-900 dark:text-white mb-6 leading-[1.15]"
           >
             {t('titlePart1')}{" "}
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-violet-600 to-fuchsia-600 dark:from-violet-400 dark:to-fuchsia-400">
@@ -111,12 +111,12 @@ export function Hero() {
         </div>
 
         {/* RIGHT COLUMN: HERO FUTURISTIC - Hidden on mobile, visible from md */}
-        <div className="hidden md:flex relative items-center justify-center h-full">
+        <div className="hidden md:flex relative items-center justify-center h-full w-full">
              <motion.div
                 initial={{ opacity: 0, scale: 0.8 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ duration: 1.2, delay: 0.4 }}
-                className="relative w-full h-full min-h-[400px] lg:min-h-[500px]"
+                className="relative w-[85%] max-w-[450px] aspect-square min-h-[300px] lg:min-h-[400px]"
              >
                 <HeroFuturistic />
              </motion.div>
