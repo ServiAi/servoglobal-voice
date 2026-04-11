@@ -53,16 +53,16 @@
     "cta": "Book consultation"
   },
   "hero": {
-    "badge": "Voice AI Technology + Omnichannel",
-    "titlePart1": "Handle",
-    "titlePart2": "100% of your calls,",
-    "titlePart3": "24/7.",
-    "descriptionFull": "Capture data, understand intent, and execute actions: appointments, visits, tickets, payments, or payment promises.",
-    "descriptionShort": "Answer, understand, and execute actions 24/7.",
-    "microcopySetup": "Custom implementation (setup) + monthly operation + variable consumption by channels and volume.",
-    "microcopySuperPlus": "Activate Click-to-Servi-IA-Call: smart form → Servi-IA call with context → faster closing.",
-    "ctaPrimary": "Book Consultation",
-    "ctaSecondary": "Try Servi-IA Now"
+    "badge": "Guided Implementation of AI Voice Agents",
+    "titlePart1": "AI Voice Agents that",
+    "titlePart2": "answer and sell for you,",
+    "titlePart3": "integrated into your operation.",
+    "descriptionFull": "We design and implement your custom agent (Voice + WhatsApp + CRM + Calendar). Book a pre-consultation and receive an implementation plan.",
+    "descriptionShort": "Custom agents that answer and sell 24/7.",
+    "microcopySetup": "Initial diagnosis → Functional pilot → Continuous optimization.",
+    "microcopySuperPlus": "We are not a self-service platform, we implement it for you.",
+    "ctaPrimary": "Book Pre-consultation",
+    "ctaSecondary": "Try Demo (Call Now)"
   },
   "demoCommon": {
     "fillAllFields": "Please complete all fields to continue.",
@@ -206,30 +206,30 @@
   "process": {
     "title": "We don't sell a platform.",
     "subtitle": "We implement a system that fits your operation.",
-    "description": "Custom implementation with setup based on scope: integrations, flows and channels. We offer Click-to-Servi-IA-Call to boost conversions with prior context.",
-    "microcopySetup": "Custom implementation (setup) based on scope.",
+    "description": "The service includes full support: we implement solutions that connect with your existing PBX, CRM, and channels.",
+    "microcopySetup": "Custom implementation based on scope.",
     "cta": "Start with Phase 1",
     "phases": {
       "phase1": {
         "number": "1",
         "title": "Pre-consultation (Diagnosis)",
-        "description": "We analyze your processes, volume, channels, integrations, risks and metrics.",
+        "description": "A free first step. We analyze your use case, relevant channels, volume, and scope.",
         "deliverableLabel": "Deliverable:",
         "deliverable": "Flow map + Technical proposal"
       },
       "phase2": {
         "number": "2",
         "title": "Implementation (Pilot)",
-        "description": "We build your Servi-IA, integrate channels (voice + messaging + CRM + calendars) and train flows.",
+        "description": "We build your Servi-IA, integrate channels (voice + messaging) and deliver in record time.",
         "deliverableLabel": "Result:",
-        "deliverable": "Functional Servi-IA + Configured integrations"
+        "deliverable": "Functional Pilot + Configured integrations"
       },
       "phase3": {
         "number": "3",
         "title": "Production & Optimization",
-        "description": "Deployment, monitoring, adjustments, continuous improvements and constant support.",
+        "description": "Deployment, metrics monitoring, and continuous optimization of conversation flows.",
         "deliverableLabel": "Support:",
-        "deliverable": "Maintenance + Optimization + Metrics"
+        "deliverable": "Monthly Operation + Adjustments"
       }
     }
   },
@@ -246,108 +246,110 @@
     }
   },
   "pricing": {
-    "title": "Plans & Pricing",
-    "subtitle": "Mandatory setup (custom implementation) + monthly operation + variable consumption.",
+    "title": "Plans and Pricing",
+    "subtitle": "Service operation, support, and maintenance. Integrated and custom-built.",
     "monthly": "Monthly",
-    "setup": "Setup",
+    "setup": "Setup (One-time)",
     "from": "From",
-    "cta": "Book consultation",
+    "cta": "Book pre-consultation",
     "plans": {
       "conecta": {
-        "name": "Servi-IA Starter",
-        "idealFor": "1 vertical / low volume",
-        "includes": "Click-to-Servi-IA-Call base + essential flows + outcomes",
-        "monthly": "$550"
+        "name": "Web Conversion Plan",
+        "idealFor": "Smart digital capture and conversion",
+        "includes": "WebRTC smart form, Click to call, Web leads",
+        "monthly": "$510"
       },
       "integra": {
-        "name": "Servi-IA Growth",
-        "idealFor": "2–3 verticals",
-        "includes": "+ advanced automations + reporting",
-        "monthly": "$950"
+        "name": "Voice Cloud / PBX Plan",
+        "idealFor": "Real voice operation, PSTN, PBX, and telephony integration",
+        "includes": "Trunk integration, local extension handling",
+        "monthly": "$546"
       },
       "escala": {
-        "name": "Servi-IA Enterprise",
-        "idealFor": "Custom solutions for high-volume and business-critical operations",
-        "includes": "+ continuous optimization + advanced support",
-        "monthly": "$1,499",
+        "name": "Enterprise",
+        "idealFor": "Custom solutions for high volumes and critical operations",
+        "includes": "High-demand audit. Outbound dialer, SLAs",
+        "monthly": "Custom",
         "setup": "custom",
-        "setupLabel": "We evaluate your requirements and present you with an offer tailored to your needs",
+        "setupLabel": "We evaluate your requirements and present an offer tailored to your needs",
         "hooks": [
           "Custom architecture (Multi-agent)",
-          "Native integration (PBX, CRM, APIs)",
+          "Deep native integration (PBX, CRM, APIs)",
           "Dedicated support & onboarding"
         ]
       }
     },
-    "addon": {
-      "name": "Servi-IA Turbo",
-      "description": "Advanced Click-to-Servi-IA-Call for campaigns and complex funnels",
-      "monthly": "$199",
-      "setup": "$600"
+    "excess": {
+      "title": "Investment Components",
+      "webrtc": "Initial Bucket: 2,000 AI minutes included per plan",
+      "didIn": "Initial Setup (One-time): Web Conversion $550 | Voice Cloud $950",
+      "outbound": "Additional AI Minute: USD 0.20",
+      "didExtra": "Consulting / Extra change: USD 60"
     },
-    "consumptionNote": "Consumption (minutes and messaging) varies by country and volume. Billed based on plan and actual usage.",
+    "addon": {
+      "name": "Additional Conditions",
+      "description": "Second agent with no setup fee (subject to complexity) and 10% monthly discount. Free initial pre-consultation (20-30 mins). All amounts in USD at current exchange rate, VAT exclusive.",
+      "monthly": "-",
+      "setup": "-"
+    },
+    "consumptionNote": "The monthly fee represents service operation and continuous support. The setup is mandatory and a one-time payment. Meta (WhatsApp) costs are assumed directly by the client.",
     "services": {
       "byopbx": {
         "header": "Infrastructure Professional Services",
-        "name": "Professional Services (BYO PBX)",
-        "description": "Implementation on client infrastructure.",
-        "assessment": "Mandatory prior assessment (infrastructure review): $500",
-        "setup": "Variable setup subject to quote."
+        "name": "Integration with your PBX / CRM",
+        "description": "Telephony or custom software integrations may generate additional setup costs upon assessment.",
+        "assessment": "Free initial assessment in a 30-min consultation",
+        "setup": "Variable setup costs"
       }
     }
   },
   "faq": {
     "title": "Frequently Asked Questions",
-    "subtitle": "We answer your questions before the consultation.",
+    "subtitle": "We answer your questions before the pre-consultation.",
     "items": {
+      "whatIncludes": {
+        "question": "What does the Monthly fee include vs the Setup?",
+        "answer": "The Setup (one-time payment) covers the design, development, and integration of the agent with your systems. The Monthly fee covers operations, scaled support, platform use, and the base package of included minutes."
+      },
+      "additionalMinutes": {
+        "question": "How is additional consumption charged?",
+        "answer": "If you exceed the 2,000 minutes included in your monthly plan, each additional AI minute costs USD 0.20, billed at the end of the month or via prepaid balance."
+      },
+      "secondAgent": {
+        "question": "How does adding a second agent work?",
+        "answer": "A second agent is usually added with no setup fee (subject to complexity evaluation), and you get a 10% discount on the monthly fee for the second agent."
+      },
+      "metaCosts": {
+        "question": "Who covers WhatsApp / Meta costs?",
+        "answer": "Outbound or proactive messages on WhatsApp are governed by Meta's pricing and are directly covered by the client through their own card or messaging balance."
+      },
       "replaceTeam": {
         "question": "Does this replace my team?",
-        "answer": "No. It automates repetitive tasks and frees your team for higher-value work. Servi-IA escalates to human when needed."
+        "answer": "No. It automates repetitive tasks and frees your team for higher-value work. Servi-IA escalates to a human agent when the case falls outside automated scripts."
       },
       "changeOperation": {
         "question": "Do I need to change my current operation?",
-        "answer": "No. We integrate with your existing infrastructure (CRM, calendars, telephony, messaging). You don't need to replace anything."
-      },
-      "voiceInfra": {
-        "question": "Do you configure my voice infrastructure?",
-        "answer": "Yes. If needed, we offer voice infrastructure setup and optimization as a custom service."
+        "answer": "No. We integrate with your existing infrastructure (CRM, calendars, PBX, telephony, messaging)."
       },
       "howLong": {
         "question": "How long does implementation take?",
-        "answer": "Depends on scope. After diagnosis, we deliver a functional pilot in record time. Each project is custom-built."
-      },
-      "omnichannel": {
-        "question": "Does it work with messaging and calls?",
-        "answer": "Yes. Servi-IA is omnichannel: voice (telephony), messaging, and web chat, integrated based on your operation."
-      },
-      "handoffRequired": {
-        "question": "Is human handoff mandatory?",
-        "answer": "No. Human handoff is configurable: by call, by messaging, or no handoff. You define it based on your operation."
-      },
-      "ownMetrics": {
-        "question": "Can I have my own metrics?",
-        "answer": "Yes. Metric exports, dashboard access, and periodic reports are available upon request."
-      },
-      "whatIsClickToIA": {
-        "question": "What is Click-to-Servi-IA-Call?",
-        "answer": "It's an experience where the user fills a quick form and connects with Servi-IA that already has the context to close faster."
-      },
-      "whatIsCallback": {
-        "question": "What is 'Servi-IA calls you now'?",
-        "answer": "It's the variant where the user leaves their number with consent and the system triggers a Servi-IA call with the form's context."
+        "answer": "It depends on the scope evaluated during the free pre-consultation. We typically define and deploy a functional pilot in weeks."
       },
       "dataPrivacy": {
-        "question": "Do you handle sensitive data (Health, Banking, Gov) and strict regulations?",
-        "answer": "Yes. For regulated sectors, we deploy the entire solution (including open-source LLMs) on your own on-premise infrastructure or private cloud, ensuring total data sovereignty and compliance."
+        "question": "Do you handle sensitive data and regulatory compliance?",
+        "answer": "Yes, for regulated sectors we have implementation processes that guarantee data sovereignty and secure storage within your ecosystem."
       }
     }
   },
   "booking": {
     "title": "Schedule your diagnosis",
-    "description": "Book a diagnosis call (15–30 min). Receive an initial automation plan for your case.",
-    "microcopy": "Custom implementation with setup.",
-    "postSchedule": "Have ready: current processes, CRM, channels, monthly volume.",
-    "cta": "Book Consultation"
+    "description": "Book a diagnosis call (20–30 min). We'll explore the use case, operational volume, channels, and necessary integrations.",
+    "microcopy": "We will deliver an automation plan with technical feasibility and implementation times.",
+    "postSchedule": "Have ready: current processes, phone system / CRM you use, and current challenges.",
+    "cta": "Book Pre-consultation"
+  },
+  "legal": {
+    "consentCheckbox": "I expressly authorize the processing of my personal data in accordance with the privacy policy."
   },
   "voiceDemo": {
     "title": "Try Click-to-Servi-IA-Call now",

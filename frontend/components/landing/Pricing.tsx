@@ -1,10 +1,13 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { Check, Zap, ArrowRight, Settings, Phone } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { cn } from '@/lib/utils';
+import { DemoOutbound } from '@/components/landing/DemoOutbound';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 const PLAN_IDS = ['conecta', 'integra', 'escala'] as const;
 
@@ -37,6 +40,8 @@ const PLAN_HIGHLIGHTS: Record<string, string[]> = {
 
 export function Pricing() {
   const t = useTranslations('pricing');
+  const tVoiceDemo = useTranslations('voiceDemo');
+  const [isCallNowModalOpen, setIsCallNowModalOpen] = useState(false);
 
   return (
     <section id="precios" className="py-24 bg-white dark:bg-zinc-950 transition-colors duration-300">
@@ -132,13 +137,11 @@ export function Pricing() {
                 {/* CTA */}
                 {planId === 'escala' ? (
                   <button
-                    data-cal-namespace="serviglobal-ventas-ia"
-                    data-cal-link="serviglobal/serviglobal-ventas-ia"
-                    data-cal-config='{"layout":"month_view","useSlotsViewOnSmallScreen":"true"}'
+                    onClick={() => setIsCallNowModalOpen(true)}
                     className="w-full text-center py-3 px-6 rounded-xl font-bold transition-all flex items-center justify-center gap-2 bg-violet-600 text-white hover:bg-violet-700 shadow-lg shadow-violet-500/20 cursor-pointer"
                   >
                     <Phone className="size-4" />
-                    Contactar Ventas
+                    Consulta nuestro equipo de ventas
                   </button>
                 ) : (
                   <Link
@@ -253,6 +256,19 @@ export function Pricing() {
           {t('consumptionNote')}
         </p>
       </div>
+
+      <Dialog open={isCallNowModalOpen} onOpenChange={setIsCallNowModalOpen}>
+        <DialogContent className="max-w-4xl w-[95vw] bg-white dark:bg-zinc-950 border-zinc-200 dark:border-white/10 p-0 overflow-hidden">
+          <DialogHeader className="px-6 pt-6 pb-2">
+            <DialogTitle className="text-xl font-bold text-zinc-900 dark:text-white">
+              {tVoiceDemo('outboundTab')}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="px-4 pb-4 max-h-[78vh] overflow-y-auto">
+            <DemoOutbound />
+          </div>
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }

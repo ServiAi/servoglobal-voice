@@ -49,7 +49,7 @@ export function ContactModal({ children, open, onOpenChange }: ContactModalProps
     {
       icon: <Facebook className="size-5" />,
       label: 'Facebook',
-      href: 'https://www.facebook.com/serviglobalsas'
+      href: 'https://www.facebook.com/serviglobalsasoficial'
     },
     {
       icon: <Instagram className="size-5" />,

@@ -53,16 +53,16 @@
     "cta": "Agendar preconsultoría"
   },
   "hero": {
-    "badge": "Tecnología de Voz IA + Omnicanalidad",
-    "titlePart1": "Atiende el",
-    "titlePart2": "100% de tus llamadas,",
-    "titlePart3": "24/7.",
-    "descriptionFull": "Captura datos, entiende intención y ejecuta acciones: cita, visita, ticket, pago o promesa de pago.",
-    "descriptionShort": "Captura datos, entiende y ejecuta acciones 24/7.",
-    "microcopySetup": "Implementación personalizada (configuración) + operación mensual + consumo variable según canales y volumen.",
-    "microcopySuperPlus": "Activa Clic para Llamar con Servi-IA: formulario inteligente → llamada con Servi-IA con contexto → cierre más rápido.",
+    "badge": "Implementación Guiada de Agentes de Voz IA",
+    "titlePart1": "Agentes de Voz con IA que",
+    "titlePart2": "atienden y venden por ti,",
+    "titlePart3": "integrados a tu operación.",
+    "descriptionFull": "Diseñamos e implementamos tu agente a medida (voz + WhatsApp + CRM + Calendar). Agenda una preconsultoría y recibe un plan de implementación.",
+    "descriptionShort": "Agentes a medida que atienden y venden 24/7.",
+    "microcopySetup": "Diagnóstico inicial → Piloto funcional → Optimización continua.",
+    "microcopySuperPlus": "No somos una plataforma autoservicio, nosotros lo implementamos por ti.",
     "ctaPrimary": "Agendar Preconsultoría",
-    "ctaSecondary": "Probar Servi-IA Ahora"
+    "ctaSecondary": "Probar Demo (Llamar Ahora)"
   },
   "demoCommon": {
     "fillAllFields": "Por favor, completa todos los campos para continuar.",
@@ -206,30 +206,30 @@
   "process": {
     "title": "No vendemos una plataforma.",
     "subtitle": "Implementamos un sistema que encaja con tu operación.",
-    "description": "Implementación personalizada con configuración según alcance: integraciones, flujos y canales. Ofrecemos Clic para Llamar con Servi-IA para aumentar conversiones con contexto previo.",
+    "description": "El servicio incluye acompañamiento total: implementamos soluciones que conectan con tu PBX, CRM y canales existentes.",
     "microcopySetup": "Implementación personalizada (configuración) según alcance.",
     "cta": "Comenzar con Fase 1",
     "phases": {
       "phase1": {
         "number": "1",
         "title": "Preconsultoría (Diagnóstico)",
-        "description": "Analizamos procesos, volumen, canales, integraciones, riesgos y métricas de tu operación.",
+        "description": "Un primer paso gratuito. Analizamos tu caso de uso, canales pertinentes, volumen y alcance.",
         "deliverableLabel": "Entregable:",
         "deliverable": "Mapa de flujos + Propuesta técnica"
       },
       "phase2": {
         "number": "2",
         "title": "Implementación (Piloto)",
-        "description": "Construimos tu Servi-IA, integramos canales (voz + mensajería + CRM + calendarios) y entrenamos flujos (guiones de conversación).",
+        "description": "Construimos tu Servi-IA, integramos canales (voz + mensajería) y entregamos en tiempo récord.",
         "deliverableLabel": "Resultado:",
-        "deliverable": "Servi-IA funcional + Integraciones configuradas"
+        "deliverable": "Piloto Funcional + Integraciones configuradas"
       },
       "phase3": {
         "number": "3",
         "title": "Producción y Optimización",
-        "description": "Despliegue, monitoreo, ajustes, mejoras continuas y soporte constante.",
+        "description": "Despliegue, monitoreo de métricas, y optimización continua de los flujos de conversación.",
         "deliverableLabel": "Soporte:",
-        "deliverable": "Mantenimiento + Optimización + Métricas"
+        "deliverable": "Operación Mensual + Ajustes"
       }
     }
   },
@@ -247,29 +247,29 @@
   },
   "pricing": {
     "title": "Planes y Precios",
-    "subtitle": "Configuración obligatoria (implementación personalizada) + operación mensual + consumo variable.",
+    "subtitle": "Operación del servicio, soporte y mantenimiento. Integrado y a medida.",
     "monthly": "Mensual",
-    "setup": "Configuración",
+    "setup": "Configuración (Setup)",
     "from": "Desde",
     "cta": "Agendar preconsultoría",
     "plans": {
       "conecta": {
-        "name": "Servi-IA Starter",
-        "idealFor": "Validar canal de voz / bajo volumen",
-        "includes": "1,000 min Llamadas Web + 300 min Número Virtual",
-        "monthly": "$550"
+        "name": "Plan Web Conversion",
+        "idealFor": "Captación y conversión digital inteligente",
+        "includes": "Formulario inteligente WebRTC, Clic para llamar, Leads web",
+        "monthly": "$510"
       },
       "integra": {
-        "name": "Servi-IA Growth",
-        "idealFor": "Escalar operaciones / omnicanalidad",
-        "includes": "3,000 min Llamadas Web + 1,000 min Número Virtual + 1 Número Virtual (Local/USA)",
-        "monthly": "$950"
+        "name": "Plan Voice Cloud / PBX",
+        "idealFor": "Operación de voz real, PSTN, PBX e integración telefónica",
+        "includes": "Integración con troncales, manejo de extensiones locales",
+        "monthly": "$546"
       },
       "escala": {
-        "name": "Servi-IA Enterprise",
+        "name": "Enterprise",
         "idealFor": "Soluciones a medida para altos volúmenes y operaciones críticas",
-        "includes": "8,000 min Llamadas Web + 2,500 min Número Virtual + Programador Saliente",
-        "monthly": "$1.499",
+        "includes": "Auditoría de alta demanda. Programador Saliente, SLAs",
+        "monthly": "A medida",
         "setup": "custom",
         "setupLabel": "Evaluamos tus requerimientos y te presentamos una oferta ajustada a tus necesidades",
         "hooks": [
@@ -280,81 +280,76 @@
       }
     },
     "excess": {
-      "title": "Tarifas por Excesos y Adicionales (Mensual)",
-      "webrtc": "Clic-para-Llamar Servi-IA (Web): $0.09/min",
-      "didIn": "Entrante Número Virtual: $0.10/min",
-      "outbound": "Saliente: $0.14/min",
-      "didExtra": "Número Virtual Extra: USA $20 / CO $30 / Celular $39"
+      "title": "Componentes de la Inversión",
+      "webrtc": "Bolsa Inicial: 2,000 minutos IA incluidos por plan",
+      "didIn": "Setup Inicial (Pago único): Web Conversion $550 | Voice Cloud $950",
+      "outbound": "Minuto IA Adicional: USD 0.20",
+      "didExtra": "Consultoría / Cambio adicional: USD 60"
     },
     "addon": {
-      "name": "Super Plus: Clic para Llamar con Servi-IA",
-      "description": "Formulario inteligente → Llamada con Servi-IA con contexto para acelerar cierres.",
-      "monthly": "$199",
-      "setup": "$600"
+      "name": "Condiciones Adicionales",
+      "description": "Segundo agente sin cobro de setup (sujeto a complejidad) con 10% de descuento mensual. Preconsultoría inicial gratuita (20 - 30 mins). Todos los valores en USD con TRM vigente al día y están exentos de IVA.",
+      "monthly": "-",
+      "setup": "-"
     },
     "services": {
       "byopbx": {
         "header": "Servicios Profesionales de Infraestructura",
-        "name": "Servicios Profesionales (Tu PBX)",
-        "description": "Implementación en infraestructura del cliente.",
-        "assessment": "Evaluación previa obligatoria (revisión de infraestructura): $500",
-        "setup": "Configuración variable bajo cotización."
+        "name": "Integración con tu PBX / CRM",
+        "description": "Las integraciones de telefonía o software custom pueden generar costos de configuración (setup) adicionales según evaluación.",
+        "assessment": "Evaluación previa gratuita en consultoría de 30 mins",
+        "setup": "Configuración variable"
       }
     },
-    "consumptionNote": "Los minutos se calculan sobre duración real. La configuración depende del alcance. Los costos de minutos/Número Virtual adicionales se facturan según consumo."
+    "consumptionNote": "El Fee mensual representa la operación del servicio y el soporte continuo. La configuración (setup) es obligatoria y de un solo pago. Los costos de Meta (WhatsApp) son asumidos por el cliente."
   },
   "faq": {
     "title": "Preguntas Frecuentes",
     "subtitle": "Resolvemos tus dudas antes de la preconsultoría.",
     "items": {
+      "whatIncludes": {
+        "question": "¿Qué incluye el cobro Mensual vs la Configuración (Setup)?",
+        "answer": "La Configuración o Setup (pago único) cubre el diseño, desarrollo e integración del agente a tus sistemas. El cobro Mensual (fee) representa la operación, soporte escalado, uso de la plataforma y el paquete base de minutos incluidos."
+      },
+      "additionalMinutes": {
+        "question": "¿Cómo se cobra el consumo adicional?",
+        "answer": "Si sobrepasas los 2,000 minutos incluidos en tu plan mensual, cada minuto IA adicional tiene un costo de USD 0.20 cobrados a mes vencido o mediante recarga."
+      },
+      "secondAgent": {
+        "question": "¿Cómo funciona agregar un segundo agente?",
+        "answer": "El segundo agente se añade usualmente sin cobro de setup (sujeto a evaluación de la complejidad) y en estos casos obtienes un 10% de descuento en el fee mensual del segundo agente."
+      },
+      "metaCosts": {
+        "question": "¿Quién asume el costo de WhatsApp / Meta?",
+        "answer": "Los mensajes salientes o iniciados en WhatsApp se rigen por la tarifa de Meta y son asumidos de forma directa por el cliente en su tarjeta o balance de mensajería."
+      },
       "replaceTeam": {
         "question": "¿Esto reemplaza a mi equipo?",
-        "answer": "No. Automatiza lo repetitivo y libera a tu equipo para tareas de mayor valor. Servi-IA escala a humano cuando corresponde."
+        "answer": "No. Automatiza lo repetitivo y libera a tu equipo para tareas de mayor valor. Servi-IA escala a un agente humano cuando el caso sale del libretos automatizado."
       },
       "changeOperation": {
         "question": "¿Necesito cambiar mi operación actual?",
-        "answer": "No. Nos integramos con tu infraestructura existente (CRM, calendarios, telefonía, mensajería). No necesitas reemplazar nada."
-      },
-      "voiceInfra": {
-        "question": "¿Ustedes configuran mi infraestructura de voz?",
-        "answer": "Sí. Si lo requieres, ofrecemos acompañamiento y configuración de tu infraestructura de voz como servicio personalizado."
+        "answer": "No. Nos integramos con tu infraestructura existente (CRM, calendarios, PBX, telefonía, mensajería)."
       },
       "howLong": {
         "question": "¿Cuánto tarda la implementación?",
-        "answer": "Depende del alcance. Tras el diagnóstico, definimos un piloto funcional en tiempo récord. Cada proyecto es a medida."
-      },
-      "omnichannel": {
-        "question": "¿Funciona con mensajería y llamadas?",
-        "answer": "Sí. Servi-IA es omnicanal: voz (telefonía), mensajería y chat web, integrados según tu operación."
-      },
-      "handoffRequired": {
-        "question": "¿El traspaso a humano es obligatorio?",
-        "answer": "No. El traspaso a humano es configurable: por llamada, por mensajería, o sin traspaso. Lo defines tú según tu operación."
-      },
-      "ownMetrics": {
-        "question": "¿Puedo tener mis propias métricas?",
-        "answer": "Sí. Exportación de métricas, acceso a tableros de control y reportes periódicos están disponibles bajo solicitud."
-      },
-      "whatIsClickToIA": {
-        "question": "¿Qué es Clic para Llamar con Servi-IA?",
-        "answer": "Es una experiencia donde el usuario completa un formulario rápido y queda conectado con Servi-IA que ya tiene el contexto para cerrar más rápido."
-      },
-      "whatIsCallback": {
-        "question": "¿Qué es 'Servi-IA te llama ahora'?",
-        "answer": "Es la variante donde el usuario deja su número con consentimiento y el sistema dispara una llamada con Servi-IA con el contexto del formulario."
+        "answer": "Depende del alcance evaluado en la preconsultoría gratuita. Solemos definir y desplegar un piloto funcional en semanas."
       },
       "dataPrivacy": {
-        "question": "¿Manejan datos sensibles (Salud, Banca, Gobierno) y normativas estrictas?",
-        "answer": "Sí. Para sectores regulados, desplegamos toda la solución (incluyendo LLMs de código abierto) en su propia infraestructura local o nube privada, garantizando soberanía total de sus datos y cumplimiento normativo."
+        "question": "¿Manejan datos sensibles y cumplimiento normativo?",
+        "answer": "Sí, para sectores regulados tenemos procesos de implementación que garantizan la soberanía y almacenamiento seguro dentro de tu ecosistema."
       }
     }
   },
   "booking": {
     "title": "Agenda tu diagnóstico",
-    "description": "Agenda una llamada de diagnóstico (15–30 min). Recibe un plan inicial de automatización según tu caso.",
-    "microcopy": "Implementación personalizada con configuración (sin precios publicados).",
-    "postSchedule": "Ten a mano: procesos actuales, CRM, canales, volumen mensual.",
+    "description": "Agenda una llamada de diagnóstico (20–30 min). Exploraremos el caso de uso, volumen de operación, canales e integraciones necesarias.",
+    "microcopy": "Te entregaremos un plan de automatización con factibilidad técnica y tiempos de implementación.",
+    "postSchedule": "Ten a mano: procesos actuales, sistema telefónico / CRM que utilizas y retos actuales.",
     "cta": "Agendar Preconsultoría"
+  },
+  "legal": {
+    "consentCheckbox": "Autorizo de manera previa y expresa el tratamiento de mis datos personales según la política."
   },
   "voiceDemo": {
     "title": "Prueba Clic para Llamar con Servi-IA ahora",
