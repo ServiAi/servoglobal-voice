@@ -198,10 +198,10 @@ function EnergyRings() {
 
 export function VoiceSphere3D() {
   return (
-    <div className="w-full h-[300px] sm:h-[400px] flex items-center justify-center relative">
+    <div className="w-full h-[400px] sm:h-[500px] lg:h-[600px] flex items-center justify-center relative">
       <Canvas 
         className="bg-transparent" 
-        camera={{ position: [0, 0, 6], fov: 45 }}
+        camera={{ position: [0, 0, 5.5], fov: 45 }}
         dpr={[1, 2]}
       >
         {/* Iluminación ambiental fuerte */}
@@ -234,14 +234,16 @@ export function VoiceSphere3D() {
         <pointLight position={[0, -5, 0]} intensity={0.5} color="#6d28d9" />
         
         {/* Componentes de la esfera */}
-        <InnerCoreParticles />
-        <LiquidEnergySphere />
-        <EnergyRings />
+        <group scale={1.15}>
+          <InnerCoreParticles />
+          <LiquidEnergySphere />
+          <EnergyRings />
+        </group>
       </Canvas>
       
       {/* Efecto glow de fondo */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[250px] h-[250px] bg-violet-500/40 blur-[100px] rounded-full pointer-events-none" />
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[150px] h-[150px] bg-purple-400/30 blur-[50px] rounded-full pointer-events-none" />
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[350px] h-[350px] bg-violet-500/40 blur-[100px] rounded-full pointer-events-none" />
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[200px] h-[200px] bg-purple-400/30 blur-[50px] rounded-full pointer-events-none" />
     </div>
   );
 }
