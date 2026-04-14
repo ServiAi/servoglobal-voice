@@ -3,7 +3,6 @@
 import React from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from '@/components/ui/dialog';
 import { Mail, MapPin, Phone, Globe, Facebook, Linkedin, Instagram } from 'lucide-react';
-import Image from 'next/image';
 
 interface ContactModalProps {
   children?: React.ReactNode;

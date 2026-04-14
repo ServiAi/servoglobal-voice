@@ -5,7 +5,7 @@ import { Turnstile } from '@marsidev/react-turnstile';
 import React from 'react';
 import Image from 'next/image';
 import { useUltravox } from '@/hooks/useUltravox';
-import { Phone, Mic, PhoneOff, User, Loader2, ChevronDown } from 'lucide-react';
+import { Phone, PhoneOff, User, Loader2, ChevronDown } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';

@@ -1,12 +1,9 @@
 'use client';
 
-import { Canvas, extend, useFrame, useThree } from '@react-three/fiber';
-import { useTexture, shaderMaterial, useAspect, Html } from '@react-three/drei';
-import { useRef, useState, useEffect, useMemo, Suspense } from 'react';
+import { Canvas, useFrame } from '@react-three/fiber';
+import { useTexture, useAspect, Html } from '@react-three/drei';
+import { useRef, Suspense } from 'react';
 import * as THREE from 'three';
-import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
-import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
-import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 
 // Usamos la imagen local para asegurar carga
 const TEXTUREMAP = '/voice-sphere.png';
@@ -106,45 +103,9 @@ const SceneShader = {
 
 // --- COMPONENTS ---
 
-const Effects = () => {
-  const { gl, scene, camera, size } = useThree();
-  const composer = useRef<EffectComposer>();
-
-  useEffect(() => {
-    const renderScene = new RenderPass(scene, camera);
-    
-    // Bloom Pass para el brillo de los puntos rojos
-    const bloomPass = new UnrealBloomPass(
-      new THREE.Vector2(size.width, size.height),
-      1.0, // Strength
-      0.1, // Radius
-      0.1 // Threshold
-    );
-    
-    const effectComposer = new EffectComposer(gl);
-    effectComposer.addPass(renderScene);
-    effectComposer.addPass(bloomPass); 
-    
-    composer.current = effectComposer;
-    return () => {
-        composer.current = undefined;
-    };
-  }, [gl, scene, camera, size]);
-
-  useFrame(() => {
-    if (composer.current) {
-        composer.current.render();
-    }
-  }, 1);
-
-  return null;
-};
-
 const Scene = () => {
   const [textureMap, depthMap] = useTexture([TEXTUREMAP, DEPTHMAP]);
   const materialRef = useRef<THREE.ShaderMaterial>(null);
-  const { viewport } = useThree();
-  const [visible, setVisible] = useState(false);
   
   // Aspect Scaling
   const scale = useAspect(
@@ -152,10 +113,6 @@ const Scene = () => {
     1100, // Source height
     1
   );
-
-  useEffect(() => {
-    if (textureMap && depthMap) setVisible(true);
-  }, [textureMap, depthMap]);
 
   useFrame((state) => {
     if (materialRef.current) {

@@ -9,78 +9,9 @@ import * as THREE from 'three';
 function LiquidEnergySphere() {
   const meshRef = useRef<THREE.Mesh>(null);
   const materialRef = useRef<React.ElementRef<typeof MeshDistortMaterial>>(null);
-  const { pointer, size, viewport } = useThree();
-  
-  // Valores suavizados para el movimiento del mouse
-  const smoothedMouse = useRef({ x: 0, y: 0 });
-  const mouseInfluence = useRef(0);
-
-  useFrame((state) => {
-    const time = state.clock.elapsedTime;
-    
-    // === CÁLCULO DE INFLUENCIA DEL MOUSE ===
-    // Convertir posición del pointer a coordenadas 3D
-    const mouseX = (pointer.x * viewport.width) / 2;
-    const mouseY = (pointer.y * viewport.height) / 2;
-    
-    // Calcular distancia del mouse al centro de la esfera
-    const distanceToCenter = Math.sqrt(mouseX * mouseX + mouseY * mouseY);
-    const sphereRadius = 2.2; // Radio visual de la esfera
-    const influenceRadius = 4; // Radio de influencia del mouse
-    
-    // Factor de proximidad (1 cuando está cerca, 0 cuando está lejos)
-    const proximityFactor = Math.max(0, 1 - distanceToCenter / influenceRadius);
-    
-    // Suavizar la influencia del mouse para evitar cambios bruscos
-    mouseInfluence.current += (proximityFactor - mouseInfluence.current) * 0.08;
-    
-    // Suavizar posición del mouse
-    smoothedMouse.current.x += (mouseX - smoothedMouse.current.x) * 0.05;
-    smoothedMouse.current.y += (mouseY - smoothedMouse.current.y) * 0.05;
-
-    if (meshRef.current) {
-      // === MOVIMIENTO ORGÁNICO SIN ROTACIÓN SIMPLE ===
-      // Ondulación suave del mesh para efecto de "respiración"
-      const breathe = Math.sin(time * 0.3) * 0.02;
-      meshRef.current.scale.setScalar(2.2 + breathe);
-      
-      // Micro-movimiento orgánico basado en funciones seno combinadas
-      meshRef.current.position.x = Math.sin(time * 0.4) * 0.05 + Math.sin(time * 0.7) * 0.03;
-      meshRef.current.position.y = Math.cos(time * 0.5) * 0.04 + Math.sin(time * 0.3) * 0.02;
-      meshRef.current.position.z = Math.sin(time * 0.6) * 0.03;
-      
-      // Rotación muy sutil y orgánica (no una rotación constante)
-      meshRef.current.rotation.x = Math.sin(time * 0.2) * 0.1;
-      meshRef.current.rotation.y = Math.cos(time * 0.15) * 0.15;
-      meshRef.current.rotation.z = Math.sin(time * 0.25) * 0.08;
-    }
-
-    if (materialRef.current) {
-      // === DISTORSIÓN TOPOLÓGICA FLUIDA ===
-      // Múltiples ondas seno combinadas para efecto viscoso orgánico
-      const wave1 = Math.sin(time * 0.4) * 0.15;
-      const wave2 = Math.sin(time * 0.7 + 1.5) * 0.1;
-      const wave3 = Math.sin(time * 1.1 + 3.0) * 0.08;
-      const wave4 = Math.cos(time * 0.5 + 0.5) * 0.12;
-      
-      // Combinar ondas para distorsión orgánica
-      const baseDistort = 0.35 + wave1 + wave2 + wave3 + wave4;
-      
-      // Aumentar distorsión cuando el mouse está cerca
-      const mouseBoost = mouseInfluence.current * 0.25;
-      (materialRef.current as any).distort = Math.min(0.8, Math.max(0.2, baseDistort + mouseBoost));
-      
-      // === VELOCIDAD DINÁMICA ===
-      // Velocidad base con variación orgánica
-      const baseSpeed = 2.5 + Math.sin(time * 0.3) * 0.5;
-      // Aumentar velocidad con proximidad del mouse
-      const speedBoost = mouseInfluence.current * 2;
-      (materialRef.current as any).speed = baseSpeed + speedBoost;
-    }
-  });
 
   return (
-    <Icosahedron args={[1, 64]} ref={meshRef}>
+    <Icosahedron ref={meshRef} args={[2, 64]}>
       <MeshDistortMaterial
         ref={materialRef}
         color="#8B5CF6"
