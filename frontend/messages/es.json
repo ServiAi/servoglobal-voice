@@ -1,12 +1,12 @@
 {
   "metadata": {
-    "title": "Agentes de Voz IA y Servi-IA | ServiGlobal ? IA",
-    "description": "ServiGlobal ? IA implementa Servi-IA para agendamiento inteligente, captaci?n y calificaci?n de leads, y atenci?n automatizada con voz e integraciones.",
-    "keywords": "ServiGlobal IA, Servi-IA, agentes de voz, inteligencia artificial, agendamiento inteligente, calificaci?n de leads, atenci?n automatizada, triage, automatizaci?n de llamadas",
-    "ogTitle": "ServiGlobal ? IA - Servi-IA para tu operaci?n",
-    "ogDescription": "Implementaci?n guiada de Servi-IA para agendar, calificar leads y automatizar atenci?n con voz e integraciones.",
-    "twitterTitle": "ServiGlobal ? IA - Servi-IA",
-    "twitterDescription": "Agendamiento, leads y atenci?n automatizada con Servi-IA."
+    "title": "Agentes de Voz IA y Servi-IA | ServiGlobal · IA",
+    "description": "ServiGlobal · IA implementa Servi-IA para agendamiento inteligente, captación y calificación de leads, y atención automatizada con voz e integraciones.",
+    "keywords": "ServiGlobal IA, Servi-IA, agentes de voz, inteligencia artificial, agendamiento inteligente, calificación de leads, atención automatizada, triage, automatización de llamadas",
+    "ogTitle": "ServiGlobal · IA - Servi-IA para tu operación",
+    "ogDescription": "Implementación guiada de Servi-IA para agendar, calificar leads y automatizar atención con voz e integraciones.",
+    "twitterTitle": "ServiGlobal · IA - Servi-IA",
+    "twitterDescription": "Agendamiento, leads y atención automatizada con Servi-IA."
   },
   "whyUs": {
     "title": "¿Por qué confiar en nosotros?",
@@ -115,7 +115,7 @@
   },
   "useCases": {
     "title": "Resultados de negocio con Servi-IA",
-    "subtitle": "Empieza por el resultado que necesitas: agenda m?s r?pido, califica mejor tus leads y automatiza la atenci?n repetitiva con implementaci?n guiada.",
+    "subtitle": "Empieza por el resultado que necesitas: agenda más rápido, califica mejor tus leads y automatiza la atención repetitiva con implementación guiada.",
     "automates": "Automatiza",
     "typicalIntegrations": "Integraciones Típicas",
     "scheduleFor": "Agendar diagnóstico para",
@@ -226,9 +226,9 @@
         ]
       }
     },
-    "sectorsTitle": "Tambi?n aplica a tu sector",
-    "sectorsSubtitle": "Los mismos flujos se adaptan a industrias y operaciones distintas seg?n tus canales, CRM, agenda y telefon?a.",
-    "sectorCta": "Dise?ar mi caso en preconsultor?a",
+    "sectorsTitle": "También aplica a tu sector",
+    "sectorsSubtitle": "Los mismos flujos se adaptan a industrias y operaciones distintas según tus canales, CRM, agenda y telefonía.",
+    "sectorCta": "Diseñar mi caso en preconsultoría",
     "results": {
       "scheduling": {
         "title": "Agendamiento inteligente",
@@ -238,20 +238,20 @@
           "Confirma, reprograma y reduce ausencias",
           "Entrega contexto al equipo antes de cada cita"
         ],
-        "cta": "Agendar preconsultor?a"
+        "cta": "Agendar preconsultoría"
       },
       "leads": {
-        "title": "Captaci?n y calificaci?n de leads",
-        "promise": "Responde al instante desde web, campa?as y redes para separar curiosos de oportunidades reales.",
+        "title": "Captación y calificación de leads",
+        "promise": "Responde al instante desde web, campañas y redes para separar curiosos de oportunidades reales.",
         "tasks": [
           "Captura datos clave desde formularios inteligentes",
-          "Llama con contexto para validar intenci?n y urgencia",
+          "Llama con contexto para validar intención y urgencia",
           "Registra el lead y prioriza el seguimiento comercial"
         ],
         "cta": "Probar demo"
       },
       "triage": {
-        "title": "Atenci?n automatizada / triage",
+        "title": "Atención automatizada / triage",
         "promise": "Resuelve solicitudes repetitivas y escala a humanos solo cuando el caso lo necesita.",
         "tasks": [
           "Clasifica motivos de contacto y nivel de prioridad",
@@ -344,74 +344,74 @@
   },
   "pricing": {
     "title": "Planes y precios",
-    "subtitle": "Implementaci?n guiada, operaci?n mensual y consumo adicional seg?n uso. La preconsultor?a gratuita define el alcance antes de iniciar.",
+    "subtitle": "Implementación guiada, operación mensual y consumo adicional según uso. La preconsultoría gratuita define el alcance antes de iniciar.",
     "monthly": "Mensual",
-    "setup": "Configuraci?n (Setup)",
+    "setup": "Configuración (Setup)",
     "from": "Desde",
-    "cta": "Agendar preconsultor?a",
+    "cta": "Agendar preconsultoría",
     "badgeRecommended": "Recomendado",
     "setupLabel": "Setup inicial",
-    "monthlyFeeLabel": "Fee mensual de operaci?n",
-    "monthlyFeeHelp": "Operaci?n, soporte y plataforma del servicio",
+    "monthlyFeeLabel": "Fee mensual de operación",
+    "monthlyFeeHelp": "Operación, soporte y plataforma del servicio",
     "includedMinutesLabel": "Bolsa inicial incluida",
     "salesCta": "Consultar ventas",
     "plans": {
       "webConversion": {
         "name": "Plan Web Conversion",
-        "idealFor": "Ideal para captaci?n y conversi?n digital inteligente",
+        "idealFor": "Ideal para captación y conversión digital inteligente",
         "setup": "USD 550",
         "monthly": "USD 510",
         "minutes": "2,000 minutos IA incluidos",
         "features": [
           "Formulario inteligente WebRTC",
-          "Clic para llamar desde web, campa?as y redes",
+          "Clic para llamar desde web, campañas y redes",
           "Callback inmediato con contexto del lead",
-          "Captaci?n y calificaci?n de leads digitales",
-          "Hasta 30 llamadas simult?neas como capacidad comercial"
+          "Captación y calificación de leads digitales",
+          "Hasta 30 llamadas simultáneas como capacidad comercial"
         ]
       },
       "voiceCloud": {
         "name": "Plan Voice Cloud / PBX",
-        "idealFor": "Ideal para operaci?n de voz real, PSTN, PBX e integraci?n telef?nica",
+        "idealFor": "Ideal para operación de voz real, PSTN, PBX e integración telefónica",
         "setup": "USD 950",
         "monthly": "USD 546",
         "minutes": "2,000 minutos IA incluidos",
         "features": [
-          "Integraci?n con telefon?a, PBX, DID o troncales",
-          "Operaci?n de voz real para llamadas entrantes o flujos definidos",
-          "Conexi?n con CRM, agenda y herramientas de operaci?n",
-          "Evaluaci?n de costos adicionales por integraciones telef?nicas",
-          "Acompa?amiento para puesta en producci?n"
+          "Integración con telefonía, PBX, DID o troncales",
+          "Operación de voz real para llamadas entrantes o flujos definidos",
+          "Conexión con CRM, agenda y herramientas de operación",
+          "Evaluación de costos adicionales por integraciones telefónicas",
+          "Acompañamiento para puesta en producción"
         ]
       },
       "enterprise": {
         "name": "Enterprise",
-        "idealFor": "Soluciones a medida para alto volumen, m?ltiples agentes o integraciones cr?ticas",
+        "idealFor": "Soluciones a medida para alto volumen, múltiples agentes o integraciones críticas",
         "setup": "A medida",
         "monthly": "A medida",
-        "minutes": "Bolsa de minutos definida seg?n alcance",
+        "minutes": "Bolsa de minutos definida según alcance",
         "features": [
           "Arquitectura multiagente o flujos avanzados",
           "Integraciones profundas con PBX, CRM, APIs o sistemas internos",
           "Condiciones operativas y soporte definidos por propuesta",
-          "Evaluaci?n t?cnica y comercial en preconsultor?a"
+          "Evaluación técnica y comercial en preconsultoría"
         ]
       }
     },
     "commercialTerms": {
       "title": "Condiciones comerciales",
-      "description": "Notas claras para calcular operaci?n, consumo y servicios adicionales.",
+      "description": "Notas claras para calcular operación, consumo y servicios adicionales.",
       "items": [
         "Minuto IA adicional: USD 0.20.",
-        "Consultor?a o cambio adicional: USD 60.",
+        "Consultoría o cambio adicional: USD 60.",
         "Segundo agente sin setup, sujeto a complejidad, con 10% de descuento mensual.",
-        "Preconsultor?a gratuita de 20-30 min.",
+        "Preconsultoría gratuita de 20-30 min.",
         "Costos de Meta / WhatsApp asumidos por el cliente.",
         "Valores exentos de IVA.",
-        "Valores en USD con TRM vigente al d?a."
+        "Valores en USD con TRM vigente al día."
       ]
     },
-    "consumptionNote": "El fee mensual representa la operaci?n del servicio, soporte continuo y uso de plataforma. El setup es un pago ?nico por implementaci?n inicial."
+    "consumptionNote": "El fee mensual representa la operación del servicio, soporte continuo y uso de plataforma. El setup es un pago único por implementación inicial."
   },
   "faq": {
     "title": "Preguntas Frecuentes",
@@ -515,7 +515,7 @@
     "emailPlaceholder": "Correo electrónico",
     "phonePlaceholder": "Teléfono",
     "offline": "Desconectado",
-    "poweredBy": "Con tecnolog?a de ServiGlobal ? IA Voice Engine"
+    "poweredBy": "Con tecnología de ServiGlobal · IA Voice Engine"
   },
   "demoOutbound": {
     "requestCompleted": "Solicitud enviada",
