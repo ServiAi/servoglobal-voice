@@ -153,7 +153,7 @@ export const HeroFuturistic = () => {
   return (
     <div className="w-full h-full min-h-[500px] relative flex items-center justify-center">
       <Canvas
-        camera={{ position: [0, 0, 2], fov: 50 }}
+        camera={{ position: [0, 0, 1.45], fov: 50 }}
         style={{ background: 'transparent' }}
         gl={{ antialias: false }} 
         onCreated={() => console.log('Canvas Created')}
