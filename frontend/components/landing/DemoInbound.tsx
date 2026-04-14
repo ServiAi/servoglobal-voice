@@ -24,6 +24,7 @@ const COUNTRY_CODES = [
 export function DemoInbound() {
   const t = useTranslations('demoInbound');
   const tCommon = useTranslations('demoCommon');
+  const tLegal = useTranslations('legal');
   // Use the new Ultravox hook instead of the simulation
   const { demoState, volumeLevels, startCall, endCall, resetDemo } = useUltravox();
   // Timer logic
@@ -41,6 +42,7 @@ export function DemoInbound() {
   });
   const [isDropdownOpen, setIsDropdownOpen] = React.useState(false);
   const [token, setToken] = React.useState<string | null>(null);
+  const [hasConsent, setHasConsent] = React.useState(false);
   const dropdownRef = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
@@ -56,7 +58,7 @@ export function DemoInbound() {
   }, []);
 
   const handleStartCall = () => {
-    if (!formData.name || !formData.email || !formData.phone || !token) return;
+    if (!formData.name || !formData.email || !formData.phone || !token || !hasConsent) return;
     
     const industryTranslated = formData.industry ? tCommon(`options.industry.${formData.industry}`) : '';
     const useCaseTranslated = formData.useCase ? tCommon(`options.useCase.${formData.useCase}`) : '';
@@ -132,7 +134,7 @@ export function DemoInbound() {
         <span>{t('simulatorVersion')}</span>
         <div className="flex gap-1">
            <div className={cn("size-2 rounded-full", demoState === 'connected' ? "bg-green-500" : "bg-zinc-500")}></div>
-           <span>{demoState === 'connected' ? t('online') : 'Offline'}</span>
+           <span>{demoState === 'connected' ? t('online') : t('offline')}</span>
         </div>
       </div>
 
@@ -308,21 +310,31 @@ export function DemoInbound() {
                   />
               </div>
 
+              <label className="flex items-start gap-2 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 p-2 text-[10px] text-zinc-600 dark:text-zinc-300">
+                <input
+                  type="checkbox"
+                  checked={hasConsent}
+                  onChange={(e) => setHasConsent(e.target.checked)}
+                  className="mt-0.5 size-3.5 rounded border-zinc-300 accent-violet-600"
+                />
+                <span>{tLegal('consentCheckbox')}</span>
+              </label>
+
               <button
                 onClick={handleStartCall}
-                disabled={!formData.name || !formData.email || !formData.phone || !formData.company || !formData.industry || !formData.useCase || !formData.volume || !formData.painPoint || !token}
+                disabled={!formData.name || !formData.email || !formData.phone || !formData.company || !formData.industry || !formData.useCase || !formData.volume || !formData.painPoint || !token || !hasConsent}
                 className="w-full py-2.5 bg-zinc-900 dark:bg-white text-white dark:text-black font-bold rounded-lg hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-all active:scale-[0.98] shadow-xl shadow-black/5 dark:shadow-white/5 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed text-xs"
               >
                 <Phone className="size-4" />
                 {t('callNow')}
               </button>
-              {(!formData.name || !formData.email || !formData.phone || !formData.company || !formData.industry || !formData.useCase || !formData.volume || !formData.painPoint) && (
+              {(!formData.name || !formData.email || !formData.phone || !formData.company || !formData.industry || !formData.useCase || !formData.volume || !formData.painPoint || !hasConsent) && (
                   <p className="text-[10px] text-amber-600 dark:text-amber-500 text-center animate-pulse">
-                      {tCommon('fillAllFields')}
+                      {!hasConsent ? tLegal('consentRequired') : tCommon('fillAllFields')}
                   </p>
               )}
                <p className="text-[10px] text-zinc-400 text-center">
-                  * Powered by ServiGlobal AI Voice Engine
+                  {t('poweredBy')}
                </p>
             </div>
           </div>

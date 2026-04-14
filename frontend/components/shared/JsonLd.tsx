@@ -1,4 +1,4 @@
-import { WithContext, Organization, SoftwareApplication } from 'schema-dts';
+﻿import { WithContext, Organization, SoftwareApplication } from 'schema-dts';
 
 export function JsonLd() {
   const organizationSchema: WithContext<Organization> = {
@@ -6,12 +6,12 @@ export function JsonLd() {
     '@type': 'Organization',
     name: 'ServiGlobal · IA',
     url: 'https://www.serviglobal-ia.com',
-    logo: 'https://www.serviglobal-ia.com/logo.png', // Replace with actual logo URL
-    description: 'Implementación de agentes de voz con IA y soluciones omnicanal.',
+    logo: 'https://www.serviglobal-ia.com/logo.png',
+    description: 'Guided implementation of Servi-IA for scheduling, lead capture, and automated service.',
     contactPoint: {
       '@type': 'ContactPoint',
-      telephone: '+1-555-010-9999', // Replace with actual phone
-      contactType: 'customer service',
+      telephone: '+1-555-010-9999',
+      contactType: 'sales',
       areaServed: ['US', 'ES', 'MX', 'CO'],
       availableLanguage: ['en', 'es']
     },
@@ -24,14 +24,14 @@ export function JsonLd() {
   const softwareSchema: WithContext<SoftwareApplication> = {
     '@context': 'https://schema.org',
     '@type': 'SoftwareApplication',
-    name: 'ServiGlobal IA Agent',
+    name: 'Servi-IA',
     applicationCategory: 'BusinessApplication',
     operatingSystem: 'Cloud',
     offers: {
       '@type': 'Offer',
-      price: '299',
+      price: '510',
       priceCurrency: 'USD',
-      description: 'Servi-IA Starter Plan'
+      description: 'Servi-IA Web Conversion monthly operation fee with guided implementation'
     }
   };
 
@@ -48,3 +48,4 @@ export function JsonLd() {
     </section>
   );
 }
+

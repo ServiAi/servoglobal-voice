@@ -8,7 +8,7 @@ import * as THREE from 'three';
 // Componente interno de esfera de energía líquida con efecto metaball
 function LiquidEnergySphere() {
   const meshRef = useRef<THREE.Mesh>(null);
-  const materialRef = useRef<any>(null);
+  const materialRef = useRef<React.ElementRef<typeof MeshDistortMaterial>>(null);
   const { pointer, size, viewport } = useThree();
   
   // Valores suavizados para el movimiento del mouse
@@ -68,14 +68,14 @@ function LiquidEnergySphere() {
       
       // Aumentar distorsión cuando el mouse está cerca
       const mouseBoost = mouseInfluence.current * 0.25;
-      materialRef.current.distort = Math.min(0.8, Math.max(0.2, baseDistort + mouseBoost));
+      (materialRef.current as any).distort = Math.min(0.8, Math.max(0.2, baseDistort + mouseBoost));
       
       // === VELOCIDAD DINÁMICA ===
       // Velocidad base con variación orgánica
       const baseSpeed = 2.5 + Math.sin(time * 0.3) * 0.5;
       // Aumentar velocidad con proximidad del mouse
       const speedBoost = mouseInfluence.current * 2;
-      materialRef.current.speed = baseSpeed + speedBoost;
+      (materialRef.current as any).speed = baseSpeed + speedBoost;
     }
   });
 

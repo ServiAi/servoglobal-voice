@@ -1,12 +1,12 @@
 {
   "metadata": {
-    "title": "Agentes de Voz IA y Asistentes Virtuales | ServiGlobal",
-    "description": "Implementa agentes de voz con IA que atienden llamadas 24/7. Automatiza citas, ventas y soporte con nuestros asistentes de voz omnicanal para tu negocio.",
-    "keywords": "agentes de voz, inteligencia artificial, asistentes virtuales, automatización de llamadas, IA inmobiliaria, chatbots de voz, call center ia, automatización de ventas",
-    "ogTitle": "ServiGlobal - Agentes de Voz IA para tu Negocio",
-    "ogDescription": "Atiende el 100% de tus llamadas. Automatiza agendamiento, ventas y soporte con Inteligencia Artificial.",
-    "twitterTitle": "ServiGlobal - Agentes de Voz IA",
-    "twitterDescription": "Transforma tu atención al cliente con agentes de voz IA que funcionan 24/7."
+    "title": "Agentes de Voz IA y Servi-IA | ServiGlobal ? IA",
+    "description": "ServiGlobal ? IA implementa Servi-IA para agendamiento inteligente, captaci?n y calificaci?n de leads, y atenci?n automatizada con voz e integraciones.",
+    "keywords": "ServiGlobal IA, Servi-IA, agentes de voz, inteligencia artificial, agendamiento inteligente, calificaci?n de leads, atenci?n automatizada, triage, automatizaci?n de llamadas",
+    "ogTitle": "ServiGlobal ? IA - Servi-IA para tu operaci?n",
+    "ogDescription": "Implementaci?n guiada de Servi-IA para agendar, calificar leads y automatizar atenci?n con voz e integraciones.",
+    "twitterTitle": "ServiGlobal ? IA - Servi-IA",
+    "twitterDescription": "Agendamiento, leads y atenci?n automatizada con Servi-IA."
   },
   "whyUs": {
     "title": "¿Por qué confiar en nosotros?",
@@ -114,8 +114,8 @@
     }
   },
   "useCases": {
-    "title": "Soluciones por Industria",
-    "subtitle": "Nuestros agentes Servi-IA se adaptan a tu modelo de negocio. Selecciona tu industria para ver cómo podemos ayudarte.",
+    "title": "Resultados de negocio con Servi-IA",
+    "subtitle": "Empieza por el resultado que necesitas: agenda m?s r?pido, califica mejor tus leads y automatiza la atenci?n repetitiva con implementaci?n guiada.",
     "automates": "Automatiza",
     "typicalIntegrations": "Integraciones Típicas",
     "scheduleFor": "Agendar diagnóstico para",
@@ -124,44 +124,141 @@
       "atencion": {
         "title": "Atención al Cliente",
         "promise": "Resuelve consultas 24/7 y reduce tiempos de espera.",
-        "tasks": ["Automatiza FAQs y estado de pedidos", "Escalamiento inteligente a humano", "Disponibilidad inmediata en voz y mensajería"],
-        "integrations": ["Mensajería", "Chat Web", "CRM", "Email"]
+        "tasks": [
+          "Automatiza FAQs y estado de pedidos",
+          "Escalamiento inteligente a humano",
+          "Disponibilidad inmediata en voz y mensajería"
+        ],
+        "integrations": [
+          "Mensajería",
+          "Chat Web",
+          "CRM",
+          "Email"
+        ]
       },
       "soporte": {
         "title": "Centros de Soporte y Técnico",
         "promise": "Disminuye tickets repetitivos y estandariza tu soporte.",
-        "tasks": ["Clasificación automática de incidentes", "Diagnóstico guiado básico", "Creación y seguimiento de tickets"],
-        "integrations": ["Sistemas de tickets", "CRM", "Telefonía/VoIP"]
+        "tasks": [
+          "Clasificación automática de incidentes",
+          "Diagnóstico guiado básico",
+          "Creación y seguimiento de tickets"
+        ],
+        "integrations": [
+          "Sistemas de tickets",
+          "CRM",
+          "Telefonía/VoIP"
+        ]
       },
       "cobranza": {
         "title": "Cobranza y Recuperación de Pagos",
         "promise": "Más promesas de pago, menos fricción operativa.",
-        "tasks": ["Recordatorios de pago preventivos", "Negociación de acuerdos simples", "Validación de identidad y registro en CRM"],
-        "integrations": ["Pasarelas de pago", "CRM", "Email", "Mensajería", "Telefonía"]
+        "tasks": [
+          "Recordatorios de pago preventivos",
+          "Negociación de acuerdos simples",
+          "Validación de identidad y registro en CRM"
+        ],
+        "integrations": [
+          "Pasarelas de pago",
+          "CRM",
+          "Email",
+          "Mensajería",
+          "Telefonía"
+        ]
       },
       "ventas": {
         "title": "Ventas y Generación de Leads",
         "promise": "Filtra prospectos y agenda citas con leads calificados.",
-        "tasks": ["Calificación de prospectos", "Manejo de objeciones comunes", "Agendamiento directo en calendario"],
-        "integrations": ["Calendarios", "CRM", "Mensajería", "Email"]
+        "tasks": [
+          "Calificación de prospectos",
+          "Manejo de objeciones comunes",
+          "Agendamiento directo en calendario"
+        ],
+        "integrations": [
+          "Calendarios",
+          "CRM",
+          "Mensajería",
+          "Email"
+        ]
       },
       "reclutamiento": {
         "title": "Reclutamiento y Selección",
         "promise": "Pre-filtra candidatos y agenda entrevistas sin intervención humana.",
-        "tasks": ["Filtrado inicial de requisitos", "Coordinación de entrevistas", "Respuestas a dudas de vacantes"],
-        "integrations": ["ATS/CRM", "Calendarios", "Email", "Mensajería"]
+        "tasks": [
+          "Filtrado inicial de requisitos",
+          "Coordinación de entrevistas",
+          "Respuestas a dudas de vacantes"
+        ],
+        "integrations": [
+          "ATS/CRM",
+          "Calendarios",
+          "Email",
+          "Mensajería"
+        ]
       },
       "reservas": {
         "title": "Reservaciones y Agendamiento",
         "promise": "Tu agenda se llena sola y sin errores.",
-        "tasks": ["Consulta de disponibilidad en tiempo real", "Confirmación y recordatorios automáticos", "Reprogramación y cancelación automática"],
-        "integrations": ["Calendarios", "Mensajería", "Email"]
+        "tasks": [
+          "Consulta de disponibilidad en tiempo real",
+          "Confirmación y recordatorios automáticos",
+          "Reprogramación y cancelación automática"
+        ],
+        "integrations": [
+          "Calendarios",
+          "Mensajería",
+          "Email"
+        ]
       },
       "ecommerce": {
         "title": "E-commerce y Tiendas Online",
         "promise": "Convierte más con soporte y ventas automatizadas.",
-        "tasks": ["Recuperación de carritos (Cierre de ventas)", "Recomendación de productos", "Seguimiento de envíos y devoluciones"],
-        "integrations": ["Plataformas e-commerce", "Mensajería", "CRM", "Email"]
+        "tasks": [
+          "Recuperación de carritos (Cierre de ventas)",
+          "Recomendación de productos",
+          "Seguimiento de envíos y devoluciones"
+        ],
+        "integrations": [
+          "Plataformas e-commerce",
+          "Mensajería",
+          "CRM",
+          "Email"
+        ]
+      }
+    },
+    "sectorsTitle": "Tambi?n aplica a tu sector",
+    "sectorsSubtitle": "Los mismos flujos se adaptan a industrias y operaciones distintas seg?n tus canales, CRM, agenda y telefon?a.",
+    "sectorCta": "Dise?ar mi caso en preconsultor?a",
+    "results": {
+      "scheduling": {
+        "title": "Agendamiento inteligente",
+        "promise": "Convierte llamadas, formularios y mensajes en citas calificadas dentro de tu calendario.",
+        "tasks": [
+          "Consulta disponibilidad y agenda con reglas de negocio",
+          "Confirma, reprograma y reduce ausencias",
+          "Entrega contexto al equipo antes de cada cita"
+        ],
+        "cta": "Agendar preconsultor?a"
+      },
+      "leads": {
+        "title": "Captaci?n y calificaci?n de leads",
+        "promise": "Responde al instante desde web, campa?as y redes para separar curiosos de oportunidades reales.",
+        "tasks": [
+          "Captura datos clave desde formularios inteligentes",
+          "Llama con contexto para validar intenci?n y urgencia",
+          "Registra el lead y prioriza el seguimiento comercial"
+        ],
+        "cta": "Probar demo"
+      },
+      "triage": {
+        "title": "Atenci?n automatizada / triage",
+        "promise": "Resuelve solicitudes repetitivas y escala a humanos solo cuando el caso lo necesita.",
+        "tasks": [
+          "Clasifica motivos de contacto y nivel de prioridad",
+          "Responde preguntas frecuentes con criterios consistentes",
+          "Crea contexto para soporte, ventas o back office"
+        ],
+        "cta": "Ver demo"
       }
     }
   },
@@ -246,62 +343,75 @@
     }
   },
   "pricing": {
-    "title": "Planes y Precios",
-    "subtitle": "Operación del servicio, soporte y mantenimiento. Integrado y a medida.",
+    "title": "Planes y precios",
+    "subtitle": "Implementaci?n guiada, operaci?n mensual y consumo adicional seg?n uso. La preconsultor?a gratuita define el alcance antes de iniciar.",
     "monthly": "Mensual",
-    "setup": "Configuración (Setup)",
+    "setup": "Configuraci?n (Setup)",
     "from": "Desde",
-    "cta": "Agendar preconsultoría",
+    "cta": "Agendar preconsultor?a",
+    "badgeRecommended": "Recomendado",
+    "setupLabel": "Setup inicial",
+    "monthlyFeeLabel": "Fee mensual de operaci?n",
+    "monthlyFeeHelp": "Operaci?n, soporte y plataforma del servicio",
+    "includedMinutesLabel": "Bolsa inicial incluida",
+    "salesCta": "Consultar ventas",
     "plans": {
-      "conecta": {
+      "webConversion": {
         "name": "Plan Web Conversion",
-        "idealFor": "Captación y conversión digital inteligente",
-        "includes": "Formulario inteligente WebRTC, Clic para llamar, Leads web",
-        "monthly": "$510"
+        "idealFor": "Ideal para captaci?n y conversi?n digital inteligente",
+        "setup": "USD 550",
+        "monthly": "USD 510",
+        "minutes": "2,000 minutos IA incluidos",
+        "features": [
+          "Formulario inteligente WebRTC",
+          "Clic para llamar desde web, campa?as y redes",
+          "Callback inmediato con contexto del lead",
+          "Captaci?n y calificaci?n de leads digitales",
+          "Hasta 30 llamadas simult?neas como capacidad comercial"
+        ]
       },
-      "integra": {
+      "voiceCloud": {
         "name": "Plan Voice Cloud / PBX",
-        "idealFor": "Operación de voz real, PSTN, PBX e integración telefónica",
-        "includes": "Integración con troncales, manejo de extensiones locales",
-        "monthly": "$546"
+        "idealFor": "Ideal para operaci?n de voz real, PSTN, PBX e integraci?n telef?nica",
+        "setup": "USD 950",
+        "monthly": "USD 546",
+        "minutes": "2,000 minutos IA incluidos",
+        "features": [
+          "Integraci?n con telefon?a, PBX, DID o troncales",
+          "Operaci?n de voz real para llamadas entrantes o flujos definidos",
+          "Conexi?n con CRM, agenda y herramientas de operaci?n",
+          "Evaluaci?n de costos adicionales por integraciones telef?nicas",
+          "Acompa?amiento para puesta en producci?n"
+        ]
       },
-      "escala": {
+      "enterprise": {
         "name": "Enterprise",
-        "idealFor": "Soluciones a medida para altos volúmenes y operaciones críticas",
-        "includes": "Auditoría de alta demanda. Programador Saliente, SLAs",
+        "idealFor": "Soluciones a medida para alto volumen, m?ltiples agentes o integraciones cr?ticas",
+        "setup": "A medida",
         "monthly": "A medida",
-        "setup": "custom",
-        "setupLabel": "Evaluamos tus requerimientos y te presentamos una oferta ajustada a tus necesidades",
-        "hooks": [
-          "Arquitectura a medida (Multiagente)",
-          "Integración nativa (PBX, CRM, APIs)",
-          "Acompañamiento y soporte dedicado"
+        "minutes": "Bolsa de minutos definida seg?n alcance",
+        "features": [
+          "Arquitectura multiagente o flujos avanzados",
+          "Integraciones profundas con PBX, CRM, APIs o sistemas internos",
+          "Condiciones operativas y soporte definidos por propuesta",
+          "Evaluaci?n t?cnica y comercial en preconsultor?a"
         ]
       }
     },
-    "excess": {
-      "title": "Componentes de la Inversión",
-      "webrtc": "Bolsa Inicial: 2,000 minutos IA incluidos por plan",
-      "didIn": "Setup Inicial (Pago único): Web Conversion $550 | Voice Cloud $950",
-      "outbound": "Minuto IA Adicional: USD 0.20",
-      "didExtra": "Consultoría / Cambio adicional: USD 60"
+    "commercialTerms": {
+      "title": "Condiciones comerciales",
+      "description": "Notas claras para calcular operaci?n, consumo y servicios adicionales.",
+      "items": [
+        "Minuto IA adicional: USD 0.20.",
+        "Consultor?a o cambio adicional: USD 60.",
+        "Segundo agente sin setup, sujeto a complejidad, con 10% de descuento mensual.",
+        "Preconsultor?a gratuita de 20-30 min.",
+        "Costos de Meta / WhatsApp asumidos por el cliente.",
+        "Valores exentos de IVA.",
+        "Valores en USD con TRM vigente al d?a."
+      ]
     },
-    "addon": {
-      "name": "Condiciones Adicionales",
-      "description": "Segundo agente sin cobro de setup (sujeto a complejidad) con 10% de descuento mensual. Preconsultoría inicial gratuita (20 - 30 mins). Todos los valores en USD con TRM vigente al día y están exentos de IVA.",
-      "monthly": "-",
-      "setup": "-"
-    },
-    "services": {
-      "byopbx": {
-        "header": "Servicios Profesionales de Infraestructura",
-        "name": "Integración con tu PBX / CRM",
-        "description": "Las integraciones de telefonía o software custom pueden generar costos de configuración (setup) adicionales según evaluación.",
-        "assessment": "Evaluación previa gratuita en consultoría de 30 mins",
-        "setup": "Configuración variable"
-      }
-    },
-    "consumptionNote": "El Fee mensual representa la operación del servicio y el soporte continuo. La configuración (setup) es obligatoria y de un solo pago. Los costos de Meta (WhatsApp) son asumidos por el cliente."
+    "consumptionNote": "El fee mensual representa la operaci?n del servicio, soporte continuo y uso de plataforma. El setup es un pago ?nico por implementaci?n inicial."
   },
   "faq": {
     "title": "Preguntas Frecuentes",
@@ -349,7 +459,8 @@
     "cta": "Agendar Preconsultoría"
   },
   "legal": {
-    "consentCheckbox": "Autorizo de manera previa y expresa el tratamiento de mis datos personales según la política."
+    "consentCheckbox": "Autorizo de manera previa y expresa el tratamiento de mis datos personales según la política.",
+    "consentRequired": "Debes autorizar el tratamiento de datos para continuar."
   },
   "voiceDemo": {
     "title": "Prueba Clic para Llamar con Servi-IA ahora",
@@ -378,7 +489,9 @@
     "establishingConnection": "Generando Paquete de Contexto...",
     "namePlaceholder": "Nombre completo",
     "emailPlaceholder": "Correo electrónico",
-    "phonePlaceholder": "Teléfono"
+    "phonePlaceholder": "Teléfono",
+    "offline": "Desconectado",
+    "poweredBy": "Con tecnolog?a de ServiGlobal ? IA Voice Engine"
   },
   "demoOutbound": {
     "requestCompleted": "Solicitud enviada",
@@ -428,4 +541,3 @@
     "en": "EN"
   }
 }
-

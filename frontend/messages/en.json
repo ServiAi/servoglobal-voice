@@ -1,12 +1,12 @@
 {
   "metadata": {
-    "title": "Voice AI Agents & Virtual Assistants | ServiGlobal",
-    "description": "Implement AI voice agents that handle calls 24/7. Automate appointments, sales, and support with our omnichannel voice assistants for your business.",
-    "keywords": "voice agents, artificial intelligence, virtual assistants, call automation, real estate AI, voice chatbots, call center ai, sales automation",
-    "ogTitle": "ServiGlobal - Voice AI Agents for your Business",
-    "ogDescription": "Handle 100% of your calls. Automate scheduling, sales, and support with Artificial Intelligence.",
-    "twitterTitle": "ServiGlobal - Voice AI Agents",
-    "twitterDescription": "Transform your customer service with AI voice agents that work 24/7."
+    "title": "AI Voice Agents and Servi-IA | ServiGlobal ? IA",
+    "description": "ServiGlobal ? IA implements Servi-IA for smart scheduling, lead capture and qualification, and automated service with voice and integrations.",
+    "keywords": "ServiGlobal IA, Servi-IA, voice agents, artificial intelligence, smart scheduling, lead qualification, automated service, triage, call automation",
+    "ogTitle": "ServiGlobal ? IA - Servi-IA for your operation",
+    "ogDescription": "Guided implementation of Servi-IA to schedule, qualify leads, and automate service with voice and integrations.",
+    "twitterTitle": "ServiGlobal ? IA - Servi-IA",
+    "twitterDescription": "Scheduling, leads, and automated service with Servi-IA."
   },
   "whyUs": {
     "title": "Why trust us?",
@@ -114,8 +114,8 @@
     }
   },
   "useCases": {
-    "title": "Choose your use case",
-    "subtitle": "Our Servi-IA agents adapt to your business model. Select your industry to see how we can help.",
+    "title": "Business outcomes with Servi-IA",
+    "subtitle": "Start with the outcome you need: schedule faster, qualify leads better, and automate repetitive service with guided implementation.",
     "automates": "Automates",
     "typicalIntegrations": "Typical Integrations",
     "scheduleFor": "Schedule diagnosis for",
@@ -124,44 +124,141 @@
       "atencion": {
         "title": "Customer Service",
         "promise": "Resolve queries 24/7 and reduce wait times.",
-        "tasks": ["Automate FAQs and order status", "Intelligent escalation to human", "Immediate availability on voice and messaging"],
-        "integrations": ["Messaging", "Web Chat", "CRM", "Email"]
+        "tasks": [
+          "Automate FAQs and order status",
+          "Intelligent escalation to human",
+          "Immediate availability on voice and messaging"
+        ],
+        "integrations": [
+          "Messaging",
+          "Web Chat",
+          "CRM",
+          "Email"
+        ]
       },
       "soporte": {
         "title": "Call Centers & Technical Support",
         "promise": "Reduce repetitive tickets and standardize your support.",
-        "tasks": ["Automatic incident triage", "Basic guided diagnosis", "Ticket creation and tracking"],
-        "integrations": ["Ticketing systems", "CRM", "Telephony/VoIP"]
+        "tasks": [
+          "Automatic incident triage",
+          "Basic guided diagnosis",
+          "Ticket creation and tracking"
+        ],
+        "integrations": [
+          "Ticketing systems",
+          "CRM",
+          "Telephony/VoIP"
+        ]
       },
       "cobranza": {
         "title": "Collections & Payment Recovery",
         "promise": "More payment promises, less operational friction.",
-        "tasks": ["Preventive payment reminders", "Simple agreement negotiation", "Identity validation and CRM logging"],
-        "integrations": ["Payment gateways", "CRM", "Email", "Messaging", "Telephony"]
+        "tasks": [
+          "Preventive payment reminders",
+          "Simple agreement negotiation",
+          "Identity validation and CRM logging"
+        ],
+        "integrations": [
+          "Payment gateways",
+          "CRM",
+          "Email",
+          "Messaging",
+          "Telephony"
+        ]
       },
       "ventas": {
         "title": "Sales & Lead Generation",
         "promise": "Filter prospects and schedule meetings with qualified leads.",
-        "tasks": ["Prospect qualification", "Common objection handling", "Direct calendar scheduling"],
-        "integrations": ["Calendars", "CRM", "Messaging", "Email"]
+        "tasks": [
+          "Prospect qualification",
+          "Common objection handling",
+          "Direct calendar scheduling"
+        ],
+        "integrations": [
+          "Calendars",
+          "CRM",
+          "Messaging",
+          "Email"
+        ]
       },
       "reclutamiento": {
         "title": "Recruitment & Selection",
         "promise": "Pre-filter candidates and schedule interviews without human intervention.",
-        "tasks": ["Initial requirements screening", "Interview coordination", "Job opening FAQs"],
-        "integrations": ["ATS/CRM", "Calendars", "Email", "Messaging"]
+        "tasks": [
+          "Initial requirements screening",
+          "Interview coordination",
+          "Job opening FAQs"
+        ],
+        "integrations": [
+          "ATS/CRM",
+          "Calendars",
+          "Email",
+          "Messaging"
+        ]
       },
       "reservas": {
         "title": "Bookings & Scheduling",
         "promise": "Your calendar fills itself, error-free.",
-        "tasks": ["Real-time availability check", "Automatic confirmation and reminders", "Automatic rescheduling and cancellation"],
-        "integrations": ["Calendars", "Messaging", "Email"]
+        "tasks": [
+          "Real-time availability check",
+          "Automatic confirmation and reminders",
+          "Automatic rescheduling and cancellation"
+        ],
+        "integrations": [
+          "Calendars",
+          "Messaging",
+          "Email"
+        ]
       },
       "ecommerce": {
         "title": "E-commerce & Online Stores",
         "promise": "Convert more with automated support and sales.",
-        "tasks": ["Abandoned cart recovery", "Product recommendations", "Shipment tracking and returns"],
-        "integrations": ["E-commerce platforms", "Messaging", "CRM", "Email"]
+        "tasks": [
+          "Abandoned cart recovery",
+          "Product recommendations",
+          "Shipment tracking and returns"
+        ],
+        "integrations": [
+          "E-commerce platforms",
+          "Messaging",
+          "CRM",
+          "Email"
+        ]
+      }
+    },
+    "sectorsTitle": "Also applies to your sector",
+    "sectorsSubtitle": "The same flows adapt to different industries and operations based on your channels, CRM, calendar, and telephony.",
+    "sectorCta": "Design my case in pre-consultation",
+    "results": {
+      "scheduling": {
+        "title": "Smart scheduling",
+        "promise": "Turn calls, forms, and messages into qualified appointments inside your calendar.",
+        "tasks": [
+          "Check availability and schedule with business rules",
+          "Confirm, reschedule, and reduce no-shows",
+          "Deliver context to your team before every appointment"
+        ],
+        "cta": "Book pre-consultation"
+      },
+      "leads": {
+        "title": "Lead capture and qualification",
+        "promise": "Respond instantly from web, campaigns, and social channels to separate browsers from real opportunities.",
+        "tasks": [
+          "Capture key data through smart forms",
+          "Call with context to validate intent and urgency",
+          "Log the lead and prioritize commercial follow-up"
+        ],
+        "cta": "Try demo"
+      },
+      "triage": {
+        "title": "Automated service / triage",
+        "promise": "Resolve repetitive requests and escalate to humans only when the case needs it.",
+        "tasks": [
+          "Classify contact reasons and priority level",
+          "Answer FAQs with consistent criteria",
+          "Create context for support, sales, or back office"
+        ],
+        "cta": "See demo"
       }
     }
   },
@@ -247,61 +344,74 @@
   },
   "pricing": {
     "title": "Plans and Pricing",
-    "subtitle": "Service operation, support, and maintenance. Integrated and custom-built.",
+    "subtitle": "Guided implementation, monthly operation, and additional consumption based on usage. The free pre-consultation defines scope before kickoff.",
     "monthly": "Monthly",
-    "setup": "Setup (One-time)",
+    "setup": "Setup",
     "from": "From",
     "cta": "Book pre-consultation",
+    "badgeRecommended": "Recommended",
+    "setupLabel": "Initial setup",
+    "monthlyFeeLabel": "Monthly operation fee",
+    "monthlyFeeHelp": "Service operation, support, and platform",
+    "includedMinutesLabel": "Initial bucket included",
+    "salesCta": "Talk to sales",
     "plans": {
-      "conecta": {
+      "webConversion": {
         "name": "Web Conversion Plan",
-        "idealFor": "Smart digital capture and conversion",
-        "includes": "WebRTC smart form, Click to call, Web leads",
-        "monthly": "$510"
+        "idealFor": "Ideal for smart digital capture and conversion",
+        "setup": "USD 550",
+        "monthly": "USD 510",
+        "minutes": "2,000 AI minutes included",
+        "features": [
+          "WebRTC smart form",
+          "Click to call from web, campaigns, and social channels",
+          "Immediate callback with lead context",
+          "Digital lead capture and qualification",
+          "Up to 30 simultaneous calls as a commercial capacity claim"
+        ]
       },
-      "integra": {
+      "voiceCloud": {
         "name": "Voice Cloud / PBX Plan",
-        "idealFor": "Real voice operation, PSTN, PBX, and telephony integration",
-        "includes": "Trunk integration, local extension handling",
-        "monthly": "$546"
+        "idealFor": "Ideal for real voice operation, PSTN, PBX, and telephony integration",
+        "setup": "USD 950",
+        "monthly": "USD 546",
+        "minutes": "2,000 AI minutes included",
+        "features": [
+          "Integration with telephony, PBX, DID, or trunks",
+          "Real voice operation for inbound calls or defined flows",
+          "Connection with CRM, calendar, and operations tools",
+          "Assessment of additional costs for telephony integrations",
+          "Guided support for production launch"
+        ]
       },
-      "escala": {
+      "enterprise": {
         "name": "Enterprise",
-        "idealFor": "Custom solutions for high volumes and critical operations",
-        "includes": "High-demand audit. Outbound dialer, SLAs",
+        "idealFor": "Custom solutions for high volume, multiple agents, or critical integrations",
+        "setup": "Custom",
         "monthly": "Custom",
-        "setup": "custom",
-        "setupLabel": "We evaluate your requirements and present an offer tailored to your needs",
-        "hooks": [
-          "Custom architecture (Multi-agent)",
-          "Deep native integration (PBX, CRM, APIs)",
-          "Dedicated support & onboarding"
+        "minutes": "Minute bucket defined by scope",
+        "features": [
+          "Multi-agent architecture or advanced flows",
+          "Deep integrations with PBX, CRM, APIs, or internal systems",
+          "Operational terms and support defined by proposal",
+          "Technical and commercial assessment in pre-consultation"
         ]
       }
     },
-    "excess": {
-      "title": "Investment Components",
-      "webrtc": "Initial Bucket: 2,000 AI minutes included per plan",
-      "didIn": "Initial Setup (One-time): Web Conversion $550 | Voice Cloud $950",
-      "outbound": "Additional AI Minute: USD 0.20",
-      "didExtra": "Consulting / Extra change: USD 60"
+    "commercialTerms": {
+      "title": "Commercial terms",
+      "description": "Clear notes for operation, usage, and additional services.",
+      "items": [
+        "Additional AI minute: USD 0.20.",
+        "Consulting or additional change: USD 60.",
+        "Second agent with no setup, subject to complexity, with 10% monthly discount.",
+        "Free 20-30 min pre-consultation.",
+        "Meta / WhatsApp costs are covered by the client.",
+        "Values are VAT-exempt.",
+        "Values in USD using the current exchange rate for the day."
+      ]
     },
-    "addon": {
-      "name": "Additional Conditions",
-      "description": "Second agent with no setup fee (subject to complexity) and 10% monthly discount. Free initial pre-consultation (20-30 mins). All amounts in USD at current exchange rate, VAT exclusive.",
-      "monthly": "-",
-      "setup": "-"
-    },
-    "consumptionNote": "The monthly fee represents service operation and continuous support. The setup is mandatory and a one-time payment. Meta (WhatsApp) costs are assumed directly by the client.",
-    "services": {
-      "byopbx": {
-        "header": "Infrastructure Professional Services",
-        "name": "Integration with your PBX / CRM",
-        "description": "Telephony or custom software integrations may generate additional setup costs upon assessment.",
-        "assessment": "Free initial assessment in a 30-min consultation",
-        "setup": "Variable setup costs"
-      }
-    }
+    "consumptionNote": "The monthly fee represents service operation, ongoing support, and platform use. Setup is a one-time payment for the initial implementation."
   },
   "faq": {
     "title": "Frequently Asked Questions",
@@ -349,7 +459,8 @@
     "cta": "Book Pre-consultation"
   },
   "legal": {
-    "consentCheckbox": "I expressly authorize the processing of my personal data in accordance with the privacy policy."
+    "consentCheckbox": "I expressly authorize the processing of my personal data in accordance with the privacy policy.",
+    "consentRequired": "You must authorize personal data processing to continue."
   },
   "voiceDemo": {
     "title": "Try Click-to-Servi-IA-Call now",
@@ -378,7 +489,9 @@
     "establishingConnection": "Generating Context Pack...",
     "namePlaceholder": "Full name",
     "emailPlaceholder": "Email address",
-    "phonePlaceholder": "Phone"
+    "phonePlaceholder": "Phone",
+    "offline": "Offline",
+    "poweredBy": "Powered by ServiGlobal ? IA Voice Engine"
   },
   "demoOutbound": {
     "requestCompleted": "Request sent",

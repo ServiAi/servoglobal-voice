@@ -1,81 +1,106 @@
-# ServiGlobal · IA - Agentes de Voz e IA Omnicanal
+﻿# ServiGlobal · IA - Landing de Servi-IA
 
-Esta landing page está diseñada para ofrecer servicios de consultoría e implementación de agentes de voz IA y soluciones omnicanal. Enfocada en la conversión a través de demos interactivas y agendamiento de pre-consultorías.
+Landing page comercial para presentar **Servi-IA**, la solución de agentes de voz e IA de **ServiGlobal · IA**. La página está enfocada en convertir visitantes mediante demos, explicación de implementación guiada, preconsultoría y rutas comerciales claras según el tipo de operación.
+
+## Enfoque Comercial Actual
+
+- **ServiGlobal · IA** funciona como marca paraguas.
+- **Servi-IA** es la solución implementada para cada cliente.
+- El primer paso comercial es una **preconsultoría gratuita de 20-30 minutos**.
+- La oferta se comunica como implementación guiada, operación mensual y consumo adicional según uso.
+- La landing prioriza tres resultados:
+  - agendamiento inteligente;
+  - captación y calificación de leads;
+  - atención automatizada y triage.
 
 ## Funcionalidades Implementadas
 
 ### 1. Hero Section
 
-- Mensaje de valor claro: **"Atiende el 100% de tus llamadas, 24/7"**.
-- Branding actualizado a **Servi-IA**.
-- Llamadas a la acción (CTAs) principales: Agendar Preconsultoría y Probar Servi-IA Ahora.
-- Animación autónoma y reactiva (ondas sinusoidales) para mayor dinamismo.
+- Mensaje de valor para agentes de voz con IA integrados a la operación del cliente.
+- CTAs principales hacia preconsultoría y demo.
+- Animación visual para reforzar la experiencia de agente de voz.
 
-### 2. Soluciones por Industria (Antes Casos de Uso)
+### 2. Resultados y Casos de Uso
 
-- Visualización de 7 verticales de negocio:
-  - Atención al Cliente
-  - Soporte Técnico
-  - Cobranza
-  - Ventas
-  - Reclutamiento
-  - Reservas
-  - E-commerce
-- Contenido dinámico y específico para cada vertical.
+- La sección de soluciones prioriza resultados de negocio antes que industrias.
+- Resultados principales:
+  - **Agendamiento inteligente:** disponibilidad, confirmaciones, reprogramaciones y contexto para citas.
+  - **Captación y calificación de leads:** formularios inteligentes, llamadas con contexto y priorización comercial.
+  - **Atención automatizada / triage:** clasificación de solicitudes, respuestas repetitivas y escalamiento cuando corresponde.
+- Las industrias quedan como ejemplos de aplicación: atención, soporte, cobranza, ventas, reclutamiento, reservas y e-commerce.
 
-### 3. Demos de Agentes de Voz (Simulación UI)
+### 3. Demos de Agentes de Voz
 
-- **Clic para Llamar (Inbound):** Simulación de llamada desde el navegador con visualización de ondas de audio y estados de llamada.
-- **Servi-IA te llama (Outbound):** Formulario para solicitar una llamada (“Callback”), simulando el flujo de contacto de un agente con contexto previo.
-- Integración real con **Ultravox** (experimental/demo).
+- **Clic para llamar (Inbound/Web):** formulario y conexión desde navegador con Servi-IA.
+- **Servi-IA te llama (Outbound/Callback):** formulario para solicitar llamada inmediata o programada con contexto previo.
+- Ambos formularios incluyen consentimiento visible para tratamiento de datos antes de iniciar la interacción.
+- La demo inbound usa la integración existente con Ultravox y la outbound conserva el flujo actual hacia el backend.
 
-### 4. Beneficios y Seguridad
+### 4. Implementación Guiada
 
-- **8 Beneficios Clave:** Incluyendo "Seguridad Empresarial" para sectores regulados (Banca, Salud).
-- Enfoque en reducción de costos, omnicanalidad y cierre de ventas.
+- La página comunica un proceso de acompañamiento:
+  - preconsultoría y diagnóstico;
+  - implementación / piloto;
+  - producción, soporte y optimización.
+- El posicionamiento evita vender una plataforma autoservicio y enfatiza diseño, integración y operación acompañada.
 
 ### 5. Integraciones
 
-- Showcase de compatibilidad con herramientas populares (CRM, Calendarios, VoIP, WhatsApp).
+La landing presenta compatibilidad con canales y sistemas existentes, sin exigir reemplazar la operación actual:
 
-### 6. Agendamiento y Contacto
+- telefonía / PBX / VoIP;
+- CRM y herramientas de operación;
+- calendarios;
+- mensajería y WhatsApp;
+- formularios web y canales digitales.
 
-- **Modal de Contacto:** Acceso rápido a información de contacto (WhatsApp, Teléfono, Email, Ubicación) desde el Header y Footer.
-- Integración para agendar citas directamente.
+### 6. Pricing
 
-### 7. Precios v2.0
+El pricing está alineado con tres rutas comerciales:
 
-- Estrategia de **Bolsas de Minutos** (Llamadas Web + Número Virtual).
-- Planes: Starter, Growth, Enterprise.
-- Add-ons: **Clic para Llamar con Servi-IA** y Servicios Profesionales (BYO PBX).
+- **Web Conversion:** para captación y conversión digital inteligente. Incluye formulario inteligente WebRTC, clic para llamar, leads web/campañas/redes y callback con contexto.
+- **Voice Cloud / PBX:** para operación de voz real, PSTN, PBX e integración telefónica.
+- **Enterprise:** ruta a medida para alto volumen, múltiples agentes o integraciones críticas.
 
-### 8. Internacionalización (i18n)
+Condiciones visibles en landing:
 
-- Soporte multi-idioma (Español/Inglés) con `next-intl`.
-- **Localización completa en Español:** Se han eliminado términos en inglés (Setup -> Configuración, DID -> Número Virtual, etc.) para una experiencia nativa.
+- setup visible por plan;
+- fee mensual como operación del servicio;
+- bolsa inicial de 2,000 minutos IA en planes base;
+- minuto IA adicional de USD 0.20;
+- consultoría o cambio adicional de USD 60;
+- segundo agente sin setup sujeto a complejidad, con descuento mensual;
+- costos de Meta / WhatsApp a cargo del cliente;
+- valores en USD con TRM vigente al día y exentos de IVA.
+
+### 7. Internacionalización
+
+- Soporte multi-idioma con `next-intl`.
+- Traducciones en `frontend/messages/es.json` y `frontend/messages/en.json`.
+- Los textos visibles de pricing, casos de uso, demos y consentimiento se manejan desde archivos de traducción.
 
 ## Infraestructura y Despliegue
 
 ### Stack Tecnológico
 
-- **Frontend:** Next.js 14, Tailwind CSS, Framer Motion, Lucide React.
+- **Frontend:** Next.js 15, React, Tailwind CSS, Framer Motion, Lucide React, next-intl.
 - **Backend:** FastAPI (Python), Docker.
-- **IA/Voz:** Ultravox (Integración de agentes de voz).
+- **IA/Voz:** Ultravox en la demo inbound existente.
 
 ### CI/CD y Hosting
 
 - **Hosting:** VPS en Hostinger.
-- **Orquestación:** Dokploy (Alternativa a Vercel/Heroku self-hosted).
-- **CI/CD:** GitHub Actions (`dokploy_deploy.yml`).
-  - Despliegue automático a producción (rama `main` o `develop`) mediante Webhooks de Dokploy.
+- **Orquestación:** Dokploy.
+- **CI/CD:** GitHub Actions (`dokploy_deploy.yml`) para despliegue mediante webhooks de Dokploy.
 
 ## Estructura del Proyecto
 
-- `/frontend`: Aplicación Next.js.
-  - `/components`: Componentes de UI (`Hero`, `UseCases`, `VoiceDemo`, `ContactModal`, etc.).
-  - `/messages`: Archivos de traducción (`es.json`, `en.json`).
-- `/backend`: API FastAPI.
-- `.github/workflows`: Flujos de trabajo de CI/CD.
+- `/frontend`: aplicación Next.js.
+  - `/components/landing`: secciones de la landing (`Hero`, `UseCases`, `Pricing`, `VoiceDemo`, `Booking`, etc.).
+  - `/messages`: archivos de traducción (`es.json`, `en.json`).
+- `/backend`: API FastAPI existente.
+- `.github/workflows`: flujos de CI/CD.
 
 ## Cómo Ejecutar Localmente
 
@@ -91,7 +116,6 @@ npm run dev
 
 ```bash
 cd backend
-# Crear entorno virtual y activar
 pip install -r requirements.txt
 uvicorn app.main:app --reload
 ```

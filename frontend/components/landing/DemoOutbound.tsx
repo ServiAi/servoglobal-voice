@@ -5,7 +5,6 @@ import { useAudioSimulation } from '@/hooks/useAudioSimulation';
 import { PhoneIncoming, Loader2, CheckCircle2, PhoneOff, ChevronDown, Calendar, Clock } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 
 const COUNTRY_CODES = [
@@ -22,6 +21,7 @@ const COUNTRY_CODES = [
 export function DemoOutbound() {
   const t = useTranslations('demoOutbound');
   const tCommon = useTranslations('demoCommon');
+  const tLegal = useTranslations('legal');
   const { demoState, startCall, endCall, resetDemo } = useAudioSimulation();
   const [formStep, setFormStep] = useState<'form' | 'submitting' | 'calling' | 'scheduled'>('form');
   const [countryCode, setCountryCode] = useState('+57');
@@ -37,6 +37,7 @@ export function DemoOutbound() {
   const [useCase, setUseCase] = useState('');
   const [volume, setVolume] = useState('');
   const [painPoint, setPainPoint] = useState('');
+  const [hasConsent, setHasConsent] = useState(false);
 
   // Scheduling State
   const [callMode, setCallMode] = useState<'now' | 'schedule'>('now');
@@ -58,6 +59,7 @@ export function DemoOutbound() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!hasConsent) return;
     setFormStep('submitting');
     
     try {
@@ -69,7 +71,7 @@ export function DemoOutbound() {
         const volumeTranslated = volume ? tCommon(`options.volume.${volume}`) : '';
         const painPointTranslated = painPoint ? tCommon(`options.painPoint.${painPoint}`) : '';
 
-        const payload: any = { 
+        const payload: Record<string, string | null> = {
             name, 
             email, 
             phone: fullPhone,
@@ -135,7 +137,7 @@ export function DemoOutbound() {
               }
           </p>
           <button 
-            onClick={() => { resetDemo(); setFormStep('form'); setName(''); setEmail(''); setPhone(''); setScheduleTime(''); }} // Reset form as well
+            onClick={() => { resetDemo(); setFormStep('form'); setName(''); setEmail(''); setPhone(''); setScheduleTime(''); setHasConsent(false); }} // Reset form as well
             className="w-full max-w-xs py-3 bg-zinc-900 dark:bg-white text-white dark:text-black font-bold rounded-lg hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-colors text-center"
           >
              {t('scheduleAnother')}
@@ -387,11 +389,20 @@ export function DemoOutbound() {
                    </motion.div>
                )}
                
-                {(!name || !email || !phone || !company || !industry || !useCase || !volume || !painPoint || (callMode === 'schedule' && !scheduleTime)) && (
+                {(!name || !email || !phone || !company || !industry || !useCase || !volume || !painPoint || !hasConsent || (callMode === 'schedule' && !scheduleTime)) && (
                     <p className="text-[10px] text-amber-600 dark:text-amber-500 text-center animate-pulse mb-2">
-                        {tCommon('fillAllFields')}
+                        {!hasConsent ? tLegal('consentRequired') : tCommon('fillAllFields')}
                     </p>
                 )}
+               <label className="flex items-start gap-2 rounded-lg border border-zinc-200 dark:border-white/10 bg-zinc-50 dark:bg-black/30 p-2 text-[10px] text-zinc-600 dark:text-zinc-300">
+                  <input
+                    type="checkbox"
+                    checked={hasConsent}
+                    onChange={(e) => setHasConsent(e.target.checked)}
+                    className="mt-0.5 size-3.5 rounded border-zinc-300 accent-green-600"
+                  />
+                  <span>{tLegal('consentCheckbox')}</span>
+               </label>
                <div className="flex justify-center my-2 w-full min-h-[65px]">
                   <Turnstile 
                       siteKey={
@@ -404,7 +415,7 @@ export function DemoOutbound() {
                   />
                </div>
 
-               <button type="submit" disabled={!token} className="w-full py-4 bg-green-600 hover:bg-green-500 text-white font-bold rounded-lg transition-all shadow-lg shadow-green-900/20 flex items-center justify-center gap-2 mt-2 disabled:opacity-50 disabled:cursor-not-allowed">
+               <button type="submit" disabled={!token || !hasConsent} className="w-full py-4 bg-green-600 hover:bg-green-500 text-white font-bold rounded-lg transition-all shadow-lg shadow-green-900/20 flex items-center justify-center gap-2 mt-2 disabled:opacity-50 disabled:cursor-not-allowed">
                  {callMode === 'now' ? <PhoneIncoming className="size-5" /> : <Clock className="size-5" />}
                  {callMode === 'now' ? t('wantCall') : t('scheduleCall')}
                </button>
