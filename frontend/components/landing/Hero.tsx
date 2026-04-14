@@ -114,7 +114,7 @@ export function Hero() {
         <div className="hidden md:flex relative items-center justify-center h-full w-full">
              <motion.div
                 initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1.15 }}
+                animate={{ opacity: 1, scale: 1.10 }}
                 transition={{ duration: 1.2, delay: 0.4 }}
                 className="relative w-full max-w-[600px] lg:max-w-[700px] xl:max-w-[850px] aspect-square lg:-mr-12"
              >
