@@ -441,9 +441,33 @@
         "question": "Do I need to change my current operation?",
         "answer": "No. We integrate with your existing infrastructure (CRM, calendars, PBX, telephony, messaging)."
       },
+      "voiceInfra": {
+        "question": "Do I need to replace my current voice infrastructure?",
+        "answer": "No. Servi-IA can connect to your existing phone system, PBX, or voice provider when the integration is technically available."
+      },
       "howLong": {
         "question": "How long does implementation take?",
         "answer": "It depends on the scope evaluated during the free pre-consultation. We typically define and deploy a functional pilot in weeks."
+      },
+      "omnichannel": {
+        "question": "Can Servi-IA work across WhatsApp, web, and phone calls?",
+        "answer": "Yes. We design the flow according to your channels so the agent can receive context, answer, qualify, schedule, or escalate from the touchpoints your operation uses."
+      },
+      "handoffRequired": {
+        "question": "What happens when a case needs a human agent?",
+        "answer": "Servi-IA detects cases outside the automated flow and transfers the context to your team so the conversation can continue without starting from zero."
+      },
+      "ownMetrics": {
+        "question": "Can I track my own operation metrics?",
+        "answer": "Yes. We can connect the agent to your CRM, dashboards, or reporting processes so you can measure conversations, outcomes, usage, and operational follow-up."
+      },
+      "whatIsClickToIA": {
+        "question": "What is Click-to-Servi-IA-Call?",
+        "answer": "It is a web or campaign flow where a visitor leaves their details and immediately connects with Servi-IA by voice, with the form context already available to the agent."
+      },
+      "whatIsCallback": {
+        "question": "What is a callback with Servi-IA?",
+        "answer": "It is an outbound call requested from a form or workflow. Servi-IA calls the person with the submitted context and follows the rules defined for your operation."
       },
       "dataPrivacy": {
         "question": "Do you handle sensitive data and regulatory compliance?",

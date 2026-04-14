@@ -441,9 +441,33 @@
         "question": "¿Necesito cambiar mi operación actual?",
         "answer": "No. Nos integramos con tu infraestructura existente (CRM, calendarios, PBX, telefonía, mensajería)."
       },
+      "voiceInfra": {
+        "question": "¿Necesito reemplazar mi infraestructura de voz actual?",
+        "answer": "No. Servi-IA puede conectarse con tu sistema telefónico, PBX o proveedor de voz existente cuando la integración esté técnicamente disponible."
+      },
       "howLong": {
         "question": "¿Cuánto tarda la implementación?",
         "answer": "Depende del alcance evaluado en la preconsultoría gratuita. Solemos definir y desplegar un piloto funcional en semanas."
+      },
+      "omnichannel": {
+        "question": "¿Servi-IA puede operar en WhatsApp, web y llamadas?",
+        "answer": "Sí. Diseñamos el flujo según tus canales para que el agente reciba contexto, responda, califique, agende o escale desde los puntos de contacto que usa tu operación."
+      },
+      "handoffRequired": {
+        "question": "¿Qué pasa cuando un caso necesita un agente humano?",
+        "answer": "Servi-IA detecta los casos que salen del flujo automatizado y transfiere el contexto a tu equipo para continuar la conversación sin empezar desde cero."
+      },
+      "ownMetrics": {
+        "question": "¿Puedo medir mis propias métricas de operación?",
+        "answer": "Sí. Podemos conectar el agente con tu CRM, tableros o procesos de reporte para medir conversaciones, resultados, consumo y seguimiento operativo."
+      },
+      "whatIsClickToIA": {
+        "question": "¿Qué es Clic para Llamar con Servi-IA?",
+        "answer": "Es un flujo web o de campaña donde una persona deja sus datos y se conecta de inmediato por voz con Servi-IA, con el contexto del formulario ya disponible para el agente."
+      },
+      "whatIsCallback": {
+        "question": "¿Qué es una devolución de llamada con Servi-IA?",
+        "answer": "Es una llamada saliente solicitada desde un formulario o flujo. Servi-IA llama a la persona con el contexto enviado y sigue las reglas definidas para tu operación."
       },
       "dataPrivacy": {
         "question": "¿Manejan datos sensibles y cumplimiento normativo?",
