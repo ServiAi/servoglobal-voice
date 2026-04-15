@@ -1,20 +1,15 @@
 ﻿'use client';
 
-import { useState } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { ArrowRight, Check, FileText, Phone } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { cn } from '@/lib/utils';
-import { DemoOutbound } from '@/components/landing/DemoOutbound';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 const PLAN_IDS = ['webConversion', 'voiceCloud', 'enterprise'] as const;
 
 export function Pricing() {
   const t = useTranslations('pricing');
-  const tVoiceDemo = useTranslations('voiceDemo');
-  const [isSalesModalOpen, setIsSalesModalOpen] = useState(false);
 
   return (
     <section id="precios" className="py-24 bg-white dark:bg-zinc-950 transition-colors duration-300">
@@ -108,13 +103,13 @@ export function Pricing() {
                 </ul>
 
                 {isEnterprise ? (
-                  <button
-                    onClick={() => setIsSalesModalOpen(true)}
+                  <Link
+                    href="#agendar"
                     className="w-full text-center py-3 px-6 rounded-xl font-bold transition-all flex items-center justify-center gap-2 bg-violet-600 text-white hover:bg-violet-700 shadow-lg shadow-violet-500/20 cursor-pointer"
                   >
                     <Phone className="size-4" />
                     {t('salesCta')}
-                  </button>
+                  </Link>
                 ) : (
                   <Link
                     href="#agendar"
@@ -172,19 +167,6 @@ export function Pricing() {
           {t('consumptionNote')}
         </p>
       </div>
-
-      <Dialog open={isSalesModalOpen} onOpenChange={setIsSalesModalOpen}>
-        <DialogContent className="max-w-4xl w-[95vw] bg-white dark:bg-zinc-950 border-zinc-200 dark:border-white/10 p-0 overflow-hidden">
-          <DialogHeader className="px-6 pt-6 pb-2">
-            <DialogTitle className="text-xl font-bold text-zinc-900 dark:text-white">
-              {tVoiceDemo('outboundTab')}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="px-4 pb-4 max-h-[78vh] overflow-y-auto">
-            <DemoOutbound />
-          </div>
-        </DialogContent>
-      </Dialog>
     </section>
   );
 }

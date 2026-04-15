@@ -1,11 +1,11 @@
 {
   "metadata": {
-    "title": "AI Voice Agents and Servi-IA | ServiGlobal ? IA",
-    "description": "ServiGlobal ? IA implements Servi-IA for smart scheduling, lead capture and qualification, and automated service with voice and integrations.",
+    "title": "AI Voice Agents and Servi-IA | ServiGlobal · IA",
+    "description": "ServiGlobal · IA implements Servi-IA for smart scheduling, lead capture and qualification, and automated service with voice and integrations.",
     "keywords": "ServiGlobal IA, Servi-IA, voice agents, artificial intelligence, smart scheduling, lead qualification, automated service, triage, call automation",
-    "ogTitle": "ServiGlobal ? IA - Servi-IA for your operation",
+    "ogTitle": "ServiGlobal · IA - Servi-IA for your operation",
     "ogDescription": "Guided implementation of Servi-IA to schedule, qualify leads, and automate service with voice and integrations.",
-    "twitterTitle": "ServiGlobal ? IA - Servi-IA",
+    "twitterTitle": "ServiGlobal · IA - Servi-IA",
     "twitterDescription": "Scheduling, leads, and automated service with Servi-IA."
   },
   "whyUs": {
@@ -354,7 +354,7 @@
     "monthlyFeeLabel": "Monthly operation fee",
     "monthlyFeeHelp": "Service operation, support, and platform",
     "includedMinutesLabel": "Initial bucket included",
-    "salesCta": "Talk to sales",
+    "salesCta": "Book enterprise consultation",
     "plans": {
       "webConversion": {
         "name": "Web Conversion Plan",
@@ -515,7 +515,7 @@
     "emailPlaceholder": "Email address",
     "phonePlaceholder": "Phone",
     "offline": "Offline",
-    "poweredBy": "Powered by ServiGlobal ? IA Voice Engine"
+    "poweredBy": "Powered by ServiGlobal · IA Voice Engine"
   },
   "demoOutbound": {
     "requestCompleted": "Request sent",
@@ -542,7 +542,8 @@
     "callNow": "Call Now",
     "scheduleLater": "Schedule for later",
     "preferredTime": "Preferred Time",
-    "scheduleCall": "Schedule Callback"
+    "scheduleCall": "Schedule Callback",
+    "errorInitiatingCall": "We couldn't start the call. Please try again in a moment."
   },
   "floatingCta": {
     "scheduleButton": "Schedule Now",

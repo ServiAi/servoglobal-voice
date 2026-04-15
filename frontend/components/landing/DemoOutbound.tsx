@@ -113,7 +113,7 @@ export function DemoOutbound() {
         
     } catch (error) {
         console.error("Error initiating call:", error);
-        alert('Error initiating call. Check console for details.');
+        alert(t('errorInitiatingCall'));
         setFormStep('form');
     }
   };

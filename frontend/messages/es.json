@@ -354,7 +354,7 @@
     "monthlyFeeLabel": "Fee mensual de operación",
     "monthlyFeeHelp": "Operación, soporte y plataforma del servicio",
     "includedMinutesLabel": "Bolsa inicial incluida",
-    "salesCta": "Consultar ventas",
+    "salesCta": "Agendar preconsultoría Enterprise",
     "plans": {
       "webConversion": {
         "name": "Plan Web Conversion",
@@ -435,7 +435,7 @@
       },
       "replaceTeam": {
         "question": "¿Esto reemplaza a mi equipo?",
-        "answer": "No. Automatiza lo repetitivo y libera a tu equipo para tareas de mayor valor. Servi-IA escala a un agente humano cuando el caso sale del libretos automatizado."
+        "answer": "No. Automatiza lo repetitivo y libera a tu equipo para tareas de mayor valor. Servi-IA escala a un agente humano cuando el caso sale del flujo automatizado."
       },
       "changeOperation": {
         "question": "¿Necesito cambiar mi operación actual?",
@@ -542,7 +542,8 @@
     "callNow": "Llamar Ahora",
     "scheduleLater": "Agendar para después",
     "preferredTime": "Hora preferida",
-    "scheduleCall": "Agendar Devolución de Llamada"
+    "scheduleCall": "Agendar Devolución de Llamada",
+    "errorInitiatingCall": "No pudimos iniciar la llamada. Inténtalo de nuevo en un momento."
   },
   "floatingCta": {
     "scheduleButton": "Agendar Ahora",
