@@ -8,10 +8,10 @@ Landing page comercial para presentar **Servi-IA**, la solución de agentes de v
 - **Servi-IA** es la solución implementada para cada cliente.
 - El primer paso comercial es una **preconsultoría gratuita de 20-30 minutos**.
 - La oferta se comunica como implementación guiada, operación mensual y consumo adicional según uso.
-- La landing prioriza tres resultados:
-  - agendamiento inteligente;
-  - captación y calificación de leads;
-  - atención automatizada y triage.
+- La landing prioriza tres verticales de salida al mercado:
+  - Bienes Raíces / Lead Qualification;
+  - Salud y Reservas / Agendamiento;
+  - Cobranza y Recuperación / Seguimiento.
 
 ## Funcionalidades Implementadas
 
@@ -21,14 +21,18 @@ Landing page comercial para presentar **Servi-IA**, la solución de agentes de v
 - CTAs principales hacia preconsultoría y demo.
 - Animación visual para reforzar la experiencia de agente de voz.
 
-### 2. Resultados y Casos de Uso
+### 2. Verticales Prioritarias y Casos de Uso
 
-- La sección de soluciones prioriza resultados de negocio antes que industrias.
+- La sección de soluciones prioriza verticales donde el retorno es más claro y el despliegue suele ser más rápido.
+- Verticales prioritarias:
+  - **Bienes Raíces / Lead Qualification:** respuesta rápida, calificación y agenda para asesores.
+  - **Salud y Reservas / Agendamiento:** confirmaciones, reprogramación y contexto para citas.
+  - **Cobranza y Recuperación / Seguimiento:** recordatorios, registro y escalamiento.
 - Resultados principales:
   - **Agendamiento inteligente:** disponibilidad, confirmaciones, reprogramaciones y contexto para citas.
   - **Captación y calificación de leads:** formularios inteligentes, llamadas con contexto y priorización comercial.
   - **Atención automatizada / triage:** clasificación de solicitudes, respuestas repetitivas y escalamiento cuando corresponde.
-- Las industrias quedan como ejemplos de aplicación: atención, soporte, cobranza, ventas, reclutamiento, reservas y e-commerce.
+- Otros sectores quedan como aplicaciones compatibles en segundo plano.
 
 ### 3. Demos de Agentes de Voz
 
@@ -66,9 +70,10 @@ El pricing está alineado con tres rutas comerciales:
 Condiciones visibles en landing:
 
 - setup visible por plan;
-- fee mensual como operación del servicio;
+- operación mensual del servicio, no solo consumo de minutos;
 - bolsa inicial de 2,000 minutos IA en planes base;
-- minuto IA adicional de USD 0.20;
+- minuto IA adicional por plan: Web Conversion USD 0.16/min, Voice Cloud / PBX USD 0.18/min y Enterprise USD 0.14-0.16/min según volumen;
+- escala de consumo adicional visible desde USD 0.18/min hasta USD 0.14/min según volumen;
 - consultoría o cambio adicional de USD 60;
 - segundo agente sin setup sujeto a complejidad, con descuento mensual;
 - costos de Meta / WhatsApp a cargo del cliente;
