@@ -31,7 +31,7 @@ export function JsonLd() {
       '@type': 'Offer',
       price: '510',
       priceCurrency: 'USD',
-      description: 'Servi-IA Web Conversion monthly operation fee with guided implementation'
+      description: 'Servi-IA Web Conversion monthly service operation with guided implementation'
     }
   };
 
