@@ -6,7 +6,8 @@ import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 
 const RESULT_IDS = ['scheduling', 'leads', 'triage'] as const;
-const SECTOR_IDS = ['atencion', 'soporte', 'cobranza', 'ventas', 'reclutamiento', 'reservas', 'ecommerce'] as const;
+const PRIORITY_VERTICAL_IDS = ['realEstateLeads', 'healthBooking', 'collectionsRecovery'] as const;
+const OTHER_SECTOR_IDS = ['atencion', 'soporte', 'ventas', 'reclutamiento', 'ecommerce'] as const;
 
 const RESULT_ICONS = {
   scheduling: CalendarCheck,
@@ -24,6 +25,12 @@ const SECTOR_ICONS = {
   ecommerce: ShoppingBag,
 } as const;
 
+const PRIORITY_ICONS = {
+  realEstateLeads: Briefcase,
+  healthBooking: CalendarCheck,
+  collectionsRecovery: Sparkles,
+} as const;
+
 export function UseCases() {
   const t = useTranslations('useCases');
 
@@ -36,6 +43,72 @@ export function UseCases() {
           </h2>
           <p className="text-lg text-zinc-600 dark:text-neutral-400">
             {t('subtitle')}
+          </p>
+        </div>
+
+        <div className="mb-16">
+          <div className="mb-7 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-wider text-violet-700 dark:text-violet-300">
+                {t('priorityEyebrow')}
+              </p>
+              <h3 className="mt-2 text-2xl md:text-3xl font-bold text-zinc-900 dark:text-white">
+                {t('priorityTitle')}
+              </h3>
+            </div>
+            <p className="max-w-2xl text-sm md:text-base text-zinc-600 dark:text-neutral-400">
+              {t('prioritySubtitle')}
+            </p>
+          </div>
+
+          <div className="grid gap-6 lg:grid-cols-3">
+            {PRIORITY_VERTICAL_IDS.map((id, idx) => {
+              const Icon = PRIORITY_ICONS[id];
+              const tasks = t.raw(`priorityVerticals.${id}.tasks`) as string[];
+
+              return (
+                <motion.article
+                  key={id}
+                  initial={{ opacity: 0, y: 24 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: idx * 0.1 }}
+                  className="rounded-3xl border border-violet-200 dark:border-violet-500/20 bg-white dark:bg-zinc-900 p-7 shadow-sm dark:shadow-none"
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="size-12 rounded-xl bg-violet-100 dark:bg-violet-950/40 flex items-center justify-center">
+                      <Icon className="size-6 text-violet-700 dark:text-violet-300" />
+                    </div>
+                    <span className="rounded-full bg-zinc-100 dark:bg-white/5 px-3 py-1 text-xs font-semibold text-zinc-600 dark:text-neutral-300">
+                      {t('priorityBadge')}
+                    </span>
+                  </div>
+                  <h3 className="mt-5 text-xl font-bold text-zinc-900 dark:text-white">
+                    {t(`priorityVerticals.${id}.title`)}
+                  </h3>
+                  <p className="mt-3 text-sm leading-relaxed text-zinc-600 dark:text-neutral-400">
+                    {t(`priorityVerticals.${id}.promise`)}
+                  </p>
+                  <ul className="mt-5 space-y-3">
+                    {tasks.map((task, i) => (
+                      <li key={i} className="flex items-start gap-2 text-sm text-zinc-700 dark:text-neutral-300">
+                        <span className="mt-1.5 size-1.5 rounded-full bg-violet-500 dark:bg-violet-400 shrink-0" />
+                        <span>{task}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </motion.article>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="mb-8 text-center">
+          <h3 className="text-2xl md:text-3xl font-bold text-zinc-900 dark:text-white">
+            {t('resultsTitle')}
+          </h3>
+          <p className="mt-3 text-zinc-600 dark:text-neutral-400">
+            {t('resultsSubtitle')}
           </p>
         </div>
 
@@ -108,7 +181,7 @@ export function UseCases() {
           </div>
 
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            {SECTOR_IDS.map((id) => {
+            {OTHER_SECTOR_IDS.map((id) => {
               const Icon = SECTOR_ICONS[id];
               return (
                 <div
