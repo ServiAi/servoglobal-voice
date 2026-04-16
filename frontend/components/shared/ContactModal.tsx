@@ -3,6 +3,7 @@
 import React from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from '@/components/ui/dialog';
 import { Mail, MapPin, Phone, Globe, Facebook, Linkedin, Instagram } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 
 interface ContactModalProps {
   children?: React.ReactNode;
@@ -11,17 +12,18 @@ interface ContactModalProps {
 }
 
 export function ContactModal({ children, open, onOpenChange }: ContactModalProps) {
+  const t = useTranslations('contactModal');
 
   const contactInfo = [
     {
       icon: <Mail className="size-5 text-violet-600" />,
-      label: 'Correo electrónico',
+      label: t('email'),
       value: 'ventas-ia@serviglobal.co',
       href: 'mailto:ventas-ia@serviglobal.co'
     },
     {
       icon: <MapPin className="size-5 text-violet-600" />,
-      label: 'Ubicación',
+      label: t('location'),
       value: 'Avenida el Dorado No. 68 C 61 Edificio Torre Central Davivienda Bogotá D.C',
       href: 'https://maps.google.com/?q=Avenida+el+Dorado+No.+68+C+61+Edificio+Torre+Central+Davivienda+Bogota+D.C'
     },
@@ -33,7 +35,7 @@ export function ContactModal({ children, open, onOpenChange }: ContactModalProps
     },
     {
       icon: <Globe className="size-5 text-violet-600" />,
-      label: 'Sitio Web',
+      label: t('website'),
       value: 'www.serviglobal.co',
       href: 'https://www.serviglobal.co'
     }
@@ -66,9 +68,9 @@ export function ContactModal({ children, open, onOpenChange }: ContactModalProps
       )}
       <DialogContent className="sm:max-w-md bg-white dark:bg-zinc-950 border-zinc-200 dark:border-white/10">
         <DialogHeader>
-          <DialogTitle className="text-xl font-bold text-center mb-4 text-zinc-900 dark:text-white">Contáctanos</DialogTitle>
+          <DialogTitle className="text-xl font-bold text-center mb-4 text-zinc-900 dark:text-white">{t('title')}</DialogTitle>
           <DialogDescription className="text-center text-zinc-500 dark:text-zinc-400 mb-4">
-             Estamos listos para ayudarte. Encuentra nuestros canales de contacto a continuación.
+             {t('description')}
           </DialogDescription>
         </DialogHeader>
         
@@ -100,11 +102,11 @@ export function ContactModal({ children, open, onOpenChange }: ContactModalProps
             className="flex items-center justify-center gap-2 w-full py-3 bg-[#25D366] hover:bg-[#20bd5a] text-white rounded-lg font-bold transition-all shadow-lg shadow-green-500/20 active:scale-[0.98]"
           >
              <Phone className="size-5 fill-white" />
-             Chatear en WhatsApp
+             {t('whatsapp')}
           </a>
 
           <div className="pt-4 border-t border-zinc-200 dark:border-zinc-800">
-            <p className="text-center text-xs text-zinc-500 mb-3">Síguenos en redes sociales</p>
+            <p className="text-center text-xs text-zinc-500 mb-3">{t('social')}</p>
             <div className="flex justify-center gap-4">
               {socialLinks.map((social, index) => (
                  <a
