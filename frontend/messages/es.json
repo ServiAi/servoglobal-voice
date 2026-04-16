@@ -1,16 +1,16 @@
 {
   "metadata": {
     "title": "Agentes de Voz IA y Servi-IA | ServiGlobal · IA",
-    "description": "ServiGlobal · IA implementa Servi-IA para agendamiento inteligente, captación y calificación de leads, y atención automatizada con voz e integraciones.",
+    "description": "ServiGlobal · IA implementa Servi-IA sobre tu operación para agendamiento inteligente, captación y calificación de leads, y atención automatizada con voz e integraciones.",
     "keywords": "ServiGlobal IA, Servi-IA, agentes de voz, inteligencia artificial, agendamiento inteligente, calificación de leads, atención automatizada, triage, automatización de llamadas",
-    "ogTitle": "ServiGlobal · IA - Servi-IA para tu operación",
+    "ogTitle": "ServiGlobal · IA implementa Servi-IA para tu operación",
     "ogDescription": "Implementación guiada de Servi-IA para agendar, calificar leads y automatizar atención con voz e integraciones.",
     "twitterTitle": "ServiGlobal · IA - Servi-IA",
     "twitterDescription": "Agendamiento, leads y atención automatizada con Servi-IA."
   },
   "whyUs": {
     "title": "¿Por qué confiar en nosotros?",
-    "subtitle": "Experiencia, integración y acompañamiento real en cada paso.",
+    "subtitle": "ServiGlobal · IA combina experiencia en voz, integración real y acompañamiento para implementar Servi-IA sin fricción.",
     "features": {
       "voiceExperience": {
         "title": "Experiencia sólida en voz",
@@ -28,14 +28,14 @@
         "description": "Diagnóstico, diseño, piloto y producción con nuestro equipo. No desaparecemos después del lanzamiento."
       },
       "clickToIACall": {
-        "title": "Clic para Llamar Omnicanal",
+        "title": "Clic para Llamar con Servi-IA",
         "subtitle": "Filtra y cierra desde Redes, Web o Email.",
         "description": "Implementable como embudo en Facebook/Instagram Ads, Email Marketing o Web. Filtra leads para que la IA llame con contexto y cierre rápido."
       },
       "customVoiceInfra": {
         "title": "Infraestructura de voz",
         "subtitle": "A tu medida.",
-        "description": "Configuramos u optimizamos tu infraestructura de voz para habilitar agentes de IA, o la implementamos desde cero."
+        "description": "Configuramos u optimizamos tu infraestructura de voz para habilitar Servi-IA, o la implementamos desde cero si el caso lo requiere."
       },
       "continuousSupport": {
         "title": "Acompañamiento continuo",
@@ -50,17 +50,27 @@
     "integrations": "Integraciones",
     "demo": "Demo",
     "pricing": "Precios",
+    "contact": "Contáctanos",
     "cta": "Agendar preconsultoría"
   },
+  "contactModal": {
+    "title": "Contáctanos",
+    "description": "Estamos listos para ayudarte. Encuentra nuestros canales de contacto a continuación.",
+    "email": "Correo electrónico",
+    "location": "Ubicación",
+    "website": "Sitio web",
+    "whatsapp": "Chatear en WhatsApp",
+    "social": "Síguenos en redes sociales"
+  },
   "hero": {
-    "badge": "Implementación Guiada de Agentes de Voz IA",
+    "badge": "ServiGlobal · IA implementa Servi-IA",
     "titlePart1": "Agentes de Voz con IA que",
     "titlePart2": "atienden y venden por ti,",
     "titlePart3": "integrados a tu operación.",
-    "descriptionFull": "Diseñamos e implementamos tu agente a medida (voz + WhatsApp + CRM + Calendar). Agenda una preconsultoría y recibe un plan de implementación.",
-    "descriptionShort": "Agentes a medida que atienden y venden 24/7.",
+    "descriptionFull": "Servi-IA es la solución de agentes de voz que configuramos e integramos para tu caso: voz, WhatsApp, CRM y agenda conectados a tu operación real.",
+    "descriptionShort": "Servi-IA se diseña e integra para tu operación.",
     "microcopySetup": "Diagnóstico inicial → Piloto funcional → Optimización continua.",
-    "microcopySuperPlus": "No somos una plataforma autoservicio, nosotros lo implementamos por ti.",
+    "microcopySuperPlus": "No te entregamos una plataforma vacía; implementamos Servi-IA sobre tu operación real.",
     "ctaPrimary": "Agendar Preconsultoría",
     "ctaSecondary": "Probar Demo (Llamar Ahora)"
   },
@@ -113,13 +123,64 @@
       }
     }
   },
+  "trustStrip": {
+    "items": {
+      "voice": {
+        "title": "+25 años de experiencia en operación de voz para empresas",
+        "description": "ServiGlobal · IA parte de experiencia real en voz, telecom y operación empresarial."
+      },
+      "infrastructure": {
+        "title": "Integramos sobre tu PBX, CRM y canales actuales",
+        "description": "No necesitas cambiar lo que ya funciona para empezar a operar con Servi-IA."
+      },
+      "implementation": {
+        "title": "Implementación guiada con acompañamiento real",
+        "description": "Diseñamos, conectamos, lanzamos y ajustamos la solución junto a tu equipo."
+      }
+    }
+  },
   "useCases": {
-    "title": "Resultados de negocio con Servi-IA",
-    "subtitle": "Empieza por el resultado que necesitas: agenda más rápido, califica mejor tus leads y automatiza la atención repetitiva con implementación guiada.",
+    "title": "Verticales prioritarias para salir al mercado",
+    "subtitle": "Empezamos por operaciones donde el retorno es más claro, el despliegue es más rápido y Servi-IA puede conectarse a procesos existentes.",
     "automates": "Automatiza",
     "typicalIntegrations": "Integraciones Típicas",
     "scheduleFor": "Agendar diagnóstico para",
     "tryIAFor": "Probar Servi-IA ahora para",
+    "priorityEyebrow": "Mayor tracción inicial",
+    "priorityTitle": "Tres casos donde Servi-IA llega con más claridad comercial",
+    "prioritySubtitle": "Priorizamos flujos con alto volumen de contacto, necesidad de respuesta rápida y reglas operativas claras.",
+    "priorityBadge": "Prioritario",
+    "priorityVerticals": {
+      "realEstateLeads": {
+        "title": "Bienes Raíces / Lead Qualification",
+        "promise": "Servi-IA responde rápido a interesados, filtra intención y agenda visitas o llamadas con contexto.",
+        "tasks": [
+          "Calificación de leads desde web, campañas y redes",
+          "Callback inmediato para validar presupuesto, zona e interés",
+          "Agenda de citas para asesores comerciales"
+        ]
+      },
+      "healthBooking": {
+        "title": "Salud y Reservas / Agendamiento",
+        "promise": "Servi-IA ayuda a convertir solicitudes en citas confirmadas, con reglas de disponibilidad y recordatorios.",
+        "tasks": [
+          "Agendamiento, confirmación y reprogramación",
+          "Reducción de llamadas repetitivas al equipo",
+          "Entrega de contexto antes de cada cita"
+        ]
+      },
+      "collectionsRecovery": {
+        "title": "Cobranza y Recuperación / Seguimiento",
+        "promise": "Servi-IA automatiza seguimientos frecuentes y prioriza los casos que requieren intervención humana.",
+        "tasks": [
+          "Recordatorios y seguimiento de compromisos",
+          "Registro de respuestas en CRM o sistema interno",
+          "Escalamiento cuando el caso necesita negociación"
+        ]
+      }
+    },
+    "resultsTitle": "Resultados que implementamos dentro de cada vertical",
+    "resultsSubtitle": "La solución se diseña por caso, pero el retorno suele concentrarse en estos frentes.",
     "verticals": {
       "atencion": {
         "title": "Atención al Cliente",
@@ -226,8 +287,8 @@
         ]
       }
     },
-    "sectorsTitle": "También aplica a tu sector",
-    "sectorsSubtitle": "Los mismos flujos se adaptan a industrias y operaciones distintas según tus canales, CRM, agenda y telefonía.",
+    "sectorsTitle": "Otros sectores compatibles",
+    "sectorsSubtitle": "Mantenemos foco comercial, pero los mismos patrones se adaptan a otros procesos con canales, CRM, agenda o telefonía.",
     "sectorCta": "Diseñar mi caso en preconsultoría",
     "results": {
       "scheduling": {
@@ -264,7 +325,7 @@
   },
   "benefits": {
     "title": "¿Cómo Servi-IA Puede Beneficiarte?",
-    "subtitle": "Resultados tangibles desde el primer mes de implementación.",
+    "subtitle": "Resultados orientados a operación, ventas y servicio desde una implementación guiada.",
     "items": {
       "sales": {
         "title": "Incrementa Ventas",
@@ -300,10 +361,34 @@
       }
     }
   },
+  "roi": {
+    "eyebrow": "Cómo se ve el retorno",
+    "title": "El valor aparece cuando Servi-IA reduce fricción operativa",
+    "description": "No prometemos cifras cerradas sin diagnóstico. El retorno suele venir de responder antes, perder menos oportunidades, confirmar más citas y liberar al equipo de tareas repetitivas.",
+    "boxTitle": "Palancas de impacto",
+    "items": {
+      "response": {
+        "title": "Velocidad de respuesta",
+        "description": "Menos tiempo entre el interés del lead y el primer contacto con contexto."
+      },
+      "agenda": {
+        "title": "Agenda / ocupación",
+        "description": "Más solicitudes convertidas en citas confirmadas y menos fricción para reprogramar."
+      },
+      "workload": {
+        "title": "Carga operativa",
+        "description": "Menos tiempo del equipo en preguntas repetitivas, recordatorios y clasificación inicial."
+      },
+      "coverage": {
+        "title": "Cobertura",
+        "description": "Más capacidad de atención sin crecer al mismo ritmo en personal."
+      }
+    }
+  },
   "process": {
     "title": "No vendemos una plataforma.",
     "subtitle": "Implementamos un sistema que encaja con tu operación.",
-    "description": "El servicio incluye acompañamiento total: implementamos soluciones que conectan con tu PBX, CRM y canales existentes.",
+    "description": "ServiGlobal · IA implementa Servi-IA con acompañamiento total: diseño, integración con tu PBX, CRM y canales, y operación continua.",
     "microcopySetup": "Implementación personalizada (configuración) según alcance.",
     "cta": "Comenzar con Fase 1",
     "phases": {
@@ -344,16 +429,17 @@
   },
   "pricing": {
     "title": "Planes y precios",
-    "subtitle": "Implementación guiada, operación mensual y consumo adicional según uso. La preconsultoría gratuita define el alcance antes de iniciar.",
+    "subtitle": "No pagas solo minutos. Pagas una operación guiada con soporte, plataforma, mantenimiento y mejora continua. La preconsultoría define el alcance antes de iniciar.",
     "monthly": "Mensual",
     "setup": "Configuración (Setup)",
     "from": "Desde",
     "cta": "Agendar preconsultoría",
     "badgeRecommended": "Recomendado",
     "setupLabel": "Setup inicial",
-    "monthlyFeeLabel": "Fee mensual de operación",
-    "monthlyFeeHelp": "Operación, soporte y plataforma del servicio",
-    "includedMinutesLabel": "Bolsa inicial incluida",
+    "monthlyFeeLabel": "Operación mensual del servicio",
+    "monthlyFeeHelp": "Soporte, plataforma, mantenimiento y acompañamiento",
+    "includedMinutesLabel": "Minutos IA incluidos",
+    "additionalMinuteLabel": "Minuto adicional",
     "salesCta": "Agendar preconsultoría Enterprise",
     "plans": {
       "webConversion": {
@@ -362,6 +448,7 @@
         "setup": "USD 550",
         "monthly": "USD 510",
         "minutes": "2,000 minutos IA incluidos",
+        "additionalMinute": "USD 0.16/min",
         "features": [
           "Formulario inteligente WebRTC",
           "Clic para llamar desde web, campañas y redes",
@@ -376,6 +463,7 @@
         "setup": "USD 950",
         "monthly": "USD 546",
         "minutes": "2,000 minutos IA incluidos",
+        "additionalMinute": "USD 0.18/min",
         "features": [
           "Integración con telefonía, PBX, DID o troncales",
           "Operación de voz real para llamadas entrantes o flujos definidos",
@@ -389,7 +477,8 @@
         "idealFor": "Soluciones a medida para alto volumen, múltiples agentes o integraciones críticas",
         "setup": "A medida",
         "monthly": "A medida",
-        "minutes": "Bolsa de minutos definida según alcance",
+        "minutes": "Bolsa según alcance",
+        "additionalMinute": "USD 0.14 - 0.16/min según volumen",
         "features": [
           "Arquitectura multiagente o flujos avanzados",
           "Integraciones profundas con PBX, CRM, APIs o sistemas internos",
@@ -398,11 +487,25 @@
         ]
       }
     },
+    "operationIncludes": {
+      "title": "¿Qué incluye la operación mensual?",
+      "description": "La mensualidad cubre la operación del servicio, no solo el consumo. ServiGlobal · IA acompaña la solución para que Servi-IA siga funcionando sobre tu operación real.",
+      "items": {
+        "operation": "Operación del servicio y monitoreo funcional",
+        "support": "Soporte continuo y acompañamiento comercial/técnico",
+        "platform": "Uso de plataforma, configuración y base de minutos",
+        "maintenance": "Mantenimiento, ajustes menores y mejora continua"
+      }
+    },
     "commercialTerms": {
       "title": "Condiciones comerciales",
-      "description": "Notas claras para calcular operación, consumo y servicios adicionales.",
+      "description": "Escala simple para consumo adicional y servicios complementarios.",
       "items": [
-        "Minuto IA adicional: USD 0.20.",
+        "1-2,000 min extra: USD 0.18/min.",
+        "2,001-5,000 min extra: USD 0.16/min.",
+        "5,001-15,000 min extra: USD 0.15/min.",
+        "15,001+ min extra: USD 0.14/min.",
+        "Enterprise anual / comprometido: propuesta personalizada.",
         "Consultoría o cambio adicional: USD 60.",
         "Segundo agente sin setup, sujeto a complejidad, con 10% de descuento mensual.",
         "Preconsultoría gratuita de 20-30 min.",
@@ -411,19 +514,19 @@
         "Valores en USD con TRM vigente al día."
       ]
     },
-    "consumptionNote": "El fee mensual representa la operación del servicio, soporte continuo y uso de plataforma. El setup es un pago único por implementación inicial."
+    "consumptionNote": "La operación mensual cubre servicio operado, soporte continuo y uso de plataforma. El setup es un pago único por implementación inicial."
   },
   "faq": {
     "title": "Preguntas Frecuentes",
     "subtitle": "Resolvemos tus dudas antes de la preconsultoría.",
     "items": {
       "whatIncludes": {
-        "question": "¿Qué incluye el cobro Mensual vs la Configuración (Setup)?",
-        "answer": "La Configuración o Setup (pago único) cubre el diseño, desarrollo e integración del agente a tus sistemas. El cobro Mensual (fee) representa la operación, soporte escalado, uso de la plataforma y el paquete base de minutos incluidos."
+        "question": "¿Qué incluye la operación mensual vs el setup?",
+        "answer": "El setup cubre diseño, desarrollo e integración inicial de Servi-IA a tus sistemas. La operación mensual cubre servicio operado, soporte continuo, plataforma, mantenimiento, ajustes menores y el paquete base de minutos incluidos."
       },
       "additionalMinutes": {
         "question": "¿Cómo se cobra el consumo adicional?",
-        "answer": "Si sobrepasas los 2,000 minutos incluidos en tu plan mensual, cada minuto IA adicional tiene un costo de USD 0.20 cobrados a mes vencido o mediante recarga."
+        "answer": "Si superas los minutos incluidos, el consumo adicional se cobra según escala: Web Conversion parte de USD 0.16/min, Voice Cloud / PBX parte de USD 0.18/min y Enterprise se define por volumen y complejidad."
       },
       "secondAgent": {
         "question": "¿Cómo funciona agregar un segundo agente?",
@@ -477,8 +580,8 @@
   },
   "booking": {
     "title": "Agenda tu diagnóstico",
-    "description": "Agenda una llamada de diagnóstico (20–30 min). Exploraremos el caso de uso, volumen de operación, canales e integraciones necesarias.",
-    "microcopy": "Te entregaremos un plan de automatización con factibilidad técnica y tiempos de implementación.",
+    "description": "Agenda una llamada de diagnóstico (20-30 min). ServiGlobal · IA evaluará dónde Servi-IA puede generar retorno en tu operación.",
+    "microcopy": "Te entregaremos un plan de automatización con factibilidad técnica, integraciones necesarias y tiempos de implementación.",
     "postSchedule": "Ten a mano: procesos actuales, sistema telefónico / CRM que utilizas y retos actuales.",
     "cta": "Agendar Preconsultoría"
   },
@@ -550,8 +653,14 @@
     "demoButton": "Probar Servi-IA"
   },
   "footer": {
-    "tagline": "Agentes Servi-IA que trabajan mientras tú descansas.",
+    "tagline": "ServiGlobal · IA implementa Servi-IA para operaciones reales de voz, agenda y servicio.",
+    "proofLine": "Respaldado por +25 años en voz",
     "product": "Producto",
+    "links": {
+      "cases": "Casos",
+      "pricing": "Precios",
+      "demo": "Demo"
+    },
     "services": "Servicios",
     "servicesItems": {
       "implementation": "Implementación",
@@ -559,6 +668,7 @@
       "customDev": "Desarrollo a medida"
     },
     "contact": "Contacto",
+    "privacy": "Política de Privacidad",
     "copyright": "© 2026 ServiGlobal · IA. Todos los derechos reservados."
   },
   "languageSwitcher": {
