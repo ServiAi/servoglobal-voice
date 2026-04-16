@@ -83,7 +83,7 @@ export function Header() {
               onClick={() => setContactOpen(true)}
               className="text-sm font-medium text-zinc-600 dark:text-white/70 hover:text-zinc-900 dark:hover:text-white transition-colors"
             >
-              Contáctanos
+              {t('contact')}
             </button>
 
             <ThemeToggle />
@@ -191,7 +191,7 @@ export function Header() {
                   }}
                   className="w-full text-left text-zinc-800 dark:text-white/80 hover:text-violet-600 dark:hover:text-white font-medium py-2 border-b border-zinc-100 dark:border-white/5"
                 >
-                  Contáctanos
+                  {t('contact')}
                 </button>
                 
                 <Link
