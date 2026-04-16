@@ -7,6 +7,7 @@ import { useTranslations } from 'next-intl';
 import { cn } from '@/lib/utils';
 
 const PLAN_IDS = ['webConversion', 'voiceCloud', 'enterprise'] as const;
+const OPERATION_ITEM_IDS = ['operation', 'support', 'platform', 'maintenance'] as const;
 
 export function Pricing() {
   const t = useTranslations('pricing');
@@ -91,6 +92,14 @@ export function Pricing() {
                       {t(`plans.${planId}.minutes`)}
                     </p>
                   </div>
+                  <div className="rounded-2xl bg-zinc-50 dark:bg-black/20 border border-zinc-200 dark:border-white/10 p-4">
+                    <p className="text-xs uppercase tracking-wider font-semibold text-zinc-500 dark:text-neutral-500 mb-1">
+                      {t('additionalMinuteLabel')}
+                    </p>
+                    <p className="text-base font-bold text-zinc-900 dark:text-white">
+                      {t(`plans.${planId}.additionalMinute`)}
+                    </p>
+                  </div>
                 </div>
 
                 <ul className="space-y-3 mb-8 flex-1">
@@ -128,6 +137,34 @@ export function Pricing() {
             );
           })}
         </div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          className="max-w-5xl mx-auto mb-8"
+        >
+          <div className="rounded-2xl border border-violet-200 dark:border-violet-500/20 bg-violet-50 dark:bg-violet-950/20 p-6 md:p-8">
+            <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+              <div className="max-w-xl">
+                <h3 className="text-2xl font-bold text-zinc-900 dark:text-white">
+                  {t('operationIncludes.title')}
+                </h3>
+                <p className="mt-3 text-sm leading-relaxed text-zinc-700 dark:text-neutral-300">
+                  {t('operationIncludes.description')}
+                </p>
+              </div>
+              <ul className="grid gap-3 sm:grid-cols-2 lg:w-[28rem]">
+                {OPERATION_ITEM_IDS.map((item) => (
+                  <li key={item} className="flex items-start gap-2 text-sm text-zinc-700 dark:text-neutral-300">
+                    <Check className="size-4 text-violet-600 dark:text-violet-300 mt-0.5 shrink-0" />
+                    <span>{t(`operationIncludes.items.${item}`)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </motion.div>
 
         <motion.div
           initial={{ opacity: 0, y: 20 }}
