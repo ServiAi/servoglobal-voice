@@ -25,7 +25,7 @@ export function Footer() {
               {t('tagline')}
             </p>
             <p className="text-xs text-zinc-400 dark:text-neutral-600 mt-2 font-medium">
-              Respaldado por +25 años en voz
+              {t('proofLine')}
             </p>
           </div>
 
@@ -47,9 +47,9 @@ export function Footer() {
               {t('product')}
             </h4>
             <ul className="space-y-2 text-sm text-zinc-600 dark:text-neutral-400">
-              <li><Link href="#casos" className="hover:text-violet-600 transition-colors">Casos</Link></li>
-              <li><Link href="#precios" className="hover:text-violet-600 transition-colors">Precios</Link></li>
-              <li><Link href="#demos" className="hover:text-violet-600 transition-colors">Demo</Link></li>
+              <li><Link href="#casos" className="hover:text-violet-600 transition-colors">{t('links.cases')}</Link></li>
+              <li><Link href="#precios" className="hover:text-violet-600 transition-colors">{t('links.pricing')}</Link></li>
+              <li><Link href="#demos" className="hover:text-violet-600 transition-colors">{t('links.demo')}</Link></li>
               <li>
                 <ContactModal>
                   <button className="hover:text-violet-600 transition-colors text-left">
@@ -65,7 +65,7 @@ export function Footer() {
           <div>{t('copyright')}</div>
           <div className="flex gap-4">
             <Link href={`/${locale}/politica-de-privacidad`} className="hover:text-zinc-900 dark:hover:text-white transition-colors">
-              Política de Privacidad
+              {t('privacy')}
             </Link>
           </div>
         </div>
