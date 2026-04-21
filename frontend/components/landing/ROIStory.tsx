@@ -1,6 +1,7 @@
 'use client';
 
-import { motion } from 'framer-motion';
+import { motion, useScroll, useTransform } from 'framer-motion';
+import { useRef } from 'react';
 import { BarChart3, CalendarCheck, Clock3, Users } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
@@ -13,17 +14,30 @@ const ROI_ITEMS = [
 
 export function ROIStory() {
   const t = useTranslations('roi');
+  const containerRef = useRef<HTMLElement>(null);
+
+  const { scrollYProgress } = useScroll({
+    target: containerRef,
+    offset: ["start end", "end start"]
+  });
+
+  const yLeft = useTransform(scrollYProgress, [0, 1], [-50, 50]);
+  const yRight = useTransform(scrollYProgress, [0, 1], [50, -50]);
+  const yBlob = useTransform(scrollYProgress, [0, 1], [80, -80]);
 
   return (
-    <section className="py-24 bg-white dark:bg-zinc-950 border-b border-zinc-200 dark:border-white/5 transition-colors duration-300">
-      <div className="container mx-auto px-4 md:px-6">
+    <section ref={containerRef} className="relative py-24 bg-white dark:bg-zinc-950 border-b border-zinc-200 dark:border-white/5 transition-colors duration-300 overflow-hidden">
+      {/* Decorative Parallax Blob */}
+      <motion.div style={{ y: yBlob }} className="absolute top-1/4 -left-20 w-80 h-80 bg-violet-600/5 dark:bg-violet-600/10 rounded-full blur-[100px] pointer-events-none -z-10" />
+
+      <div className="container mx-auto px-4 md:px-6 relative z-10">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           className="grid gap-10 lg:grid-cols-[0.9fr_1.1fr] lg:items-center"
         >
-          <div>
+          <motion.div style={{ y: yLeft }}>
             <p className="text-sm font-semibold uppercase tracking-wider text-violet-700 dark:text-violet-300">
               {t('eyebrow')}
             </p>
@@ -33,9 +47,9 @@ export function ROIStory() {
             <p className="mt-5 text-lg leading-relaxed text-zinc-600 dark:text-neutral-400">
               {t('description')}
             </p>
-          </div>
+          </motion.div>
 
-          <div className="rounded-3xl border border-zinc-200 dark:border-white/10 bg-zinc-50 dark:bg-zinc-900 p-6 md:p-8">
+          <motion.div style={{ y: yRight }} className="rounded-3xl border border-zinc-200 dark:border-white/10 bg-zinc-50 dark:bg-zinc-900 p-6 md:p-8">
             <h3 className="text-xl font-bold text-zinc-900 dark:text-white">
               {t('boxTitle')}
             </h3>
@@ -57,7 +71,7 @@ export function ROIStory() {
                 </div>
               ))}
             </div>
-          </div>
+          </motion.div>
         </motion.div>
       </div>
     </section>
