@@ -1,10 +1,15 @@
 'use client';
 
-import { motion, useScroll, useTransform } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { useRef } from 'react';
 import { ArrowRight, Briefcase, CalendarCheck, CheckCircle2, Headphones, ShoppingBag, Sparkles, Target } from 'lucide-react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
+import {
+  sectionDesktop,
+  useParallaxLayer,
+  useSectionParallax,
+} from '@/hooks/useSectionParallax';
 
 const RESULT_IDS = ['scheduling', 'leads', 'triage'] as const;
 const PRIORITY_VERTICAL_IDS = ['realEstateLeads', 'healthBooking', 'collectionsRecovery'] as const;
@@ -36,14 +41,16 @@ export function UseCases() {
   const t = useTranslations('useCases');
   const containerRef = useRef<HTMLElement>(null);
   
-  const { scrollYProgress } = useScroll({
+  const { profile, scrollYProgress } = useSectionParallax({
     target: containerRef,
-    offset: ["start end", "end start"]
+    desktopProfile: sectionDesktop,
   });
-
-  const yTitle = useTransform(scrollYProgress, [0, 1], [-80, 80]);
-  const yFloating1 = useTransform(scrollYProgress, [0, 1], [-150, 150]);
-  const yFloating2 = useTransform(scrollYProgress, [0, 1], [150, -150]);
+  const yTitle = useParallaxLayer(scrollYProgress, profile, 'content');
+  const yFloating1 = useParallaxLayer(scrollYProgress, profile, 'background');
+  const yFloating2 = useParallaxLayer(scrollYProgress, profile, 'background', -1);
+  const yPriority = useParallaxLayer(scrollYProgress, profile, 'accent');
+  const yResults = useParallaxLayer(scrollYProgress, profile, 'accent');
+  const ySectors = useParallaxLayer(scrollYProgress, profile, 'content');
 
   return (
     <section ref={containerRef} id="casos" className="relative py-24 bg-zinc-50 dark:bg-zinc-950 transition-colors duration-300 overflow-hidden z-0">
@@ -62,7 +69,7 @@ export function UseCases() {
           </p>
         </motion.div>
 
-        <div className="mb-16">
+        <motion.div style={{ y: yPriority }} className="mb-16">
           <div className="mb-7 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
             <div>
               <p className="text-sm font-semibold uppercase tracking-wider text-violet-700 dark:text-violet-300">
@@ -117,18 +124,18 @@ export function UseCases() {
               );
             })}
           </div>
-        </div>
+        </motion.div>
 
-        <div className="mb-8 text-center">
+        <motion.div style={{ y: yResults }} className="mb-8 text-center">
           <h3 className="text-2xl md:text-3xl font-bold text-zinc-900 dark:text-white">
             {t('resultsTitle')}
           </h3>
           <p className="mt-3 text-zinc-600 dark:text-neutral-400">
             {t('resultsSubtitle')}
           </p>
-        </div>
+        </motion.div>
 
-        <div className="grid md:grid-cols-3 gap-6 lg:gap-8 mb-14">
+        <motion.div style={{ y: yResults }} className="grid md:grid-cols-3 gap-6 lg:gap-8 mb-14">
           {RESULT_IDS.map((id, idx) => {
             const Icon = RESULT_ICONS[id];
             const tasks = t.raw(`results.${id}.tasks`) as string[];
@@ -168,13 +175,14 @@ export function UseCases() {
                   <ArrowRight className="size-4" />
                 </Link>
               </motion.article>
-            );
-          })}
-        </div>
+              );
+            })}
+        </motion.div>
 
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
+          style={{ y: ySectors }}
+          initial={{ opacity: 0, scale: 0.98 }}
+          whileInView={{ opacity: 1, scale: 1 }}
           viewport={{ once: true }}
           className="rounded-3xl border border-zinc-200 dark:border-white/10 bg-white dark:bg-zinc-900 p-6 md:p-8"
         >

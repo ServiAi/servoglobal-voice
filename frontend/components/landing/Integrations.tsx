@@ -1,8 +1,13 @@
 'use client';
 
-import { motion, useScroll, useTransform } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { useRef } from 'react';
 import { useTranslations } from 'next-intl';
+import {
+  sectionDesktop,
+  useParallaxLayer,
+  useSectionParallax,
+} from '@/hooks/useSectionParallax';
 
 const INTEGRATIONS = {
   "channels": ["Telefonía / VoIP", "Mensajería", "Web Chat"],
@@ -17,14 +22,13 @@ export function Integrations() {
   const t = useTranslations('integrations');
   const containerRef = useRef<HTMLElement>(null);
 
-  const { scrollYProgress } = useScroll({
+  const { profile, scrollYProgress } = useSectionParallax({
     target: containerRef,
-    offset: ["start end", "end start"]
+    desktopProfile: sectionDesktop,
   });
-
-  const yLeft = useTransform(scrollYProgress, [0, 1], [-60, 60]);
-  const yRight = useTransform(scrollYProgress, [0, 1], [60, -60]);
-  const yBlob = useTransform(scrollYProgress, [0, 1], [-120, 120]);
+  const yLeft = useParallaxLayer(scrollYProgress, profile, 'content');
+  const yRight = useParallaxLayer(scrollYProgress, profile, 'accent');
+  const yBlob = useParallaxLayer(scrollYProgress, profile, 'background', -1);
 
   return (
     <section ref={containerRef} id="integraciones" className="relative py-24 bg-white dark:bg-black border-t border-zinc-200 dark:border-white/5 transition-colors duration-300 overflow-hidden">

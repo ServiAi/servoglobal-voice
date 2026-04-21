@@ -1,9 +1,14 @@
 'use client';
 
-import { motion, useScroll, useTransform } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { useRef } from 'react';
 import { BarChart3, CalendarCheck, Clock3, Users } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import {
+  sectionDesktop,
+  useParallaxLayer,
+  useSectionParallax,
+} from '@/hooks/useSectionParallax';
 
 const ROI_ITEMS = [
   { key: 'response', icon: Clock3 },
@@ -16,14 +21,13 @@ export function ROIStory() {
   const t = useTranslations('roi');
   const containerRef = useRef<HTMLElement>(null);
 
-  const { scrollYProgress } = useScroll({
+  const { profile, scrollYProgress } = useSectionParallax({
     target: containerRef,
-    offset: ["start end", "end start"]
+    desktopProfile: sectionDesktop,
   });
-
-  const yLeft = useTransform(scrollYProgress, [0, 1], [-50, 50]);
-  const yRight = useTransform(scrollYProgress, [0, 1], [50, -50]);
-  const yBlob = useTransform(scrollYProgress, [0, 1], [80, -80]);
+  const yLeft = useParallaxLayer(scrollYProgress, profile, 'content');
+  const yRight = useParallaxLayer(scrollYProgress, profile, 'accent');
+  const yBlob = useParallaxLayer(scrollYProgress, profile, 'background', -1);
 
   return (
     <section ref={containerRef} className="relative py-24 bg-white dark:bg-zinc-950 border-b border-zinc-200 dark:border-white/5 transition-colors duration-300 overflow-hidden">

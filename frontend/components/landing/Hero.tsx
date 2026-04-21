@@ -1,10 +1,18 @@
 'use client';
 
 import Link from 'next/link';
-import { motion, useScroll, useTransform } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { ArrowRight, Sparkles } from 'lucide-react';
 import dynamic from 'next/dynamic';
+import { useRef } from 'react';
 import { useTranslations } from 'next-intl';
+import {
+  heroDesktop,
+  useParallaxLayer,
+  useParallaxOpacity,
+  useParallaxScale,
+  useSectionParallax,
+} from '@/hooks/useSectionParallax';
 
 const HeroFuturistic = dynamic(() => import('../hero-futuristic').then(mod => mod.HeroFuturistic), { 
   ssr: false,
@@ -18,28 +26,47 @@ const AnimatedShaderBackground = dynamic(() => import('../ui/animated-shader-bac
 
 export function Hero() {
   const t = useTranslations('hero');
-  const { scrollY } = useScroll();
-  const yBg = useTransform(scrollY, [0, 1000], [0, 200]);
-  const yText = useTransform(scrollY, [0, 1000], [0, -100]);
-  const ySphere = useTransform(scrollY, [0, 1000], [0, -50]);
-  const opacityText = useTransform(scrollY, [0, 800], [1, 0]);
+  const sectionRef = useRef<HTMLElement>(null);
+  const { prefersReducedMotion, profile, scrollYProgress } = useSectionParallax({
+    target: sectionRef,
+    desktopProfile: heroDesktop,
+  });
+  const yBackground = useParallaxLayer(scrollYProgress, profile, 'background');
+  const yBlob = useParallaxLayer(scrollYProgress, profile, 'background', -1);
+  const yText = useParallaxLayer(scrollYProgress, profile, 'accent');
+  const ySphere = useParallaxLayer(scrollYProgress, profile, 'content');
+  const opacityText = useParallaxOpacity(scrollYProgress, profile);
+  const scaleText = useParallaxScale(scrollYProgress, profile);
   
   return (
-    <section className="relative min-h-[80vh] md:min-h-screen flex items-center bg-white dark:bg-black overflow-hidden pt-20 pb-8 md:pb-0 transition-colors duration-300">
+    <section
+      ref={sectionRef}
+      className="relative min-h-[80vh] md:min-h-screen flex items-center bg-white dark:bg-black overflow-hidden pt-20 pb-8 md:pb-0 transition-colors duration-300"
+    >
       {/* Mobile Animated Background - Only visible on mobile */}
       <div className="md:hidden absolute inset-0 z-0 opacity-10 dark:opacity-100">
-        <AnimatedShaderBackground />
+        {!prefersReducedMotion ? <AnimatedShaderBackground /> : null}
       </div>
       
       {/* Desktop Background Effects */}
-      <motion.div style={{ y: yBg }} className="hidden md:block absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-violet-100/50 via-white to-white dark:from-violet-900/20 dark:via-black dark:to-black opacity-60 dark:opacity-40" />
-      <motion.div style={{ y: yBg }} className="hidden md:block absolute top-1/4 right-0 w-[600px] h-[600px] bg-violet-600/10 rounded-full blur-[120px] pointer-events-none" />
+      <motion.div
+        style={{ y: yBackground }}
+        className="hidden md:block absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-violet-100/50 via-white to-white dark:from-violet-900/20 dark:via-black dark:to-black opacity-60 dark:opacity-40"
+      />
+      <motion.div
+        style={{ y: yBlob }}
+        className="hidden md:block absolute top-1/4 right-0 w-[600px] h-[600px] bg-violet-600/10 rounded-full blur-[120px] pointer-events-none"
+      />
+      <motion.div
+        style={{ y: yBackground }}
+        className="hidden md:block absolute -bottom-20 left-[12%] w-[420px] h-[420px] bg-fuchsia-500/10 dark:bg-fuchsia-500/15 rounded-full blur-[120px] pointer-events-none"
+      />
 
       <div className="container mx-auto px-4 md:px-6 relative z-10 grid lg:grid-cols-2 gap-12 items-center">
         
         {/* LEFT COLUMN: TEXT CONTENT */}
         <motion.div 
-           style={{ y: yText, opacity: opacityText }}
+           style={{ y: yText, opacity: opacityText, scale: scaleText }}
            className="flex flex-col items-center lg:items-start text-center lg:text-left"
         >
           <motion.div

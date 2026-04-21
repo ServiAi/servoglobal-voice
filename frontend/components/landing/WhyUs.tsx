@@ -1,8 +1,14 @@
 'use client';
 
 import { motion } from 'framer-motion';
+import { useRef } from 'react';
 import { Phone, Plug, Users, Sparkles, Server, HeartHandshake } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import {
+  sectionDesktop,
+  useParallaxLayer,
+  useSectionParallax,
+} from '@/hooks/useSectionParallax';
 
 const FEATURES = [
   { key: 'voiceExperience', icon: Phone, color: 'emerald' },
@@ -69,14 +75,27 @@ const colorMap: Record<string, { bg: string; icon: string; border: string }> = {
 
 export function WhyUs() {
   const t = useTranslations('whyUs');
+  const containerRef = useRef<HTMLElement>(null);
+  const { profile, scrollYProgress } = useSectionParallax({
+    target: containerRef,
+    desktopProfile: sectionDesktop,
+  });
+  const yHeader = useParallaxLayer(scrollYProgress, profile, 'content');
+  const yBlob = useParallaxLayer(scrollYProgress, profile, 'background', -1);
 
   return (
-    <section className="py-24 bg-white dark:bg-zinc-950 transition-colors duration-300">
-      <div className="container mx-auto px-4 md:px-6">
+    <section ref={containerRef} className="relative py-24 bg-white dark:bg-zinc-950 transition-colors duration-300 overflow-hidden">
+      <motion.div
+        style={{ y: yBlob }}
+        className="absolute -top-20 left-1/2 h-[30rem] w-[30rem] -translate-x-1/2 rounded-full bg-violet-600/5 dark:bg-violet-600/10 blur-[120px] pointer-events-none -z-10"
+      />
+
+      <div className="container mx-auto px-4 md:px-6 relative z-10">
         {/* Header */}
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
+          style={{ y: yHeader }}
+          initial={{ opacity: 0, scale: 0.98 }}
+          whileInView={{ opacity: 1, scale: 1 }}
           viewport={{ once: true, margin: '-100px' }}
           transition={{ duration: 0.6 }}
           className="text-center mb-16"
