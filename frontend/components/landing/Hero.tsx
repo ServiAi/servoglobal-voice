@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { motion } from 'framer-motion';
+import { motion, useScroll, useTransform } from 'framer-motion';
 import { ArrowRight, Sparkles } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { useTranslations } from 'next-intl';
@@ -18,6 +18,11 @@ const AnimatedShaderBackground = dynamic(() => import('../ui/animated-shader-bac
 
 export function Hero() {
   const t = useTranslations('hero');
+  const { scrollY } = useScroll();
+  const yBg = useTransform(scrollY, [0, 1000], [0, 200]);
+  const yText = useTransform(scrollY, [0, 1000], [0, -100]);
+  const ySphere = useTransform(scrollY, [0, 1000], [0, -50]);
+  const opacityText = useTransform(scrollY, [0, 800], [1, 0]);
   
   return (
     <section className="relative min-h-[80vh] md:min-h-screen flex items-center bg-white dark:bg-black overflow-hidden pt-20 pb-8 md:pb-0 transition-colors duration-300">
@@ -27,13 +32,16 @@ export function Hero() {
       </div>
       
       {/* Desktop Background Effects */}
-      <div className="hidden md:block absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-violet-100/50 via-white to-white dark:from-violet-900/20 dark:via-black dark:to-black opacity-60 dark:opacity-40" />
-      <div className="hidden md:block absolute top-1/4 right-0 w-[600px] h-[600px] bg-violet-600/10 rounded-full blur-[120px] pointer-events-none" />
+      <motion.div style={{ y: yBg }} className="hidden md:block absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-violet-100/50 via-white to-white dark:from-violet-900/20 dark:via-black dark:to-black opacity-60 dark:opacity-40" />
+      <motion.div style={{ y: yBg }} className="hidden md:block absolute top-1/4 right-0 w-[600px] h-[600px] bg-violet-600/10 rounded-full blur-[120px] pointer-events-none" />
 
       <div className="container mx-auto px-4 md:px-6 relative z-10 grid lg:grid-cols-2 gap-12 items-center">
         
         {/* LEFT COLUMN: TEXT CONTENT */}
-        <div className="flex flex-col items-center lg:items-start text-center lg:text-left">
+        <motion.div 
+           style={{ y: yText, opacity: opacityText }}
+           className="flex flex-col items-center lg:items-start text-center lg:text-left"
+        >
           <motion.div
              initial={{ opacity: 0, x: -20 }}
              animate={{ opacity: 1, x: 0 }}
@@ -108,11 +116,12 @@ export function Hero() {
                 {t('ctaSecondary')}
               </Link>
           </motion.div>
-        </div>
+        </motion.div>
 
         {/* RIGHT COLUMN: HERO FUTURISTIC - Hidden on mobile, visible from md */}
         <div className="hidden md:flex relative items-center justify-center h-full w-full">
              <motion.div
+                style={{ y: ySphere }}
                 initial={{ opacity: 0, scale: 0.8 }}
                 animate={{ opacity: 1, scale: 1.10 }}
                 transition={{ duration: 1.2, delay: 0.4 }}
