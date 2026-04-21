@@ -1,6 +1,7 @@
-﻿'use client';
+'use client';
 
-import { motion } from 'framer-motion';
+import { motion, useScroll, useTransform } from 'framer-motion';
+import { useRef } from 'react';
 import { ArrowRight, Briefcase, CalendarCheck, CheckCircle2, Headphones, ShoppingBag, Sparkles, Target } from 'lucide-react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
@@ -33,18 +34,33 @@ const PRIORITY_ICONS = {
 
 export function UseCases() {
   const t = useTranslations('useCases');
+  const containerRef = useRef<HTMLElement>(null);
+  
+  const { scrollYProgress } = useScroll({
+    target: containerRef,
+    offset: ["start end", "end start"]
+  });
+
+  const yTitle = useTransform(scrollYProgress, [0, 1], [-80, 80]);
+  const yFloating1 = useTransform(scrollYProgress, [0, 1], [-150, 150]);
+  const yFloating2 = useTransform(scrollYProgress, [0, 1], [150, -150]);
 
   return (
-    <section id="casos" className="py-24 bg-zinc-50 dark:bg-zinc-950 transition-colors duration-300">
-      <div className="container mx-auto px-4 md:px-6">
-        <div className="text-center max-w-3xl mx-auto mb-14">
+    <section ref={containerRef} id="casos" className="relative py-24 bg-zinc-50 dark:bg-zinc-950 transition-colors duration-300 overflow-hidden z-0">
+      
+      {/* Decorative Parallax Backgrounds */}
+      <motion.div style={{ y: yFloating1 }} className="absolute -top-10 -left-20 w-96 h-96 bg-violet-600/5 dark:bg-violet-600/10 rounded-full blur-[100px] -z-10 pointer-events-none" />
+      <motion.div style={{ y: yFloating2 }} className="absolute bottom-20 -right-20 w-[30rem] h-[30rem] bg-fuchsia-600/5 dark:bg-fuchsia-600/10 rounded-full blur-[120px] -z-10 pointer-events-none" />
+
+      <div className="container mx-auto px-4 md:px-6 relative z-10">
+        <motion.div style={{ y: yTitle }} className="text-center max-w-3xl mx-auto mb-14">
           <h2 className="text-3xl md:text-5xl font-bold text-zinc-900 dark:text-white mb-6">
             {t('title')}
           </h2>
           <p className="text-lg text-zinc-600 dark:text-neutral-400">
             {t('subtitle')}
           </p>
-        </div>
+        </motion.div>
 
         <div className="mb-16">
           <div className="mb-7 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
