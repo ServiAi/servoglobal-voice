@@ -127,6 +127,13 @@ async def create_sip_call_via_pbx(
 
     url = f"https://api.ultravox.ai/api/agents/{final_agent_id}/calls"
 
+    logger.info(
+        "Creating Ultravox SIP call via PBX | pbx_uri=%s | username=%s | agent_id=%s",
+        pbx_uri,
+        settings.UVX_SIP_USERNAME,
+        final_agent_id,
+    )
+
     try:
         async with httpx.AsyncClient() as client:
             r = await client.post(url, json=payload, headers=headers, timeout=20.0)
@@ -205,6 +212,13 @@ async def create_scheduled_sip_call_via_pbx(
     }
 
     url = f"https://api.ultravox.ai/api/agents/{final_agent_id}/scheduled_batches"
+
+    logger.info(
+        "Creating Ultravox SIP call via PBX | pbx_uri=%s | username=%s | agent_id=%s",
+        pbx_uri,
+        settings.UVX_SIP_USERNAME,
+        final_agent_id,
+    )
 
     try:
         async with httpx.AsyncClient() as client:
