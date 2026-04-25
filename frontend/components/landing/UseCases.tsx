@@ -16,26 +16,59 @@ const PRIORITY_VERTICAL_IDS = ['realEstateLeads', 'healthBooking', 'collectionsR
 const OTHER_SECTOR_IDS = ['atencion', 'soporte', 'ventas', 'reclutamiento', 'ecommerce'] as const;
 
 const RESULT_ICONS = {
-  scheduling: CalendarCheck,
-  leads: Target,
-  triage: Headphones,
+  scheduling: { icon: CalendarCheck, color: 'blue' },
+  leads: { icon: Target, color: 'violet' },
+  triage: { icon: Headphones, color: 'cyan' },
 } as const;
 
 const SECTOR_ICONS = {
-  atencion: Headphones,
-  soporte: CheckCircle2,
-  cobranza: Sparkles,
-  ventas: Target,
-  reclutamiento: Briefcase,
-  reservas: CalendarCheck,
-  ecommerce: ShoppingBag,
+  atencion: { icon: Headphones, color: 'emerald' },
+  soporte: { icon: CheckCircle2, color: 'blue' },
+  cobranza: { icon: Sparkles, color: 'rose' },
+  ventas: { icon: Target, color: 'amber' },
+  reclutamiento: { icon: Briefcase, color: 'violet' },
+  reservas: { icon: CalendarCheck, color: 'cyan' },
+  ecommerce: { icon: ShoppingBag, color: 'rose' },
 } as const;
 
 const PRIORITY_ICONS = {
-  realEstateLeads: Briefcase,
-  healthBooking: CalendarCheck,
-  collectionsRecovery: Sparkles,
+  realEstateLeads: { icon: Briefcase, color: 'amber' },
+  healthBooking: { icon: CalendarCheck, color: 'emerald' },
+  collectionsRecovery: { icon: Sparkles, color: 'rose' },
 } as const;
+
+const ucColorMap: Record<string, { bg: string; icon: string; glow: string }> = {
+  emerald: {
+    bg: 'bg-emerald-100 dark:bg-emerald-950/60',
+    icon: 'text-emerald-600 dark:text-emerald-400',
+    glow: 'shadow-md shadow-emerald-200/50 dark:shadow-emerald-500/20',
+  },
+  blue: {
+    bg: 'bg-blue-100 dark:bg-blue-950/60',
+    icon: 'text-blue-600 dark:text-blue-400',
+    glow: 'shadow-md shadow-blue-200/50 dark:shadow-blue-500/20',
+  },
+  violet: {
+    bg: 'bg-violet-100 dark:bg-violet-950/60',
+    icon: 'text-violet-600 dark:text-violet-400',
+    glow: 'shadow-md shadow-violet-200/50 dark:shadow-violet-500/20',
+  },
+  amber: {
+    bg: 'bg-amber-100 dark:bg-amber-950/60',
+    icon: 'text-amber-600 dark:text-amber-400',
+    glow: 'shadow-md shadow-amber-200/50 dark:shadow-amber-500/20',
+  },
+  rose: {
+    bg: 'bg-rose-100 dark:bg-rose-950/60',
+    icon: 'text-rose-600 dark:text-rose-400',
+    glow: 'shadow-md shadow-rose-200/50 dark:shadow-rose-500/20',
+  },
+  cyan: {
+    bg: 'bg-cyan-100 dark:bg-cyan-950/60',
+    icon: 'text-cyan-600 dark:text-cyan-400',
+    glow: 'shadow-md shadow-cyan-200/50 dark:shadow-cyan-500/20',
+  },
+};
 
 export function UseCases() {
   const t = useTranslations('useCases');
@@ -86,7 +119,8 @@ export function UseCases() {
 
           <div className="grid gap-6 lg:grid-cols-3">
             {PRIORITY_VERTICAL_IDS.map((id, idx) => {
-              const Icon = PRIORITY_ICONS[id];
+              const { icon: Icon, color } = PRIORITY_ICONS[id];
+              const colors = ucColorMap[color];
               const tasks = t.raw(`priorityVerticals.${id}.tasks`) as string[];
 
               return (
@@ -99,8 +133,8 @@ export function UseCases() {
                   className="rounded-3xl border border-violet-200 dark:border-violet-500/20 bg-white dark:bg-zinc-900 p-7 shadow-sm dark:shadow-none"
                 >
                   <div className="flex items-start justify-between gap-4">
-                    <div className="size-12 rounded-xl bg-violet-100 dark:bg-violet-950/40 flex items-center justify-center">
-                      <Icon className="size-6 text-violet-700 dark:text-violet-300" />
+                    <div className={`size-12 rounded-xl ${colors.bg} ${colors.glow} flex items-center justify-center`}>
+                      <Icon className={`size-6 ${colors.icon}`} />
                     </div>
                     <span className="rounded-full bg-zinc-100 dark:bg-white/5 px-3 py-1 text-xs font-semibold text-zinc-600 dark:text-neutral-300">
                       {t('priorityBadge')}
@@ -137,7 +171,8 @@ export function UseCases() {
 
         <motion.div style={{ y: yResults }} className="grid md:grid-cols-3 gap-6 lg:gap-8 mb-14">
           {RESULT_IDS.map((id, idx) => {
-            const Icon = RESULT_ICONS[id];
+            const { icon: Icon, color } = RESULT_ICONS[id];
+            const colors = ucColorMap[color];
             const tasks = t.raw(`results.${id}.tasks`) as string[];
             const href = id === 'scheduling' ? '#agendar' : '#demos';
 
@@ -150,8 +185,8 @@ export function UseCases() {
                 transition={{ delay: idx * 0.1 }}
                 className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 rounded-3xl p-7 flex flex-col shadow-sm dark:shadow-none hover:border-violet-300 dark:hover:border-violet-500/30 transition-colors"
               >
-                <div className="size-12 rounded-xl bg-violet-100 dark:bg-violet-950/40 flex items-center justify-center mb-5">
-                  <Icon className="size-6 text-violet-600 dark:text-violet-300" />
+                <div className={`size-12 rounded-xl ${colors.bg} ${colors.glow} flex items-center justify-center mb-5`}>
+                  <Icon className={`size-6 ${colors.icon}`} />
                 </div>
                 <h3 className="text-2xl font-bold text-zinc-900 dark:text-white mb-3">
                   {t(`results.${id}.title`)}
@@ -206,13 +241,16 @@ export function UseCases() {
 
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
             {OTHER_SECTOR_IDS.map((id) => {
-              const Icon = SECTOR_ICONS[id];
+              const { icon: Icon, color } = SECTOR_ICONS[id];
+              const colors = ucColorMap[color];
               return (
                 <div
                   key={id}
                   className="rounded-xl border border-zinc-200 dark:border-white/10 bg-zinc-50 dark:bg-black/20 p-4"
                 >
-                  <Icon className="size-5 text-violet-600 dark:text-violet-300 mb-3" />
+                  <div className={`size-9 rounded-lg ${colors.bg} ${colors.glow} flex items-center justify-center mb-3`}>
+                    <Icon className={`size-5 ${colors.icon}`} />
+                  </div>
                   <p className="font-semibold text-zinc-900 dark:text-white text-sm">
                     {t(`verticals.${id}.title`)}
                   </p>

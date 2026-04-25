@@ -40,36 +40,42 @@ const itemVariants = {
   },
 };
 
-const colorMap: Record<string, { bg: string; icon: string; border: string }> = {
+const colorMap: Record<string, { bg: string; icon: string; border: string; glow: string }> = {
   emerald: {
-    bg: 'bg-emerald-100 dark:bg-emerald-900/30',
+    bg: 'bg-emerald-100 dark:bg-emerald-950/60',
     icon: 'text-emerald-600 dark:text-emerald-400',
     border: 'border-emerald-200 dark:border-emerald-500/20',
+    glow: 'shadow-md shadow-emerald-200/50 dark:shadow-emerald-500/20',
   },
   blue: {
-    bg: 'bg-blue-100 dark:bg-blue-900/30',
+    bg: 'bg-blue-100 dark:bg-blue-950/60',
     icon: 'text-blue-600 dark:text-blue-400',
     border: 'border-blue-200 dark:border-blue-500/20',
+    glow: 'shadow-md shadow-blue-200/50 dark:shadow-blue-500/20',
   },
   violet: {
-    bg: 'bg-violet-100 dark:bg-violet-900/30',
+    bg: 'bg-violet-100 dark:bg-violet-950/60',
     icon: 'text-violet-600 dark:text-violet-400',
     border: 'border-violet-200 dark:border-violet-500/20',
+    glow: 'shadow-md shadow-violet-200/50 dark:shadow-violet-500/20',
   },
   amber: {
-    bg: 'bg-amber-100 dark:bg-amber-900/30',
+    bg: 'bg-amber-100 dark:bg-amber-950/60',
     icon: 'text-amber-600 dark:text-amber-400',
     border: 'border-amber-200 dark:border-amber-500/20',
+    glow: 'shadow-md shadow-amber-200/50 dark:shadow-amber-500/20',
   },
   rose: {
-    bg: 'bg-rose-100 dark:bg-rose-900/30',
+    bg: 'bg-rose-100 dark:bg-rose-950/60',
     icon: 'text-rose-600 dark:text-rose-400',
     border: 'border-rose-200 dark:border-rose-500/20',
+    glow: 'shadow-md shadow-rose-200/50 dark:shadow-rose-500/20',
   },
   cyan: {
-    bg: 'bg-cyan-100 dark:bg-cyan-900/30',
+    bg: 'bg-cyan-100 dark:bg-cyan-950/60',
     icon: 'text-cyan-600 dark:text-cyan-400',
     border: 'border-cyan-200 dark:border-cyan-500/20',
+    glow: 'shadow-md shadow-cyan-200/50 dark:shadow-cyan-500/20',
   },
 };
 
@@ -126,7 +132,7 @@ export function WhyUs() {
               >
                 {/* Icon */}
                 <div
-                  className={`size-14 rounded-xl ${colors.bg} flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300`}
+                  className={`size-14 rounded-xl ${colors.bg} ${colors.glow} flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300`}
                 >
                   <Icon className={`size-7 ${colors.icon}`} />
                 </div>
