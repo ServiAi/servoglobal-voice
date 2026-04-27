@@ -48,7 +48,7 @@
     "cases": "Cases",
     "howItWorks": "How it works",
     "integrations": "Integrations",
-    "demo": "Demo",
+    "demo": "Servi-IA in action",
     "pricing": "Pricing",
     "contact": "Contact",
     "cta": "Book consultation"
@@ -72,7 +72,7 @@
     "microcopySetup": "Initial diagnosis → Functional pilot → Continuous optimization.",
     "microcopySuperPlus": "We do not hand over an empty platform; we implement Servi-IA on top of your real operation.",
     "ctaPrimary": "Book Pre-consultation",
-    "ctaSecondary": "Try Demo (Call Now)"
+    "ctaSecondary": "Try Servi-IA in action"
   },
   "demoCommon": {
     "fillAllFields": "Please complete all fields to continue.",
@@ -309,7 +309,7 @@
           "Call with context to validate intent and urgency",
           "Log the lead and prioritize commercial follow-up"
         ],
-        "cta": "Try demo"
+        "cta": "Try voice experience"
       },
       "triage": {
         "title": "Automated service / triage",
@@ -319,7 +319,7 @@
           "Answer FAQs with consistent criteria",
           "Create context for support, sales, or back office"
         ],
-        "cta": "See demo"
+        "cta": "See Servi-IA in action"
       }
     }
   },
@@ -590,21 +590,27 @@
     "consentRequired": "You must authorize personal data processing to continue."
   },
   "voiceDemo": {
-    "title": "Try Click-to-Servi-IA-Call now",
-    "subtitle": "Try the funnel: form → Servi-IA call with context → close.",
-    "disclaimer": "This demo is an example. In the consultation we design your real flow with your rules and integrations.",
-    "inboundTab": "Click-to-Servi-IA-Call (Web)",
-    "outboundTab": "Servi-IA calls you now"
+    "title": "Try Servi-IA in action",
+    "subtitle": "Listen to a real voice experience and, if your operation requires it, request a call or book a pre-consultation with ServiGlobal · IA.",
+    "disclaimer": "This experience shows a real voice flow. The final implementation is designed in the pre-consultation around your rules, channels, and integrations.",
+    "exploreLabel": "Explore the experience",
+    "exploreText": "Try how Servi-IA receives form context and speaks by voice in a guided flow.",
+    "commercialLabel": "Move commercially",
+    "commercialText": "Request a contextual call or book a pre-consultation to shape your real use case.",
+    "inboundTab": "Try Click-to-Call experience",
+    "outboundTab": "Request a Servi-IA call",
+    "inboundHint": "Functional experience to see how Servi-IA can operate from your website, campaigns, or forms.",
+    "outboundHint": "Callback request to experience how Servi-IA can initiate contact with context."
   },
   "demoInbound": {
     "callEnded": "Interaction ended!",
-    "callEndedDesc": "That's how Click-to-Servi-IA-Call works. Ready to design your real flow?",
+    "callEndedDesc": "This sample shows how Servi-IA can speak with context from a form. In the pre-consultation we design your real flow with rules, channels, and integrations.",
     "scheduleConsultation": "Book Consultation",
     "tryAgain": "Try again",
-    "simulatorVersion": "Click-to-Servi-IA-Call Demo",
+    "simulatorVersion": "Click-to-Servi-IA-Call Experience",
     "online": "Online",
-    "webCall": "Servi-IA Call (Demo)",
-    "selectAgentDesc": "Fill the form and connect with Servi-IA with context.",
+    "webCall": "Click-to-Call experience with Servi-IA",
+    "selectAgentDesc": "Complete the form to try a contextual voice call, similar to how it could operate from your website or campaigns.",
     "agentType": "Vertical",
     "agentSales": "Sales",
     "agentSupport": "Support",
@@ -622,19 +628,19 @@
   },
   "demoOutbound": {
     "requestCompleted": "Request sent",
-    "requestCompletedDesc": "We received your data. Servi-IA will contact you with your form's context.",
+    "requestCompletedDesc": "We received your data. This request shows how Servi-IA can initiate contact with context; the pre-consultation defines the real flow for your operation.",
     "scheduleConsultation": "Book consultation",
     "back": "Back",
-    "weCallYou": "Servi-IA calls you now",
-    "weCallYouDesc": "Leave your details, fill the form and Servi-IA calls you with context.",
+    "weCallYou": "Request a call with Servi-IA",
+    "weCallYouDesc": "Leave your details to experience a contextual callback and move toward a pre-consultation if your case applies.",
     "name": "Name",
     "namePlaceholder": "Your name",
     "email": "Email",
     "emailPlaceholder": "you@email.com",
     "phone": "Phone",
     "phonePlaceholder": "Phone",
-    "wantCall": "Request Servi-IA call",
-    "submitDisclaimer": "By submitting, you agree to be contacted. Your data will only be used for this interaction.",
+    "wantCall": "Request call now",
+    "submitDisclaimer": "By submitting, you request a functional interaction with Servi-IA. Your data will only be used for this call and related commercial follow-up.",
     "processingRequest": "Generating Context Pack...",
     "simulatingCall": "Request Received",
     "agentDialing": "Servi-IA will call you with your form's context.",
@@ -642,7 +648,7 @@
     "callScheduled": "Callback Scheduled!",
     "callScheduledDesc": "We will call you at",
     "scheduleAnother": "Schedule another",
-    "callNow": "Call Now",
+    "callNow": "Call now",
     "scheduleLater": "Schedule for later",
     "preferredTime": "Preferred Time",
     "scheduleCall": "Schedule Callback",
@@ -650,7 +656,7 @@
   },
   "floatingCta": {
     "scheduleButton": "Schedule Now",
-    "demoButton": "Try Servi-IA"
+    "demoButton": "Try Servi-IA in action"
   },
   "footer": {
     "tagline": "ServiGlobal · IA implements Servi-IA for real voice, scheduling, and service operations.",
@@ -659,7 +665,7 @@
     "links": {
       "cases": "Cases",
       "pricing": "Pricing",
-      "demo": "Demo"
+      "demo": "Servi-IA in action"
     },
     "services": "Services",
     "servicesItems": {

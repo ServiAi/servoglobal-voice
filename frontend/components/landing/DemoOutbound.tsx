@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Turnstile } from '@marsidev/react-turnstile';
 import Image from 'next/image';
+import Link from 'next/link';
 import { useAudioSimulation } from '@/hooks/useAudioSimulation';
 import { PhoneIncoming, Loader2, CheckCircle2, PhoneOff, ChevronDown, Calendar, Clock } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -136,6 +137,12 @@ export function DemoOutbound() {
                 : t('requestCompletedDesc')
               }
           </p>
+          <Link
+            href="#agendar"
+            className="mb-3 w-full max-w-xs py-3 bg-violet-600 hover:bg-violet-500 text-white rounded-lg font-semibold transition-colors text-center"
+          >
+            {t('scheduleConsultation')}
+          </Link>
           <button 
             onClick={() => { resetDemo(); setFormStep('form'); setName(''); setEmail(''); setPhone(''); setScheduleTime(''); setHasConsent(false); }} // Reset form as well
             className="w-full max-w-xs py-3 bg-zinc-900 dark:bg-white text-white dark:text-black font-bold rounded-lg hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-colors text-center"

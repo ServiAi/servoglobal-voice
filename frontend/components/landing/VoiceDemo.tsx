@@ -14,20 +14,39 @@ export function VoiceDemo() {
   return (
     <section id="demos" className="py-24 bg-zinc-50 dark:bg-black relative overflow-hidden transition-colors duration-300">
       <div className="container mx-auto px-4 md:px-6 relative z-10">
-        <div className="text-center max-w-3xl mx-auto mb-16">
+        <div className="text-center max-w-3xl mx-auto mb-10">
             <h2 className="text-3xl md:text-5xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-violet-600 to-zinc-600 dark:from-white dark:to-neutral-500 mb-6">
                 {t('title')}
             </h2>
             <p className="text-lg text-zinc-600 dark:text-neutral-400">
                 {t('subtitle')}
                 <br />
-                <span className="text-sm text-zinc-500 dark:text-neutral-600">{t('disclaimer')}</span>
+                <span className="text-sm text-zinc-500 dark:text-neutral-500">{t('disclaimer')}</span>
             </p>
         </div>
 
+        <div className="grid gap-4 md:grid-cols-2 max-w-4xl mx-auto mb-10">
+          <div className="rounded-2xl border border-zinc-200 bg-white/80 p-5 shadow-sm dark:border-white/10 dark:bg-neutral-900/60">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-violet-600 dark:text-violet-400">
+              {t('exploreLabel')}
+            </p>
+            <p className="mt-2 text-sm leading-relaxed text-zinc-600 dark:text-neutral-400">
+              {t('exploreText')}
+            </p>
+          </div>
+          <div className="rounded-2xl border border-zinc-200 bg-white/80 p-5 shadow-sm dark:border-white/10 dark:bg-neutral-900/60">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-green-600 dark:text-green-400">
+              {t('commercialLabel')}
+            </p>
+            <p className="mt-2 text-sm leading-relaxed text-zinc-600 dark:text-neutral-400">
+              {t('commercialText')}
+            </p>
+          </div>
+        </div>
+
         {/* Tabs */}
-        <div className="flex justify-center mb-12">
-            <div className="flex p-1 bg-white dark:bg-neutral-900/50 border border-zinc-200 dark:border-white/10 rounded-xl backdrop-blur-sm shadow-sm dark:shadow-none">
+        <div className="flex flex-col items-center gap-4 mb-12">
+            <div className="grid w-full max-w-2xl grid-cols-1 sm:grid-cols-2 p-1 bg-white dark:bg-neutral-900/50 border border-zinc-200 dark:border-white/10 rounded-xl backdrop-blur-sm shadow-sm dark:shadow-none">
                 <button
                     suppressHydrationWarning
                     onClick={() => setActiveTab('inbound')}
@@ -53,6 +72,9 @@ export function VoiceDemo() {
                     {t('outboundTab')}
                 </button>
             </div>
+            <p className="max-w-2xl text-center text-sm text-zinc-500 dark:text-neutral-500">
+              {activeTab === 'inbound' ? t('inboundHint') : t('outboundHint')}
+            </p>
         </div>
 
         {/* Demo Stage */}
