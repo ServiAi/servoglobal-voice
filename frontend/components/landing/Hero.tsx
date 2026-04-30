@@ -14,7 +14,7 @@ import {
   useSectionParallax,
 } from '@/hooks/useSectionParallax';
 
-const HeroFuturistic = dynamic(() => import('../hero-futuristic').then(mod => mod.HeroFuturistic), { 
+const RotatingEarth = dynamic(() => import('../ui/wireframe-dotted-globe'), {
   ssr: false,
   loading: () => <div className="w-full h-full min-h-[500px] bg-transparent" />
 });
@@ -51,11 +51,11 @@ export function Hero() {
       {/* Desktop Background Effects */}
       <motion.div
         style={{ y: yBackground }}
-        className="hidden md:block absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-violet-100/50 via-white to-white dark:from-violet-900/20 dark:via-black dark:to-black opacity-60 dark:opacity-40"
+        className="hidden md:block absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-zinc-100/40 via-white to-white dark:from-white/5 dark:via-black dark:to-black opacity-60 dark:opacity-40"
       />
       <motion.div
         style={{ y: yBlob }}
-        className="hidden md:block absolute top-1/4 right-0 w-[600px] h-[600px] bg-violet-600/10 rounded-full blur-[120px] pointer-events-none"
+        className="hidden md:block absolute top-1/4 right-0 w-[600px] h-[600px] bg-white/5 rounded-full blur-[120px] pointer-events-none"
       />
       <motion.div
         style={{ y: yBackground }}
@@ -145,16 +145,25 @@ export function Hero() {
           </motion.div>
         </motion.div>
 
-        {/* RIGHT COLUMN: HERO FUTURISTIC - Hidden on mobile, visible from md */}
+        {/* RIGHT COLUMN: DIGITAL GLOBE - Hidden on mobile, visible from md */}
         <div className="hidden md:flex relative items-center justify-center h-full w-full">
              <motion.div
                 style={{ y: ySphere }}
                 initial={{ opacity: 0, scale: 0.8 }}
                 animate={{ opacity: 1, scale: 1.10 }}
                 transition={{ duration: 1.2, delay: 0.4 }}
-                className="relative w-full max-w-[600px] lg:max-w-[700px] xl:max-w-[850px] aspect-square lg:-mr-12"
+                 className="relative -top-8 w-full max-w-[600px] lg:max-w-[700px] xl:max-w-[850px] aspect-square lg:-mr-12"
              >
-                <HeroFuturistic />
+                <RotatingEarth
+                  width={820}
+                  height={820}
+                  className="w-full h-full scale-95 origin-center"
+                  dotColor="#b800f5"
+                  glowColor="rgba(184, 0, 245, 0.72)"
+                  backgroundColor="transparent"
+                  rotationSpeed={0.32}
+                  showControlsHint={false}
+                />
              </motion.div>
         </div>
 
