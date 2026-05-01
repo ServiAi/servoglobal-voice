@@ -14,9 +14,23 @@ import {
   useSectionParallax,
 } from '@/hooks/useSectionParallax';
 
+function GlobeLoadingFallback() {
+  return (
+    <div
+      aria-hidden="true"
+      className="relative flex h-full min-h-[500px] w-full items-center justify-center"
+    >
+      <div className="absolute h-[78%] w-[78%] rounded-full bg-[radial-gradient(circle_at_35%_30%,rgba(255,255,255,0.98),rgba(255,255,255,0.72)_36%,rgba(255,255,255,0.12)_66%,rgba(255,255,255,0)_72%)] shadow-[0_0_70px_rgba(184,0,245,0.26)] dark:bg-[radial-gradient(circle_at_35%_30%,rgba(30,22,36,0.96),rgba(9,0,12,0.94)_45%,rgba(0,0,0,0.98)_72%)]" />
+      <div className="absolute h-[64%] w-[64%] rounded-full border border-fuchsia-500/20 opacity-70 shadow-[inset_0_0_35px_rgba(184,0,245,0.22)]" />
+      <div className="absolute h-[78%] w-[78%] rounded-full bg-[repeating-radial-gradient(circle_at_center,transparent_0,transparent_22px,rgba(184,0,245,0.12)_23px,transparent_24px)] opacity-50" />
+      <div className="absolute h-2 w-2 rounded-full bg-[#ff0033] shadow-[0_0_24px_rgba(255,0,51,0.9)]" />
+    </div>
+  );
+}
+
 const RotatingEarth = dynamic(() => import('../ui/wireframe-dotted-globe'), {
   ssr: false,
-  loading: () => <div className="w-full h-full min-h-[500px] bg-transparent" />
+  loading: () => <GlobeLoadingFallback />,
 });
 
 const AnimatedShaderBackground = dynamic(() => import('../ui/animated-shader-background'), { 

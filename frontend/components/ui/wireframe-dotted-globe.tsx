@@ -123,6 +123,36 @@ function generateLandDots(world: LandCollection) {
   return dots;
 }
 
+function generateFallbackDots(): DotData[] {
+  const dots: DotData[] = [];
+  const latStep = 5.8;
+  const lngStep = 7.4;
+
+  for (let lat = -68; lat <= 72; lat += latStep) {
+    const rowOffset = Math.abs(Math.round(lat / latStep)) % 2 === 0 ? 0 : lngStep * 0.5;
+
+    for (let lng = -180 + rowOffset; lng <= 180; lng += lngStep) {
+      const latitudeWeight = 1 - Math.abs(lat) / 92;
+      const band =
+        Math.sin((lng + lat * 1.7) * 0.045) +
+        Math.cos((lng * 0.55 - lat * 2.1) * 0.038) +
+        randomNoise(lng * 0.04, lat * 0.07);
+
+      if (band > 0.45 && latitudeWeight > 0.22) {
+        dots.push({
+          lng: lng + (randomNoise(lng * 0.13, lat * 0.17) - 0.5) * 2.2,
+          lat: lat + (randomNoise(lng * 0.19, lat * 0.11) - 0.5) * 1.8,
+          seed: randomNoise(lng * 0.29, lat * 0.31),
+        });
+      }
+    }
+  }
+
+  return dots;
+}
+
+const FALLBACK_DOTS = generateFallbackDots();
+
 function drawCirclePath(context: CanvasRenderingContext2D, cx: number, cy: number, radius: number) {
   context.beginPath();
   context.arc(cx, cy, radius, 0, TAU);
@@ -140,7 +170,7 @@ export default function RotatingEarth({
   showControlsHint = false,
 }: RotatingEarthProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const dotsRef = useRef<DotData[]>([]);
+  const dotsRef = useRef<DotData[]>(FALLBACK_DOTS);
   const worldRef = useRef<LandCollection | null>(null);
   const frameRef = useRef<number | null>(null);
   const rotationRef = useRef<[number, number, number]>([-28, -12, 0]);
@@ -178,8 +208,14 @@ export default function RotatingEarth({
         }
 
         worldRef.current = world;
-        dotsRef.current = generateLandDots(world);
-        setIsReady(true);
+        window.setTimeout(() => {
+          if (cancelled) {
+            return;
+          }
+
+          dotsRef.current = generateLandDots(world);
+          setIsReady(true);
+        }, 0);
       })
       .catch(() => {
         if (!cancelled) {
@@ -195,7 +231,7 @@ export default function RotatingEarth({
   useEffect(() => {
     const canvas = canvasRef.current;
 
-    if (!canvas || !isReady || hasError) {
+    if (!canvas) {
       return;
     }
 
@@ -216,7 +252,7 @@ export default function RotatingEarth({
     const mapDotColor = dotColor;
     const mapGlowColor = glowColor;
     const graticuleColor = isDarkMode ? 'rgba(255, 255, 255, 0.16)' : 'rgba(0, 0, 0, 0.14)';
-    const landStrokeColor = isDarkMode ? 'rgba(255, 255, 255, 0.28)' : 'rgba(0, 0, 0, 0.28)';
+    const landStrokeColor = isDarkMode ? 'rgba(255, 255, 255, 0.28)' : 'rgba(0, 0, 0, 0.88)';
     const scanColor = isDarkMode ? WHITE_SCAN : 'rgba(0, 0, 0, 0.16)';
     const scanEdgeColor = isDarkMode ? 'rgba(255, 255, 255, 0)' : 'rgba(0, 0, 0, 0)';
     const scanArcColor = isDarkMode ? WHITE_SCAN_SOFT : 'rgba(0, 0, 0, 0.12)';
@@ -282,10 +318,6 @@ export default function RotatingEarth({
     const drawGeoLayers = (time: number) => {
       const world = worldRef.current;
 
-      if (!world) {
-        return;
-      }
-
       context.save();
       drawCirclePath(context, cx, cy, radius);
       context.clip();
@@ -296,11 +328,13 @@ export default function RotatingEarth({
       context.lineWidth = 0.55;
       context.stroke();
 
-      context.beginPath();
-      geoPath(world);
-      context.strokeStyle = landStrokeColor;
-      context.lineWidth = 0.72;
-      context.stroke();
+      if (world) {
+        context.beginPath();
+        geoPath(world);
+        context.strokeStyle = landStrokeColor;
+        context.lineWidth = 0.72;
+        context.stroke();
+      }
 
       const sweepPosition = Math.sin(time * 0.75) * 0.5 + 0.5;
       const sweepX = cx - radius + radius * 2 * sweepPosition;
@@ -504,7 +538,7 @@ export default function RotatingEarth({
       canvas.removeEventListener('pointerup', handlePointerUp);
       canvas.removeEventListener('pointercancel', handlePointerUp);
     };
-  }, [autoRotate, backgroundColor, dotColor, glowColor, hasError, height, isDarkMode, isReady, rotationSpeed, width]);
+  }, [autoRotate, backgroundColor, dotColor, glowColor, hasError, height, isDarkMode, rotationSpeed, width]);
 
   return (
     <div className={`relative flex h-full min-h-[500px] w-full items-center justify-center ${className}`}>
@@ -515,10 +549,10 @@ export default function RotatingEarth({
         role="img"
       />
       {!isReady && !hasError ? (
-        <div className="absolute inset-0 rounded-full bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.1),transparent_64%)]" />
+        <div className="pointer-events-none absolute inset-0 rounded-full bg-[radial-gradient(circle_at_center,rgba(184,0,245,0.12),transparent_64%)] opacity-60" />
       ) : null}
       {hasError ? (
-        <div className="absolute h-[62%] w-[62%] rounded-full border border-white/20 bg-black/80 shadow-[0_0_80px_rgba(255,255,255,0.12)]" />
+        <div className="pointer-events-none absolute h-[62%] w-[62%] rounded-full border border-[#ff0033]/20 shadow-[0_0_80px_rgba(255,0,51,0.14)]" />
       ) : null}
       {showControlsHint ? (
         <div className="pointer-events-none absolute bottom-8 rounded-full border border-[#ff0033]/20 bg-black/40 px-3 py-1 text-xs text-[#ff8aa0] backdrop-blur">
