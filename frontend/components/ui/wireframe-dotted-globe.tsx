@@ -33,7 +33,6 @@ const DOT_SPACING = 18;
 const STEP_SIZE = DOT_SPACING * 0.08;
 const RED = '#ff0033';
 const WHITE_SCAN = 'rgba(255, 255, 255, 0.22)';
-const WHITE_SCAN_SOFT = 'rgba(255, 255, 255, 0.14)';
 const BLACK_CORE = 'rgba(4, 0, 3, 0.92)';
 const TAU = Math.PI * 2;
 const COLOMBIA_MARKER = {
@@ -251,11 +250,11 @@ export default function RotatingEarth({
     const cy = height / 2;
     const mapDotColor = dotColor;
     const mapGlowColor = glowColor;
-    const graticuleColor = isDarkMode ? 'rgba(255, 255, 255, 0.16)' : 'rgba(0, 0, 0, 0.14)';
-    const landStrokeColor = isDarkMode ? 'rgba(255, 255, 255, 0.28)' : 'rgba(0, 0, 0, 0.88)';
+    const graticuleColor = isDarkMode ? 'rgba(255, 255, 255, 0.34)' : 'rgba(0, 0, 0, 0.14)';
+    const landStrokeColor = isDarkMode ? 'rgba(255, 255, 255, 0.58)' : 'rgba(0, 0, 0, 0.88)';
     const scanColor = isDarkMode ? WHITE_SCAN : 'rgba(0, 0, 0, 0.16)';
     const scanEdgeColor = isDarkMode ? 'rgba(255, 255, 255, 0)' : 'rgba(0, 0, 0, 0)';
-    const scanArcColor = isDarkMode ? WHITE_SCAN_SOFT : 'rgba(0, 0, 0, 0.12)';
+    const scanArcColor = isDarkMode ? 'rgba(255, 255, 255, 0.24)' : 'rgba(0, 0, 0, 0.12)';
 
     canvas.width = Math.round(width * dpr);
     canvas.height = Math.round(height * dpr);
