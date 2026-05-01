@@ -33,6 +33,8 @@ const statusLabels = {
   pending: "NEXT",
 } as const;
 
+const AUTO_ROTATE_DEGREES_PER_SECOND = 5.6;
+
 export default function RadialOrbitalTimeline({ timelineData, className }: RadialOrbitalTimelineProps) {
   const [expandedItems, setExpandedItems] = useState<Record<number, boolean>>({});
   const [rotationAngle, setRotationAngle] = useState(0);
@@ -93,12 +95,25 @@ export default function RadialOrbitalTimeline({ timelineData, className }: Radia
       return;
     }
 
-    const rotationTimer = window.setInterval(() => {
-      setRotationAngle((prev) => Number(((prev + 0.28) % 360).toFixed(3)));
-    }, 50);
+    let frameId = 0;
+    let previousTimestamp: number | null = null;
+
+    const animate = (timestamp: number) => {
+      if (previousTimestamp === null) {
+        previousTimestamp = timestamp;
+      }
+
+      const deltaSeconds = Math.min((timestamp - previousTimestamp) / 1000, 0.08);
+      previousTimestamp = timestamp;
+
+      setRotationAngle((prev) => (prev + AUTO_ROTATE_DEGREES_PER_SECOND * deltaSeconds) % 360);
+      frameId = window.requestAnimationFrame(animate);
+    };
+
+    frameId = window.requestAnimationFrame(animate);
 
     return () => {
-      window.clearInterval(rotationTimer);
+      window.cancelAnimationFrame(frameId);
     };
   }, [autoRotate]);
 
@@ -164,15 +179,18 @@ export default function RadialOrbitalTimeline({ timelineData, className }: Radia
             const isRelated = isRelatedToActive(item.id);
             const isPulsing = pulseEffect[item.id];
             const Icon = item.icon;
+            const nodeOpacity = isExpanded ? 1 : position.opacity;
 
             return (
               <div
                 key={item.id}
-                className="absolute cursor-pointer transition-all duration-700"
+                className={cn(
+                  "absolute cursor-pointer will-change-transform",
+                  autoRotate ? "transition-opacity duration-300" : "transition-all duration-700",
+                )}
                 style={{
                   transform: `translate(${position.x}px, ${position.y}px)`,
                   zIndex: isExpanded ? 200 : position.zIndex,
-                  opacity: isExpanded ? 1 : position.opacity,
                 }}
                 onClick={(event) => {
                   event.stopPropagation();
@@ -188,6 +206,7 @@ export default function RadialOrbitalTimeline({ timelineData, className }: Radia
                     height: `${item.energy * 0.5 + 46}px`,
                     left: `-${(item.energy * 0.5 + 6) / 2}px`,
                     top: `-${(item.energy * 0.5 + 6) / 2}px`,
+                    opacity: nodeOpacity,
                   }}
                 />
 
@@ -200,6 +219,7 @@ export default function RadialOrbitalTimeline({ timelineData, className }: Radia
                         ? "border-fuchsia-400 bg-fuchsia-50 text-zinc-950 animate-pulse dark:border-fuchsia-300 dark:bg-white/70"
                         : "border-zinc-300 bg-white text-zinc-950 shadow-sm dark:border-white/35 dark:bg-zinc-950 dark:text-white",
                   )}
+                  style={{ opacity: nodeOpacity }}
                 >
                   <Icon size={18} />
                 </div>
@@ -207,7 +227,7 @@ export default function RadialOrbitalTimeline({ timelineData, className }: Radia
                 <div
                   className={cn(
                     "absolute left-1/2 top-14 -translate-x-1/2 whitespace-nowrap text-xs font-semibold transition-all duration-300",
-                    isExpanded ? "scale-125 text-zinc-950 dark:text-white" : "text-zinc-600 dark:text-white/70",
+                    isExpanded ? "scale-125 text-black dark:text-white" : "text-black dark:text-white",
                   )}
                 >
                   {item.title}
