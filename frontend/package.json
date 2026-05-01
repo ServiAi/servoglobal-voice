@@ -3,10 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "npm run clean:next && next dev",
     "dev:clean": "npm run clean:next && next dev",
-    "dev:turbo": "next dev --turbo",
+    "dev:turbo": "npm run clean:next && next dev --turbo",
     "build": "next build",
+    "build:check": "npm run clean:next && next build && npm run clean:next",
     "clean:next": "node -e \"require('fs').rmSync('.next', { recursive: true, force: true })\"",
     "start": "next start",
     "lint": "next lint"

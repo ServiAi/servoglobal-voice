@@ -13,10 +13,11 @@ import { VoiceDemo } from '@/components/landing/VoiceDemo';
 import { Booking } from '@/components/landing/Booking';
 
 import { FloatingCTA } from '@/components/shared/FloatingCTA';
+import { BrandSpotlightScope } from '@/components/ui/spotlight-card';
 
 export default function Home() {
   return (
-    <main className="flex min-h-screen flex-col">
+    <BrandSpotlightScope className="flex min-h-screen flex-col">
       <Header />
       <Hero />
       <TrustStrip />
@@ -32,6 +33,6 @@ export default function Home() {
       <Booking />
 
       <FloatingCTA />
-    </main>
+    </BrandSpotlightScope>
   );
 }

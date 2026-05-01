@@ -5,6 +5,7 @@ import { useRef } from 'react';
 import { ArrowRight, Briefcase, CalendarCheck, CheckCircle2, Headphones, ShoppingBag, Sparkles, Target } from 'lucide-react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
+import RadialOrbitalTimeline from '@/components/ui/radial-orbital-timeline';
 import {
   sectionDesktop,
   useParallaxLayer,
@@ -84,6 +85,30 @@ export function UseCases() {
   const yPriority = useParallaxLayer(scrollYProgress, profile, 'accent');
   const yResults = useParallaxLayer(scrollYProgress, profile, 'accent');
   const ySectors = useParallaxLayer(scrollYProgress, profile, 'content');
+  const sectorTimelineData = OTHER_SECTOR_IDS.map((id, index) => {
+    const { icon: Icon } = SECTOR_ICONS[id];
+    const relatedIdsByIndex = [
+      [2, 3],
+      [1, 3],
+      [1, 2, 5],
+      [2, 5],
+      [1, 3],
+    ];
+    const statuses = ['completed', 'completed', 'in-progress', 'pending', 'in-progress'] as const;
+    const energies = [94, 86, 92, 72, 80];
+
+    return {
+      id: index + 1,
+      title: t(`verticals.${id}.title`),
+      date: ['24/7', 'SLA', 'CRM', 'HR', 'SHOP'][index],
+      content: t(`verticals.${id}.promise`),
+      category: t('typicalIntegrations'),
+      icon: Icon,
+      relatedIds: relatedIdsByIndex[index],
+      status: statuses[index],
+      energy: energies[index],
+    };
+  });
 
   return (
     <section ref={containerRef} id="casos" className="relative py-24 bg-zinc-50 dark:bg-zinc-950 transition-colors duration-300 overflow-hidden z-0">
@@ -219,48 +244,27 @@ export function UseCases() {
           initial={{ opacity: 0, scale: 0.98 }}
           whileInView={{ opacity: 1, scale: 1 }}
           viewport={{ once: true }}
-          className="rounded-3xl border border-zinc-200 dark:border-white/10 bg-white dark:bg-zinc-900 p-6 md:p-8"
+          className="overflow-hidden rounded-3xl border border-violet-200 bg-white p-6 text-zinc-950 shadow-xl shadow-violet-500/10 dark:border-violet-300/20 dark:bg-zinc-950 dark:text-white dark:shadow-2xl dark:shadow-violet-950/30 md:p-8"
         >
           <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-6">
             <div>
               <h3 className="text-2xl font-bold text-zinc-900 dark:text-white mb-2">
                 {t('sectorsTitle')}
               </h3>
-              <p className="text-zinc-600 dark:text-neutral-400 max-w-2xl">
+              <p className="text-zinc-600 dark:text-white/60 max-w-2xl">
                 {t('sectorsSubtitle')}
               </p>
             </div>
             <Link
               href="#agendar"
-              className="inline-flex items-center gap-2 text-violet-700 dark:text-violet-300 font-semibold hover:underline"
+              className="inline-flex items-center gap-2 text-violet-700 font-semibold hover:text-fuchsia-700 dark:text-violet-200 dark:hover:text-fuchsia-200"
             >
               {t('sectorCta')}
               <ArrowRight className="size-4" />
             </Link>
           </div>
 
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            {OTHER_SECTOR_IDS.map((id) => {
-              const { icon: Icon, color } = SECTOR_ICONS[id];
-              const colors = ucColorMap[color];
-              return (
-                <div
-                  key={id}
-                  className="rounded-xl border border-zinc-200 dark:border-white/10 bg-zinc-50 dark:bg-black/20 p-4"
-                >
-                  <div className={`size-9 rounded-lg ${colors.bg} ${colors.glow} flex items-center justify-center mb-3`}>
-                    <Icon className={`size-5 ${colors.icon}`} />
-                  </div>
-                  <p className="font-semibold text-zinc-900 dark:text-white text-sm">
-                    {t(`verticals.${id}.title`)}
-                  </p>
-                  <p className="text-xs text-zinc-600 dark:text-neutral-400 mt-2">
-                    {t(`verticals.${id}.promise`)}
-                  </p>
-                </div>
-              );
-            })}
-          </div>
+          <RadialOrbitalTimeline timelineData={sectorTimelineData} />
         </motion.div>
       </div>
     </section>

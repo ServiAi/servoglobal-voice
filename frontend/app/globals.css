@@ -122,3 +122,56 @@
 .animate-spin-slow {
   animation: spin-slow 8s linear infinite;
 }
+
+@layer components {
+  [data-brand-spotlight-scope] {
+    --spotlight-x: -1000;
+    --spotlight-y: -1000;
+    --spotlight-xp: 0;
+    --spotlight-yp: 0;
+    --brand-spotlight-violet: 124 58 237;
+    --brand-spotlight-fuchsia: 217 70 239;
+    --brand-spotlight-red: 255 0 51;
+  }
+
+  [data-brand-spotlight-scope]
+    :where(.border, .border-y, .border-t, .border-b, .border-l, .border-r, .brand-spotlight-border) {
+    position: relative;
+  }
+}
+
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  [data-brand-spotlight-scope]
+    :where(.border, .border-y, .border-t, .border-b, .border-l, .border-r, .brand-spotlight-border)::before {
+    content: "";
+    pointer-events: none;
+    position: absolute;
+    inset: -1px;
+    z-index: 1;
+    border: 1px solid transparent;
+    border-radius: inherit;
+    background:
+      radial-gradient(
+        260px 260px at calc(var(--spotlight-x) * 1px) calc(var(--spotlight-y) * 1px),
+        rgb(var(--brand-spotlight-violet) / 0.95),
+        rgb(var(--brand-spotlight-fuchsia) / 0.7) 32%,
+        rgb(var(--brand-spotlight-red) / 0.28) 56%,
+        transparent 74%
+      )
+      border-box;
+    background-attachment: fixed;
+    mask:
+      linear-gradient(transparent, transparent) padding-box,
+      linear-gradient(white, white) border-box;
+    mask-composite: intersect;
+    opacity: 0;
+    transition: opacity 180ms ease;
+  }
+
+  [data-brand-spotlight-scope]
+    :where(.border, .border-y, .border-t, .border-b, .border-l, .border-r, .brand-spotlight-border):hover::before,
+  [data-brand-spotlight-scope]
+    :where(.border, .border-y, .border-t, .border-b, .border-l, .border-r, .brand-spotlight-border):focus-within::before {
+    opacity: 1;
+  }
+}
