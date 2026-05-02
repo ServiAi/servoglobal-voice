@@ -6,6 +6,23 @@ class Settings(BaseSettings):
     ULTRAVOX_MODEL: str = "fixie-ai/ultravox-70b"
     PORT: int = 8000
     DEFAULT_AGENT_ID: str | None = None
+    DATABASE_URL: str = "postgresql+psycopg://serviai:serviai@localhost:5432/serviai"
+
+    # Auth0
+    AUTH0_DOMAIN: str = ""
+    AUTH0_AUDIENCE: str = ""
+    AUTH0_ISSUER: str = ""
+    AUTH0_ALGORITHMS: str = "RS256"
+    AUTH0_AUTO_CREATE_USERS: bool = True
+
+    # Initial private app bootstrap
+    BOOTSTRAP_TENANT_NAME: str = "ServiGlobal IA"
+    BOOTSTRAP_TENANT_SLUG: str = "serviglobal-ia"
+    BOOTSTRAP_TENANT_TIMEZONE: str = "America/Bogota"
+    BOOTSTRAP_USER_AUTH0_SUB: str = ""
+    BOOTSTRAP_USER_EMAIL: str = ""
+    BOOTSTRAP_USER_NAME: str = ""
+    BOOTSTRAP_USER_ROLE: str = "tenant_admin"
 
     # SIP / Asterisk Configuration
     ASTERISK_PUBLIC_HOST: str = "54.243.24.145"
