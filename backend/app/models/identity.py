@@ -37,6 +37,10 @@ class Tenant(Base, TimestampMixin):
         back_populates="tenant", cascade="all, delete-orphan"
     )
     audit_logs: Mapped[list[AccessAuditLog]] = relationship(back_populates="tenant")
+    agents = relationship("Agent", back_populates="tenant")
+    calls = relationship("Call", back_populates="tenant")
+    call_events = relationship("CallEvent", back_populates="tenant")
+    metric_snapshots = relationship("MetricSnapshotDaily", back_populates="tenant")
 
 
 class User(Base, TimestampMixin):

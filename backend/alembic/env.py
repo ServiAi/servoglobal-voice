@@ -8,7 +8,16 @@ from sqlalchemy import engine_from_config, pool
 from app.core.config import settings
 from app.db.base import Base
 from app.db.url import normalize_database_url
-from app.models import AccessAuditLog, Tenant, TenantMembership, User  # noqa: F401
+from app.models import (  # noqa: F401
+    AccessAuditLog,
+    Agent,
+    Call,
+    CallEvent,
+    MetricSnapshotDaily,
+    Tenant,
+    TenantMembership,
+    User,
+)
 
 config = context.config
 database_url = normalize_database_url(settings.DATABASE_URL)
