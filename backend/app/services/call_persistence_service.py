@@ -17,7 +17,7 @@ from app.services.call_status_normalizer import CallStatusNormalizer
 class PersistCallInput:
     tenant_id: str
     external_provider: str
-    started_at: datetime
+    started_at: datetime | None = None
     external_call_id: str | None = None
     agent_id: str | None = None
     provider_agent_id: str | None = None
@@ -33,6 +33,7 @@ class PersistCallInput:
     direction: str | None = None
     customer_phone: str | None = None
     last_synced_at: datetime | None = None
+    partial_update: bool = False
 
 
 @dataclass(frozen=True)
@@ -64,7 +65,7 @@ class CallPersistenceService:
             call = Call(
                 tenant_id=payload.tenant_id,
                 external_provider=payload.external_provider,
-                started_at=payload.started_at,
+                started_at=payload.started_at or datetime.now(UTC),
                 normalized_status=self._normalized_status(payload),
             )
             self.db.add(call)
@@ -128,23 +129,35 @@ class CallPersistenceService:
             )
 
     def _apply_call_payload(self, call: Call, payload: PersistCallInput) -> None:
-        call.external_call_id = payload.external_call_id
+        if payload.external_call_id is not None:
+            call.external_call_id = payload.external_call_id
         call.external_provider = payload.external_provider
-        call.agent_id = payload.agent_id
-        call.provider_agent_id = payload.provider_agent_id
-        call.provider_status = payload.provider_status
-        call.normalized_status = self._normalized_status(payload)
-        call.started_at = payload.started_at
-        call.joined_at = payload.joined_at
-        call.ended_at = payload.ended_at
-        call.duration_seconds = payload.duration_seconds
-        call.billed_minutes = self._decimal_or_none(payload.billed_minutes)
-        call.summary = payload.summary
-        call.short_summary = payload.short_summary
-        call.recording_url = payload.recording_url
-        call.direction = payload.direction
-        call.customer_phone = payload.customer_phone
-        call.last_synced_at = payload.last_synced_at
+        self._assign(call, "agent_id", payload.agent_id, payload.partial_update)
+        self._assign(call, "provider_agent_id", payload.provider_agent_id, payload.partial_update)
+        self._assign(call, "provider_status", payload.provider_status, payload.partial_update)
+        if payload.provider_status is not None or payload.normalized_status is not None:
+            call.normalized_status = self._normalized_status(payload)
+        self._assign(call, "started_at", payload.started_at, payload.partial_update)
+        self._assign(call, "joined_at", payload.joined_at, payload.partial_update)
+        self._assign(call, "ended_at", payload.ended_at, payload.partial_update)
+        self._assign(call, "duration_seconds", payload.duration_seconds, payload.partial_update)
+        self._assign(
+            call,
+            "billed_minutes",
+            self._decimal_or_none(payload.billed_minutes),
+            payload.partial_update,
+        )
+        self._assign(call, "summary", payload.summary, payload.partial_update)
+        self._assign(call, "short_summary", payload.short_summary, payload.partial_update)
+        self._assign(call, "recording_url", payload.recording_url, payload.partial_update)
+        self._assign(call, "direction", payload.direction, payload.partial_update)
+        self._assign(call, "customer_phone", payload.customer_phone, payload.partial_update)
+        self._assign(call, "last_synced_at", payload.last_synced_at, payload.partial_update)
+
+    def _assign(self, call: Call, field_name: str, value, partial_update: bool) -> None:
+        if partial_update and value is None:
+            return
+        setattr(call, field_name, value)
 
     def _normalized_status(self, payload: PersistCallInput) -> str:
         if payload.normalized_status:

@@ -4,6 +4,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     ULTRAVOX_API_KEY: str
     ULTRAVOX_MODEL: str = "fixie-ai/ultravox-70b"
+    ULTRAVOX_WEBHOOK_SECRET: str = ""
     PORT: int = 8000
     DEFAULT_AGENT_ID: str | None = None
     DATABASE_URL: str = "postgresql+psycopg://serviai:serviai@localhost:5432/serviai"
