@@ -47,7 +47,7 @@ export function getAuthorizeUrl(config: Auth0Config, state: string, codeChalleng
     response_type: 'code',
     client_id: config.clientId,
     redirect_uri: redirectUri,
-    scope: 'openid profile email',
+    scope: 'openid profile email read:me',
     audience: config.audience,
     state,
     code_challenge: codeChallenge,
