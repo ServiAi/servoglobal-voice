@@ -21,7 +21,7 @@ from app.models import (  # noqa: F401
 
 config = context.config
 database_url = normalize_database_url(settings.DATABASE_URL)
-config.set_main_option("sqlalchemy.url", database_url)
+config.set_main_option("sqlalchemy.url", database_url.replace("%", "%%"))
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
