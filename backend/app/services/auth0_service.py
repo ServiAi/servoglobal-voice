@@ -12,7 +12,7 @@ from app.core.config import settings
 @dataclass(frozen=True)
 class AuthenticatedIdentity:
     external_auth_id: str
-    email: str
+    email: str | None = None
     name: str | None = None
     claims: dict | None = None
 
@@ -60,7 +60,7 @@ class Auth0TokenVerifier:
 
         external_auth_id = claims.get("sub")
         email = claims.get("email")
-        if not external_auth_id or not email:
+        if not external_auth_id:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Authentication token is missing required identity claims",

@@ -36,13 +36,13 @@ class Sprint1AuthContextTests(unittest.TestCase):
         app.dependency_overrides.clear()
         Base.metadata.drop_all(bind=engine)
 
-    def override_identity(self, external_auth_id: str, email: str = "user@example.com"):
+    def override_identity(self, external_auth_id: str, email: str | None = "user@example.com"):
         async def _identity_override():
             return AuthenticatedIdentity(
                 external_auth_id=external_auth_id,
                 email=email,
                 name="Test User",
-                claims={"sub": external_auth_id, "email": email},
+                claims={"sub": external_auth_id, "email": email} if email else {"sub": external_auth_id},
             )
 
         app.dependency_overrides[get_current_identity] = _identity_override
@@ -109,6 +109,28 @@ class Sprint1AuthContextTests(unittest.TestCase):
         payload = response.json()
         self.assertEqual(payload["tenant_id"], tenant.id)
         self.assertEqual(payload["role"], "tenant_viewer")
+
+    def test_me_resolves_existing_user_when_access_token_has_no_email(self):
+        user, _ = self.seed_user_with_membership()
+        self.override_identity("auth0|active-user", None)
+
+        response = self.client.get("/api/v1/me", headers={"Authorization": "Bearer test"})
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["user_id"], user.id)
+        self.assertEqual(payload["email"], "active@example.com")
+
+    def test_new_user_without_email_uses_stable_fallback_email(self):
+        self.override_identity("auth0|no-email-user", None)
+
+        response = self.client.get("/api/v1/me", headers={"Authorization": "Bearer test"})
+
+        self.assertEqual(response.status_code, 403)
+        with SessionLocal() as db:
+            user = db.query(User).filter(User.external_auth_id == "auth0|no-email-user").one_or_none()
+            self.assertIsNotNone(user)
+            self.assertTrue(user.email.endswith("@auth0.local"))
 
     def test_me_writes_access_audit_log_on_success(self):
         user, tenant = self.seed_user_with_membership()

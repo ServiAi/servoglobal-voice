@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from hashlib import sha256
+import re
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
@@ -12,6 +14,14 @@ from app.services.auth0_service import AuthenticatedIdentity
 
 
 ACTIVE = "active"
+FALLBACK_EMAIL_DOMAIN = "auth0.local"
+
+
+def _fallback_email(external_auth_id: str) -> str:
+    compact_sub = re.sub(r"[^a-zA-Z0-9]+", "-", external_auth_id).strip("-").lower()
+    digest = sha256(external_auth_id.encode("utf-8")).hexdigest()[:12]
+    local_part = compact_sub[:40] or "auth0-user"
+    return f"{local_part}-{digest}@{FALLBACK_EMAIL_DOMAIN}"
 
 
 class IdentityService:
@@ -30,7 +40,7 @@ class IdentityService:
                 )
             user = User(
                 external_auth_id=identity.external_auth_id,
-                email=identity.email,
+                email=identity.email or _fallback_email(identity.external_auth_id),
                 name=identity.name,
                 is_internal=False,
                 status=ACTIVE,
@@ -47,7 +57,8 @@ class IdentityService:
                 detail="Authenticated user is not active",
             )
 
-        user.email = identity.email
+        if identity.email:
+            user.email = identity.email
         user.name = identity.name or user.name
         user.last_login_at = datetime.now(UTC)
         self.db.commit()
