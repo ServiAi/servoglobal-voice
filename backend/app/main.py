@@ -17,6 +17,7 @@ from app.api.endpoints import notifications
 from app.api.endpoints import chatwoot_webhook
 from app.api.endpoints import voice
 from app.api.endpoints import calcom
+from app.api.endpoints import dashboard
 from app.api.endpoints import me
 from app.api.endpoints import ultravox_webhook
 
@@ -24,6 +25,7 @@ app.include_router(notifications.router)
 app.include_router(chatwoot_webhook.router)
 app.include_router(voice.router)
 app.include_router(calcom.router)
+app.include_router(dashboard.router)
 app.include_router(me.router)
 app.include_router(ultravox_webhook.router)
 
