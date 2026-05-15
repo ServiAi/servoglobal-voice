@@ -38,7 +38,8 @@ export function DashboardFilters() {
       from,
       to,
       agent_id: agentId,
-      status
+      status,
+      page: ''
     })}`);
   };
 
@@ -114,9 +115,12 @@ export function DashboardFilters() {
             className="w-full appearance-none rounded-md border border-white/10 bg-zinc-950 py-2 pl-3 pr-8 text-sm text-zinc-200 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
           >
             <option value="">Todos los estados</option>
-            <option value="completed">Completadas</option>
+            <option value="answered">Contestadas</option>
+            <option value="unanswered">No contestadas</option>
+            <option value="in_progress">En curso</option>
             <option value="failed">Fallidas</option>
-            <option value="no_answer">Sin respuesta</option>
+            <option value="rejected">Rechazadas</option>
+            <option value="cancelled">Canceladas</option>
           </select>
         </div>
 

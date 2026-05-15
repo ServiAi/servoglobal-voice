@@ -3,6 +3,8 @@ export type DashboardFilters = {
   to?: string;
   agent_id?: string;
   status?: string;
+  page?: number;
+  page_size?: number;
 };
 
 export type DashboardKpisResponse = {
@@ -91,6 +93,8 @@ function buildQueryString(filters?: DashboardFilters): string {
   if (filters.to) params.set('to', filters.to);
   if (filters.agent_id) params.set('agent_id', filters.agent_id);
   if (filters.status) params.set('status', filters.status);
+  if (filters.page !== undefined) params.set('page', filters.page.toString());
+  if (filters.page_size !== undefined) params.set('page_size', filters.page_size.toString());
   
   const str = params.toString();
   return str ? `?${str}` : '';

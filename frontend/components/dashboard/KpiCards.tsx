@@ -1,4 +1,4 @@
-import { PhoneCall, Clock, CheckCircle, DollarSign } from 'lucide-react';
+import { Activity, Clock, DollarSign, PhoneCall, PhoneOff, CheckCircle } from 'lucide-react';
 import type { DashboardKpisResponse } from '@/lib/api/dashboard';
 
 interface KpiCardsProps {
@@ -6,30 +6,57 @@ interface KpiCardsProps {
 }
 
 export function KpiCards({ data }: KpiCardsProps) {
+  const formatNumber = (value: number | undefined) => (value ?? 0).toLocaleString();
+  const formatPercent = (value: number | undefined) => `${(value ?? 0).toFixed(1)}%`;
+
   const kpis = [
     {
       title: 'Llamadas Totales',
-      value: (data?.calls_total ?? 0).toLocaleString(),
+      value: formatNumber(data?.calls_total),
       icon: <PhoneCall className="h-5 w-5 text-cyan-500" />,
       description: 'Volumen total del periodo'
     },
     {
-      title: 'Minutos Consumidos',
-      value: Math.round(data?.billed_minutes ?? 0).toLocaleString(),
-      icon: <Clock className="h-5 w-5 text-emerald-500" />,
-      description: `Promedio: ${Math.round(data?.avg_duration_seconds ?? 0)}s/llamada`
+      title: 'Contestadas',
+      value: formatNumber(data?.calls_answered),
+      icon: <CheckCircle className="h-5 w-5 text-emerald-500" />,
+      description: 'Conectadas exitosamente'
+    },
+    {
+      title: 'No Contestadas',
+      value: formatNumber(data?.calls_unanswered),
+      icon: <PhoneOff className="h-5 w-5 text-destructive" />,
+      description: 'Sin respuesta registrada'
     },
     {
       title: 'Tasa de Éxito',
-      value: `${((data?.answer_rate ?? 0) * 100).toFixed(1)}%`,
+      value: formatPercent(data?.answer_rate),
       icon: <CheckCircle className="h-5 w-5 text-violet-500" />,
-      description: 'Llamadas completadas'
+      description: 'Contestadas sobre cerradas'
     },
     {
-      title: 'Costo Estimado',
-      value: `$${((data?.billed_minutes ?? 0) * 0.05).toFixed(3)}`, // placeholder for avg cost
-      icon: <DollarSign className="h-5 w-5 text-amber-500" />,
-      description: 'Total facturado'
+      title: 'Duración Total',
+      value: `${Math.round((data?.total_duration_seconds ?? 0) / 60).toLocaleString()} min`,
+      icon: <Clock className="h-5 w-5 text-amber-500" />,
+      description: 'Suma de duraciones'
+    },
+    {
+      title: 'Promedio Duración',
+      value: `${Math.round(data?.avg_duration_seconds ?? 0)} s`,
+      icon: <Clock className="h-5 w-5 text-amber-500" />,
+      description: 'Por llamada conectada'
+    },
+    {
+      title: 'Minutos Facturados',
+      value: formatNumber(Math.round(data?.billed_minutes ?? 0)),
+      icon: <DollarSign className="h-5 w-5 text-emerald-500" />,
+      description: 'Total facturable'
+    },
+    {
+      title: 'Activas',
+      value: formatNumber(data?.active_calls),
+      icon: <Activity className="h-5 w-5 text-blue-500" />,
+      description: 'En curso ahora'
     }
   ];
 

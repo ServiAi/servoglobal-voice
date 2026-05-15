@@ -34,6 +34,15 @@ function normalizeLocale(locale: string): Locale {
   return locales.includes(locale as Locale) ? (locale as Locale) : 'es';
 }
 
+function normalizePositiveInteger(value: string | string[] | undefined, fallback: number) {
+  if (typeof value !== 'string') {
+    return fallback;
+  }
+
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
 export default async function PrivateDashboardBase({ params, searchParams }: Props) {
   const { locale: rawLocale } = await params;
   const locale = normalizeLocale(rawLocale);
@@ -62,6 +71,8 @@ export default async function PrivateDashboardBase({ params, searchParams }: Pro
     to: typeof resolvedSearchParams.to === 'string' ? resolvedSearchParams.to : undefined,
     agent_id: typeof resolvedSearchParams.agent_id === 'string' ? resolvedSearchParams.agent_id : undefined,
     status: typeof resolvedSearchParams.status === 'string' ? resolvedSearchParams.status : undefined,
+    page: normalizePositiveInteger(resolvedSearchParams.page, 1),
+    page_size: normalizePositiveInteger(resolvedSearchParams.page_size, 10),
   };
 
   // Fetch all dashboard data concurrently
