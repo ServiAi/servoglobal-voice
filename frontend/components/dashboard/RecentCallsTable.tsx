@@ -1,13 +1,26 @@
 'use client';
 
-import { format, parseISO } from 'date-fns';
-import { es } from 'date-fns/locale';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import type { DashboardRecentCallsResponse } from '@/lib/api/dashboard';
 
 interface RecentCallsTableProps {
   data: DashboardRecentCallsResponse;
+}
+
+const MONTHS_ES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+
+function formatCallDateTime(value?: string | null) {
+  if (!value) return 'N/A';
+
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+  if (!match) return value;
+
+  const [, year, month, day, hour, minute] = match;
+  const monthLabel = MONTHS_ES[Number(month) - 1];
+  if (!monthLabel) return value;
+
+  return `${day} ${monthLabel} ${year}, ${hour}:${minute}`;
 }
 
 export function RecentCallsTable({ data }: RecentCallsTableProps) {
@@ -77,13 +90,7 @@ export function RecentCallsTable({ data }: RecentCallsTableProps) {
                   {call.id.slice(0, 8)}...
                 </td>
                 <td className="whitespace-nowrap px-6 py-4 text-foreground">
-                  {(() => {
-                    try {
-                      return call.started_at ? format(parseISO(call.started_at), "dd MMM yyyy, HH:mm", { locale: es }) : 'N/A';
-                    } catch {
-                      return call.started_at || 'N/A';
-                    }
-                  })()}
+                  {formatCallDateTime(call.started_at)}
                 </td>
                 <td className="whitespace-nowrap px-6 py-4 text-foreground">
                   {call.agent_name || 'Desconocido'}
