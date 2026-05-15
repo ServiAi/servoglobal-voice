@@ -13,6 +13,7 @@ import {
   type DashboardFilters
 } from '@/lib/api/dashboard';
 
+import { Suspense } from 'react';
 import { DashboardFilters as DashboardFiltersUI } from '@/components/dashboard/DashboardFilters';
 import { KpiCards } from '@/components/dashboard/KpiCards';
 import { TrendsChart } from '@/components/dashboard/TrendsChart';
@@ -105,7 +106,9 @@ export default async function PrivateDashboardBase({ params, searchParams }: Pro
         </header>
 
         {/* Filters */}
-        <DashboardFiltersUI />
+        <Suspense fallback={<div className="h-20 animate-pulse rounded-xl border border-white/10 bg-zinc-900/50 mb-8" />}>
+          <DashboardFiltersUI />
+        </Suspense>
 
         {/* Dashboard Content */}
         {kpisRes.ok ? (

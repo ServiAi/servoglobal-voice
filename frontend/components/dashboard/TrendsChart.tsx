@@ -28,11 +28,21 @@ export function TrendsChart({ data }: TrendsChartProps) {
   }
 
   // Format dates for the X axis
-  const formattedData = data.map(item => ({
-    ...item,
-    displayDate: format(parseISO(item.date), 'dd MMM', { locale: es }),
-    successPercent: Math.round(item.success_rate * 100)
-  }));
+  const formattedData = data.map(item => {
+    let displayDate = item.date;
+    try {
+      if (item.date) {
+        displayDate = format(parseISO(item.date), 'dd MMM', { locale: es });
+      }
+    } catch (e) {
+      // Ignore parse error
+    }
+    return {
+      ...item,
+      displayDate,
+      successPercent: Math.round((item.success_rate ?? 0) * 100)
+    };
+  });
 
   return (
     <div className="rounded-xl border border-white/10 bg-zinc-900/40 p-5">

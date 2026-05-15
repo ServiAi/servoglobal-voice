@@ -9,25 +9,25 @@ export function KpiCards({ data }: KpiCardsProps) {
   const kpis = [
     {
       title: 'Llamadas Totales',
-      value: data.total_calls.toLocaleString(),
+      value: (data?.total_calls ?? 0).toLocaleString(),
       icon: <PhoneCall className="h-5 w-5 text-cyan-400" />,
       description: 'Volumen total del periodo'
     },
     {
       title: 'Minutos Consumidos',
-      value: Math.round(data.total_minutes).toLocaleString(),
+      value: Math.round(data?.total_minutes ?? 0).toLocaleString(),
       icon: <Clock className="h-5 w-5 text-emerald-400" />,
-      description: `Promedio: ${Math.round(data.avg_duration_seconds)}s/llamada`
+      description: `Promedio: ${Math.round(data?.avg_duration_seconds ?? 0)}s/llamada`
     },
     {
       title: 'Tasa de Éxito',
-      value: `${(data.success_rate * 100).toFixed(1)}%`,
+      value: `${((data?.success_rate ?? 0) * 100).toFixed(1)}%`,
       icon: <CheckCircle className="h-5 w-5 text-violet-400" />,
       description: 'Llamadas completadas'
     },
     {
       title: 'Costo Promedio',
-      value: `$${data.avg_cost.toFixed(3)}`,
+      value: `$${(data?.avg_cost ?? 0).toFixed(3)}`,
       icon: <DollarSign className="h-5 w-5 text-amber-400" />,
       description: 'Por llamada'
     }

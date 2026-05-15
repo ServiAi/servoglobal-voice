@@ -54,19 +54,25 @@ export function RecentCallsTable({ data }: RecentCallsTableProps) {
                   {call.id.slice(0, 8)}...
                 </td>
                 <td className="whitespace-nowrap px-6 py-4 text-zinc-300">
-                  {format(parseISO(call.created_at), "dd MMM yyyy, HH:mm", { locale: es })}
+                  {(() => {
+                    try {
+                      return call.created_at ? format(parseISO(call.created_at), "dd MMM yyyy, HH:mm", { locale: es }) : 'N/A';
+                    } catch (e) {
+                      return call.created_at || 'N/A';
+                    }
+                  })()}
                 </td>
                 <td className="whitespace-nowrap px-6 py-4 text-zinc-300">
                   {call.agent_name || 'Desconocido'}
                 </td>
                 <td className="whitespace-nowrap px-6 py-4">
-                  {Math.round(call.duration_seconds)}s
+                  {Math.round(call.duration_seconds ?? 0)}s
                 </td>
                 <td className="whitespace-nowrap px-6 py-4">
                   {getStatusBadge(call.status)}
                 </td>
                 <td className="whitespace-nowrap px-6 py-4 text-zinc-300">
-                  ${call.cost.toFixed(3)}
+                  ${(call.cost ?? 0).toFixed(3)}
                 </td>
               </tr>
             ))}
