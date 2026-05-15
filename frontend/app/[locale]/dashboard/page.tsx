@@ -66,6 +66,13 @@ export default async function PrivateDashboardBase({ params, searchParams }: Pro
 
   // Await searchParams and build filters
   const resolvedSearchParams = await searchParams;
+  const initialQueryParams = new URLSearchParams();
+  Object.entries(resolvedSearchParams).forEach(([key, value]) => {
+    if (typeof value === 'string') {
+      initialQueryParams.set(key, value);
+    }
+  });
+  const initialQueryString = initialQueryParams.toString();
   const filters: DashboardFilters = {
     from: typeof resolvedSearchParams.from === 'string' ? resolvedSearchParams.from : undefined,
     to: typeof resolvedSearchParams.to === 'string' ? resolvedSearchParams.to : undefined,
@@ -122,7 +129,7 @@ export default async function PrivateDashboardBase({ params, searchParams }: Pro
 
         {/* Filters */}
         <Suspense fallback={<div className="h-20 animate-pulse rounded-xl border border-border bg-muted/50 mb-8" />}>
-          <DashboardFiltersUI />
+          <DashboardFiltersUI initialFilters={filters} initialQueryString={initialQueryString} />
         </Suspense>
 
         {/* Dashboard Content */}

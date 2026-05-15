@@ -1,23 +1,28 @@
 'use client';
 
-import { useRouter, usePathname, useSearchParams } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { useCallback, useState } from 'react';
 import { Calendar, Search } from 'lucide-react';
+import type { DashboardFilters as DashboardFilterValues } from '@/lib/api/dashboard';
 
-export function DashboardFilters() {
+type DashboardFiltersProps = {
+  initialFilters?: DashboardFilterValues;
+  initialQueryString?: string;
+};
+
+export function DashboardFilters({ initialFilters, initialQueryString = '' }: DashboardFiltersProps) {
   const router = useRouter();
   const pathname = usePathname();
-  const searchParams = useSearchParams();
 
   // Keep local state for the inputs
-  const [from, setFrom] = useState(searchParams.get('from') || '');
-  const [to, setTo] = useState(searchParams.get('to') || '');
-  const [agentId, setAgentId] = useState(searchParams.get('agent_id') || '');
-  const [status, setStatus] = useState(searchParams.get('status') || '');
+  const [from, setFrom] = useState(initialFilters?.from || '');
+  const [to, setTo] = useState(initialFilters?.to || '');
+  const [agentId, setAgentId] = useState(initialFilters?.agent_id || '');
+  const [status, setStatus] = useState(initialFilters?.status || '');
 
   const createQueryString = useCallback(
     (params: Record<string, string>) => {
-      const newSearchParams = new URLSearchParams(searchParams.toString());
+      const newSearchParams = new URLSearchParams(initialQueryString);
 
       Object.entries(params).forEach(([name, value]) => {
         if (value) {
@@ -29,7 +34,7 @@ export function DashboardFilters() {
 
       return newSearchParams.toString();
     },
-    [searchParams]
+    [initialQueryString]
   );
 
   const handleApply = (e: React.FormEvent) => {
