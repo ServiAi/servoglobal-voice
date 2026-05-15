@@ -5,43 +5,79 @@ export type DashboardFilters = {
   status?: string;
 };
 
-export type KpiData = {
-  total_calls: number;
-  total_minutes: number;
+export type DashboardKpisResponse = {
+  calls_total: number;
+  calls_answered: number;
+  calls_unanswered: number;
+  answer_rate: number;
   avg_duration_seconds: number;
-  avg_cost: number;
-  success_rate: number;
+  total_duration_seconds: number;
+  billed_minutes: number;
+  active_calls: number;
 };
 
-export type TrendPoint = {
+export type DashboardTrendItem = {
   date: string;
-  total_calls: number;
-  success_rate: number;
+  calls_total: number;
+  calls_answered: number;
+  calls_unanswered: number;
+  billed_minutes: number;
+  total_duration_seconds: number;
 };
 
-export type StatusDistribution = {
-  status: string;
-  count: number;
+export type DashboardTrendsResponse = {
+  series: DashboardTrendItem[];
 };
 
-export type AgentDistribution = {
+export type DashboardDistributionItem = {
+  key: string;
+  label: string;
+  calls: number;
+  percentage: number;
+};
+
+export type DashboardStatusDistributionResponse = {
+  items: DashboardDistributionItem[];
+};
+
+export type DashboardAgentDistributionItem = {
+  agent_id: string | null;
   agent_name: string;
-  count: number;
+  calls: number;
+  percentage: number;
 };
 
-export type HeatmapPoint = {
-  day_of_week: number;
-  hour_of_day: number;
-  call_count: number;
+export type DashboardAgentDistributionResponse = {
+  items: DashboardAgentDistributionItem[];
 };
 
-export type RecentCall = {
+export type DashboardHeatmapItem = {
+  day: string;
+  hour: number;
+  calls: number;
+};
+
+export type DashboardHeatmapResponse = {
+  matrix: DashboardHeatmapItem[];
+};
+
+export type DashboardRecentCallItem = {
   id: string;
-  created_at: string;
-  duration_seconds: number;
-  status: string;
+  started_at: string;
+  duration_seconds: number | null;
+  billed_minutes: number | null;
   agent_name: string;
-  cost: number;
+  summary: string | null;
+  short_summary: string | null;
+  status: string;
+  external_provider: string;
+};
+
+export type DashboardRecentCallsResponse = {
+  items: DashboardRecentCallItem[];
+  page: number;
+  page_size: number;
+  total: number;
 };
 
 export type FetchResult<T> =
@@ -98,25 +134,25 @@ async function fetchDashboardEndpoint<T>(
 }
 
 export function fetchKpis(accessToken: string, filters?: DashboardFilters) {
-  return fetchDashboardEndpoint<KpiData>('kpis', accessToken, filters);
+  return fetchDashboardEndpoint<DashboardKpisResponse>('kpis', accessToken, filters);
 }
 
 export function fetchTrends(accessToken: string, filters?: DashboardFilters) {
-  return fetchDashboardEndpoint<TrendPoint[]>('trends', accessToken, filters);
+  return fetchDashboardEndpoint<DashboardTrendsResponse>('trends', accessToken, filters);
 }
 
 export function fetchStatusDistribution(accessToken: string, filters?: DashboardFilters) {
-  return fetchDashboardEndpoint<StatusDistribution[]>('status-distribution', accessToken, filters);
+  return fetchDashboardEndpoint<DashboardStatusDistributionResponse>('status-distribution', accessToken, filters);
 }
 
 export function fetchAgentDistribution(accessToken: string, filters?: DashboardFilters) {
-  return fetchDashboardEndpoint<AgentDistribution[]>('agent-distribution', accessToken, filters);
+  return fetchDashboardEndpoint<DashboardAgentDistributionResponse>('agent-distribution', accessToken, filters);
 }
 
 export function fetchHeatmap(accessToken: string, filters?: DashboardFilters) {
-  return fetchDashboardEndpoint<HeatmapPoint[]>('heatmap', accessToken, filters);
+  return fetchDashboardEndpoint<DashboardHeatmapResponse>('heatmap', accessToken, filters);
 }
 
 export function fetchRecentCalls(accessToken: string, filters?: DashboardFilters) {
-  return fetchDashboardEndpoint<RecentCall[]>('recent-calls', accessToken, filters);
+  return fetchDashboardEndpoint<DashboardRecentCallsResponse>('recent-calls', accessToken, filters);
 }
