@@ -10,25 +10,25 @@ export function KpiCards({ data }: KpiCardsProps) {
     {
       title: 'Llamadas Totales',
       value: (data?.calls_total ?? 0).toLocaleString(),
-      icon: <PhoneCall className="h-5 w-5 text-cyan-400" />,
+      icon: <PhoneCall className="h-5 w-5 text-cyan-500" />,
       description: 'Volumen total del periodo'
     },
     {
       title: 'Minutos Consumidos',
       value: Math.round(data?.billed_minutes ?? 0).toLocaleString(),
-      icon: <Clock className="h-5 w-5 text-emerald-400" />,
+      icon: <Clock className="h-5 w-5 text-emerald-500" />,
       description: `Promedio: ${Math.round(data?.avg_duration_seconds ?? 0)}s/llamada`
     },
     {
       title: 'Tasa de Éxito',
       value: `${((data?.answer_rate ?? 0) * 100).toFixed(1)}%`,
-      icon: <CheckCircle className="h-5 w-5 text-violet-400" />,
+      icon: <CheckCircle className="h-5 w-5 text-violet-500" />,
       description: 'Llamadas completadas'
     },
     {
       title: 'Costo Estimado',
       value: `$${((data?.billed_minutes ?? 0) * 0.05).toFixed(3)}`, // placeholder for avg cost
-      icon: <DollarSign className="h-5 w-5 text-amber-400" />,
+      icon: <DollarSign className="h-5 w-5 text-amber-500" />,
       description: 'Total facturado'
     }
   ];
@@ -38,17 +38,17 @@ export function KpiCards({ data }: KpiCardsProps) {
       {kpis.map((kpi, index) => (
         <div
           key={index}
-          className="relative overflow-hidden rounded-xl border border-white/10 bg-zinc-900/40 p-5 backdrop-blur-sm transition-all hover:border-white/20 hover:bg-zinc-900/60"
+          className="relative overflow-hidden rounded-xl border border-border bg-card p-5 transition-all hover:border-primary/20 hover:bg-muted/50 shadow-sm"
         >
           <div className="flex items-center justify-between">
-            <p className="text-sm font-medium text-zinc-400">{kpi.title}</p>
-            <div className="rounded-full bg-white/5 p-2">{kpi.icon}</div>
+            <p className="text-sm font-medium text-muted-foreground">{kpi.title}</p>
+            <div className="rounded-full bg-muted p-2">{kpi.icon}</div>
           </div>
           <div className="mt-4">
-            <h3 className="text-3xl font-semibold tracking-tight text-zinc-100">
+            <h3 className="text-3xl font-semibold tracking-tight text-foreground">
               {kpi.value}
             </h3>
-            <p className="mt-1 text-xs text-zinc-500">{kpi.description}</p>
+            <p className="mt-1 text-xs text-muted-foreground">{kpi.description}</p>
           </div>
         </div>
       ))}

@@ -23,8 +23,4 @@ DOKPLOY_API_KEY = "rFOqCbIJxXZXGMYGfswGekHUytGZpAPsgklbjhSUzBRBIFLeZBEVdRsvUfItt
 
 [mcp_servers.postgres]
 command = "npx"
-args = [
-  "-y",
-  "@modelcontextprotocol/server-postgres",
-  "postgresql://serviai_user:Pancracio810129%2A%2B@127.0.0.1:15432/serviai_staging"
-]
+args = ["-y", "@modelcontextprotocol/server-postgres", "postgresql://serviai_user:Pancracio810129%2A%2B@127.0.0.1:15432/serviai_staging"]

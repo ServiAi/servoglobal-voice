@@ -21,6 +21,7 @@ import { StatusDistributionChart } from '@/components/dashboard/StatusDistributi
 import { AgentDistributionChart } from '@/components/dashboard/AgentDistributionChart';
 import { HeatmapChart } from '@/components/dashboard/HeatmapChart';
 import { RecentCallsTable } from '@/components/dashboard/RecentCallsTable';
+import { ThemeToggle } from '@/components/shared/ThemeToggle';
 
 type Props = {
   params: Promise<{ locale: string }>;
@@ -81,32 +82,35 @@ export default async function PrivateDashboardBase({ params, searchParams }: Pro
   ]);
 
   return (
-    <main className="min-h-screen bg-zinc-950 px-6 py-10 text-zinc-100">
+    <main className="min-h-screen bg-background px-6 py-10 text-foreground transition-colors duration-300">
       <section className="mx-auto flex w-full max-w-[1400px] flex-col gap-6">
-        <header className="flex flex-col gap-4 border-b border-white/10 pb-6 sm:flex-row sm:items-center sm:justify-between">
+        <header className="flex flex-col gap-4 border-b border-border pb-6 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-sm font-medium uppercase text-cyan-300">
+            <p className="text-sm font-medium uppercase text-primary">
               ServiGlobal IA
             </p>
             <h1 className="mt-2 text-3xl font-semibold tracking-normal">
               Dashboard de Métricas
             </h1>
-            <p className="mt-1 text-sm text-zinc-400">
+            <p className="mt-1 text-sm text-muted-foreground">
               {profile.tenant_name} • {profile.name ?? profile.email}
             </p>
           </div>
-          <form action="/api/auth/logout" method="get">
-            <button
-              type="submit"
-              className="inline-flex h-10 items-center justify-center rounded-md border border-white/15 bg-zinc-900 px-4 text-sm font-medium text-zinc-100 transition hover:bg-zinc-800 hover:text-cyan-200"
-            >
-              Cerrar sesión
-            </button>
-          </form>
+          <div className="flex items-center gap-4">
+            <ThemeToggle />
+            <form action="/api/auth/logout" method="get">
+              <button
+                type="submit"
+                className="inline-flex h-10 items-center justify-center rounded-md border border-border bg-card px-4 text-sm font-medium text-foreground transition hover:bg-accent hover:text-accent-foreground"
+              >
+                Cerrar sesión
+              </button>
+            </form>
+          </div>
         </header>
 
         {/* Filters */}
-        <Suspense fallback={<div className="h-20 animate-pulse rounded-xl border border-white/10 bg-zinc-900/50 mb-8" />}>
+        <Suspense fallback={<div className="h-20 animate-pulse rounded-xl border border-border bg-muted/50 mb-8" />}>
           <DashboardFiltersUI />
         </Suspense>
 
@@ -114,7 +118,7 @@ export default async function PrivateDashboardBase({ params, searchParams }: Pro
         {kpisRes.ok ? (
           <KpiCards data={kpisRes.data} />
         ) : (
-          <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-red-400 mb-8">
+          <div className="rounded-xl border border-destructive/20 bg-destructive/10 p-4 text-destructive mb-8">
             Error cargando KPIs: {kpisRes.detail}
           </div>
         )}
@@ -124,7 +128,7 @@ export default async function PrivateDashboardBase({ params, searchParams }: Pro
             {trendsRes.ok ? (
               <TrendsChart data={trendsRes.data} />
             ) : (
-              <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-red-400">
+              <div className="rounded-xl border border-destructive/20 bg-destructive/10 p-4 text-destructive">
                 Error cargando tendencias.
               </div>
             )}
@@ -133,7 +137,7 @@ export default async function PrivateDashboardBase({ params, searchParams }: Pro
             {statusRes.ok ? (
               <StatusDistributionChart data={statusRes.data} />
             ) : (
-              <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-red-400">
+              <div className="rounded-xl border border-destructive/20 bg-destructive/10 p-4 text-destructive">
                 Error cargando estados.
               </div>
             )}
@@ -145,7 +149,7 @@ export default async function PrivateDashboardBase({ params, searchParams }: Pro
             {agentRes.ok ? (
               <AgentDistributionChart data={agentRes.data} />
             ) : (
-              <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-red-400">
+              <div className="rounded-xl border border-destructive/20 bg-destructive/10 p-4 text-destructive">
                 Error cargando agentes.
               </div>
             )}
@@ -154,7 +158,7 @@ export default async function PrivateDashboardBase({ params, searchParams }: Pro
             {heatmapRes.ok ? (
               <HeatmapChart data={heatmapRes.data} />
             ) : (
-              <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-red-400">
+              <div className="rounded-xl border border-destructive/20 bg-destructive/10 p-4 text-destructive">
                 Error cargando mapa de calor.
               </div>
             )}
@@ -165,7 +169,7 @@ export default async function PrivateDashboardBase({ params, searchParams }: Pro
           {recentRes.ok ? (
             <RecentCallsTable data={recentRes.data} />
           ) : (
-            <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-red-400">
+            <div className="rounded-xl border border-destructive/20 bg-destructive/10 p-4 text-destructive">
               Error cargando llamadas recientes.
             </div>
           )}

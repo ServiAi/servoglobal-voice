@@ -76,3 +76,11 @@ dist/
 *.db
 *.sqlite
 *.sqlite3
+
+# IDES
+.vscode/
+.codex
+.agents/
+.agent/
+.rapid-os/
+opencode.json

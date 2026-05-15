@@ -3,6 +3,8 @@
 import { useMemo } from 'react';
 import { parseISO, getDay } from 'date-fns';
 import type { DashboardHeatmapResponse } from '@/lib/api/dashboard';
+import { useTheme } from 'next-themes';
+import { useEffect, useState } from 'react';
 
 interface HeatmapChartProps {
   data: DashboardHeatmapResponse;
@@ -12,6 +14,15 @@ const DAYS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 
 export function HeatmapChart({ data }: HeatmapChartProps) {
+  const { resolvedTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const isDark = resolvedTheme === 'dark' || !mounted;
+
   const { grid, maxCount } = useMemo(() => {
     let max = 0;
     const map = new Map<string, number>();
@@ -38,31 +49,31 @@ export function HeatmapChart({ data }: HeatmapChartProps) {
 
   if (!data?.matrix || !Array.isArray(data.matrix) || data.matrix.length === 0) {
     return (
-      <div className="flex h-[300px] items-center justify-center rounded-xl border border-white/10 bg-zinc-900/40">
-        <p className="text-sm text-zinc-500">No hay datos de calor.</p>
+      <div className="flex h-[300px] items-center justify-center rounded-xl border border-border bg-card">
+        <p className="text-sm text-muted-foreground">No hay datos de calor.</p>
       </div>
     );
   }
 
   // Function to determine color intensity based on value relative to maxCount
   const getIntensityColor = (count: number) => {
-    if (count === 0) return 'bg-zinc-800/30';
+    if (count === 0) return isDark ? 'bg-zinc-800/30' : 'bg-zinc-100';
     const ratio = count / maxCount;
-    if (ratio < 0.2) return 'bg-cyan-900/40';
-    if (ratio < 0.4) return 'bg-cyan-800/60';
-    if (ratio < 0.6) return 'bg-cyan-600/80';
-    if (ratio < 0.8) return 'bg-cyan-500';
-    return 'bg-cyan-400';
+    if (ratio < 0.2) return isDark ? 'bg-cyan-900/40' : 'bg-cyan-100';
+    if (ratio < 0.4) return isDark ? 'bg-cyan-800/60' : 'bg-cyan-200';
+    if (ratio < 0.6) return isDark ? 'bg-cyan-600/80' : 'bg-cyan-300';
+    if (ratio < 0.8) return isDark ? 'bg-cyan-500' : 'bg-cyan-500';
+    return isDark ? 'bg-cyan-400' : 'bg-cyan-600';
   };
 
   return (
-    <div className="rounded-xl border border-white/10 bg-zinc-900/40 p-5 overflow-x-auto">
-      <h3 className="mb-6 text-lg font-medium text-zinc-200">Mapa de Calor (Volumen)</h3>
+    <div className="rounded-xl border border-border bg-card p-5 overflow-x-auto">
+      <h3 className="mb-6 text-lg font-medium text-foreground">Mapa de Calor (Volumen)</h3>
       <div className="min-w-[600px]">
         {/* Header - Hours */}
         <div className="flex ml-10 mb-2">
           {HOURS.map((hour) => (
-            <div key={hour} className="flex-1 text-center text-[10px] text-zinc-500">
+            <div key={hour} className="flex-1 text-center text-[10px] text-muted-foreground">
               {hour}
             </div>
           ))}
@@ -72,7 +83,7 @@ export function HeatmapChart({ data }: HeatmapChartProps) {
         <div className="flex flex-col gap-1">
           {DAYS.map((day, dIdx) => (
             <div key={day} className="flex items-center">
-              <div className="w-10 text-xs font-medium text-zinc-400">{day}</div>
+              <div className="w-10 text-xs font-medium text-muted-foreground">{day}</div>
               <div className="flex flex-1 gap-1">
                 {HOURS.map((hour) => {
                   const count = grid.get(`${dIdx}-${hour}`) || 0;
@@ -80,7 +91,7 @@ export function HeatmapChart({ data }: HeatmapChartProps) {
                     <div
                       key={`${dIdx}-${hour}`}
                       title={`${day} a las ${hour}:00 - ${count} llamadas`}
-                      className={`flex-1 rounded-[2px] transition-colors hover:ring-1 hover:ring-white h-6 ${getIntensityColor(count)}`}
+                      className={`flex-1 rounded-[2px] transition-colors hover:ring-1 hover:ring-primary h-6 ${getIntensityColor(count)}`}
                     />
                   );
                 })}
@@ -90,15 +101,15 @@ export function HeatmapChart({ data }: HeatmapChartProps) {
         </div>
 
         {/* Legend */}
-        <div className="mt-4 flex items-center justify-end gap-2 text-xs text-zinc-500">
+        <div className="mt-4 flex items-center justify-end gap-2 text-xs text-muted-foreground">
           <span>Menos</span>
           <div className="flex gap-1">
-            <div className="h-3 w-3 rounded-sm bg-zinc-800/30" />
-            <div className="h-3 w-3 rounded-sm bg-cyan-900/40" />
-            <div className="h-3 w-3 rounded-sm bg-cyan-800/60" />
-            <div className="h-3 w-3 rounded-sm bg-cyan-600/80" />
-            <div className="h-3 w-3 rounded-sm bg-cyan-500" />
-            <div className="h-3 w-3 rounded-sm bg-cyan-400" />
+            <div className={`h-3 w-3 rounded-sm ${isDark ? 'bg-zinc-800/30' : 'bg-zinc-100'}`} />
+            <div className={`h-3 w-3 rounded-sm ${isDark ? 'bg-cyan-900/40' : 'bg-cyan-100'}`} />
+            <div className={`h-3 w-3 rounded-sm ${isDark ? 'bg-cyan-800/60' : 'bg-cyan-200'}`} />
+            <div className={`h-3 w-3 rounded-sm ${isDark ? 'bg-cyan-600/80' : 'bg-cyan-300'}`} />
+            <div className={`h-3 w-3 rounded-sm ${isDark ? 'bg-cyan-500' : 'bg-cyan-500'}`} />
+            <div className={`h-3 w-3 rounded-sm ${isDark ? 'bg-cyan-400' : 'bg-cyan-600'}`} />
           </div>
           <span>Más</span>
         </div>
