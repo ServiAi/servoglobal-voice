@@ -9,14 +9,14 @@ import {
   Tooltip,
   ResponsiveContainer
 } from 'recharts';
-import type { AgentDistribution } from '@/lib/api/dashboard';
+import type { DashboardAgentDistributionResponse } from '@/lib/api/dashboard';
 
 interface AgentDistributionChartProps {
-  data: AgentDistribution[];
+  data: DashboardAgentDistributionResponse;
 }
 
 export function AgentDistributionChart({ data }: AgentDistributionChartProps) {
-  if (!data || data.length === 0) {
+  if (!data?.items || !Array.isArray(data.items) || data.items.length === 0) {
     return (
       <div className="flex h-[300px] items-center justify-center rounded-xl border border-white/10 bg-zinc-900/40">
         <p className="text-sm text-zinc-500">No hay datos de agentes.</p>
@@ -24,8 +24,8 @@ export function AgentDistributionChart({ data }: AgentDistributionChartProps) {
     );
   }
 
-  // Sort by count descending and take top 5-10
-  const sortedData = [...data].sort((a, b) => b.count - a.count).slice(0, 10);
+  // Sort by calls descending and take top 10
+  const sortedData = [...data.items].sort((a, b) => b.calls - a.calls).slice(0, 10);
 
   return (
     <div className="rounded-xl border border-white/10 bg-zinc-900/40 p-5">
@@ -54,7 +54,7 @@ export function AgentDistributionChart({ data }: AgentDistributionChartProps) {
               itemStyle={{ color: '#e4e4e7' }}
               cursor={{ fill: '#27272a' }}
             />
-            <Bar dataKey="count" fill="#3b82f6" radius={[4, 4, 0, 0]} name="Llamadas" />
+            <Bar dataKey="calls" fill="#3b82f6" radius={[4, 4, 0, 0]} name="Llamadas" />
           </BarChart>
         </ResponsiveContainer>
       </div>

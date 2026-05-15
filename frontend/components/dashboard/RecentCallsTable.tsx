@@ -7,7 +7,7 @@ interface RecentCallsTableProps {
 }
 
 export function RecentCallsTable({ data }: RecentCallsTableProps) {
-  if (!data || !data.items || data.items.length === 0) {
+  if (!data?.items || !Array.isArray(data.items) || data.items.length === 0) {
     return (
       <div className="flex h-[300px] items-center justify-center rounded-xl border border-white/10 bg-zinc-900/40">
         <p className="text-sm text-zinc-500">No hay llamadas recientes.</p>

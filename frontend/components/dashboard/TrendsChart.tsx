@@ -12,14 +12,14 @@ import {
 } from 'recharts';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
-import type { TrendPoint } from '@/lib/api/dashboard';
+import type { DashboardTrendsResponse } from '@/lib/api/dashboard';
 
 interface TrendsChartProps {
-  data: TrendPoint[];
+  data: DashboardTrendsResponse;
 }
 
 export function TrendsChart({ data }: TrendsChartProps) {
-  if (!data || data.length === 0) {
+  if (!data?.series || !Array.isArray(data.series) || data.series.length === 0) {
     return (
       <div className="flex h-[300px] items-center justify-center rounded-xl border border-white/10 bg-zinc-900/40">
         <p className="text-sm text-zinc-500">No hay datos de tendencias para este periodo.</p>
@@ -28,7 +28,7 @@ export function TrendsChart({ data }: TrendsChartProps) {
   }
 
   // Format dates for the X axis
-  const formattedData = data.map(item => {
+  const formattedData = data.series.map(item => {
     let displayDate = item.date;
     try {
       if (item.date) {
@@ -37,10 +37,14 @@ export function TrendsChart({ data }: TrendsChartProps) {
     } catch (e) {
       // Ignore parse error
     }
+    
+    const answerRate = item.calls_total > 0 ? (item.calls_answered / item.calls_total) : 0;
+    
     return {
       ...item,
       displayDate,
-      successPercent: Math.round((item.success_rate ?? 0) * 100)
+      total_calls: item.calls_total,
+      successPercent: Math.round(answerRate * 100)
     };
   });
 

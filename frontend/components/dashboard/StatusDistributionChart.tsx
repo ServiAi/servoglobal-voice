@@ -8,10 +8,10 @@ import {
   ResponsiveContainer,
   Legend
 } from 'recharts';
-import type { StatusDistribution } from '@/lib/api/dashboard';
+import type { DashboardStatusDistributionResponse } from '@/lib/api/dashboard';
 
 interface StatusDistributionChartProps {
-  data: StatusDistribution[];
+  data: DashboardStatusDistributionResponse;
 }
 
 const COLORS: Record<string, string> = {
@@ -29,7 +29,7 @@ const LABELS: Record<string, string> = {
 };
 
 export function StatusDistributionChart({ data }: StatusDistributionChartProps) {
-  if (!data || data.length === 0) {
+  if (!data?.items || !Array.isArray(data.items) || data.items.length === 0) {
     return (
       <div className="flex h-[300px] items-center justify-center rounded-xl border border-white/10 bg-zinc-900/40">
         <p className="text-sm text-zinc-500">No hay datos de estados.</p>
@@ -37,10 +37,10 @@ export function StatusDistributionChart({ data }: StatusDistributionChartProps) 
     );
   }
 
-  const formattedData = data.map(item => ({
-    name: LABELS[item.status] || item.status,
-    value: item.count,
-    color: COLORS[item.status] || '#a1a1aa'
+  const formattedData = data.items.map(item => ({
+    name: LABELS[item.key] || item.label || item.key,
+    value: item.calls,
+    color: COLORS[item.key] || '#a1a1aa'
   }));
 
   return (

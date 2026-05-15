@@ -36,7 +36,7 @@ export function HeatmapChart({ data }: HeatmapChartProps) {
     return { grid: map, maxCount: max };
   }, [data]);
 
-  if (!data || !data.matrix || data.matrix.length === 0) {
+  if (!data?.matrix || !Array.isArray(data.matrix) || data.matrix.length === 0) {
     return (
       <div className="flex h-[300px] items-center justify-center rounded-xl border border-white/10 bg-zinc-900/40">
         <p className="text-sm text-zinc-500">No hay datos de calor.</p>
