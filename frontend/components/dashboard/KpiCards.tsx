@@ -6,7 +6,8 @@ interface KpiCardsProps {
 }
 
 export function KpiCards({ data }: KpiCardsProps) {
-  const formatNumber = (value: number | undefined) => (value ?? 0).toLocaleString();
+  const numberFormatter = new Intl.NumberFormat('es-CO');
+  const formatNumber = (value: number | undefined) => numberFormatter.format(value ?? 0);
   const formatPercent = (value: number | undefined) => `${(value ?? 0).toFixed(1)}%`;
 
   const kpis = [
@@ -36,7 +37,7 @@ export function KpiCards({ data }: KpiCardsProps) {
     },
     {
       title: 'Duración Total',
-      value: `${Math.round((data?.total_duration_seconds ?? 0) / 60).toLocaleString()} min`,
+      value: `${numberFormatter.format(Math.round((data?.total_duration_seconds ?? 0) / 60))} min`,
       icon: <Clock className="h-5 w-5 text-amber-500" />,
       description: 'Suma de duraciones'
     },

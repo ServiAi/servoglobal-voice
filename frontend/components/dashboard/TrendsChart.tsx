@@ -38,6 +38,15 @@ export function TrendsChart({ data }: TrendsChartProps) {
     );
   }
 
+  if (!mounted) {
+    return (
+      <div className="rounded-xl border border-border bg-card p-5">
+        <h3 className="mb-6 text-lg font-medium text-foreground">Tendencia de Llamadas</h3>
+        <div className="h-[300px] w-full animate-pulse rounded-md bg-muted/40" />
+      </div>
+    );
+  }
+
   // Format dates for the X axis
   const formattedData = data.series.map(item => {
     let displayDate = item.date;
@@ -45,7 +54,7 @@ export function TrendsChart({ data }: TrendsChartProps) {
       if (item.date) {
         displayDate = format(parseISO(item.date), 'dd MMM', { locale: es });
       }
-    } catch (e) {
+    } catch {
       // Ignore parse error
     }
     
@@ -63,7 +72,7 @@ export function TrendsChart({ data }: TrendsChartProps) {
     <div className="rounded-xl border border-border bg-card p-5">
       <h3 className="mb-6 text-lg font-medium text-foreground">Tendencia de Llamadas</h3>
       <div className="h-[300px] w-full">
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
           <ComposedChart data={formattedData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
             <defs>
               <linearGradient id="colorCalls" x1="0" y1="0" x2="0" y2="1">

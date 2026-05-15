@@ -36,7 +36,7 @@ export function HeatmapChart({ data }: HeatmapChartProps) {
           const dateObj = parseISO(p.day);
           const rawDay = getDay(dateObj); // 0 = Sunday, 1 = Monday
           dayOfWeek = rawDay === 0 ? 6 : rawDay - 1; // map so Monday = 0
-        } catch (e) {
+        } catch {
           // fallback
         }
         

@@ -5,9 +5,18 @@ import uvicorn
 
 app = FastAPI(title="ServiGlobal AI Voice Backend")
 
+
+def _cors_origins() -> list[str]:
+    return [
+        origin.strip().rstrip("/")
+        for origin in settings.CORS_ORIGINS.split(",")
+        if origin.strip()
+    ]
+
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_cors_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

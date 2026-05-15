@@ -18,12 +18,22 @@ export async function fetchMeProfile(accessToken: string): Promise<MeResult> {
     return { ok: false, status: 500, detail: 'Backend API URL is not configured' };
   }
 
-  const response = await fetch(`${apiUrl.replace(/\/$/, '')}/api/v1/me`, {
-    headers: {
-      Authorization: `Bearer ${accessToken}`
-    },
-    cache: 'no-store'
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${apiUrl.replace(/\/$/, '')}/api/v1/me`, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`
+      },
+      cache: 'no-store'
+    });
+  } catch (error) {
+    console.error('Profile API request failed', error);
+    return {
+      ok: false,
+      status: 502,
+      detail: 'Profile API is temporarily unavailable',
+    };
+  }
 
   if (!response.ok) {
     let detail = 'Unable to resolve the authenticated profile';

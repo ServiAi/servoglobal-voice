@@ -113,14 +113,24 @@ async function fetchDashboardEndpoint<T>(
   const queryStr = buildQueryString(filters);
   const url = `${apiUrl.replace(/\/$/, '')}/api/v1/dashboard/${endpoint}${queryStr}`;
 
-  const response = await fetch(url, {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-    },
-    // We shouldn't cache dashboard data strictly, but we can revalidate.
-    // Given the need for up-to-date data, 'no-store' is safest.
-    cache: 'no-store',
-  });
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+      // We shouldn't cache dashboard data strictly, but we can revalidate.
+      // Given the need for up-to-date data, 'no-store' is safest.
+      cache: 'no-store',
+    });
+  } catch (error) {
+    console.error(`Dashboard API request failed for ${endpoint}`, error);
+    return {
+      ok: false,
+      status: 502,
+      detail: 'Dashboard API is temporarily unavailable',
+    };
+  }
 
   if (!response.ok) {
     let detail = `Failed to fetch ${endpoint}`;
@@ -133,7 +143,18 @@ async function fetchDashboardEndpoint<T>(
     return { ok: false, status: response.status, detail };
   }
 
-  const data = await response.json();
+  let data: T;
+  try {
+    data = (await response.json()) as T;
+  } catch (error) {
+    console.error(`Dashboard API returned an invalid response for ${endpoint}`, error);
+    return {
+      ok: false,
+      status: 502,
+      detail: 'Dashboard API returned an invalid response',
+    };
+  }
+
   return { ok: true, data };
 }
 

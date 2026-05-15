@@ -35,6 +35,15 @@ export function AgentDistributionChart({ data }: AgentDistributionChartProps) {
     );
   }
 
+  if (!mounted) {
+    return (
+      <div className="rounded-xl border border-border bg-card p-5">
+        <h3 className="mb-6 text-lg font-medium text-foreground">Llamadas por Agente</h3>
+        <div className="h-[250px] w-full animate-pulse rounded-md bg-muted/40" />
+      </div>
+    );
+  }
+
   // Sort by calls descending and take top 10
   const sortedData = [...data.items].sort((a, b) => b.calls - a.calls).slice(0, 10);
 
@@ -42,7 +51,7 @@ export function AgentDistributionChart({ data }: AgentDistributionChartProps) {
     <div className="rounded-xl border border-border bg-card p-5">
       <h3 className="mb-6 text-lg font-medium text-foreground">Llamadas por Agente</h3>
       <div className="h-[250px] w-full">
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
           <BarChart data={sortedData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke={isDark ? "#3f3f46" : "#e4e4e7"} vertical={false} />
             <XAxis 

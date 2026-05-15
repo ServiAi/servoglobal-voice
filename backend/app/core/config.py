@@ -8,6 +8,11 @@ class Settings(BaseSettings):
     PORT: int = 8000
     DEFAULT_AGENT_ID: str | None = None
     DATABASE_URL: str = "postgresql+psycopg://serviai:serviai@localhost:5432/serviai"
+    CORS_ORIGINS: str = (
+        "https://staging.serviglobal-ia.com,"
+        "http://localhost:3000,"
+        "http://127.0.0.1:3000"
+    )
 
     # Auth0
     AUTH0_DOMAIN: str = ""

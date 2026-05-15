@@ -48,6 +48,15 @@ export function StatusDistributionChart({ data }: StatusDistributionChartProps) 
     );
   }
 
+  if (!mounted) {
+    return (
+      <div className="rounded-xl border border-border bg-card p-5">
+        <h3 className="mb-6 text-lg font-medium text-foreground">Distribución de Estados</h3>
+        <div className="h-[250px] w-full animate-pulse rounded-md bg-muted/40" />
+      </div>
+    );
+  }
+
   const formattedData = data.items.map(item => ({
     name: LABELS[item.key] || item.label || item.key,
     value: item.calls,
@@ -58,7 +67,7 @@ export function StatusDistributionChart({ data }: StatusDistributionChartProps) 
     <div className="rounded-xl border border-border bg-card p-5">
       <h3 className="mb-6 text-lg font-medium text-foreground">Distribución de Estados</h3>
       <div className="h-[250px] w-full">
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
           <PieChart>
             <Pie
               data={formattedData}
