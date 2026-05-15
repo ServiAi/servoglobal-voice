@@ -1,13 +1,13 @@
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
-import type { RecentCall } from '@/lib/api/dashboard';
+import type { DashboardRecentCallsResponse } from '@/lib/api/dashboard';
 
 interface RecentCallsTableProps {
-  data: RecentCall[];
+  data: DashboardRecentCallsResponse;
 }
 
 export function RecentCallsTable({ data }: RecentCallsTableProps) {
-  if (!data || data.length === 0) {
+  if (!data || !data.items || data.items.length === 0) {
     return (
       <div className="flex h-[300px] items-center justify-center rounded-xl border border-white/10 bg-zinc-900/40">
         <p className="text-sm text-zinc-500">No hay llamadas recientes.</p>
@@ -44,11 +44,10 @@ export function RecentCallsTable({ data }: RecentCallsTableProps) {
               <th scope="col" className="px-6 py-4 font-medium">Agente</th>
               <th scope="col" className="px-6 py-4 font-medium">Duración (s)</th>
               <th scope="col" className="px-6 py-4 font-medium">Estado</th>
-              <th scope="col" className="px-6 py-4 font-medium">Costo</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-white/5">
-            {data.map((call) => (
+            {data.items.map((call) => (
               <tr key={call.id} className="transition-colors hover:bg-white/[0.02]">
                 <td className="whitespace-nowrap px-6 py-4 font-mono text-xs text-zinc-500">
                   {call.id.slice(0, 8)}...
@@ -56,9 +55,9 @@ export function RecentCallsTable({ data }: RecentCallsTableProps) {
                 <td className="whitespace-nowrap px-6 py-4 text-zinc-300">
                   {(() => {
                     try {
-                      return call.created_at ? format(parseISO(call.created_at), "dd MMM yyyy, HH:mm", { locale: es }) : 'N/A';
+                      return call.started_at ? format(parseISO(call.started_at), "dd MMM yyyy, HH:mm", { locale: es }) : 'N/A';
                     } catch (e) {
-                      return call.created_at || 'N/A';
+                      return call.started_at || 'N/A';
                     }
                   })()}
                 </td>
@@ -70,9 +69,6 @@ export function RecentCallsTable({ data }: RecentCallsTableProps) {
                 </td>
                 <td className="whitespace-nowrap px-6 py-4">
                   {getStatusBadge(call.status)}
-                </td>
-                <td className="whitespace-nowrap px-6 py-4 text-zinc-300">
-                  ${(call.cost ?? 0).toFixed(3)}
                 </td>
               </tr>
             ))}

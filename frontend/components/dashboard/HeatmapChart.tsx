@@ -1,10 +1,11 @@
 'use client';
 
 import { useMemo } from 'react';
-import type { HeatmapPoint } from '@/lib/api/dashboard';
+import { parseISO, getDay } from 'date-fns';
+import type { DashboardHeatmapResponse } from '@/lib/api/dashboard';
 
 interface HeatmapChartProps {
-  data: HeatmapPoint[];
+  data: DashboardHeatmapResponse;
 }
 
 const DAYS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
@@ -15,15 +16,27 @@ export function HeatmapChart({ data }: HeatmapChartProps) {
     let max = 0;
     const map = new Map<string, number>();
     
-    data.forEach((p) => {
-      if (p.call_count > max) max = p.call_count;
-      map.set(`${p.day_of_week}-${p.hour_of_day}`, p.call_count);
-    });
+    if (data?.matrix) {
+      data.matrix.forEach((p) => {
+        if (p.calls > max) max = p.calls;
+        
+        let dayOfWeek = 0;
+        try {
+          const dateObj = parseISO(p.day);
+          const rawDay = getDay(dateObj); // 0 = Sunday, 1 = Monday
+          dayOfWeek = rawDay === 0 ? 6 : rawDay - 1; // map so Monday = 0
+        } catch (e) {
+          // fallback
+        }
+        
+        map.set(`${dayOfWeek}-${p.hour}`, p.calls);
+      });
+    }
 
     return { grid: map, maxCount: max };
   }, [data]);
 
-  if (!data || data.length === 0) {
+  if (!data || !data.matrix || data.matrix.length === 0) {
     return (
       <div className="flex h-[300px] items-center justify-center rounded-xl border border-white/10 bg-zinc-900/40">
         <p className="text-sm text-zinc-500">No hay datos de calor.</p>
