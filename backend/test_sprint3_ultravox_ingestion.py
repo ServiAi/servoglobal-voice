@@ -54,157 +54,257 @@ class Sprint3UltravoxIngestionTests(unittest.TestCase):
             db.refresh(agent)
             return tenant, agent
 
-    def test_webhook_persists_upstream_event_and_initial_call(self):
+    def official_payload(
+        self,
+        event: str,
+        call_id: str,
+        tenant: Tenant | None = None,
+        agent_external_id: str | None = None,
+        metadata: dict | None = None,
+        **call_overrides,
+    ) -> dict:
+        call_metadata = metadata.copy() if metadata is not None else {}
+        if tenant is not None and not call_metadata:
+            call_metadata = {
+                "tenant_id": tenant.id,
+                "tenant_slug": tenant.slug,
+                "direction": "outbound",
+                "customer_phone": "+573001112233",
+            }
+        call = {
+            "callId": call_id,
+            "created": "2026-05-02T14:00:00Z",
+            "joined": None,
+            "ended": None,
+            "shortSummary": None,
+            "summary": None,
+            "metadata": call_metadata,
+            "endReason": None,
+            "billingStatus": "BILLING_STATUS_PENDING",
+            "agent": {"agentId": agent_external_id} if agent_external_id else {},
+        }
+        call.update(call_overrides)
+        return {"event": event, "call": call}
+
+    def test_webhook_persists_official_started_event_and_initial_call(self):
         tenant, agent = self.seed_tenant_and_agent()
 
         response = self.client.post(
             "/api/v1/integrations/ultravox/events",
             headers={"x-serviai-webhook-secret": "test-webhook-secret"},
-            json={
-                "eventType": "call.started",
-                "eventId": "evt-started-1",
-                "callId": "uvx-call-1",
-                "tenant_id": tenant.id,
-                "agentId": agent.external_agent_id,
-                "status": "started",
-                "startedAt": "2026-05-02T14:00:00Z",
-                "direction": "outbound",
-                "customerPhone": "+573001112233",
-            },
+            json=self.official_payload(
+                "call.started",
+                "uvx-call-1",
+                tenant,
+                agent.external_agent_id,
+            ),
         )
 
         self.assertEqual(response.status_code, 200)
         with SessionLocal() as db:
             call = db.query(Call).filter_by(external_call_id="uvx-call-1").one()
-            event = db.query(CallEvent).filter_by(provider_event_id="evt-started-1").one()
+            event = db.query(CallEvent).filter_by(event_type="call.started").one()
             self.assertEqual(call.tenant_id, tenant.id)
             self.assertEqual(call.agent_id, agent.id)
             self.assertEqual(call.provider_status, "started")
             self.assertEqual(call.normalized_status, "in_progress")
+            self.assertEqual(call.direction, "outbound")
+            self.assertEqual(call.customer_phone, "+573001112233")
             self.assertEqual(event.call_id, call.id)
+            self.assertEqual(event.payload_json["call"]["callId"], "uvx-call-1")
 
-    def test_call_progressively_updates_joined_ended_summary_and_billing(self):
+    def test_official_events_progressively_update_joined_ended_summary_and_billing(self):
         tenant, agent = self.seed_tenant_and_agent()
 
         with SessionLocal() as db:
             service = UltravoxIngestionService(db)
-            service.ingest_event(
-                {
-                    "eventType": "call.started",
-                    "eventId": "evt-1",
-                    "callId": "uvx-progressive",
-                    "tenant_id": tenant.id,
-                    "agentId": agent.external_agent_id,
-                    "status": "started",
-                    "startedAt": "2026-05-02T14:00:00Z",
-                }
+            started = service.ingest_event(
+                self.official_payload(
+                    "call.started",
+                    "uvx-progressive",
+                    tenant,
+                    agent.external_agent_id,
+                )
             )
-            service.ingest_event(
-                {
-                    "eventType": "call.joined",
-                    "eventId": "evt-2",
-                    "callId": "uvx-progressive",
-                    "tenant_id": tenant.id,
-                    "status": "joined",
-                    "joinedAt": "2026-05-02T14:00:12Z",
-                }
+            self.assertEqual(started.call.normalized_status, "in_progress")
+
+            joined = service.ingest_event(
+                self.official_payload(
+                    "call.joined",
+                    "uvx-progressive",
+                    tenant,
+                    agent.external_agent_id,
+                    joined="2026-05-02T14:00:12Z",
+                )
             )
-            service.ingest_event(
-                {
-                    "eventType": "call.ended",
-                    "eventId": "evt-3",
-                    "callId": "uvx-progressive",
-                    "tenant_id": tenant.id,
-                    "status": "ended",
-                    "endedAt": "2026-05-02T14:03:20Z",
-                    "durationSeconds": 200,
-                }
+            self.assertEqual(joined.call.normalized_status, "in_progress")
+            self.assertIsNotNone(joined.call.joined_at)
+
+            ended = service.ingest_event(
+                self.official_payload(
+                    "call.ended",
+                    "uvx-progressive",
+                    tenant,
+                    agent.external_agent_id,
+                    joined="2026-05-02T14:00:12Z",
+                    ended="2026-05-02T14:03:20Z",
+                    endReason="hangup",
+                )
             )
-            service.ingest_event(
-                {
-                    "eventType": "call.summary.completed",
-                    "eventId": "evt-4",
-                    "callId": "uvx-progressive",
-                    "tenant_id": tenant.id,
-                    "summary": "Cliente pidio una demo comercial.",
-                    "shortSummary": "Demo comercial",
-                }
-            )
-            service.ingest_event(
-                {
-                    "eventType": "call.billing.updated",
-                    "eventId": "evt-5",
-                    "callId": "uvx-progressive",
-                    "tenant_id": tenant.id,
-                    "billedMinutes": "4.00",
-                }
+            self.assertEqual(ended.call.normalized_status, "answered")
+            self.assertEqual(ended.call.duration_seconds, 188)
+
+            billed = service.ingest_event(
+                self.official_payload(
+                    "call.billed",
+                    "uvx-progressive",
+                    tenant,
+                    agent.external_agent_id,
+                    joined="2026-05-02T14:00:12Z",
+                    ended="2026-05-02T14:03:20Z",
+                    endReason="hangup",
+                    billingStatus="BILLING_STATUS_BILLED",
+                    billedDuration="240s",
+                    summary="Cliente pidio una demo comercial.",
+                    shortSummary="Demo comercial",
+                )
             )
 
             call = db.query(Call).filter_by(external_call_id="uvx-progressive").one()
             self.assertEqual(db.query(Call).count(), 1)
-            self.assertEqual(db.query(CallEvent).count(), 5)
+            self.assertEqual(db.query(CallEvent).count(), 4)
             self.assertEqual(call.agent_id, agent.id)
-            self.assertEqual(call.provider_status, "ended")
+            self.assertEqual(call.provider_status, "BILLING_STATUS_BILLED")
             self.assertEqual(call.normalized_status, "answered")
-            self.assertEqual(call.duration_seconds, 200)
+            self.assertEqual(billed.call.normalized_status, "answered")
+            self.assertEqual(call.duration_seconds, 188)
             self.assertEqual(call.billed_minutes, Decimal("4.00"))
             self.assertEqual(call.summary, "Cliente pidio una demo comercial.")
             self.assertEqual(call.short_summary, "Demo comercial")
             self.assertIsNotNone(call.last_synced_at)
 
-    def test_late_reconciliation_completes_missing_data_without_event(self):
+    def test_official_reconciliation_completes_missing_data_without_event(self):
         tenant, _ = self.seed_tenant_and_agent()
 
         with SessionLocal() as db:
             service = UltravoxIngestionService(db)
             service.ingest_event(
-                {
-                    "eventType": "call.started",
-                    "eventId": "evt-reconcile-1",
-                    "callId": "uvx-reconcile",
-                    "tenant_id": tenant.id,
-                    "status": "started",
-                    "startedAt": "2026-05-02T15:00:00Z",
-                }
+                self.official_payload("call.started", "uvx-reconcile", tenant)
             )
 
             result = service.reconcile_call(
-                {
-                    "callId": "uvx-reconcile",
-                    "tenant_id": tenant.id,
-                    "status": "completed",
-                    "endedAt": "2026-05-02T15:02:00Z",
-                    "durationSeconds": 120,
-                    "billedMinutes": 2,
-                    "summary": "Datos completados por reconciliacion.",
-                }
+                self.official_payload(
+                    "call.billed",
+                    "uvx-reconcile",
+                    metadata={"tenant_slug": tenant.slug},
+                    joined="2026-05-02T15:00:15Z",
+                    ended="2026-05-02T15:02:00Z",
+                    endReason="agent_hangup",
+                    billingStatus="BILLING_STATUS_BILLED",
+                    billedDuration="120s",
+                    summary="Datos completados por reconciliacion.",
+                )
             )
 
             self.assertIsNone(result.event)
             self.assertEqual(db.query(CallEvent).count(), 1)
             self.assertEqual(result.call.normalized_status, "answered")
-            self.assertEqual(result.call.duration_seconds, 120)
+            self.assertEqual(result.call.duration_seconds, 105)
             self.assertEqual(result.call.billed_minutes, Decimal("2.00"))
             self.assertEqual(result.call.summary, "Datos completados por reconciliacion.")
 
-    def test_missing_agent_mapping_keeps_call_unassigned(self):
+    def test_official_tenant_slug_and_missing_agent_mapping_keeps_call_unassigned(self):
         tenant, _ = self.seed_tenant_and_agent()
+
+        with SessionLocal() as db:
+            result = UltravoxIngestionService(db).ingest_event(
+                self.official_payload(
+                    "call.started",
+                    "uvx-unassigned",
+                    metadata={"tenant_slug": tenant.slug},
+                    agent_external_id="unknown-agent",
+                )
+            )
+
+            self.assertIsNone(result.call.agent_id)
+            self.assertEqual(result.call.provider_agent_id, "unknown-agent")
+            self.assertEqual(result.call.tenant_id, tenant.id)
+
+    def test_official_unjoined_ended_event_normalizes_as_unanswered(self):
+        tenant, _ = self.seed_tenant_and_agent()
+
+        with SessionLocal() as db:
+            result = UltravoxIngestionService(db).ingest_event(
+                self.official_payload(
+                    "call.ended",
+                    "uvx-unjoined",
+                    tenant,
+                    ended="2026-05-02T14:00:30Z",
+                    endReason="unjoined",
+                    billingStatus="BILLING_STATUS_FREE_ZERO_EFFECTIVE_DURATION",
+                )
+            )
+
+            self.assertEqual(result.call.provider_status, "unjoined")
+            self.assertEqual(result.call.normalized_status, "unanswered")
+
+    def test_official_out_of_order_started_event_does_not_downgrade_terminal_call(self):
+        tenant, _ = self.seed_tenant_and_agent()
+
+        with SessionLocal() as db:
+            service = UltravoxIngestionService(db)
+            service.ingest_event(
+                self.official_payload(
+                    "call.ended",
+                    "uvx-out-of-order",
+                    tenant,
+                    joined="2026-05-02T14:00:12Z",
+                    ended="2026-05-02T14:03:20Z",
+                    endReason="hangup",
+                )
+            )
+            service.ingest_event(
+                self.official_payload("call.started", "uvx-out-of-order", tenant)
+            )
+
+            call = db.query(Call).filter_by(external_call_id="uvx-out-of-order").one()
+            self.assertEqual(db.query(CallEvent).count(), 2)
+            self.assertEqual(call.provider_status, "hangup")
+            self.assertEqual(call.normalized_status, "answered")
+
+    def test_missing_official_tenant_metadata_is_rejected(self):
+        response = self.client.post(
+            "/api/v1/integrations/ultravox/events",
+            headers={"x-serviai-webhook-secret": "test-webhook-secret"},
+            json=self.official_payload(
+                "call.started",
+                "uvx-missing-tenant",
+                metadata={},
+            ),
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["detail"], "Unable to resolve tenant for Ultravox payload")
+
+    def test_legacy_flat_payload_remains_supported(self):
+        tenant, agent = self.seed_tenant_and_agent()
 
         with SessionLocal() as db:
             result = UltravoxIngestionService(db).ingest_event(
                 {
                     "eventType": "call.started",
-                    "eventId": "evt-unassigned",
-                    "callId": "uvx-unassigned",
+                    "eventId": "evt-legacy",
+                    "callId": "uvx-legacy",
                     "tenant_id": tenant.id,
-                    "agentId": "unknown-agent",
+                    "agentId": agent.external_agent_id,
                     "status": "started",
                     "startedAt": "2026-05-02T16:00:00Z",
                 }
             )
 
-            self.assertIsNone(result.call.agent_id)
-            self.assertEqual(result.call.provider_agent_id, "unknown-agent")
+            self.assertEqual(result.event.event_type, "call.started")
+            self.assertEqual(result.call.external_call_id, "uvx-legacy")
+            self.assertEqual(result.call.agent_id, agent.id)
 
     def test_webhook_rejects_invalid_secret(self):
         tenant, _ = self.seed_tenant_and_agent()
@@ -212,12 +312,7 @@ class Sprint3UltravoxIngestionTests(unittest.TestCase):
         response = self.client.post(
             "/api/v1/integrations/ultravox/events",
             headers={"x-serviai-webhook-secret": "wrong"},
-            json={
-                "eventType": "call.started",
-                "callId": "uvx-secret",
-                "tenant_id": tenant.id,
-                "status": "started",
-            },
+            json=self.official_payload("call.started", "uvx-secret", tenant),
         )
 
         self.assertEqual(response.status_code, 401)

@@ -9,8 +9,11 @@ from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.analytics import Agent, Call, CallEvent
+from app.models.analytics import NORMALIZED_CALL_STATUSES, Agent, Call, CallEvent
 from app.services.call_status_normalizer import CallStatusNormalizer
+
+
+TERMINAL_CALL_STATUSES = set(NORMALIZED_CALL_STATUSES) - {"in_progress"}
 
 
 @dataclass(frozen=True)
@@ -132,11 +135,20 @@ class CallPersistenceService:
         if payload.external_call_id is not None:
             call.external_call_id = payload.external_call_id
         call.external_provider = payload.external_provider
+        should_update_status = payload.provider_status is not None or payload.normalized_status is not None
+        normalized_status = self._normalized_status(payload) if should_update_status else None
+        is_status_regression = (
+            payload.partial_update
+            and call.normalized_status in TERMINAL_CALL_STATUSES
+            and normalized_status == "in_progress"
+        )
+
         self._assign(call, "agent_id", payload.agent_id, payload.partial_update)
         self._assign(call, "provider_agent_id", payload.provider_agent_id, payload.partial_update)
-        self._assign(call, "provider_status", payload.provider_status, payload.partial_update)
-        if payload.provider_status is not None or payload.normalized_status is not None:
-            call.normalized_status = self._normalized_status(payload)
+        if not is_status_regression:
+            self._assign(call, "provider_status", payload.provider_status, payload.partial_update)
+            if normalized_status is not None:
+                call.normalized_status = normalized_status
         self._assign(call, "started_at", payload.started_at, payload.partial_update)
         self._assign(call, "joined_at", payload.joined_at, payload.partial_update)
         self._assign(call, "ended_at", payload.ended_at, payload.partial_update)
