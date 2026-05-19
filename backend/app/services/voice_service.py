@@ -5,6 +5,13 @@ from app.core.config import settings
 logger = logging.getLogger(__name__)
 
 
+def _ultravox_tenant_metadata() -> dict[str, str]:
+    tenant_slug = (settings.BOOTSTRAP_TENANT_SLUG or "").strip()
+    if not tenant_slug:
+        raise ValueError("BOOTSTRAP_TENANT_SLUG is required to create Ultravox calls.")
+    return {"tenant_slug": tenant_slug}
+
+
 async def create_call_session(
     agent_id: str | None = None,
     system_prompt: str | None = None,
@@ -22,7 +29,9 @@ async def create_call_session(
     # Determine Agent ID: Argument overrides Settings
     final_agent_id = agent_id or settings.DEFAULT_AGENT_ID
 
-    payload = {}
+    payload = {
+        "metadata": _ultravox_tenant_metadata(),
+    }
 
     if not final_agent_id:
         raise ValueError(
@@ -114,6 +123,7 @@ async def create_sip_call_via_pbx(
             }
         },
         "firstSpeakerSettings": {"agent": {}},  # Force agent to speak first
+        "metadata": _ultravox_tenant_metadata(),
     }
 
     if template_context:
@@ -183,6 +193,7 @@ async def create_scheduled_sip_call_via_pbx(
             }
         },
         "firstSpeakerSettings": {"agent": {}},
+        "metadata": _ultravox_tenant_metadata(),
     }
 
     if template_context:
