@@ -5,6 +5,8 @@ class Settings(BaseSettings):
     ULTRAVOX_API_KEY: str
     ULTRAVOX_MODEL: str = "fixie-ai/ultravox-70b"
     ULTRAVOX_WEBHOOK_SECRET: str = ""
+    ULTRAVOX_WEBHOOK_SIGNATURE_TOLERANCE_SECONDS: int = 60
+    ULTRAVOX_ALLOW_UNSIGNED_WEBHOOKS: bool = False
     PORT: int = 8000
     DEFAULT_AGENT_ID: str | None = None
     DATABASE_URL: str = "postgresql+psycopg://serviai:serviai@localhost:5432/serviai"

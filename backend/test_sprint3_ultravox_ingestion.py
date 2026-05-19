@@ -1,5 +1,8 @@
+import hashlib
+import hmac
+import json
 import os
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 import unittest
@@ -28,6 +31,8 @@ class Sprint3UltravoxIngestionTests(unittest.TestCase):
 
     def setUp(self):
         settings.ULTRAVOX_WEBHOOK_SECRET = "test-webhook-secret"
+        settings.ULTRAVOX_ALLOW_UNSIGNED_WEBHOOKS = False
+        settings.ULTRAVOX_WEBHOOK_SIGNATURE_TOLERANCE_SECONDS = 60
         Base.metadata.drop_all(bind=engine)
         Base.metadata.create_all(bind=engine)
         app.dependency_overrides.clear()
@@ -86,18 +91,43 @@ class Sprint3UltravoxIngestionTests(unittest.TestCase):
         call.update(call_overrides)
         return {"event": event, "call": call}
 
+    def signed_webhook_request(
+        self,
+        payload: dict,
+        *,
+        timestamp: datetime | None = None,
+        signatures: list[str] | None = None,
+        secret: str = "test-webhook-secret",
+    ) -> tuple[bytes, dict[str, str]]:
+        body = json.dumps(payload, separators=(",", ":")).encode()
+        request_timestamp = (timestamp or datetime.now(UTC)).isoformat()
+        valid_signature = hmac.new(
+            secret.encode(),
+            body + request_timestamp.encode(),
+            hashlib.sha256,
+        ).hexdigest()
+        signature_header = ",".join(signatures or [valid_signature])
+        return body, {
+            "content-type": "application/json",
+            "x-ultravox-webhook-timestamp": request_timestamp,
+            "x-ultravox-webhook-signature": signature_header,
+        }
+
     def test_webhook_persists_official_started_event_and_initial_call(self):
         tenant, agent = self.seed_tenant_and_agent()
-
-        response = self.client.post(
-            "/api/v1/integrations/ultravox/events",
-            headers={"x-serviai-webhook-secret": "test-webhook-secret"},
-            json=self.official_payload(
+        body, headers = self.signed_webhook_request(
+            self.official_payload(
                 "call.started",
                 "uvx-call-1",
                 tenant,
                 agent.external_agent_id,
-            ),
+            )
+        )
+
+        response = self.client.post(
+            "/api/v1/integrations/ultravox/events",
+            content=body,
+            headers=headers,
         )
 
         self.assertEqual(response.status_code, 200)
@@ -273,14 +303,18 @@ class Sprint3UltravoxIngestionTests(unittest.TestCase):
             self.assertEqual(call.normalized_status, "answered")
 
     def test_missing_official_tenant_metadata_is_rejected(self):
-        response = self.client.post(
-            "/api/v1/integrations/ultravox/events",
-            headers={"x-serviai-webhook-secret": "test-webhook-secret"},
-            json=self.official_payload(
+        body, headers = self.signed_webhook_request(
+            self.official_payload(
                 "call.started",
                 "uvx-missing-tenant",
                 metadata={},
-            ),
+            )
+        )
+
+        response = self.client.post(
+            "/api/v1/integrations/ultravox/events",
+            content=body,
+            headers=headers,
         )
 
         self.assertEqual(response.status_code, 400)
@@ -306,16 +340,69 @@ class Sprint3UltravoxIngestionTests(unittest.TestCase):
             self.assertEqual(result.call.external_call_id, "uvx-legacy")
             self.assertEqual(result.call.agent_id, agent.id)
 
-    def test_webhook_rejects_invalid_secret(self):
+    def test_webhook_rejects_invalid_signature(self):
         tenant, _ = self.seed_tenant_and_agent()
+        body, headers = self.signed_webhook_request(
+            self.official_payload("call.started", "uvx-secret", tenant),
+            signatures=["wrong"],
+        )
 
         response = self.client.post(
             "/api/v1/integrations/ultravox/events",
-            headers={"x-serviai-webhook-secret": "wrong"},
-            json=self.official_payload("call.started", "uvx-secret", tenant),
+            content=body,
+            headers=headers,
         )
 
         self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.json()["detail"], "Invalid Ultravox webhook signature")
+
+    def test_webhook_rejects_expired_timestamp(self):
+        tenant, _ = self.seed_tenant_and_agent()
+        body, headers = self.signed_webhook_request(
+            self.official_payload("call.started", "uvx-expired", tenant),
+            timestamp=datetime.now(UTC) - timedelta(minutes=2),
+        )
+
+        response = self.client.post(
+            "/api/v1/integrations/ultravox/events",
+            content=body,
+            headers=headers,
+        )
+
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.json()["detail"], "Expired Ultravox webhook timestamp")
+
+    def test_webhook_accepts_multiple_signatures_when_one_matches(self):
+        tenant, agent = self.seed_tenant_and_agent()
+        payload = self.official_payload(
+            "call.started",
+            "uvx-multiple-signatures",
+            tenant,
+            agent.external_agent_id,
+        )
+        body = json.dumps(payload, separators=(",", ":")).encode()
+        request_timestamp = datetime.now(UTC).isoformat()
+        valid_signature = hmac.new(
+            settings.ULTRAVOX_WEBHOOK_SECRET.encode(),
+            body + request_timestamp.encode(),
+            hashlib.sha256,
+        ).hexdigest()
+        headers = {
+            "content-type": "application/json",
+            "x-ultravox-webhook-timestamp": request_timestamp,
+            "x-ultravox-webhook-signature": f"wrong,{valid_signature}",
+        }
+
+        response = self.client.post(
+            "/api/v1/integrations/ultravox/events",
+            content=body,
+            headers=headers,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        with SessionLocal() as db:
+            call = db.query(Call).filter_by(external_call_id="uvx-multiple-signatures").one()
+            self.assertEqual(call.agent_id, agent.id)
 
 
 if __name__ == "__main__":
