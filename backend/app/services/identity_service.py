@@ -29,31 +29,92 @@ class IdentityService:
         self.db = db
 
     def resolve_user(self, identity: AuthenticatedIdentity) -> User:
+        # Step 1: Try exact match by external_auth_id (highest priority)
         user = self.db.scalar(
             select(User).where(User.external_auth_id == identity.external_auth_id)
         )
-        if user is None:
-            user = self._resolve_user_by_email(identity)
-
-        if user is None:
-            if not settings.AUTH0_AUTO_CREATE_USERS:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Authenticated user is not registered internally",
-                )
-            user = User(
-                external_auth_id=identity.external_auth_id,
-                email=identity.email or _fallback_email(identity.external_auth_id),
-                name=identity.name,
-                is_internal=False,
-                status=ACTIVE,
-                last_login_at=datetime.now(UTC),
-            )
-            self.db.add(user)
-            self.db.commit()
-            self.db.refresh(user)
+        if user is not None:
+            self._update_user_from_identity(user, identity)
             return user
 
+        # Step 2: If no external_auth_id match, try to resolve by email
+        if identity.email:
+            user = self._resolve_user_by_email_strict(identity)
+            if user is not None:
+                return user
+
+        # Step 3: No match found — either create new or reject
+        if not settings.AUTH0_AUTO_CREATE_USERS:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Authenticated user is not registered internally",
+            )
+
+        email = identity.email or _fallback_email(identity.external_auth_id)
+        user = User(
+            external_auth_id=identity.external_auth_id,
+            email=email,
+            name=identity.name,
+            is_internal=False,
+            status=ACTIVE,
+            last_login_at=datetime.now(UTC),
+        )
+        self.db.add(user)
+        self.db.commit()
+        self.db.refresh(user)
+        return user
+
+    def _resolve_user_by_email_strict(self, identity: AuthenticatedIdentity) -> User | None:
+        """Resolve a user by email with strict ambiguity detection.
+
+        Rules:
+        1. If exactly one active user exists with this email:
+           - If it already has external_auth_id, return it (already linked)
+           - If external_auth_id is NULL, link it (first login)
+        2. If multiple active users share this email, raise 409 explicitly.
+        3. If no user exists, return None (caller will create new or reject).
+        """
+        # Find ALL active users with this email
+        matching_users = self.db.scalars(
+            select(User).where(User.email == identity.email)
+        ).all()
+
+        if len(matching_users) == 0:
+            return None
+
+        if len(matching_users) > 1:
+            # AMBIGUITY: multiple active users with same email
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    f"Multiple active users found with email '{identity.email}'. "
+                    "Manual resolution required to merge or disambiguate accounts."
+                ),
+            )
+
+        # Exactly one match
+        user = matching_users[0]
+
+        if user.status != ACTIVE:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Authenticated user is not active",
+            )
+
+        # If already linked to a different sub, return as-is (don't overwrite)
+        if user.external_auth_id is not None:
+            return user
+
+        # Link the Auth0 sub to this pre-provisioned user
+        user.external_auth_id = identity.external_auth_id
+        user.name = identity.name or user.name
+        user.last_login_at = datetime.now(UTC)
+        self.db.commit()
+        self.db.refresh(user)
+        return user
+
+    def _update_user_from_identity(self, user: User, identity: AuthenticatedIdentity) -> None:
+        """Update user fields from Auth0 identity after a successful match."""
         if user.status != ACTIVE:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -66,21 +127,6 @@ class IdentityService:
         user.last_login_at = datetime.now(UTC)
         self.db.commit()
         self.db.refresh(user)
-        return user
-
-    def _resolve_user_by_email(self, identity: AuthenticatedIdentity) -> User | None:
-        if not identity.email:
-            return None
-        existing = self.db.scalar(
-            select(User).where(User.email == identity.email)
-        )
-        if existing is None:
-            return None
-        if existing.external_auth_id is not None:
-            return existing
-        existing.external_auth_id = identity.external_auth_id
-        self.db.flush()
-        return existing
 
     def resolve_active_membership(self, user: User) -> TenantMembership:
         membership = self.db.scalar(
