@@ -21,13 +21,15 @@ const COLORS: Record<string, string> = {
   failed: '#ef4444',    // red-500
   no_answer: '#f59e0b', // amber-500
   in_progress: '#3b82f6', // blue-500
+  voicemail: '#8b5cf6', // violet-500
 };
 
 const LABELS: Record<string, string> = {
   completed: 'Completada',
   failed: 'Fallida',
   no_answer: 'Sin Respuesta',
-  in_progress: 'En Progreso'
+  in_progress: 'En Progreso',
+  voicemail: 'Buzón de Voz',
 };
 
 export function StatusDistributionChart({ data }: StatusDistributionChartProps) {

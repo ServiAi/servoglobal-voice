@@ -320,6 +320,116 @@ class Sprint3UltravoxIngestionTests(unittest.TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json()["detail"], "Unable to resolve tenant for Ultravox payload")
 
+    def test_voicemail_call_with_agent_hangup_and_voicemail_summary_normalizes_as_voicemail(self):
+        tenant, agent = self.seed_tenant_and_agent()
+
+        with SessionLocal() as db:
+            service = UltravoxIngestionService(db)
+
+            started = service.ingest_event(
+                self.official_payload(
+                    "call.started",
+                    "uvx-voicemail",
+                    tenant,
+                    agent.external_agent_id,
+                )
+            )
+            self.assertEqual(started.call.normalized_status, "in_progress")
+
+            joined = service.ingest_event(
+                self.official_payload(
+                    "call.joined",
+                    "uvx-voicemail",
+                    tenant,
+                    agent.external_agent_id,
+                    joined="2026-05-02T14:00:12Z",
+                )
+            )
+            self.assertEqual(joined.call.normalized_status, "in_progress")
+            self.assertIsNotNone(joined.call.joined_at)
+
+            ended = service.ingest_event(
+                self.official_payload(
+                    "call.ended",
+                    "uvx-voicemail",
+                    tenant,
+                    agent.external_agent_id,
+                    joined="2026-05-02T14:00:12Z",
+                    ended="2026-05-02T14:03:55Z",
+                    endReason="agent_hangup",
+                    shortSummary="La llamada fue contestada por un buzón de voz automático.",
+                    summary="Se intentó contactar al usuario pero la llamada fue atendida por un sistema de contestador automático.",
+                )
+            )
+            self.assertEqual(ended.call.normalized_status, "voicemail")
+            self.assertEqual(ended.call.duration_seconds, 223)
+
+            billed = service.ingest_event(
+                self.official_payload(
+                    "call.billed",
+                    "uvx-voicemail",
+                    tenant,
+                    agent.external_agent_id,
+                    joined="2026-05-02T14:00:12Z",
+                    ended="2026-05-02T14:03:55Z",
+                    endReason="agent_hangup",
+                    billingStatus="BILLING_STATUS_BILLED",
+                    billedDuration="240s",
+                    shortSummary="Buzón de voz automático.",
+                    summary="Sistema de contestador automático atendió la llamada.",
+                )
+            )
+
+            call = db.query(Call).filter_by(external_call_id="uvx-voicemail").one()
+            self.assertEqual(db.query(Call).count(), 1)
+            self.assertEqual(db.query(CallEvent).count(), 4)
+            self.assertEqual(call.normalized_status, "voicemail")
+            self.assertEqual(billed.call.normalized_status, "voicemail")
+            self.assertEqual(call.duration_seconds, 223)
+            self.assertEqual(call.billed_minutes, Decimal("4.00"))
+            self.assertEqual(call.short_summary, "Buzón de voz automático.")
+
+    def test_human_answered_call_with_hangup_stays_answered(self):
+        tenant, agent = self.seed_tenant_and_agent()
+
+        with SessionLocal() as db:
+            service = UltravoxIngestionService(db)
+
+            service.ingest_event(
+                self.official_payload(
+                    "call.started",
+                    "uvx-human",
+                    tenant,
+                    agent.external_agent_id,
+                )
+            )
+
+            service.ingest_event(
+                self.official_payload(
+                    "call.joined",
+                    "uvx-human",
+                    tenant,
+                    agent.external_agent_id,
+                    joined="2026-05-02T14:00:12Z",
+                )
+            )
+
+            ended = service.ingest_event(
+                self.official_payload(
+                    "call.ended",
+                    "uvx-human",
+                    tenant,
+                    agent.external_agent_id,
+                    joined="2026-05-02T14:00:12Z",
+                    ended="2026-05-02T14:03:20Z",
+                    endReason="hangup",
+                    shortSummary="Cliente habló con el agente y confirmó su identidad.",
+                    summary="Yeisson confirmó su identidad y habló sobre integración de IA.",
+                )
+            )
+
+            self.assertEqual(ended.call.normalized_status, "answered")
+
     def test_legacy_flat_payload_remains_supported(self):
         tenant, agent = self.seed_tenant_and_agent()
 

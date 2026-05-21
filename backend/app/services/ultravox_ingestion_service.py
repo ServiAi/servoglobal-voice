@@ -218,14 +218,18 @@ class UltravoxIngestionService:
 
         if end_reason:
             mapped_reason = self._status_from_end_reason(end_reason, joined_at is not None)
-            if mapped_reason:
+            if mapped_reason and mapped_reason != "answered":
                 return mapped_reason
 
         if billing_status and billing_status.upper() == "BILLING_STATUS_FREE_SYSTEM_ERROR":
             return "failed"
 
         if ended_at:
-            return "answered" if joined_at else "unanswered"
+            if joined_at:
+                if self._detect_voicemail(payload):
+                    return "voicemail"
+                return "answered"
+            return "unanswered"
 
         if legacy_status:
             return legacy_status
@@ -233,7 +237,11 @@ class UltravoxIngestionService:
         if event_type in {"call.started", "call.joined"}:
             return "in_progress"
         if event_type in {"call.ended", "call.billed"}:
-            return "answered" if joined_at else "unanswered"
+            if joined_at:
+                if self._detect_voicemail(payload):
+                    return "voicemail"
+                return "answered"
+            return "unanswered"
 
         return "in_progress" if started_at else None
 
@@ -256,6 +264,32 @@ class UltravoxIngestionService:
         if normalized_reason in {"voicemail", "machine"}:
             return "voicemail"
         return None
+
+    _VOICEMAIL_PATTERNS = frozenset({
+        "buzón de voz",
+        "buzón de voz automático",
+        "contestador automático",
+        "mensaje de voz",
+        "correo de voz",
+        "systema de contestador",
+        "sistema de contestador",
+        "contestador automatico",
+        "contestador automático",
+        "machine",
+        "voicemail",
+        "answering machine",
+    })
+
+    def _detect_voicemail(self, payload: dict[str, Any]) -> bool:
+        call_obj = self._call_object(payload)
+        short_summary = self._string(call_obj.get("shortSummary") or call_obj.get("short_summary"))
+        summary = self._string(call_obj.get("summary"))
+
+        text_to_check = " ".join(filter(None, [short_summary, summary])).lower()
+        if not text_to_check:
+            return False
+
+        return any(pattern in text_to_check for pattern in self._VOICEMAIL_PATTERNS)
 
     def _event_type(self, payload: dict[str, Any]) -> str:
         return self._string(

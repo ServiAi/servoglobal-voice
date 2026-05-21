@@ -120,6 +120,18 @@ class Sprint4BDashboardApiTests(unittest.TestCase):
                     billed_minutes=Decimal("1.00"),
                 ),
                 Call(
+                    tenant_id=tenant.id,
+                    external_provider="ultravox",
+                    external_call_id="call-voicemail-1",
+                    agent_id=agent.id,
+                    normalized_status="voicemail",
+                    started_at=datetime(2026, 5, 5, 10, 0, tzinfo=UTC),
+                    duration_seconds=223,
+                    billed_minutes=Decimal("3.80"),
+                    summary="La llamada fue atendida por un sistema de contestador automático.",
+                    short_summary="Buzón de voz automático.",
+                ),
+                Call(
                     tenant_id=other_tenant.id,
                     external_provider="ultravox",
                     external_call_id="other-tenant-call",
@@ -149,14 +161,31 @@ class Sprint4BDashboardApiTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         payload = response.json()
-        self.assertEqual(payload["calls_total"], 4)
+        self.assertEqual(payload["calls_total"], 5)
         self.assertEqual(payload["calls_answered"], 1)
         self.assertEqual(payload["calls_unanswered"], 1)
         self.assertEqual(payload["active_calls"], 1)
-        self.assertEqual(payload["answer_rate"], 33.33)
+        self.assertEqual(payload["answer_rate"], 25.0)
         self.assertEqual(payload["avg_duration_seconds"], 120.0)
-        self.assertEqual(payload["total_duration_seconds"], 160)
-        self.assertEqual(payload["billed_minutes"], 4.0)
+        self.assertEqual(payload["total_duration_seconds"], 383)
+        self.assertEqual(payload["billed_minutes"], 7.8)
+
+    def test_voicemail_appears_in_status_distribution(self):
+        response = self.client.get(
+            "/api/v1/dashboard/status-distribution",
+            headers=self.auth_headers(),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        statuses = {item["key"]: item for item in response.json()["items"]}
+        self.assertIn("voicemail", statuses)
+        self.assertEqual(statuses["voicemail"]["calls"], 1)
+        self.assertEqual(statuses["voicemail"]["label"], "Voicemail")
+        self.assertEqual(statuses["voicemail"]["percentage"], 20.0)
+        self.assertEqual(statuses["answered"]["calls"], 1)
+        self.assertEqual(statuses["unanswered"]["calls"], 1)
+        self.assertEqual(statuses["failed"]["calls"], 1)
+        self.assertEqual(statuses["in_progress"]["calls"], 1)
 
     def test_trends_status_agent_heatmap_and_recent_calls_share_filters(self):
         params = {"from": "2026-05-02", "to": "2026-05-03", "agent_id": self.agent_id}
@@ -203,6 +232,18 @@ class Sprint4BDashboardApiTests(unittest.TestCase):
         recent_payload = recent_calls.json()
         self.assertEqual(recent_payload["total"], 2)
         self.assertEqual([item["status"] for item in recent_payload["items"]], ["in_progress", "answered"])
+
+    def test_kpis_exclude_voicemail_from_answered_and_answer_rate(self):
+        response = self.client.get("/api/v1/dashboard/kpis", headers=self.auth_headers())
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["calls_total"], 5)
+        self.assertEqual(payload["calls_answered"], 1)
+        self.assertEqual(payload["calls_unanswered"], 1)
+        self.assertEqual(payload["answer_rate"], 25.0)
+        eligible = 4  # total - in_progress = 5 - 1
+        self.assertEqual(payload["answer_rate"], round((1 / eligible) * 100, 2))
 
     def test_status_filter_and_tenant_isolation_are_enforced(self):
         response = self.client.get(

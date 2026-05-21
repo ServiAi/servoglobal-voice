@@ -123,37 +123,9 @@ export function Header() {
           </div>
 
           {/* Mobile Toggle */}
-          <div className="flex md:hidden items-center gap-2">
-            <ThemeToggle />
-
-            {/* Mobile Language Switcher */}
-            <div className="flex items-center gap-1 rounded-full p-1 border bg-zinc-100 dark:bg-white/5 border-zinc-200 dark:border-white/5">
-              <button
-                onClick={() => switchLocale('es')}
-                className={cn(
-                  "px-2 py-1 rounded-full text-xs font-semibold transition-all",
-                  locale === 'es' 
-                    ? "bg-violet-600 text-white" 
-                    : "text-zinc-600 dark:text-white/60"
-                )}
-              >
-                ES
-              </button>
-              <button
-                onClick={() => switchLocale('en')}
-                className={cn(
-                  "px-2 py-1 rounded-full text-xs font-semibold transition-all",
-                  locale === 'en' 
-                    ? "bg-violet-600 text-white" 
-                    : "text-zinc-600 dark:text-white/60"
-                )}
-              >
-                EN
-              </button>
-            </div>
-            
+          <div className="flex md:hidden items-center">
             <button
-              className="p-1 text-zinc-900 dark:text-white transition-colors"
+              className="p-2 text-zinc-900 dark:text-white transition-colors"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             >
               {mobileMenuOpen ? <X /> : <Menu />}
@@ -171,6 +143,33 @@ export function Header() {
               className="md:hidden bg-white/95 dark:bg-black/95 border-b border-zinc-200 dark:border-white/10 overflow-hidden backdrop-blur-xl"
             >
               <nav className="flex flex-col p-4 gap-4">
+                <div className="flex items-center justify-between pb-4 border-b border-zinc-100 dark:border-white/5">
+                  <ThemeToggle />
+                  <div className="flex items-center gap-1 rounded-full p-1 border bg-zinc-100 dark:bg-white/5 border-zinc-200 dark:border-white/5">
+                    <button
+                      onClick={() => switchLocale('es')}
+                      className={cn(
+                        "px-3 py-1 rounded-full text-xs font-semibold transition-all",
+                        locale === 'es'
+                          ? "bg-violet-600 text-white"
+                          : "text-zinc-600 dark:text-white/60"
+                      )}
+                    >
+                      ES
+                    </button>
+                    <button
+                      onClick={() => switchLocale('en')}
+                      className={cn(
+                        "px-3 py-1 rounded-full text-xs font-semibold transition-all",
+                        locale === 'en'
+                          ? "bg-violet-600 text-white"
+                          : "text-zinc-600 dark:text-white/60"
+                      )}
+                    >
+                      EN
+                    </button>
+                  </div>
+                </div>
                 {NAV_LINKS.map((link) => (
                   <Link
                     key={link.name}
