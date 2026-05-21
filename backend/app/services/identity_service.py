@@ -33,6 +33,9 @@ class IdentityService:
             select(User).where(User.external_auth_id == identity.external_auth_id)
         )
         if user is None:
+            user = self._resolve_user_by_email(identity)
+
+        if user is None:
             if not settings.AUTH0_AUTO_CREATE_USERS:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
@@ -64,6 +67,20 @@ class IdentityService:
         self.db.commit()
         self.db.refresh(user)
         return user
+
+    def _resolve_user_by_email(self, identity: AuthenticatedIdentity) -> User | None:
+        if not identity.email:
+            return None
+        existing = self.db.scalar(
+            select(User).where(User.email == identity.email)
+        )
+        if existing is None:
+            return None
+        if existing.external_auth_id is not None:
+            return existing
+        existing.external_auth_id = identity.external_auth_id
+        self.db.flush()
+        return existing
 
     def resolve_active_membership(self, user: User) -> TenantMembership:
         membership = self.db.scalar(

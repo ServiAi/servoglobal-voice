@@ -47,7 +47,7 @@ class User(Base, TimestampMixin):
     __tablename__ = "users"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
-    external_auth_id: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+    external_auth_id: Mapped[str | None] = mapped_column(String(255), nullable=True, unique=True)
     email: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     is_internal: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
