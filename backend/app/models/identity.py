@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import sqlalchemy as sa
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, String, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -45,10 +46,24 @@ class Tenant(Base, TimestampMixin):
 
 class User(Base, TimestampMixin):
     __tablename__ = "users"
+    __table_args__ = (
+        Index(
+            "ix_users_email_partial_unique",
+            "email",
+            unique=True,
+            postgresql_where=sa.text("status != 'deleted'"),
+        ),
+        Index(
+            "ix_users_external_auth_id_partial_unique",
+            "external_auth_id",
+            unique=True,
+            postgresql_where=sa.text("external_auth_id IS NOT NULL"),
+        ),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
     external_auth_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    email: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+    email: Mapped[str] = mapped_column(String(255), nullable=False)
     name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     is_internal: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="active")

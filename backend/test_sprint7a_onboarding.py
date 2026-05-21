@@ -264,7 +264,36 @@ class Sprint7AIdentityTests(unittest.TestCase):
             self.assertIn("Multiple active users", ctx.exception.detail)
 
     # ============================================================
-    # TEST 5: Tenant/admin creation still works
+    # TEST 5: No duplicate external_auth_id (non-null)
+    # ============================================================
+
+    def test_no_duplicate_external_auth_id_non_null(self):
+        """Two users cannot share the same non-null external_auth_id."""
+        user = User(
+            email="dup-sub@test.com",
+            name="User with sub",
+            external_auth_id="auth0|dups",
+            is_internal=False,
+            status="active",
+        )
+        with SessionLocal() as db:
+            db.add(user)
+            db.commit()
+
+            # Try to create another user with the same external_auth_id
+            new_user = User(
+                email="dup-sub-2@test.com",
+                name="User 2",
+                external_auth_id="auth0|dups",
+                is_internal=False,
+                status="active",
+            )
+            db.add(new_user)
+            with self.assertRaises(Exception):
+                db.commit()
+
+    # ============================================================
+    # TEST 6: Tenant/admin creation still works
     # ============================================================
 
     def test_create_tenant_still_works(self):
@@ -281,7 +310,7 @@ class Sprint7AIdentityTests(unittest.TestCase):
         self.assertEqual(len(data["agents"]), 1)
 
     # ============================================================
-    # TEST 6: /api/v1/me still works (no regression)
+    # TEST 7: /api/v1/me still works (no regression)
     # ============================================================
 
     def test_me_endpoint_still_works(self):
@@ -294,7 +323,7 @@ class Sprint7AIdentityTests(unittest.TestCase):
         self.assertIsNotNone(data["tenant_id"])
 
     # ============================================================
-    # TEST 7: Pre-provisioned user without external_auth_id is nullable
+    # TEST 8: Pre-provisioned user without external_auth_id is nullable
     # ============================================================
 
     def test_nullable_external_auth_id_column(self):
@@ -314,7 +343,7 @@ class Sprint7AIdentityTests(unittest.TestCase):
             self.assertIsNone(user.external_auth_id)
 
     # ============================================================
-    # TEST 8: User with external_auth_id already set is not overwritten
+    # TEST 9: User with external_auth_id already set is not overwritten
     # ============================================================
 
     def test_existing_external_auth_id_not_overwritten(self):
@@ -342,7 +371,7 @@ class Sprint7AIdentityTests(unittest.TestCase):
             self.assertEqual(resolved.name, "Updated Name")  # name is updated
 
     # ============================================================
-    # TEST 9: New user created when no email match
+    # TEST 10: New user created when no email match
     # ============================================================
 
     def test_new_user_created_when_no_match(self):
@@ -359,7 +388,7 @@ class Sprint7AIdentityTests(unittest.TestCase):
             self.assertEqual(new_user.email, "brandnew@test.com")
 
     # ============================================================
-    # TEST 10: Admin guard still works
+    # TEST 11: Admin guard still works
     # ============================================================
 
     def test_admin_guard_rejects_non_internal(self):
