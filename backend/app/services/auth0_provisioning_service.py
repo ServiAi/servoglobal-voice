@@ -23,8 +23,10 @@ class Auth0ProvisionedUser:
     email: str
     name: str | None = None
     connection: str | None = None
+    created_via: str = "management_api"
     verification_email_sent: bool = False
     password_reset_triggered: bool = False
+    activation_errors: list[str] | None = None
 
 
 class Auth0ProvisioningService:
@@ -42,35 +44,51 @@ class Auth0ProvisioningService:
         self._validate_configuration()
         provisioned_user = self.create_database_user(email=email, name=name)
 
-        try:
-            verification_email_sent = False
-            password_reset_triggered = False
+        activation_errors: list[str] = []
+        verification_email_sent = False
+        password_reset_triggered = False
 
-            if self._settings.AUTH0_ONBOARDING_SEND_VERIFICATION_EMAIL:
-                self.send_verification_email(provisioned_user.user_id)
+        if self._settings.AUTH0_ONBOARDING_SEND_VERIFICATION_EMAIL:
+            if provisioned_user.created_via == "management_api":
+                try:
+                    self.send_verification_email(provisioned_user.user_id)
+                    verification_email_sent = True
+                except Auth0ProvisioningError as exc:
+                    activation_errors.append(str(exc))
+            else:
                 verification_email_sent = True
 
-            if self._settings.AUTH0_ONBOARDING_TRIGGER_PASSWORD_RESET:
+        if self._settings.AUTH0_ONBOARDING_TRIGGER_PASSWORD_RESET:
+            try:
                 self.trigger_password_reset_email(email=email)
                 password_reset_triggered = True
+            except Auth0ProvisioningError as exc:
+                activation_errors.append(str(exc))
 
-            return replace(
-                provisioned_user,
-                verification_email_sent=verification_email_sent,
-                password_reset_triggered=password_reset_triggered,
-            )
-        except Exception as exc:
-            try:
-                self.delete_user(provisioned_user.user_id)
-            except Auth0ProvisioningError as cleanup_exc:
-                raise Auth0ProvisioningError(
-                    "Auth0 user was created but activation flow failed; "
-                    f"cleanup also failed: {cleanup_exc}",
-                    status_code=cleanup_exc.status_code,
-                ) from exc
-            raise
+        return replace(
+            provisioned_user,
+            verification_email_sent=verification_email_sent,
+            password_reset_triggered=password_reset_triggered,
+            activation_errors=activation_errors,
+        )
 
     def create_database_user(self, *, email: str, name: str) -> Auth0ProvisionedUser:
+        try:
+            return self._create_database_user_with_management_api(email=email, name=name)
+        except Auth0ProvisioningError as exc:
+            if not self._can_use_authentication_signup_fallback(exc):
+                raise
+            return self._create_database_user_with_authentication_api(
+                email=email,
+                name=name,
+            )
+
+    def _create_database_user_with_management_api(
+        self,
+        *,
+        email: str,
+        name: str,
+    ) -> Auth0ProvisionedUser:
         payload = {
             "connection": self._connection_name(),
             "email": email,
@@ -93,6 +111,46 @@ class Auth0ProvisioningService:
             email=data.get("email") or email,
             name=data.get("name") or name,
             connection=self._connection_name(),
+            created_via="management_api",
+        )
+
+    def _create_database_user_with_authentication_api(
+        self,
+        *,
+        email: str,
+        name: str,
+    ) -> Auth0ProvisionedUser:
+        response = self._post(
+            f"{self._auth0_base_url()}/dbconnections/signup",
+            operation="call Auth0 Authentication API /dbconnections/signup",
+            json={
+                "client_id": self._onboarding_app_client_id(),
+                "email": email,
+                "password": self._generate_temporary_password(),
+                "connection": self._connection_name(),
+                "name": name,
+                "user_metadata": {
+                    "serviglobal_onboarding": "true",
+                },
+            },
+        )
+        self._ensure_success(
+            response,
+            operation="call Auth0 Authentication API /dbconnections/signup",
+            expected_status=200,
+        )
+        data = self._response_json(response)
+        user_id = self._normalize_database_user_id(data.get("user_id") or data.get("_id"))
+        if not user_id:
+            raise Auth0ProvisioningError(
+                "Auth0 signup response did not include user_id or _id"
+            )
+        return Auth0ProvisionedUser(
+            user_id=user_id,
+            email=data.get("email") or email,
+            name=data.get("name") or name,
+            connection=self._connection_name(),
+            created_via="authentication_api_signup",
         )
 
     def send_verification_email(self, user_id: str) -> None:
@@ -280,6 +338,24 @@ class Auth0ProvisioningService:
         if connection:
             return connection
         return "Username-Password-Authentication"
+
+    def _can_use_authentication_signup_fallback(
+        self,
+        exc: Auth0ProvisioningError,
+    ) -> bool:
+        if not self._settings.AUTH0_ONBOARDING_ALLOW_AUTHENTICATION_SIGNUP_FALLBACK:
+            return False
+        if not self._onboarding_app_client_id():
+            return False
+        return exc.status_code in {401, 403}
+
+    def _normalize_database_user_id(self, raw_user_id: Any) -> str:
+        if not isinstance(raw_user_id, str) or not raw_user_id.strip():
+            return ""
+        user_id = raw_user_id.strip()
+        if "|" in user_id:
+            return user_id
+        return f"auth0|{user_id}"
 
     def _ensure_success(
         self,

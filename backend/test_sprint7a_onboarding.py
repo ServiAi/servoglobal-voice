@@ -82,14 +82,32 @@ class FakeAuth0Response:
 
 
 class RecordingAuth0HttpClient:
-    def __init__(self) -> None:
+    def __init__(self, *, management_token_status: int = 200) -> None:
         self.posts: list[dict] = []
         self.deletes: list[dict] = []
+        self.management_token_status = management_token_status
 
     def post(self, url: str, *, json: dict | None = None, headers: dict | None = None):
         self.posts.append({"url": url, "json": json, "headers": headers})
         if url.endswith("/oauth/token"):
+            if self.management_token_status != 200:
+                return FakeAuth0Response(
+                    self.management_token_status,
+                    {
+                        "error": "access_denied",
+                        "error_description": "Client is not authorized",
+                    },
+                )
             return FakeAuth0Response(200, {"access_token": "management-token"})
+        if url.endswith("/dbconnections/signup"):
+            return FakeAuth0Response(
+                200,
+                {
+                    "_id": "signup-created-user-id",
+                    "email": json["email"],
+                    "email_verified": False,
+                },
+            )
         if url.endswith("/api/v2/users"):
             return FakeAuth0Response(
                 201,
@@ -126,6 +144,7 @@ class FakeAuth0Settings:
     AUTH0_ONBOARDING_APP_CLIENT_ID = "app-client-id"
     AUTH0_ONBOARDING_SEND_VERIFICATION_EMAIL = True
     AUTH0_ONBOARDING_TRIGGER_PASSWORD_RESET = True
+    AUTH0_ONBOARDING_ALLOW_AUTHENTICATION_SIGNUP_FALLBACK = True
 
 
 class LegacyFallbackAuth0Settings:
@@ -140,6 +159,7 @@ class LegacyFallbackAuth0Settings:
     AUTH0_ONBOARDING_APP_CLIENT_ID = ""
     AUTH0_ONBOARDING_SEND_VERIFICATION_EMAIL = True
     AUTH0_ONBOARDING_TRIGGER_PASSWORD_RESET = True
+    AUTH0_ONBOARDING_ALLOW_AUTHENTICATION_SIGNUP_FALLBACK = True
 
 
 class Sprint7AIdentityTests(unittest.TestCase):
@@ -602,6 +622,28 @@ class Sprint7AIdentityTests(unittest.TestCase):
             password_reset_request["json"]["connection"],
             "Username-Password-Authentication",
         )
+
+    def test_auth0_provisioning_service_falls_back_to_authentication_signup(self):
+        """If Management API is not authorized, create a real DB user via signup."""
+        http_client = RecordingAuth0HttpClient(management_token_status=403)
+        service = Auth0ProvisioningService(
+            http_client=http_client,
+            settings_obj=LegacyFallbackAuth0Settings,
+        )
+
+        provisioned = service.provision_tenant_admin(
+            email="fallback-signup@agency.com",
+            name="Fallback Signup",
+        )
+
+        self.assertEqual(provisioned.user_id, "auth0|signup-created-user-id")
+        self.assertEqual(provisioned.created_via, "authentication_api_signup")
+        self.assertTrue(provisioned.verification_email_sent)
+        self.assertTrue(provisioned.password_reset_triggered)
+        self.assertEqual(provisioned.activation_errors, [])
+        post_urls = [call["url"] for call in http_client.posts]
+        self.assertIn("https://fallback.auth0.com/dbconnections/signup", post_urls)
+        self.assertNotIn("https://fallback.auth0.com/api/v2/users", post_urls)
 
     def test_delete_tenant_removes_tenant_owned_records_and_preserves_users(self):
         """Deleting a tenant removes tenant data without deleting identity users."""

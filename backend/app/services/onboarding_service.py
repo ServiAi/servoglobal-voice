@@ -404,6 +404,11 @@ class OnboardingService:
                         if auth0_provisioning is not None
                         else None
                     ),
+                    "created_via": (
+                        auth0_provisioning.created_via
+                        if auth0_provisioning is not None
+                        else None
+                    ),
                     "verification_email_sent": (
                         auth0_provisioning.verification_email_sent
                         if auth0_provisioning is not None
@@ -413,6 +418,11 @@ class OnboardingService:
                         auth0_provisioning.password_reset_triggered
                         if auth0_provisioning is not None
                         else False
+                    ),
+                    "activation_errors": (
+                        auth0_provisioning.activation_errors
+                        if auth0_provisioning is not None
+                        else []
                     ),
                 },
             },

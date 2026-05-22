@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     AUTH0_ONBOARDING_APP_CLIENT_ID: str = ""
     AUTH0_ONBOARDING_SEND_VERIFICATION_EMAIL: bool = True
     AUTH0_ONBOARDING_TRIGGER_PASSWORD_RESET: bool = True
+    AUTH0_ONBOARDING_ALLOW_AUTHENTICATION_SIGNUP_FALLBACK: bool = True
 
     # Initial private app bootstrap
     BOOTSTRAP_TENANT_NAME: str = "ServiGlobal IA"
