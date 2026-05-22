@@ -19,6 +19,7 @@ import {
   type TenantCreatePayload,
   type TenantAgent,
 } from '@/lib/api/admin-tenants-client';
+import { getAdminAccessRedirect } from '@/lib/auth/admin-client';
 
 const TIMEZONES = [
   'America/Bogota',
@@ -131,9 +132,18 @@ export function NewTenantClient({ locale }: NewTenantClientProps) {
       setTimeout(() => {
         router.push(`/${locale}/admin/tenants/${result.data.id}`);
       }, 1500);
-    } else if (result.status === 401) {
-      router.push(`/api/auth/login?returnTo=/${locale}/admin/tenants/new`);
     } else {
+      const redirectTo = getAdminAccessRedirect(
+        result.status,
+        locale,
+        `/${locale}/admin/tenants/new`
+      );
+
+      if (redirectTo) {
+        router.push(redirectTo);
+        return;
+      }
+
       setError(result.detail);
     }
   };

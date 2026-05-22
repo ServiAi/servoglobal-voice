@@ -2,26 +2,26 @@ import 'server-only';
 
 import { NextResponse } from 'next/server';
 
-import { getAccessToken } from '@/lib/auth/server';
 import { type FetchResult } from '@/lib/api/tenants';
+import { resolveInternalAdminAccess } from '@/lib/auth/server';
 
 export async function requireAdminAccessToken(): Promise<
   | { ok: true; accessToken: string }
   | { ok: false; response: NextResponse<{ detail: string }> }
 > {
-  const accessToken = await getAccessToken();
+  const result = await resolveInternalAdminAccess();
 
-  if (!accessToken) {
+  if (!result.ok) {
     return {
       ok: false,
       response: NextResponse.json(
-        { detail: 'Authentication token is required' },
-        { status: 401 }
+        { detail: result.detail },
+        { status: result.status }
       ),
     };
   }
 
-  return { ok: true, accessToken };
+  return { ok: true, accessToken: result.context.accessToken };
 }
 
 export function adminJsonResponse<T>(

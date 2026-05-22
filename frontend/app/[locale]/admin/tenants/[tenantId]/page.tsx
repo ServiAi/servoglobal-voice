@@ -1,8 +1,9 @@
-import { redirect } from 'next/navigation';
-
 import { locales, type Locale } from '@/i18n';
 import { fetchTenantDetail } from '@/lib/api/tenants';
-import { getAccessToken } from '@/lib/auth/server';
+import {
+  redirectAdminAccessFailure,
+  requireInternalAdminAccess,
+} from '@/lib/auth/server';
 
 import { TenantDetailClient } from './tenant-detail-client';
 
@@ -19,16 +20,13 @@ function normalizeLocale(locale: string): Locale {
 export default async function TenantDetailPage({ params }: Props) {
   const { locale: rawLocale, tenantId } = await params;
   const locale = normalizeLocale(rawLocale);
-  const accessToken = await getAccessToken();
-
-  if (!accessToken) {
-    redirect(`/api/auth/login?returnTo=/${locale}/admin/tenants/${tenantId}`);
-  }
+  const returnTo = `/${locale}/admin/tenants/${tenantId}`;
+  const { accessToken } = await requireInternalAdminAccess(locale, returnTo);
 
   const result = await fetchTenantDetail(accessToken, tenantId);
 
-  if (!result.ok && result.status === 401) {
-    redirect(`/api/auth/login?returnTo=/${locale}/admin/tenants/${tenantId}`);
+  if (!result.ok) {
+    redirectAdminAccessFailure(result.status, locale, returnTo);
   }
 
   return (

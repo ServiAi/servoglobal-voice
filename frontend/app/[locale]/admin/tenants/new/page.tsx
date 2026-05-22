@@ -1,7 +1,5 @@
-import { redirect } from 'next/navigation';
-
 import { locales, type Locale } from '@/i18n';
-import { getAccessToken } from '@/lib/auth/server';
+import { requireInternalAdminAccess } from '@/lib/auth/server';
 
 import { NewTenantClient } from './new-tenant-client';
 
@@ -18,11 +16,7 @@ function normalizeLocale(locale: string): Locale {
 export default async function NewTenantPage({ params }: Props) {
   const { locale: rawLocale } = await params;
   const locale = normalizeLocale(rawLocale);
-  const accessToken = await getAccessToken();
-
-  if (!accessToken) {
-    redirect(`/api/auth/login?returnTo=/${locale}/admin/tenants/new`);
-  }
+  await requireInternalAdminAccess(locale, `/${locale}/admin/tenants/new`);
 
   return <NewTenantClient locale={locale} />;
 }

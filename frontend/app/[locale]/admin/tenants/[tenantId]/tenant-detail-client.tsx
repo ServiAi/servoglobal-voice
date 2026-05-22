@@ -28,6 +28,7 @@ import {
   fetchTenantDetail,
   updateTenant,
 } from '@/lib/api/admin-tenants-client';
+import { getAdminAccessRedirect } from '@/lib/auth/admin-client';
 
 function StatusBadge({ status }: { status: string }) {
   if (status === 'active') {
@@ -119,6 +120,24 @@ export function TenantDetailClient({
   const [agentChannel, setAgentChannel] = useState('voice');
   const [agentError, setAgentError] = useState<string | null>(null);
 
+  const redirectOnAccessFailure = useCallback(
+    (status: number) => {
+      const redirectTo = getAdminAccessRedirect(
+        status,
+        locale,
+        `/${locale}/admin/tenants/${tenantId}`
+      );
+
+      if (redirectTo) {
+        router.push(redirectTo);
+        return true;
+      }
+
+      return false;
+    },
+    [locale, router, tenantId]
+  );
+
   const load = useCallback(async () => {
     setLoading(true);
     const result = await fetchTenantDetail(tenantId);
@@ -128,13 +147,11 @@ export function TenantDetailClient({
       setEditTimezone(result.data.timezone);
       setEditStatus(result.data.status);
       setError(null);
-    } else if (result.status === 401) {
-      router.push(`/api/auth/login?returnTo=/${locale}/admin/tenants/${tenantId}`);
-    } else {
+    } else if (!redirectOnAccessFailure(result.status)) {
       setError(result.detail);
     }
     setLoading(false);
-  }, [locale, router, tenantId]);
+  }, [redirectOnAccessFailure, tenantId]);
 
   const handleSaveEdit = async () => {
     setSaving(true);
@@ -147,9 +164,7 @@ export function TenantDetailClient({
     if (result.ok) {
       setTenant(result.data);
       setEditing(false);
-    } else if (result.status === 401) {
-      router.push(`/api/auth/login?returnTo=/${locale}/admin/tenants/${tenantId}`);
-    } else {
+    } else if (!redirectOnAccessFailure(result.status)) {
       setError(result.detail);
     }
   };
@@ -167,9 +182,7 @@ export function TenantDetailClient({
       setShowAddMembership(false);
       setMembershipEmail('');
       load();
-    } else if (result.status === 401) {
-      router.push(`/api/auth/login?returnTo=/${locale}/admin/tenants/${tenantId}`);
-    } else {
+    } else if (!redirectOnAccessFailure(result.status)) {
       setMembershipError(result.detail);
     }
   };
@@ -190,9 +203,7 @@ export function TenantDetailClient({
       setAgentName('');
       setAgentAgentId('');
       load();
-    } else if (result.status === 401) {
-      router.push(`/api/auth/login?returnTo=/${locale}/admin/tenants/${tenantId}`);
-    } else {
+    } else if (!redirectOnAccessFailure(result.status)) {
       setAgentError(result.detail);
     }
   };
