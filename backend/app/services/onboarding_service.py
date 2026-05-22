@@ -63,10 +63,15 @@ class OnboardingService:
         if existing_user is not None and existing_user.external_auth_id is not None:
             raise ValueError(f"A user with external_auth_id already exists for email '{admin_email}'")
 
-        provisioned_admin = self.auth0_provisioning_service.provision_tenant_admin(
-            email=normalized_admin_email,
-            name=admin_name.strip(),
-        )
+        provisioned_admin: Auth0ProvisionedUser | None = None
+        auth0_activation_errors: list[str] = []
+        try:
+            provisioned_admin = self.auth0_provisioning_service.provision_tenant_admin(
+                email=normalized_admin_email,
+                name=admin_name.strip(),
+            )
+        except Auth0ProvisioningError as exc:
+            auth0_activation_errors.append(str(exc))
 
         try:
             tenant = Tenant(
@@ -80,7 +85,11 @@ class OnboardingService:
 
             if existing_user is None:
                 admin_user = User(
-                    external_auth_id=provisioned_admin.user_id,
+                    external_auth_id=(
+                        provisioned_admin.user_id
+                        if provisioned_admin is not None
+                        else None
+                    ),
                     email=normalized_admin_email,
                     name=admin_name.strip(),
                     is_internal=False,
@@ -90,7 +99,8 @@ class OnboardingService:
                 self.db.flush()
             else:
                 admin_user = existing_user
-                admin_user.external_auth_id = provisioned_admin.user_id
+                if provisioned_admin is not None:
+                    admin_user.external_auth_id = provisioned_admin.user_id
                 admin_user.name = admin_name.strip()
                 admin_user.status = "active"
 
@@ -132,9 +142,12 @@ class OnboardingService:
                 membership,
                 agent_list,
                 auth0_provisioning=provisioned_admin,
+                auth0_activation_errors=auth0_activation_errors,
             )
         except Exception as exc:
             self.db.rollback()
+            if provisioned_admin is None:
+                raise
             try:
                 self.auth0_provisioning_service.delete_user(provisioned_admin.user_id)
             except Auth0ProvisioningError as cleanup_exc:
@@ -356,6 +369,7 @@ class OnboardingService:
         agents: list[Agent],
         *,
         auth0_provisioning: Auth0ProvisionedUser | None = None,
+        auth0_activation_errors: list[str] | None = None,
     ) -> dict:
         member_dicts = [
             {
@@ -422,7 +436,7 @@ class OnboardingService:
                     "activation_errors": (
                         auth0_provisioning.activation_errors
                         if auth0_provisioning is not None
-                        else []
+                        else auth0_activation_errors or []
                     ),
                 },
             },
