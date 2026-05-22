@@ -24,6 +24,7 @@ class OnboardingService:
         agents: list[dict] | None = None,
     ) -> dict:
         slug = slug.strip().lower()
+        normalized_admin_email = admin_email.strip().lower()
 
         existing_tenant = self.db.scalar(
             select(Tenant).where(Tenant.slug == slug)
@@ -32,7 +33,10 @@ class OnboardingService:
             raise ValueError(f"Tenant slug '{slug}' already exists")
 
         existing_user = self.db.scalar(
-            select(User).where(User.email == admin_email)
+            select(User).where(
+                User.email == normalized_admin_email,
+                User.status != "deleted",
+            )
         )
         if existing_user is not None and existing_user.external_auth_id is not None:
             raise ValueError(f"A user with external_auth_id already exists for email '{admin_email}'")
@@ -46,15 +50,20 @@ class OnboardingService:
         self.db.add(tenant)
         self.db.flush()
 
-        admin_user = User(
-            external_auth_id=None,
-            email=admin_email.strip().lower(),
-            name=admin_name.strip(),
-            is_internal=False,
-            status="active",
-        )
-        self.db.add(admin_user)
-        self.db.flush()
+        if existing_user is None:
+            admin_user = User(
+                external_auth_id=None,
+                email=normalized_admin_email,
+                name=admin_name.strip(),
+                is_internal=False,
+                status="active",
+            )
+            self.db.add(admin_user)
+            self.db.flush()
+        else:
+            admin_user = existing_user
+            admin_user.name = admin_name.strip()
+            admin_user.status = "active"
 
         membership = TenantMembership(
             tenant_id=tenant.id,

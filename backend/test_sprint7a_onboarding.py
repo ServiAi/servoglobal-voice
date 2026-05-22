@@ -309,6 +309,37 @@ class Sprint7AIdentityTests(unittest.TestCase):
         self.assertTrue(data["is_ready_for_calls"])
         self.assertEqual(len(data["agents"]), 1)
 
+    def test_create_tenant_reuses_preprovisioned_admin_user(self):
+        """Tenant creation reuses an unlinked admin user instead of duplicating email."""
+        slug = f"tenant-{uuid.uuid4().hex[:8]}"
+        email = f"preprovisioned-{uuid.uuid4().hex[:6]}@agency.com"
+        with SessionLocal() as db:
+            existing_user = User(
+                email=email,
+                name="Preprovisioned Admin",
+                external_auth_id=None,
+                is_internal=False,
+                status="active",
+            )
+            db.add(existing_user)
+            db.commit()
+            db.refresh(existing_user)
+            existing_user_id = existing_user.id
+
+        payload = self._make_admin_payload(slug)
+        payload["admin"]["email"] = email
+        payload["admin"]["name"] = "Tenant Admin"
+
+        response = self.client.post("/api/v1/admin/tenants", json=payload)
+
+        self.assertEqual(response.status_code, 201)
+        data = response.json()
+        self.assertEqual(data["admin"]["id"], existing_user_id)
+        self.assertEqual(data["admin"]["email"], email)
+        with SessionLocal() as db:
+            count = db.query(User).filter(User.email == email).count()
+            self.assertEqual(count, 1)
+
     # ============================================================
     # TEST 7: /api/v1/me still works (no regression)
     # ============================================================
