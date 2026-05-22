@@ -30,6 +30,7 @@ from app.api.endpoints import dashboard
 from app.api.endpoints import me
 from app.api.endpoints import ultravox_webhook
 from app.api.endpoints.admin import tenants as admin_tenants
+from app.api.endpoints import auth0 as auth0_endpoint
 
 app.include_router(notifications.router)
 app.include_router(chatwoot_webhook.router)
@@ -39,6 +40,7 @@ app.include_router(dashboard.router)
 app.include_router(me.router)
 app.include_router(ultravox_webhook.router)
 app.include_router(admin_tenants.router)
+app.include_router(auth0_endpoint.router)
 
 @app.get("/health")
 def health_check():
