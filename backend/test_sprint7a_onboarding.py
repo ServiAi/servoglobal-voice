@@ -116,12 +116,28 @@ class RecordingAuth0HttpClient:
 
 class FakeAuth0Settings:
     AUTH0_DOMAIN = ""
+    AUTH0_CLIENT_ID = ""
+    AUTH0_CLIENT_SECRET = ""
     AUTH0_MANAGEMENT_DOMAIN = "example.auth0.com"
     AUTH0_MANAGEMENT_CLIENT_ID = "management-client-id"
     AUTH0_MANAGEMENT_CLIENT_SECRET = "management-client-secret"
     AUTH0_MANAGEMENT_AUDIENCE = ""
     AUTH0_ONBOARDING_CONNECTION = "Username-Password-Authentication"
     AUTH0_ONBOARDING_APP_CLIENT_ID = "app-client-id"
+    AUTH0_ONBOARDING_SEND_VERIFICATION_EMAIL = True
+    AUTH0_ONBOARDING_TRIGGER_PASSWORD_RESET = True
+
+
+class LegacyFallbackAuth0Settings:
+    AUTH0_DOMAIN = "fallback.auth0.com"
+    AUTH0_CLIENT_ID = "legacy-client-id"
+    AUTH0_CLIENT_SECRET = "legacy-client-secret"
+    AUTH0_MANAGEMENT_DOMAIN = ""
+    AUTH0_MANAGEMENT_CLIENT_ID = ""
+    AUTH0_MANAGEMENT_CLIENT_SECRET = ""
+    AUTH0_MANAGEMENT_AUDIENCE = ""
+    AUTH0_ONBOARDING_CONNECTION = ""
+    AUTH0_ONBOARDING_APP_CLIENT_ID = ""
     AUTH0_ONBOARDING_SEND_VERIFICATION_EMAIL = True
     AUTH0_ONBOARDING_TRIGGER_PASSWORD_RESET = True
 
@@ -551,6 +567,40 @@ class Sprint7AIdentityTests(unittest.TestCase):
         self.assertIn(
             "https://example.auth0.com/dbconnections/change_password",
             post_urls,
+        )
+
+    def test_auth0_provisioning_service_uses_legacy_auth0_fallbacks(self):
+        """Staging can provision when management-specific env vars are absent."""
+        http_client = RecordingAuth0HttpClient()
+        service = Auth0ProvisioningService(
+            http_client=http_client,
+            settings_obj=LegacyFallbackAuth0Settings,
+        )
+
+        provisioned = service.provision_tenant_admin(
+            email="fallback-admin@agency.com",
+            name="Fallback Admin",
+        )
+
+        self.assertEqual(provisioned.connection, "Username-Password-Authentication")
+        token_request = next(
+            call for call in http_client.posts if call["url"].endswith("/oauth/token")
+        )
+        self.assertEqual(token_request["json"]["client_id"], "legacy-client-id")
+        self.assertEqual(token_request["json"]["client_secret"], "legacy-client-secret")
+        self.assertEqual(
+            token_request["json"]["audience"],
+            "https://fallback.auth0.com/api/v2/",
+        )
+        password_reset_request = next(
+            call
+            for call in http_client.posts
+            if call["url"].endswith("/dbconnections/change_password")
+        )
+        self.assertEqual(password_reset_request["json"]["client_id"], "legacy-client-id")
+        self.assertEqual(
+            password_reset_request["json"]["connection"],
+            "Username-Password-Authentication",
         )
 
     def test_delete_tenant_removes_tenant_owned_records_and_preserves_users(self):

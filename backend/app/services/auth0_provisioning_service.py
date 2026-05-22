@@ -103,10 +103,11 @@ class Auth0ProvisioningService:
         )
 
     def trigger_password_reset_email(self, *, email: str) -> None:
-        client_id = self._settings.AUTH0_ONBOARDING_APP_CLIENT_ID.strip()
+        client_id = self._onboarding_app_client_id()
         if not client_id:
             raise Auth0ProvisioningError(
-                "AUTH0_ONBOARDING_APP_CLIENT_ID is required when password reset is enabled"
+                "AUTH0_ONBOARDING_APP_CLIENT_ID or AUTH0_CLIENT_ID is required "
+                "when password reset is enabled"
             )
 
         response = self._post(
@@ -169,8 +170,8 @@ class Auth0ProvisioningService:
             operation="get Auth0 Management API token",
             json={
                 "grant_type": "client_credentials",
-                "client_id": self._settings.AUTH0_MANAGEMENT_CLIENT_ID,
-                "client_secret": self._settings.AUTH0_MANAGEMENT_CLIENT_SECRET,
+                "client_id": self._management_client_id(),
+                "client_secret": self._management_client_secret(),
                 "audience": self._management_audience(),
             },
         )
@@ -216,17 +217,17 @@ class Auth0ProvisioningService:
         missing = []
         if not self._management_domain():
             missing.append("AUTH0_MANAGEMENT_DOMAIN or AUTH0_DOMAIN")
-        if not self._settings.AUTH0_MANAGEMENT_CLIENT_ID:
-            missing.append("AUTH0_MANAGEMENT_CLIENT_ID")
-        if not self._settings.AUTH0_MANAGEMENT_CLIENT_SECRET:
-            missing.append("AUTH0_MANAGEMENT_CLIENT_SECRET")
+        if not self._management_client_id():
+            missing.append("AUTH0_MANAGEMENT_CLIENT_ID or AUTH0_CLIENT_ID")
+        if not self._management_client_secret():
+            missing.append("AUTH0_MANAGEMENT_CLIENT_SECRET or AUTH0_CLIENT_SECRET")
         if not self._connection_name():
             missing.append("AUTH0_ONBOARDING_CONNECTION")
         if (
             self._settings.AUTH0_ONBOARDING_TRIGGER_PASSWORD_RESET
-            and not self._settings.AUTH0_ONBOARDING_APP_CLIENT_ID
+            and not self._onboarding_app_client_id()
         ):
-            missing.append("AUTH0_ONBOARDING_APP_CLIENT_ID")
+            missing.append("AUTH0_ONBOARDING_APP_CLIENT_ID or AUTH0_CLIENT_ID")
         if missing:
             raise Auth0ProvisioningError(
                 "Auth0 onboarding provisioning configuration is incomplete: "
@@ -253,8 +254,32 @@ class Auth0ProvisioningService:
             return audience
         return f"{self._auth0_base_url()}/api/v2/"
 
+    def _management_client_id(self) -> str:
+        return (
+            self._settings.AUTH0_MANAGEMENT_CLIENT_ID
+            or self._settings.AUTH0_CLIENT_ID
+            or ""
+        ).strip()
+
+    def _management_client_secret(self) -> str:
+        return (
+            self._settings.AUTH0_MANAGEMENT_CLIENT_SECRET
+            or self._settings.AUTH0_CLIENT_SECRET
+            or ""
+        ).strip()
+
+    def _onboarding_app_client_id(self) -> str:
+        return (
+            self._settings.AUTH0_ONBOARDING_APP_CLIENT_ID
+            or self._settings.AUTH0_CLIENT_ID
+            or ""
+        ).strip()
+
     def _connection_name(self) -> str:
-        return self._settings.AUTH0_ONBOARDING_CONNECTION.strip()
+        connection = self._settings.AUTH0_ONBOARDING_CONNECTION.strip()
+        if connection:
+            return connection
+        return "Username-Password-Authentication"
 
     def _ensure_success(
         self,

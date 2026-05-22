@@ -18,6 +18,8 @@ class Settings(BaseSettings):
 
     # Auth0
     AUTH0_DOMAIN: str = ""
+    AUTH0_CLIENT_ID: str = ""
+    AUTH0_CLIENT_SECRET: str = ""
     AUTH0_AUDIENCE: str = ""
     AUTH0_ISSUER: str = ""
     AUTH0_ALGORITHMS: str = "RS256"
