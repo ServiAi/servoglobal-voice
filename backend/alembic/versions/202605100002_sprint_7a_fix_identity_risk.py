@@ -19,6 +19,20 @@ depends_on = None
 
 
 def upgrade() -> None:
+    bind = op.get_bind()
+
+    if bind.dialect.name == "postgresql":
+        op.execute("DROP INDEX IF EXISTS ix_users_email_unique")
+        op.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS ix_users_email_partial_unique "
+            "ON users (email) WHERE status != 'deleted'"
+        )
+        op.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS ix_users_external_auth_id_partial_unique "
+            "ON users (external_auth_id) WHERE external_auth_id IS NOT NULL"
+        )
+        return
+
     # 1. Drop the incorrect partial index from 200001
     #    (it only protected email when external_auth_id IS NOT NULL,
     #     leaving a gap for duplicate emails with NULL external_auth_id)
@@ -47,6 +61,17 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    bind = op.get_bind()
+
+    if bind.dialect.name == "postgresql":
+        op.execute("DROP INDEX IF EXISTS ix_users_external_auth_id_partial_unique")
+        op.execute("DROP INDEX IF EXISTS ix_users_email_partial_unique")
+        op.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS ix_users_email_unique "
+            "ON users (email) WHERE external_auth_id IS NOT NULL"
+        )
+        return
+
     op.drop_index("ix_users_external_auth_id_partial_unique", table_name="users")
     op.drop_index("ix_users_email_partial_unique", table_name="users")
     op.create_index(
