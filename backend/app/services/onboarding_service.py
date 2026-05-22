@@ -5,11 +5,38 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.models.analytics import Agent
 from app.models.identity import Tenant, TenantMembership, User
+from app.services.auth0_provisioning_service import (
+    Auth0ProvisionedUser,
+    Auth0ProvisioningError,
+    Auth0ProvisioningService,
+)
+
+
+class OnboardingConsistencyError(RuntimeError):
+    def __init__(
+        self,
+        message: str,
+        *,
+        auth0_user_id: str,
+        compensation_attempted: bool,
+        compensation_succeeded: bool,
+    ) -> None:
+        super().__init__(message)
+        self.auth0_user_id = auth0_user_id
+        self.compensation_attempted = compensation_attempted
+        self.compensation_succeeded = compensation_succeeded
 
 
 class OnboardingService:
-    def __init__(self, db: Session) -> None:
+    def __init__(
+        self,
+        db: Session,
+        auth0_provisioning_service: Auth0ProvisioningService | None = None,
+    ) -> None:
         self.db = db
+        self.auth0_provisioning_service = (
+            auth0_provisioning_service or Auth0ProvisioningService()
+        )
 
     def create_tenant(
         self,
@@ -32,72 +59,99 @@ class OnboardingService:
         if existing_tenant is not None:
             raise ValueError(f"Tenant slug '{slug}' already exists")
 
-        existing_user = self.db.scalar(
-            select(User).where(
-                User.email == normalized_admin_email,
-                User.status != "deleted",
-            )
-        )
+        existing_user = self._get_existing_active_user_by_email(normalized_admin_email)
         if existing_user is not None and existing_user.external_auth_id is not None:
             raise ValueError(f"A user with external_auth_id already exists for email '{admin_email}'")
 
-        tenant = Tenant(
-            name=name.strip(),
-            slug=slug,
-            timezone=timezone,
-            status=status,
+        provisioned_admin = self.auth0_provisioning_service.provision_tenant_admin(
+            email=normalized_admin_email,
+            name=admin_name.strip(),
         )
-        self.db.add(tenant)
-        self.db.flush()
 
-        if existing_user is None:
-            admin_user = User(
-                external_auth_id=None,
-                email=normalized_admin_email,
-                name=admin_name.strip(),
-                is_internal=False,
+        try:
+            tenant = Tenant(
+                name=name.strip(),
+                slug=slug,
+                timezone=timezone,
+                status=status,
+            )
+            self.db.add(tenant)
+            self.db.flush()
+
+            if existing_user is None:
+                admin_user = User(
+                    external_auth_id=provisioned_admin.user_id,
+                    email=normalized_admin_email,
+                    name=admin_name.strip(),
+                    is_internal=False,
+                    status="active",
+                )
+                self.db.add(admin_user)
+                self.db.flush()
+            else:
+                admin_user = existing_user
+                admin_user.external_auth_id = provisioned_admin.user_id
+                admin_user.name = admin_name.strip()
+                admin_user.status = "active"
+
+            membership = TenantMembership(
+                tenant_id=tenant.id,
+                user_id=admin_user.id,
+                role=admin_role.strip(),
                 status="active",
             )
-            self.db.add(admin_user)
-            self.db.flush()
-        else:
-            admin_user = existing_user
-            admin_user.name = admin_name.strip()
-            admin_user.status = "active"
-
-        membership = TenantMembership(
-            tenant_id=tenant.id,
-            user_id=admin_user.id,
-            role=admin_role.strip(),
-            status="active",
-        )
-        self.db.add(membership)
-        self.db.flush()
-
-        agent_list = []
-        if agents:
-            for agent_data in agents:
-                agent = Agent(
-                    tenant_id=tenant.id,
-                    name=agent_data["name"].strip(),
-                    external_provider=agent_data["external_provider"].strip(),
-                    external_agent_id=agent_data["external_agent_id"].strip(),
-                    channel_type=agent_data.get("channel_type"),
-                    status=agent_data.get("status", "active"),
-                )
-                self.db.add(agent)
-                agent_list.append(agent)
+            self.db.add(membership)
             self.db.flush()
 
-        self.db.commit()
-        self.db.refresh(tenant)
-        self.db.refresh(admin_user)
-        self.db.refresh(membership)
+            agent_list = []
+            if agents:
+                for agent_data in agents:
+                    agent = Agent(
+                        tenant_id=tenant.id,
+                        name=agent_data["name"].strip(),
+                        external_provider=agent_data["external_provider"].strip(),
+                        external_agent_id=agent_data["external_agent_id"].strip(),
+                        channel_type=agent_data.get("channel_type"),
+                        status=agent_data.get("status", "active"),
+                    )
+                    self.db.add(agent)
+                    agent_list.append(agent)
+                self.db.flush()
 
-        for a in agent_list:
-            self.db.refresh(a)
+            self.db.commit()
+            self.db.refresh(tenant)
+            self.db.refresh(admin_user)
+            self.db.refresh(membership)
 
-        return self._build_tenant_response(tenant, admin_user, membership, agent_list)
+            for a in agent_list:
+                self.db.refresh(a)
+
+            return self._build_tenant_response(
+                tenant,
+                admin_user,
+                membership,
+                agent_list,
+                auth0_provisioning=provisioned_admin,
+            )
+        except Exception as exc:
+            self.db.rollback()
+            try:
+                self.auth0_provisioning_service.delete_user(provisioned_admin.user_id)
+            except Auth0ProvisioningError as cleanup_exc:
+                raise OnboardingConsistencyError(
+                    "Tenant local creation failed after Auth0 user creation; "
+                    f"Auth0 cleanup failed: {cleanup_exc}",
+                    auth0_user_id=provisioned_admin.user_id,
+                    compensation_attempted=True,
+                    compensation_succeeded=False,
+                ) from exc
+            raise OnboardingConsistencyError(
+                "Tenant local creation failed after Auth0 user creation; "
+                "Auth0 user was deleted",
+                auth0_user_id=provisioned_admin.user_id,
+                compensation_attempted=True,
+                compensation_succeeded=True,
+            ) from exc
 
     def list_tenants(self) -> list[Tenant]:
         return list(
@@ -246,6 +300,8 @@ class OnboardingService:
         admin_user: User,
         membership: TenantMembership,
         agents: list[Agent],
+        *,
+        auth0_provisioning: Auth0ProvisionedUser | None = None,
     ) -> dict:
         member_dicts = [
             {
@@ -284,9 +340,37 @@ class OnboardingService:
                 "name": admin_user.name,
                 "email": admin_user.email,
                 "is_internal": admin_user.is_internal,
+                "external_auth_id": admin_user.external_auth_id,
                 "has_auth0_link": admin_user.external_auth_id is not None,
+                "auth0_provisioning": {
+                    "user_created": auth0_provisioning is not None,
+                    "user_id": admin_user.external_auth_id,
+                    "connection": (
+                        auth0_provisioning.connection
+                        if auth0_provisioning is not None
+                        else None
+                    ),
+                    "verification_email_sent": (
+                        auth0_provisioning.verification_email_sent
+                        if auth0_provisioning is not None
+                        else False
+                    ),
+                    "password_reset_triggered": (
+                        auth0_provisioning.password_reset_triggered
+                        if auth0_provisioning is not None
+                        else False
+                    ),
+                },
             },
             "memberships": member_dicts,
             "agents": agent_dicts,
             "is_ready_for_calls": len(agent_dicts) > 0,
         }
+
+    def _get_existing_active_user_by_email(self, email: str) -> User | None:
+        return self.db.scalar(
+            select(User).where(
+                User.email == email,
+                User.status != "deleted",
+            )
+        )

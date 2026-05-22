@@ -17,7 +17,11 @@ from app.schemas.onboarding import (
     TenantResponse,
     TenantUpdateRequest,
 )
-from app.services.onboarding_service import OnboardingService
+from app.services.auth0_provisioning_service import (
+    Auth0ProvisioningError,
+    Auth0ProvisioningService,
+)
+from app.services.onboarding_service import OnboardingConsistencyError, OnboardingService
 
 
 router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
@@ -42,6 +46,10 @@ def get_current_internal_db(
     return db
 
 
+def get_auth0_provisioning_service() -> Auth0ProvisioningService:
+    return Auth0ProvisioningService()
+
+
 @router.post(
     "/tenants",
     response_model=dict[str, Any],
@@ -50,8 +58,11 @@ def get_current_internal_db(
 def create_tenant(
     payload: TenantCreateRequest,
     db: Session = Depends(get_current_internal_db),
+    auth0_provisioning_service: Auth0ProvisioningService = Depends(
+        get_auth0_provisioning_service
+    ),
 ) -> dict:
-    service = OnboardingService(db)
+    service = OnboardingService(db, auth0_provisioning_service)
     agents = [a.model_dump() for a in payload.agents]
     try:
         result = service.create_tenant(
@@ -68,6 +79,26 @@ def create_tenant(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=str(exc),
+        ) from exc
+    except Auth0ProvisioningError as exc:
+        status_code = (
+            status.HTTP_409_CONFLICT
+            if exc.status_code == status.HTTP_409_CONFLICT
+            else status.HTTP_502_BAD_GATEWAY
+        )
+        raise HTTPException(
+            status_code=status_code,
+            detail=str(exc),
+        ) from exc
+    except OnboardingConsistencyError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "message": str(exc),
+                "auth0_user_id": exc.auth0_user_id,
+                "compensation_attempted": exc.compensation_attempted,
+                "compensation_succeeded": exc.compensation_succeeded,
+            },
         ) from exc
     return result
 

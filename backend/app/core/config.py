@@ -22,6 +22,14 @@ class Settings(BaseSettings):
     AUTH0_ISSUER: str = ""
     AUTH0_ALGORITHMS: str = "RS256"
     AUTH0_AUTO_CREATE_USERS: bool = True
+    AUTH0_MANAGEMENT_DOMAIN: str = ""
+    AUTH0_MANAGEMENT_CLIENT_ID: str = ""
+    AUTH0_MANAGEMENT_CLIENT_SECRET: str = ""
+    AUTH0_MANAGEMENT_AUDIENCE: str = ""
+    AUTH0_ONBOARDING_CONNECTION: str = ""
+    AUTH0_ONBOARDING_APP_CLIENT_ID: str = ""
+    AUTH0_ONBOARDING_SEND_VERIFICATION_EMAIL: bool = True
+    AUTH0_ONBOARDING_TRIGGER_PASSWORD_RESET: bool = True
 
     # Initial private app bootstrap
     BOOTSTRAP_TENANT_NAME: str = "ServiGlobal IA"

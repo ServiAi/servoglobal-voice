@@ -10,6 +10,7 @@ from pathlib import Path
 import unittest
 
 import sqlalchemy as sa
+from sqlalchemy import select
 
 os.environ.setdefault("ULTRAVOX_API_KEY", "test_ultravox_key")
 TEST_DB_PATH = Path("serviai_sprint7a_test.db")
@@ -21,13 +22,107 @@ from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 from app.api.auth.deps import AuthContext, get_current_auth_context
+from app.api.endpoints.admin.tenants import get_auth0_provisioning_service
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.main import app
 from app.models.analytics import Agent
 from app.models.identity import Tenant, TenantMembership, User
 from app.services.auth0_service import AuthenticatedIdentity
+from app.services.auth0_provisioning_service import (
+    Auth0ProvisionedUser,
+    Auth0ProvisioningError,
+    Auth0ProvisioningService,
+)
 from app.services.identity_service import IdentityService
+from app.services.onboarding_service import OnboardingConsistencyError, OnboardingService
+
+
+class FakeAuth0ProvisioningService:
+    def __init__(self) -> None:
+        self.created: list[dict[str, str]] = []
+        self.deleted: list[str] = []
+        self.fail_on_provision: Auth0ProvisioningError | None = None
+
+    def provision_tenant_admin(self, *, email: str, name: str) -> Auth0ProvisionedUser:
+        if self.fail_on_provision is not None:
+            raise self.fail_on_provision
+
+        user_id = f"auth0|tenant-admin-{len(self.created) + 1}"
+        self.created.append({"email": email, "name": name, "user_id": user_id})
+        return Auth0ProvisionedUser(
+            user_id=user_id,
+            email=email,
+            name=name,
+            connection="Username-Password-Authentication",
+            verification_email_sent=True,
+            password_reset_triggered=True,
+        )
+
+    def delete_user(self, user_id: str) -> None:
+        self.deleted.append(user_id)
+
+
+class FakeAuth0Response:
+    def __init__(
+        self,
+        status_code: int,
+        payload: dict | None = None,
+        text: str = "",
+    ) -> None:
+        self.status_code = status_code
+        self._payload = payload
+        self.text = text
+
+    def json(self) -> dict:
+        if self._payload is None:
+            raise ValueError("No JSON body")
+        return self._payload
+
+
+class RecordingAuth0HttpClient:
+    def __init__(self) -> None:
+        self.posts: list[dict] = []
+        self.deletes: list[dict] = []
+
+    def post(self, url: str, *, json: dict | None = None, headers: dict | None = None):
+        self.posts.append({"url": url, "json": json, "headers": headers})
+        if url.endswith("/oauth/token"):
+            return FakeAuth0Response(200, {"access_token": "management-token"})
+        if url.endswith("/api/v2/users"):
+            return FakeAuth0Response(
+                201,
+                {
+                    "user_id": "auth0|created-from-management-api",
+                    "email": json["email"],
+                    "name": json["name"],
+                    "email_verified": False,
+                },
+            )
+        if url.endswith("/api/v2/jobs/verification-email"):
+            return FakeAuth0Response(
+                201,
+                {"status": "pending", "type": "verification_email", "id": "job_1"},
+            )
+        if url.endswith("/dbconnections/change_password"):
+            return FakeAuth0Response(200, {}, "Password reset email sent")
+        raise AssertionError(f"Unexpected POST URL: {url}")
+
+    def delete(self, url: str, *, headers: dict | None = None):
+        self.deletes.append({"url": url, "headers": headers})
+        return FakeAuth0Response(204)
+
+
+class FakeAuth0Settings:
+    AUTH0_DOMAIN = ""
+    AUTH0_MANAGEMENT_DOMAIN = "example.auth0.com"
+    AUTH0_MANAGEMENT_CLIENT_ID = "management-client-id"
+    AUTH0_MANAGEMENT_CLIENT_SECRET = "management-client-secret"
+    AUTH0_MANAGEMENT_AUDIENCE = ""
+    AUTH0_ONBOARDING_CONNECTION = "Username-Password-Authentication"
+    AUTH0_ONBOARDING_APP_CLIENT_ID = "app-client-id"
+    AUTH0_ONBOARDING_SEND_VERIFICATION_EMAIL = True
+    AUTH0_ONBOARDING_TRIGGER_PASSWORD_RESET = True
 
 
 class Sprint7AIdentityTests(unittest.TestCase):
@@ -44,6 +139,10 @@ class Sprint7AIdentityTests(unittest.TestCase):
         app.dependency_overrides.clear()
         self.client = TestClient(app)
         self.admin_user = self._seed_internal_admin()
+        self.auth0_provisioning = FakeAuth0ProvisioningService()
+        app.dependency_overrides[get_auth0_provisioning_service] = (
+            lambda: self.auth0_provisioning
+        )
         self._override_auth_context()
 
     def tearDown(self):
@@ -308,9 +407,18 @@ class Sprint7AIdentityTests(unittest.TestCase):
         self.assertEqual(data["slug"], slug)
         self.assertTrue(data["is_ready_for_calls"])
         self.assertEqual(len(data["agents"]), 1)
+        self.assertEqual(data["admin"]["external_auth_id"], "auth0|tenant-admin-1")
+        self.assertTrue(data["admin"]["has_auth0_link"])
+        self.assertTrue(
+            data["admin"]["auth0_provisioning"]["verification_email_sent"]
+        )
+        self.assertTrue(
+            data["admin"]["auth0_provisioning"]["password_reset_triggered"]
+        )
+        self.assertEqual(self.auth0_provisioning.created[0]["email"], data["admin"]["email"])
 
     def test_create_tenant_reuses_preprovisioned_admin_user(self):
-        """Tenant creation reuses an unlinked admin user instead of duplicating email."""
+        """Tenant creation links an unlinked admin user instead of duplicating email."""
         slug = f"tenant-{uuid.uuid4().hex[:8]}"
         email = f"preprovisioned-{uuid.uuid4().hex[:6]}@agency.com"
         with SessionLocal() as db:
@@ -336,9 +444,109 @@ class Sprint7AIdentityTests(unittest.TestCase):
         data = response.json()
         self.assertEqual(data["admin"]["id"], existing_user_id)
         self.assertEqual(data["admin"]["email"], email)
+        self.assertEqual(data["admin"]["external_auth_id"], "auth0|tenant-admin-1")
         with SessionLocal() as db:
             count = db.query(User).filter(User.email == email).count()
             self.assertEqual(count, 1)
+            linked = db.scalar(select(User).where(User.email == email))
+            self.assertEqual(linked.external_auth_id, "auth0|tenant-admin-1")
+
+    def test_create_tenant_does_not_duplicate_linked_admin_email(self):
+        """Existing linked admin email is rejected before any Auth0 provisioning call."""
+        slug = f"tenant-{uuid.uuid4().hex[:8]}"
+        email = f"linked-{uuid.uuid4().hex[:6]}@agency.com"
+        with SessionLocal() as db:
+            existing_user = User(
+                email=email,
+                name="Linked Admin",
+                external_auth_id="auth0|already-linked",
+                is_internal=False,
+                status="active",
+            )
+            db.add(existing_user)
+            db.commit()
+
+        payload = self._make_admin_payload(slug)
+        payload["admin"]["email"] = email
+
+        response = self.client.post("/api/v1/admin/tenants", json=payload)
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(self.auth0_provisioning.created, [])
+
+    def test_create_tenant_auth0_failure_leaves_no_local_tenant(self):
+        """If Auth0 provisioning fails, no tenant/user/membership is persisted."""
+        slug = f"tenant-{uuid.uuid4().hex[:8]}"
+        payload = self._make_admin_payload(slug)
+        email = payload["admin"]["email"]
+        self.auth0_provisioning.fail_on_provision = Auth0ProvisioningError(
+            "Auth0 unavailable",
+            status_code=500,
+        )
+
+        response = self.client.post("/api/v1/admin/tenants", json=payload)
+
+        self.assertEqual(response.status_code, 502)
+        with SessionLocal() as db:
+            self.assertIsNone(db.scalar(select(Tenant).where(Tenant.slug == slug)))
+            self.assertIsNone(db.scalar(select(User).where(User.email == email)))
+
+    def test_auth0_user_is_deleted_when_local_creation_fails(self):
+        """If local DB creation fails after Auth0 creation, compensation deletes Auth0 user."""
+        slug = f"tenant-{uuid.uuid4().hex[:8]}"
+        email = f"broken-{uuid.uuid4().hex[:6]}@agency.com"
+        fake_auth0 = FakeAuth0ProvisioningService()
+
+        with SessionLocal() as db:
+            service = OnboardingService(db, fake_auth0)
+            with self.assertRaises(OnboardingConsistencyError) as ctx:
+                service.create_tenant(
+                    name="Broken Agency",
+                    slug=slug,
+                    admin_name="Broken Admin",
+                    admin_email=email,
+                    agents=[
+                        {
+                            "name": "Broken Agent",
+                            "external_provider": "ultravox",
+                        }
+                    ],
+                )
+
+        self.assertTrue(ctx.exception.compensation_attempted)
+        self.assertTrue(ctx.exception.compensation_succeeded)
+        self.assertEqual(fake_auth0.deleted, ["auth0|tenant-admin-1"])
+        with SessionLocal() as db:
+            self.assertIsNone(db.scalar(select(Tenant).where(Tenant.slug == slug)))
+            self.assertIsNone(db.scalar(select(User).where(User.email == email)))
+
+    def test_auth0_provisioning_service_invokes_verification_and_password_reset(self):
+        """Enabled activation flags call Auth0 verification and password reset flows."""
+        http_client = RecordingAuth0HttpClient()
+        service = Auth0ProvisioningService(
+            http_client=http_client,
+            settings_obj=FakeAuth0Settings,
+        )
+
+        provisioned = service.provision_tenant_admin(
+            email="new-admin@agency.com",
+            name="New Admin",
+        )
+
+        self.assertEqual(provisioned.user_id, "auth0|created-from-management-api")
+        self.assertTrue(provisioned.verification_email_sent)
+        self.assertTrue(provisioned.password_reset_triggered)
+        post_urls = [call["url"] for call in http_client.posts]
+        self.assertIn("https://example.auth0.com/oauth/token", post_urls)
+        self.assertIn("https://example.auth0.com/api/v2/users", post_urls)
+        self.assertIn(
+            "https://example.auth0.com/api/v2/jobs/verification-email",
+            post_urls,
+        )
+        self.assertIn(
+            "https://example.auth0.com/dbconnections/change_password",
+            post_urls,
+        )
 
     # ============================================================
     # TEST 7: /api/v1/me still works (no regression)
