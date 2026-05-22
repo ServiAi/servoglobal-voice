@@ -223,6 +223,21 @@ def update_tenant(
     }
 
 
+@router.delete("/tenants/{tenant_id}", response_model=dict[str, Any])
+def delete_tenant(
+    tenant_id: str,
+    db: Session = Depends(get_current_internal_db),
+) -> dict:
+    service = OnboardingService(db)
+    try:
+        return service.delete_tenant(tenant_id)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+
+
 @router.get("/tenants/{tenant_id}/memberships", response_model=list[dict[str, Any]])
 def list_tenant_memberships(
     tenant_id: str,

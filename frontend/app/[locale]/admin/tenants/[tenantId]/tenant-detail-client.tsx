@@ -17,6 +17,8 @@ import {
   Copy,
   ExternalLink,
   Globe,
+  Trash2,
+  X,
 } from 'lucide-react';
 
 import {
@@ -25,6 +27,7 @@ import {
 import {
   addTenantAgent,
   addTenantMembership,
+  deleteTenant,
   fetchTenantDetail,
   updateTenant,
 } from '@/lib/api/admin-tenants-client';
@@ -80,6 +83,22 @@ function CopyableField({ value, label }: { value: string; label: string }) {
   );
 }
 
+function generateTenantDeleteCode() {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const values = new Uint32Array(8);
+
+  if (typeof window !== 'undefined' && window.crypto?.getRandomValues) {
+    window.crypto.getRandomValues(values);
+  } else {
+    for (let i = 0; i < values.length; i += 1) {
+      values[i] = Math.floor(Math.random() * alphabet.length);
+    }
+  }
+
+  const characters = Array.from(values, (value) => alphabet[value % alphabet.length]);
+  return `${characters.slice(0, 4).join('')}-${characters.slice(4).join('')}`;
+}
+
 type TenantDetailClientProps = {
   locale: string;
   tenantId: string;
@@ -119,6 +138,15 @@ export function TenantDetailClient({
   const [agentAgentId, setAgentAgentId] = useState('');
   const [agentChannel, setAgentChannel] = useState('voice');
   const [agentError, setAgentError] = useState<string | null>(null);
+
+  // Delete state
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [deleteCode, setDeleteCode] = useState('');
+  const [deleteConfirmation, setDeleteConfirmation] = useState('');
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const deleteReady = deleteConfirmation.trim() === deleteCode;
 
   const redirectOnAccessFailure = useCallback(
     (status: number) => {
@@ -208,6 +236,41 @@ export function TenantDetailClient({
     }
   };
 
+  const handleOpenDeleteModal = () => {
+    setDeleteCode(generateTenantDeleteCode());
+    setDeleteConfirmation('');
+    setDeleteError(null);
+    setDeleteModalOpen(true);
+  };
+
+  const handleCloseDeleteModal = () => {
+    if (deleting) {
+      return;
+    }
+    setDeleteModalOpen(false);
+    setDeleteConfirmation('');
+    setDeleteError(null);
+  };
+
+  const handleDeleteTenant = async () => {
+    if (!deleteReady || deleting) {
+      return;
+    }
+
+    setDeleting(true);
+    setDeleteError(null);
+    const result = await deleteTenant(tenantId);
+    setDeleting(false);
+
+    if (result.ok) {
+      setDeleteModalOpen(false);
+      router.push(`/${locale}/admin/tenants`);
+      router.refresh();
+    } else if (!redirectOnAccessFailure(result.status)) {
+      setDeleteError(result.detail);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
@@ -243,7 +306,18 @@ export function TenantDetailClient({
             </div>
           </div>
         </div>
-        <StatusBadge status={tenant.status} />
+        <div className="flex items-center gap-2">
+          <StatusBadge status={tenant.status} />
+          <button
+            type="button"
+            onClick={handleOpenDeleteModal}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-red-500/30 px-3 py-1.5 text-xs font-medium text-red-300 transition hover:bg-red-500/10"
+            title="Borrar tenant"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            Borrar
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -629,6 +703,93 @@ export function TenantDetailClient({
           </div>
         )}
       </section>
+
+      {deleteModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-tenant-title"
+            className="w-full max-w-md rounded-xl border border-red-500/30 bg-zinc-950 p-6 shadow-2xl"
+          >
+            <div className="mb-4 flex items-start justify-between gap-4">
+              <div>
+                <h2
+                  id="delete-tenant-title"
+                  className="flex items-center gap-2 text-lg font-semibold text-red-200"
+                >
+                  <Trash2 className="h-5 w-5" />
+                  Borrar tenant
+                </h2>
+                <p className="mt-2 text-sm text-zinc-400">
+                  Esta accion elimina el tenant, sus membresias, agentes, llamadas,
+                  eventos, metricas y registros de auditoria asociados.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleCloseDeleteModal}
+                disabled={deleting}
+                className="rounded-lg p-1 text-zinc-500 transition hover:bg-zinc-900 hover:text-zinc-200 disabled:cursor-not-allowed disabled:opacity-50"
+                title="Cerrar"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="rounded-lg border border-red-500/20 bg-red-500/5 p-4">
+              <p className="text-xs font-medium uppercase tracking-wide text-red-300">
+                Codigo de confirmacion
+              </p>
+              <p className="mt-2 select-all rounded-md bg-zinc-950 px-3 py-2 font-mono text-lg font-semibold tracking-[0.2em] text-red-100">
+                {deleteCode}
+              </p>
+            </div>
+
+            <label className="mt-4 block text-xs font-medium text-zinc-400">
+              Escribe el codigo para confirmar
+            </label>
+            <input
+              type="text"
+              value={deleteConfirmation}
+              onChange={(event) => setDeleteConfirmation(event.target.value.toUpperCase())}
+              className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 font-mono text-sm uppercase tracking-wider text-zinc-100 placeholder:text-zinc-600 focus:border-red-400 focus:outline-none focus:ring-1 focus:ring-red-400"
+              placeholder={deleteCode}
+              disabled={deleting}
+            />
+
+            {deleteError && (
+              <div className="mt-3 rounded-lg border border-red-500/20 bg-red-500/5 p-3 text-sm text-red-300">
+                {deleteError}
+              </div>
+            )}
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={handleCloseDeleteModal}
+                disabled={deleting}
+                className="rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-300 transition hover:bg-zinc-900 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteTenant}
+                disabled={!deleteReady || deleting}
+                className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-500 disabled:cursor-not-allowed disabled:bg-red-950 disabled:text-red-300/50"
+              >
+                {deleting ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Trash2 className="h-4 w-4" />
+                )}
+                Borrar definitivamente
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

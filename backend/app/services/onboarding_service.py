@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session, joinedload
 
-from app.models.analytics import Agent
-from app.models.identity import Tenant, TenantMembership, User
+from app.models.analytics import Agent, Call, CallEvent, MetricSnapshotDaily
+from app.models.identity import AccessAuditLog, Tenant, TenantMembership, User
 from app.services.auth0_provisioning_service import (
     Auth0ProvisionedUser,
     Auth0ProvisioningError,
@@ -198,6 +198,60 @@ class OnboardingService:
         self.db.refresh(tenant)
         return tenant
 
+    def delete_tenant(self, tenant_id: str) -> dict:
+        tenant = self.db.scalar(
+            select(Tenant).where(Tenant.id == tenant_id)
+        )
+        if tenant is None:
+            raise ValueError(f"Tenant '{tenant_id}' not found")
+
+        tenant_slug = tenant.slug
+        try:
+            deleted_call_events = self._delete_count(
+                delete(CallEvent).where(CallEvent.tenant_id == tenant_id)
+            )
+            deleted_metric_snapshots = self._delete_count(
+                delete(MetricSnapshotDaily).where(
+                    MetricSnapshotDaily.tenant_id == tenant_id
+                )
+            )
+            deleted_calls = self._delete_count(
+                delete(Call).where(Call.tenant_id == tenant_id)
+            )
+            deleted_agents = self._delete_count(
+                delete(Agent).where(Agent.tenant_id == tenant_id)
+            )
+            deleted_memberships = self._delete_count(
+                delete(TenantMembership).where(
+                    TenantMembership.tenant_id == tenant_id
+                )
+            )
+            deleted_audit_logs = self._delete_count(
+                delete(AccessAuditLog).where(AccessAuditLog.tenant_id == tenant_id)
+            )
+
+            self.db.delete(tenant)
+            self.db.commit()
+        except Exception:
+            self.db.rollback()
+            raise
+
+        return {
+            "id": tenant_id,
+            "slug": tenant_slug,
+            "deleted": True,
+            "deleted_counts": {
+                "call_events": deleted_call_events,
+                "metric_snapshots": deleted_metric_snapshots,
+                "calls": deleted_calls,
+                "agents": deleted_agents,
+                "memberships": deleted_memberships,
+                "access_audit_logs": deleted_audit_logs,
+                "tenants": 1,
+                "users": 0,
+            },
+        }
+
     def add_membership(
         self,
         tenant_id: str,
@@ -374,3 +428,7 @@ class OnboardingService:
                 User.status != "deleted",
             )
         )
+
+    def _delete_count(self, statement) -> int:
+        result = self.db.execute(statement)
+        return max(result.rowcount or 0, 0)

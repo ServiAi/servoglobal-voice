@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import {
+  deleteTenant,
   fetchTenantDetail,
   updateTenant,
   type TenantUpdatePayload,
@@ -43,4 +44,14 @@ export async function PATCH(request: Request, { params }: RouteContext) {
   return adminJsonResponse(
     await updateTenant(auth.accessToken, tenantId, payload)
   );
+}
+
+export async function DELETE(_request: Request, { params }: RouteContext) {
+  const auth = await requireAdminAccessToken();
+  if (!auth.ok) {
+    return auth.response;
+  }
+
+  const { tenantId } = await params;
+  return adminJsonResponse(await deleteTenant(auth.accessToken, tenantId));
 }

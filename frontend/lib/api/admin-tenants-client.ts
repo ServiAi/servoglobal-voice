@@ -5,6 +5,7 @@ import {
   type TenantAgent,
   type TenantCreatePayload,
   type TenantDetail,
+  type TenantDeleteResult,
   type TenantListItem,
   type TenantUpdatePayload,
 } from '@/lib/api/tenants';
@@ -16,6 +17,7 @@ export type {
   TenantAgent,
   TenantCreatePayload,
   TenantDetail,
+  TenantDeleteResult,
   TenantListItem,
   TenantUpdatePayload,
 } from '@/lib/api/tenants';
@@ -87,6 +89,17 @@ export function updateTenant(
     {
       method: 'PATCH',
       body: JSON.stringify(payload),
+    }
+  );
+}
+
+export function deleteTenant(
+  tenantId: string
+): Promise<FetchResult<TenantDeleteResult>> {
+  return localAdminFetch<TenantDeleteResult>(
+    `/api/admin/tenants/${encodeURIComponent(tenantId)}`,
+    {
+      method: 'DELETE',
     }
   );
 }

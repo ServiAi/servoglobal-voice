@@ -5,7 +5,8 @@ from __future__ import annotations
 import os
 import sqlite3
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
+from decimal import Decimal
 from pathlib import Path
 import unittest
 
@@ -26,8 +27,8 @@ from app.api.endpoints.admin.tenants import get_auth0_provisioning_service
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.main import app
-from app.models.analytics import Agent
-from app.models.identity import Tenant, TenantMembership, User
+from app.models.analytics import Agent, Call, CallEvent, MetricSnapshotDaily
+from app.models.identity import AccessAuditLog, Tenant, TenantMembership, User
 from app.services.auth0_service import AuthenticatedIdentity
 from app.services.auth0_provisioning_service import (
     Auth0ProvisionedUser,
@@ -165,10 +166,14 @@ class Sprint7AIdentityTests(unittest.TestCase):
     def _override_auth_context(self):
         async def _auth_context_override():
             # Seed a system tenant in the DB so the admin has a valid tenant
-            system_tenant = Tenant(name="System", slug="system", timezone="UTC")
             with SessionLocal() as db:
-                db.add(system_tenant)
-                db.commit()
+                system_tenant = db.scalar(
+                    select(Tenant).where(Tenant.slug == "system")
+                )
+                if system_tenant is None:
+                    system_tenant = Tenant(name="System", slug="system", timezone="UTC")
+                    db.add(system_tenant)
+                    db.commit()
                 db.refresh(system_tenant)
             return AuthContext(
                 user=self.admin_user,
@@ -547,6 +552,103 @@ class Sprint7AIdentityTests(unittest.TestCase):
             "https://example.auth0.com/dbconnections/change_password",
             post_urls,
         )
+
+    def test_delete_tenant_removes_tenant_owned_records_and_preserves_users(self):
+        """Deleting a tenant removes tenant data without deleting identity users."""
+        slug = f"tenant-{uuid.uuid4().hex[:8]}"
+        payload = self._make_admin_payload(slug, agent_count=1)
+        email = payload["admin"]["email"]
+        created = self.client.post("/api/v1/admin/tenants", json=payload)
+        self.assertEqual(created.status_code, 201)
+        tenant_id = created.json()["id"]
+
+        with SessionLocal() as db:
+            admin_user = db.scalar(select(User).where(User.email == email))
+            agent = db.scalar(select(Agent).where(Agent.tenant_id == tenant_id))
+            self.assertIsNotNone(admin_user)
+            self.assertIsNotNone(agent)
+
+            call = Call(
+                tenant_id=tenant_id,
+                external_call_id=f"call-{uuid.uuid4().hex[:8]}",
+                external_provider="ultravox",
+                agent_id=agent.id,
+                provider_agent_id=agent.external_agent_id,
+                normalized_status="answered",
+                started_at=datetime.now(UTC),
+                duration_seconds=42,
+                billed_minutes=Decimal("0.70"),
+            )
+            db.add(call)
+            db.flush()
+            db.add(
+                CallEvent(
+                    call_id=call.id,
+                    tenant_id=tenant_id,
+                    event_type="call.ended",
+                    payload_json={"ok": True},
+                )
+            )
+            db.add(
+                MetricSnapshotDaily(
+                    tenant_id=tenant_id,
+                    agent_id=agent.id,
+                    date=date.today(),
+                    calls_total=1,
+                    calls_answered=1,
+                    calls_unanswered=0,
+                    duration_total_seconds=42,
+                    billed_minutes=Decimal("0.70"),
+                )
+            )
+            db.add(
+                AccessAuditLog(
+                    user_id=admin_user.id,
+                    tenant_id=tenant_id,
+                    action="tenant.delete.test",
+                )
+            )
+            db.commit()
+
+        deleted = self.client.delete(f"/api/v1/admin/tenants/{tenant_id}")
+
+        self.assertEqual(deleted.status_code, 200)
+        data = deleted.json()
+        self.assertTrue(data["deleted"])
+        self.assertEqual(data["deleted_counts"]["users"], 0)
+        self.assertEqual(data["deleted_counts"]["tenants"], 1)
+
+        with SessionLocal() as db:
+            self.assertIsNone(db.scalar(select(Tenant).where(Tenant.id == tenant_id)))
+            self.assertEqual(
+                db.query(TenantMembership)
+                .filter(TenantMembership.tenant_id == tenant_id)
+                .count(),
+                0,
+            )
+            self.assertEqual(db.query(Agent).filter(Agent.tenant_id == tenant_id).count(), 0)
+            self.assertEqual(db.query(Call).filter(Call.tenant_id == tenant_id).count(), 0)
+            self.assertEqual(
+                db.query(CallEvent).filter(CallEvent.tenant_id == tenant_id).count(),
+                0,
+            )
+            self.assertEqual(
+                db.query(MetricSnapshotDaily)
+                .filter(MetricSnapshotDaily.tenant_id == tenant_id)
+                .count(),
+                0,
+            )
+            self.assertEqual(
+                db.query(AccessAuditLog)
+                .filter(AccessAuditLog.tenant_id == tenant_id)
+                .count(),
+                0,
+            )
+            self.assertIsNotNone(db.scalar(select(User).where(User.email == email)))
+
+    def test_delete_missing_tenant_returns_404(self):
+        response = self.client.delete(f"/api/v1/admin/tenants/{uuid.uuid4()}")
+        self.assertEqual(response.status_code, 404)
 
     # ============================================================
     # TEST 7: /api/v1/me still works (no regression)

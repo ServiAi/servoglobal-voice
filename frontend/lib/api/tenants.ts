@@ -75,6 +75,13 @@ export type AgentCreatePayload = {
   status?: string;
 };
 
+export type TenantDeleteResult = {
+  id: string;
+  slug: string;
+  deleted: boolean;
+  deleted_counts: Record<string, number>;
+};
+
 export type FetchResult<T> =
   | { ok: true; data: T }
   | { ok: false; status: number; detail: string };
@@ -157,6 +164,19 @@ export function updateTenant(
     {
       method: 'PATCH',
       body: JSON.stringify(payload),
+    }
+  );
+}
+
+export function deleteTenant(
+  accessToken: string,
+  tenantId: string
+): Promise<FetchResult<TenantDeleteResult>> {
+  return adminFetch<TenantDeleteResult>(
+    `/api/v1/admin/tenants/${tenantId}`,
+    accessToken,
+    {
+      method: 'DELETE',
     }
   );
 }
