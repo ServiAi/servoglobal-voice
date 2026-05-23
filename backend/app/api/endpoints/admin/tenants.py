@@ -21,7 +21,11 @@ from app.services.auth0_provisioning_service import (
     Auth0ProvisioningError,
     Auth0ProvisioningService,
 )
-from app.services.onboarding_service import OnboardingConsistencyError, OnboardingService
+from app.services.onboarding_service import (
+    OnboardingConsistencyError,
+    OnboardingService,
+    TenantDeletionBlockedError,
+)
 
 
 router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
@@ -227,13 +231,26 @@ def update_tenant(
 def delete_tenant(
     tenant_id: str,
     db: Session = Depends(get_current_internal_db),
+    auth0_provisioning_service: Auth0ProvisioningService = Depends(
+        get_auth0_provisioning_service
+    ),
 ) -> dict:
-    service = OnboardingService(db)
+    service = OnboardingService(db, auth0_provisioning_service)
     try:
         return service.delete_tenant(tenant_id)
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+    except TenantDeletionBlockedError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from exc
+    except Auth0ProvisioningError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
             detail=str(exc),
         ) from exc
 

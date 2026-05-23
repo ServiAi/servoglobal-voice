@@ -24,6 +24,7 @@ from fastapi.testclient import TestClient
 
 from app.api.auth.deps import AuthContext, get_current_auth_context
 from app.api.endpoints.admin.tenants import get_auth0_provisioning_service
+from app.core.config import settings
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.main import app
@@ -44,6 +45,7 @@ class FakeAuth0ProvisioningService:
         self.created: list[dict[str, str]] = []
         self.deleted: list[str] = []
         self.fail_on_provision: Auth0ProvisioningError | None = None
+        self.fail_on_delete: Auth0ProvisioningError | None = None
 
     def provision_tenant_admin(self, *, email: str, name: str) -> Auth0ProvisionedUser:
         if self.fail_on_provision is not None:
@@ -61,6 +63,8 @@ class FakeAuth0ProvisioningService:
         )
 
     def delete_user(self, user_id: str) -> None:
+        if self.fail_on_delete is not None:
+            raise self.fail_on_delete
         self.deleted.append(user_id)
 
 
@@ -567,7 +571,7 @@ class Sprint7AIdentityTests(unittest.TestCase):
             self.assertIsNone(db.scalar(select(User).where(User.email == email)))
 
     def test_auth0_provisioning_service_invokes_verification_and_password_reset(self):
-        """Enabled activation flags call Auth0 verification (via verify_email flag) and password reset flows."""
+        """Enabled activation flags call Auth0 verification job and password reset flows."""
         http_client = RecordingAuth0HttpClient()
         service = Auth0ProvisioningService(
             http_client=http_client,
@@ -585,11 +589,30 @@ class Sprint7AIdentityTests(unittest.TestCase):
         post_urls = [call["url"] for call in http_client.posts]
         self.assertIn("https://example.auth0.com/oauth/token", post_urls)
         self.assertIn("https://example.auth0.com/api/v2/users", post_urls)
+        self.assertIn(
+            "https://example.auth0.com/api/v2/jobs/verification-email",
+            post_urls,
+        )
         create_payload = next(
             (call["json"] for call in http_client.posts if "api/v2/users" in call["url"]),
             {},
         )
-        self.assertTrue(create_payload.get("verify_email"), "verify_email must be True so Auth0 sends verification automatically")
+        self.assertFalse(
+            create_payload.get("verify_email"),
+            "verification is sent explicitly through Auth0 jobs",
+        )
+        verification_payload = next(
+            (
+                call["json"]
+                for call in http_client.posts
+                if "api/v2/jobs/verification-email" in call["url"]
+            ),
+            {},
+        )
+        self.assertEqual(
+            verification_payload.get("user_id"),
+            "auth0|created-from-management-api",
+        )
         self.assertIn(
             "https://example.auth0.com/dbconnections/change_password",
             post_urls,
@@ -644,15 +667,19 @@ class Sprint7AIdentityTests(unittest.TestCase):
 
         self.assertEqual(provisioned.user_id, "auth0|signup-created-user-id")
         self.assertEqual(provisioned.created_via, "authentication_api_signup")
-        self.assertTrue(provisioned.verification_email_sent)
+        self.assertFalse(provisioned.verification_email_sent)
         self.assertTrue(provisioned.password_reset_triggered)
-        self.assertEqual(provisioned.activation_errors, [])
+        self.assertTrue(provisioned.activation_errors)
+        self.assertIn(
+            "Failed to get Auth0 Management API token",
+            provisioned.activation_errors[0],
+        )
         post_urls = [call["url"] for call in http_client.posts]
         self.assertIn("https://fallback.auth0.com/dbconnections/signup", post_urls)
         self.assertNotIn("https://fallback.auth0.com/api/v2/users", post_urls)
 
-    def test_delete_tenant_removes_tenant_owned_records_and_preserves_users(self):
-        """Deleting a tenant removes tenant data without deleting identity users."""
+    def test_delete_tenant_removes_tenant_owned_records_and_users(self):
+        """Deleting a tenant removes tenant data and tenant-only identity users."""
         slug = f"tenant-{uuid.uuid4().hex[:8]}"
         payload = self._make_admin_payload(slug, agent_count=1)
         email = payload["admin"]["email"]
@@ -665,6 +692,7 @@ class Sprint7AIdentityTests(unittest.TestCase):
             agent = db.scalar(select(Agent).where(Agent.tenant_id == tenant_id))
             self.assertIsNotNone(admin_user)
             self.assertIsNotNone(agent)
+            admin_external_auth_id = admin_user.external_auth_id
 
             call = Call(
                 tenant_id=tenant_id,
@@ -713,8 +741,10 @@ class Sprint7AIdentityTests(unittest.TestCase):
         self.assertEqual(deleted.status_code, 200)
         data = deleted.json()
         self.assertTrue(data["deleted"])
-        self.assertEqual(data["deleted_counts"]["users"], 0)
+        self.assertEqual(data["deleted_counts"]["users"], 1)
+        self.assertEqual(data["deleted_counts"]["auth0_users"], 1)
         self.assertEqual(data["deleted_counts"]["tenants"], 1)
+        self.assertEqual(self.auth0_provisioning.deleted, [admin_external_auth_id])
 
         with SessionLocal() as db:
             self.assertIsNone(db.scalar(select(Tenant).where(Tenant.id == tenant_id)))
@@ -742,7 +772,57 @@ class Sprint7AIdentityTests(unittest.TestCase):
                 .count(),
                 0,
             )
+            self.assertIsNone(db.scalar(select(User).where(User.email == email)))
+
+    def test_delete_tenant_auth0_failure_keeps_local_records(self):
+        """Auth0 delete failures block tenant deletion instead of leaving local-only drift."""
+        slug = f"tenant-{uuid.uuid4().hex[:8]}"
+        payload = self._make_admin_payload(slug, agent_count=0)
+        email = payload["admin"]["email"]
+        created = self.client.post("/api/v1/admin/tenants", json=payload)
+        self.assertEqual(created.status_code, 201)
+        tenant_id = created.json()["id"]
+        self.auth0_provisioning.fail_on_delete = Auth0ProvisioningError(
+            "Auth0 delete failed",
+            status_code=403,
+        )
+
+        deleted = self.client.delete(f"/api/v1/admin/tenants/{tenant_id}")
+
+        self.assertEqual(deleted.status_code, 502)
+        self.assertEqual(self.auth0_provisioning.deleted, [])
+        with SessionLocal() as db:
+            self.assertIsNotNone(db.scalar(select(Tenant).where(Tenant.id == tenant_id)))
             self.assertIsNotNone(db.scalar(select(User).where(User.email == email)))
+            self.assertEqual(
+                db.query(TenantMembership)
+                .filter(TenantMembership.tenant_id == tenant_id)
+                .count(),
+                1,
+            )
+
+    def test_delete_bootstrap_tenant_is_blocked(self):
+        """The bootstrap tenant cannot be deleted because it preserves admin access."""
+        payload = self._make_admin_payload(settings.BOOTSTRAP_TENANT_SLUG, agent_count=0)
+        payload["name"] = settings.BOOTSTRAP_TENANT_NAME
+        email = payload["admin"]["email"]
+        created = self.client.post("/api/v1/admin/tenants", json=payload)
+        self.assertEqual(created.status_code, 201)
+        tenant_id = created.json()["id"]
+
+        deleted = self.client.delete(f"/api/v1/admin/tenants/{tenant_id}")
+
+        self.assertEqual(deleted.status_code, 409)
+        self.assertEqual(self.auth0_provisioning.deleted, [])
+        with SessionLocal() as db:
+            self.assertIsNotNone(db.scalar(select(Tenant).where(Tenant.id == tenant_id)))
+            self.assertIsNotNone(db.scalar(select(User).where(User.email == email)))
+            self.assertEqual(
+                db.query(TenantMembership)
+                .filter(TenantMembership.tenant_id == tenant_id)
+                .count(),
+                1,
+            )
 
     def test_delete_missing_tenant_returns_404(self):
         response = self.client.delete(f"/api/v1/admin/tenants/{uuid.uuid4()}")
