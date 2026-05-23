@@ -206,6 +206,7 @@ class OnboardingService:
             raise ValueError(f"Tenant '{tenant_id}' not found")
 
         tenant_slug = tenant.slug
+        deleted_auth0_users = 0
         try:
             deleted_call_events = self._delete_count(
                 delete(CallEvent).where(CallEvent.tenant_id == tenant_id)
@@ -221,6 +222,12 @@ class OnboardingService:
             deleted_agents = self._delete_count(
                 delete(Agent).where(Agent.tenant_id == tenant_id)
             )
+            memberships = self.db.scalars(
+                select(TenantMembership).where(
+                    TenantMembership.tenant_id == tenant_id
+                )
+            ).all()
+            membership_user_ids = [m.user_id for m in memberships]
             deleted_memberships = self._delete_count(
                 delete(TenantMembership).where(
                     TenantMembership.tenant_id == tenant_id
@@ -229,6 +236,26 @@ class OnboardingService:
             deleted_audit_logs = self._delete_count(
                 delete(AccessAuditLog).where(AccessAuditLog.tenant_id == tenant_id)
             )
+
+            for user_id in membership_user_ids:
+                user = self.db.scalar(select(User).where(User.id == user_id))
+                if user and user.external_auth_id:
+                    remaining = self.db.scalar(
+                        select(TenantMembership).where(
+                            TenantMembership.user_id == user_id,
+                            TenantMembership.status == "active",
+                        )
+                    )
+                    if remaining is None:
+                        try:
+                            self.auth0_provisioning_service.delete_user(
+                                user.external_auth_id
+                            )
+                            deleted_auth0_users += 1
+                        except Auth0ProvisioningError:
+                            pass
+                    else:
+                        user.status = "inactive"
 
             self.db.delete(tenant)
             self.db.commit()
@@ -249,6 +276,7 @@ class OnboardingService:
                 "access_audit_logs": deleted_audit_logs,
                 "tenants": 1,
                 "users": 0,
+                "auth0_users": deleted_auth0_users,
             },
         }
 
