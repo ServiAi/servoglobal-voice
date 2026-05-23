@@ -72,7 +72,7 @@ class Auth0TokenVerifier:
             external_auth_id=external_auth_id,
             email=email,
             name=claims.get("name") or claims.get("nickname"),
-            email_verified=claims.get("email_verified", False),
+            email_verified=claims.get("email_verified") if "email_verified" in claims else None,
             claims=claims,
         )
 

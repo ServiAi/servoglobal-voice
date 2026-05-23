@@ -34,7 +34,7 @@ class IdentityService:
             select(User).where(User.external_auth_id == identity.external_auth_id)
         )
         if user is not None:
-            if not identity.email_verified:
+            if identity.email_verified is False:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Email not verified. Please verify your email before logging in.",
@@ -106,7 +106,7 @@ class IdentityService:
                 detail="Authenticated user is not active",
             )
 
-        if not identity.email_verified:
+        if identity.email_verified is False:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Email not verified. Please verify your email before logging in.",
