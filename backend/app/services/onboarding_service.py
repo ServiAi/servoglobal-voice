@@ -215,28 +215,6 @@ class OnboardingService:
         tenant_slug = tenant.slug
         deleted_auth0_users = 0
         try:
-            memberships = self.db.scalars(
-                select(TenantMembership).where(
-                    TenantMembership.tenant_id == tenant_id
-                )
-            ).all()
-            membership_user_ids = list(dict.fromkeys(m.user_id for m in memberships))
-            users_to_delete = []
-
-            for user_id in membership_user_ids:
-                user = self.db.scalar(select(User).where(User.id == user_id))
-                if user is None or user.is_internal:
-                    continue
-                remaining_membership = self.db.scalar(
-                    select(TenantMembership).where(
-                        TenantMembership.user_id == user_id,
-                        TenantMembership.tenant_id != tenant_id,
-                        TenantMembership.status == "active",
-                    )
-                )
-                if remaining_membership is None:
-                    users_to_delete.append(user)
-
             deleted_call_events = self._delete_count(
                 delete(CallEvent).where(CallEvent.tenant_id == tenant_id)
             )
@@ -251,6 +229,12 @@ class OnboardingService:
             deleted_agents = self._delete_count(
                 delete(Agent).where(Agent.tenant_id == tenant_id)
             )
+            memberships = self.db.scalars(
+                select(TenantMembership).where(
+                    TenantMembership.tenant_id == tenant_id
+                )
+            ).all()
+            membership_user_ids = list(dict.fromkeys(m.user_id for m in memberships))
             deleted_memberships = self._delete_count(
                 delete(TenantMembership).where(
                     TenantMembership.tenant_id == tenant_id
@@ -260,31 +244,27 @@ class OnboardingService:
                 delete(AccessAuditLog).where(AccessAuditLog.tenant_id == tenant_id)
             )
 
-            user_ids_to_delete = [user.id for user in users_to_delete]
-            if user_ids_to_delete:
-                audit_logs = self.db.scalars(
-                    select(AccessAuditLog).where(
-                        AccessAuditLog.user_id.in_(user_ids_to_delete)
+            for user_id in membership_user_ids:
+                user = self.db.scalar(select(User).where(User.id == user_id))
+                if user and user.external_auth_id:
+                    remaining = self.db.scalar(
+                        select(TenantMembership).where(
+                            TenantMembership.user_id == user_id,
+                            TenantMembership.status == "active",
+                        )
                     )
-                ).all()
-                for audit_log in audit_logs:
-                    audit_log.user_id = None
-
-            deleted_users = 0
-            auth0_user_ids_to_delete = []
-            for user in users_to_delete:
-                if user.external_auth_id:
-                    auth0_user_ids_to_delete.append(user.external_auth_id)
-                self.db.delete(user)
-                deleted_users += 1
+                    if remaining is None:
+                        try:
+                            self.auth0_provisioning_service.delete_user(
+                                user.external_auth_id
+                            )
+                            deleted_auth0_users += 1
+                        except Auth0ProvisioningError:
+                            pass
+                    else:
+                        user.status = "inactive"
 
             self.db.delete(tenant)
-            self.db.flush()
-
-            for auth0_user_id in auth0_user_ids_to_delete:
-                self.auth0_provisioning_service.delete_user(auth0_user_id)
-                deleted_auth0_users += 1
-
             self.db.commit()
         except Exception:
             self.db.rollback()
@@ -302,7 +282,7 @@ class OnboardingService:
                 "memberships": deleted_memberships,
                 "access_audit_logs": deleted_audit_logs,
                 "tenants": 1,
-                "users": deleted_users,
+                "users": 0,
                 "auth0_users": deleted_auth0_users,
             },
         }
