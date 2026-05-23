@@ -49,15 +49,7 @@
       "type": "local",
       "enabled": true,
       "timeout": 120000,
-      "command": [
-        "cmd",
-        "/c",
-        "npx",
-        "-y",
-        "@auth0/auth0-mcp-server",
-        "run",
-        "--read-only",
-      ],
+      "command": ["cmd", "/c", "npx", "-y", "@auth0/auth0-mcp-server", "run"],
       "environment": {
         "DEBUG": "auth0-mcp",
       },

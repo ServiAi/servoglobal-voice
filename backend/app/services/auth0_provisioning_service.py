@@ -56,7 +56,11 @@ class Auth0ProvisioningService:
                 except Auth0ProvisioningError as exc:
                     activation_errors.append(str(exc))
             else:
-                verification_email_sent = True
+                try:
+                    self.send_verification_email_via_dbconnection(email=email)
+                    verification_email_sent = True
+                except Auth0ProvisioningError as exc:
+                    activation_errors.append(str(exc))
 
         if self._settings.AUTH0_ONBOARDING_TRIGGER_PASSWORD_RESET:
             try:
@@ -158,6 +162,34 @@ class Auth0ProvisioningService:
             "/api/v2/jobs/verification-email",
             {"user_id": user_id},
             expected_status=201,
+        )
+
+    def send_verification_email_via_dbconnection(self, *, email: str) -> None:
+        """Send email verification via Authentication API (no Management API needed).
+
+        Uses the /dbconnections/change_password endpoint which sends an email
+        to the user. For onboarding, this serves as the verification mechanism
+        when Management API is unavailable.
+        """
+        client_id = self._onboarding_app_client_id()
+        if not client_id:
+            raise Auth0ProvisioningError(
+                "AUTH0_ONBOARDING_APP_CLIENT_ID or AUTH0_CLIENT_ID is required "
+                "when email verification is enabled"
+            )
+        response = self._post(
+            f"{self._auth0_base_url()}/dbconnections/change_password",
+            operation="trigger Auth0 verification email via dbconnection",
+            json={
+                "client_id": client_id,
+                "email": email,
+                "connection": self._connection_name(),
+            },
+        )
+        self._ensure_success(
+            response,
+            operation="trigger Auth0 verification email via dbconnection",
+            expected_status=200,
         )
 
     def trigger_password_reset_email(self, *, email: str) -> None:
