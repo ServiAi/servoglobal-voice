@@ -515,8 +515,8 @@ class Sprint7AIdentityTests(unittest.TestCase):
         self.assertEqual(response.status_code, 409)
         self.assertEqual(self.auth0_provisioning.created, [])
 
-    def test_create_tenant_auth0_failure_creates_unlinked_local_admin(self):
-        """If Auth0 provisioning fails, local onboarding still completes."""
+    def test_create_tenant_auth0_failure_leaves_no_local_tenant(self):
+        """If Auth0 provisioning fails, no tenant/user/membership is persisted."""
         slug = f"tenant-{uuid.uuid4().hex[:8]}"
         payload = self._make_admin_payload(slug)
         email = payload["admin"]["email"]
@@ -527,22 +527,11 @@ class Sprint7AIdentityTests(unittest.TestCase):
 
         response = self.client.post("/api/v1/admin/tenants", json=payload)
 
-        self.assertEqual(response.status_code, 201)
-        data = response.json()
-        self.assertEqual(data["slug"], slug)
-        self.assertFalse(data["admin"]["has_auth0_link"])
-        self.assertIsNone(data["admin"]["external_auth_id"])
-        self.assertFalse(data["admin"]["auth0_provisioning"]["user_created"])
-        self.assertEqual(
-            data["admin"]["auth0_provisioning"]["activation_errors"],
-            ["Auth0 unavailable"],
-        )
+        self.assertEqual(response.status_code, 502)
+        self.assertEqual(response.json()["detail"], "Auth0 unavailable")
         with SessionLocal() as db:
-            tenant = db.scalar(select(Tenant).where(Tenant.slug == slug))
-            user = db.scalar(select(User).where(User.email == email))
-            self.assertIsNotNone(tenant)
-            self.assertIsNotNone(user)
-            self.assertIsNone(user.external_auth_id)
+            self.assertIsNone(db.scalar(select(Tenant).where(Tenant.slug == slug)))
+            self.assertIsNone(db.scalar(select(User).where(User.email == email)))
 
     def test_auth0_user_is_deleted_when_local_creation_fails(self):
         """If local DB creation fails after Auth0 creation, compensation deletes Auth0 user."""
