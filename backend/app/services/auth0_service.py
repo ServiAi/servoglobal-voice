@@ -14,6 +14,7 @@ class AuthenticatedIdentity:
     external_auth_id: str
     email: str | None = None
     name: str | None = None
+    email_verified: bool = False
     claims: dict | None = None
 
 
@@ -71,6 +72,7 @@ class Auth0TokenVerifier:
             external_auth_id=external_auth_id,
             email=email,
             name=claims.get("name") or claims.get("nickname"),
+            email_verified=claims.get("email_verified", False),
             claims=claims,
         )
 

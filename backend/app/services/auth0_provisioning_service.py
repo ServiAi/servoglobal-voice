@@ -50,26 +50,16 @@ class Auth0ProvisioningService:
 
         if self._settings.AUTH0_ONBOARDING_SEND_VERIFICATION_EMAIL:
             if provisioned_user.created_via == "management_api":
-                try:
-                    self.send_verification_email(provisioned_user.user_id)
-                    verification_email_sent = True
-                except Auth0ProvisioningError as exc:
-                    activation_errors.append(str(exc))
+                verification_email_sent = True
             else:
-                try:
-                    self.send_verification_email_via_dbconnection(email=email)
-                    verification_email_sent = True
-                    password_reset_triggered = True
-                except Auth0ProvisioningError as exc:
-                    activation_errors.append(str(exc))
+                verification_email_sent = True
 
         if self._settings.AUTH0_ONBOARDING_TRIGGER_PASSWORD_RESET:
-            if provisioned_user.created_via == "management_api":
-                try:
-                    self.trigger_password_reset_email(email=email)
-                    password_reset_triggered = True
-                except Auth0ProvisioningError as exc:
-                    activation_errors.append(str(exc))
+            try:
+                self.trigger_password_reset_email(email=email)
+                password_reset_triggered = True
+            except Auth0ProvisioningError as exc:
+                activation_errors.append(str(exc))
 
         return replace(
             provisioned_user,
@@ -101,7 +91,7 @@ class Auth0ProvisioningService:
             "name": name,
             "password": self._generate_temporary_password(),
             "email_verified": False,
-            "verify_email": False,
+            "verify_email": True,
             "app_metadata": {
                 "serviglobal_onboarding": True,
             },

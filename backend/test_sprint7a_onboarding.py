@@ -272,6 +272,7 @@ class Sprint7AIdentityTests(unittest.TestCase):
                 external_auth_id="auth0|link123",
                 email="link-test@test.com",
                 name="Preprovisioned User",
+                email_verified=True,
             )
             service = IdentityService(db)
             linked = service.resolve_user(identity)
@@ -300,6 +301,7 @@ class Sprint7AIdentityTests(unittest.TestCase):
                 external_auth_id="auth0|newsub",
                 email="no-dup@test.com",
                 name="Existing User",
+                email_verified=True,
             )
             service = IdentityService(db)
             resolved = service.resolve_user(identity)
@@ -340,6 +342,7 @@ class Sprint7AIdentityTests(unittest.TestCase):
                 external_auth_id="auth0|matched",
                 email="user-a@test.com",
                 name="User A Correct",
+                email_verified=True,
             )
             service = IdentityService(db)
             resolved = service.resolve_user(identity)
@@ -377,6 +380,7 @@ class Sprint7AIdentityTests(unittest.TestCase):
             external_auth_id="auth0|new",
             email="ambiguous@test.com",
             name="Trying to Login",
+            email_verified=True,
         )
 
         with SessionLocal() as db:
@@ -563,7 +567,7 @@ class Sprint7AIdentityTests(unittest.TestCase):
             self.assertIsNone(db.scalar(select(User).where(User.email == email)))
 
     def test_auth0_provisioning_service_invokes_verification_and_password_reset(self):
-        """Enabled activation flags call Auth0 verification and password reset flows."""
+        """Enabled activation flags call Auth0 verification (via verify_email flag) and password reset flows."""
         http_client = RecordingAuth0HttpClient()
         service = Auth0ProvisioningService(
             http_client=http_client,
@@ -581,10 +585,11 @@ class Sprint7AIdentityTests(unittest.TestCase):
         post_urls = [call["url"] for call in http_client.posts]
         self.assertIn("https://example.auth0.com/oauth/token", post_urls)
         self.assertIn("https://example.auth0.com/api/v2/users", post_urls)
-        self.assertIn(
-            "https://example.auth0.com/api/v2/jobs/verification-email",
-            post_urls,
+        create_payload = next(
+            (call["json"] for call in http_client.posts if "api/v2/users" in call["url"]),
+            {},
         )
+        self.assertTrue(create_payload.get("verify_email"), "verify_email must be True so Auth0 sends verification automatically")
         self.assertIn(
             "https://example.auth0.com/dbconnections/change_password",
             post_urls,
@@ -798,6 +803,7 @@ class Sprint7AIdentityTests(unittest.TestCase):
                 external_auth_id="auth0|original",
                 email="existing-linked@test.com",
                 name="Updated Name",
+                email_verified=True,
             )
             service = IdentityService(db)
             resolved = service.resolve_user(identity)
@@ -814,12 +820,69 @@ class Sprint7AIdentityTests(unittest.TestCase):
             external_auth_id="auth0|brandnew",
             email="brandnew@test.com",
             name="Brand New",
+            email_verified=True,
         )
         with SessionLocal() as db:
             service = IdentityService(db)
             new_user = service.resolve_user(identity)
             self.assertEqual(new_user.external_auth_id, "auth0|brandnew")
             self.assertEqual(new_user.email, "brandnew@test.com")
+
+    # ============================================================
+    # TEST 12: Email verification blocks unverified login
+    # ============================================================
+
+    def test_unverified_email_blocks_login(self):
+        """Login is blocked when Auth0 reports email_verified=false."""
+        user = User(
+            email="unverified@test.com",
+            name="Unverified User",
+            external_auth_id="auth0|unverified",
+            is_internal=False,
+            status="active",
+        )
+        with SessionLocal() as db:
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+
+            identity = AuthenticatedIdentity(
+                external_auth_id="auth0|unverified",
+                email="unverified@test.com",
+                name="Unverified User",
+                email_verified=False,
+            )
+            service = IdentityService(db)
+            with self.assertRaises(HTTPException) as ctx:
+                service.resolve_user(identity)
+            self.assertEqual(ctx.exception.status_code, 403)
+            self.assertIn("Email not verified", ctx.exception.detail)
+
+    def test_unverified_email_blocks_email_match_login(self):
+        """Login by email match is also blocked when email_verified=false."""
+        user = User(
+            email="unverified-by-email@test.com",
+            name="Unverified By Email",
+            external_auth_id=None,
+            is_internal=False,
+            status="active",
+        )
+        with SessionLocal() as db:
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+
+            identity = AuthenticatedIdentity(
+                external_auth_id="auth0|newsub2",
+                email="unverified-by-email@test.com",
+                name="Unverified By Email",
+                email_verified=False,
+            )
+            service = IdentityService(db)
+            with self.assertRaises(HTTPException) as ctx:
+                service.resolve_user(identity)
+            self.assertEqual(ctx.exception.status_code, 403)
+            self.assertIn("Email not verified", ctx.exception.detail)
 
     # ============================================================
     # TEST 11: Admin guard still works

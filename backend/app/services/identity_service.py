@@ -34,6 +34,11 @@ class IdentityService:
             select(User).where(User.external_auth_id == identity.external_auth_id)
         )
         if user is not None:
+            if not identity.email_verified:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Email not verified. Please verify your email before logging in.",
+                )
             self._update_user_from_identity(user, identity)
             return user
 
@@ -99,6 +104,12 @@ class IdentityService:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Authenticated user is not active",
+            )
+
+        if not identity.email_verified:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Email not verified. Please verify your email before logging in.",
             )
 
         # If already linked to a different sub, return as-is (don't overwrite)
