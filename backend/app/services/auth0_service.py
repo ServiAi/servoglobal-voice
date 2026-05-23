@@ -14,7 +14,7 @@ class AuthenticatedIdentity:
     external_auth_id: str
     email: str | None = None
     name: str | None = None
-    email_verified: bool = False
+    email_verified: bool | None = None
     claims: dict | None = None
 
 
