@@ -10,6 +10,7 @@ import {
   AlertCircle,
   CheckCircle2,
   Clock,
+  LogOut,
 } from 'lucide-react';
 
 import { type TenantListItem } from '@/lib/api/tenants';
@@ -85,13 +86,24 @@ export function TenantsListClient({
             Gesti\u00f3n de empresas y accesos multitenant
           </p>
         </div>
-        <Link
-          href={`/${locale}/admin/tenants/new`}
-          className="inline-flex items-center gap-2 rounded-lg bg-cyan-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-cyan-500"
-        >
-          <Plus className="h-4 w-4" />
-          Nuevo tenant
-        </Link>
+        <div className="flex items-center gap-3">
+          <form action="/api/auth/logout" method="get">
+            <button
+              type="submit"
+              className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-2.5 text-sm font-medium text-zinc-300 transition hover:border-zinc-600 hover:text-zinc-100"
+            >
+              <LogOut className="h-4 w-4" />
+              Cerrar sesi\u00f3n
+            </button>
+          </form>
+          <Link
+            href={`/${locale}/admin/tenants/new`}
+            className="inline-flex items-center gap-2 rounded-lg bg-cyan-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-cyan-500"
+          >
+            <Plus className="h-4 w-4" />
+            Nuevo tenant
+          </Link>
+        </div>
       </div>
 
       {/* Back link */}

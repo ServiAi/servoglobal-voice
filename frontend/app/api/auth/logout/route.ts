@@ -11,6 +11,7 @@ import {
 export async function GET(request: NextRequest) {
   const config = getAuth0Config(request.nextUrl.origin);
   const returnTo = `${config.baseUrl}/es`;
+
   const logoutUrl = new URL(`https://${config.domain}/v2/logout`);
   logoutUrl.searchParams.set('client_id', config.clientId);
   logoutUrl.searchParams.set('returnTo', returnTo);
