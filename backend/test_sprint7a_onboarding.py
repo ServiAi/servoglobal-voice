@@ -741,7 +741,7 @@ class Sprint7AIdentityTests(unittest.TestCase):
         self.assertEqual(deleted.status_code, 200)
         data = deleted.json()
         self.assertTrue(data["deleted"])
-        self.assertEqual(data["deleted_counts"]["users"], 0)
+        self.assertEqual(data["deleted_counts"]["users"], 1)
         self.assertEqual(data["deleted_counts"]["auth0_users"], 1)
         self.assertEqual(data["deleted_counts"]["tenants"], 1)
         self.assertEqual(self.auth0_provisioning.deleted, [admin_external_auth_id])
@@ -772,7 +772,7 @@ class Sprint7AIdentityTests(unittest.TestCase):
                 .count(),
                 0,
             )
-            self.assertIsNotNone(db.scalar(select(User).where(User.email == email)))
+            self.assertIsNone(db.scalar(select(User).where(User.email == email)))
 
     def test_delete_tenant_auth0_failure_allows_tenant_deletion(self):
         """Auth0 delete failures don't block tenant deletion — tenant is still removed locally."""
@@ -795,7 +795,7 @@ class Sprint7AIdentityTests(unittest.TestCase):
         self.assertEqual(data["deleted_counts"]["auth0_users"], 0)
         with SessionLocal() as db:
             self.assertIsNone(db.scalar(select(Tenant).where(Tenant.id == tenant_id)))
-            self.assertIsNotNone(db.scalar(select(User).where(User.email == email)))
+            self.assertIsNone(db.scalar(select(User).where(User.email == email)))
 
     def test_delete_bootstrap_tenant_is_blocked(self):
         """The bootstrap tenant cannot be deleted because it preserves admin access."""
