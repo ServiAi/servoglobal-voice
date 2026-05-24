@@ -83,7 +83,7 @@ export function TenantsListClient({
             Tenants
           </h1>
           <p className="mt-1 text-sm text-zinc-400">
-            Gesti\u00f3n de empresas y accesos multitenant
+            Gestión de empresas y accesos multitenant
           </p>
         </div>
         <div className="flex items-center gap-3">
