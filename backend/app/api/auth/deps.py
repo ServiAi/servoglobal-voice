@@ -44,6 +44,18 @@ def get_current_auth_context(
 ) -> AuthContext:
     identity_service = IdentityService(db)
     user = identity_service.resolve_user(identity)
+    if user.is_internal:
+        tenant = identity_service.bootstrap_tenant()
+        membership = TenantMembership(
+            tenant_id=tenant.id,
+            user_id=user.id,
+            role="platform_admin",
+            status="active",
+            created_at=tenant.created_at,
+            updated_at=tenant.updated_at,
+        )
+        membership.tenant = tenant
+        return AuthContext(user=user, tenant=tenant, membership=membership)
     membership = identity_service.resolve_active_membership(user)
     return AuthContext(user=user, tenant=membership.tenant, membership=membership)
 

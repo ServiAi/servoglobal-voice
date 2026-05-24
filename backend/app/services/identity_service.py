@@ -158,6 +158,22 @@ class IdentityService:
             )
         return membership
 
+    def bootstrap_tenant(self) -> Tenant:
+        tenant = self.db.scalar(
+            select(Tenant).where(Tenant.slug == settings.BOOTSTRAP_TENANT_SLUG)
+        )
+        if tenant is None:
+            tenant = Tenant(
+                name=settings.BOOTSTRAP_TENANT_NAME,
+                slug=settings.BOOTSTRAP_TENANT_SLUG,
+                timezone=settings.BOOTSTRAP_TENANT_TIMEZONE,
+                status=ACTIVE,
+            )
+            self.db.add(tenant)
+            self.db.commit()
+            self.db.refresh(tenant)
+        return tenant
+
     def audit_access(
         self,
         *,
