@@ -93,7 +93,7 @@ export function TenantsListClient({
               className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-2.5 text-sm font-medium text-zinc-300 transition hover:border-zinc-600 hover:text-zinc-100"
             >
               <LogOut className="h-4 w-4" />
-              Cerrar sesi\u00f3n
+              Cerrar sesión
             </button>
           </form>
           <Link
