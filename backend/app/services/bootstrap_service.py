@@ -43,7 +43,7 @@ class IdentityBootstrapService:
         return BootstrapResult(
             tenant_id=tenant.id,
             user_id=user.id,
-            membership_id=membership.id,
+            membership_id=membership.id if membership else None,
             created_tenant=created_tenant,
             created_user=created_user,
             created_membership=created_membership,
@@ -92,7 +92,10 @@ class IdentityBootstrapService:
 
     def _get_or_create_membership(
         self, tenant: Tenant, user: User
-    ) -> tuple[TenantMembership, bool]:
+    ) -> tuple[TenantMembership | None, bool]:
+        if user.is_internal:
+            return None, False
+
         membership = self.db.scalar(
             select(TenantMembership).where(
                 TenantMembership.tenant_id == tenant.id,
