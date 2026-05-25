@@ -177,6 +177,34 @@ class Sprint1AuthContextTests(unittest.TestCase):
             self.assertEqual(db.query(User).count(), 1)
             self.assertEqual(db.query(TenantMembership).count(), 1)
 
+    def test_identity_bootstrap_promotes_existing_auth0_user_to_internal(self):
+        settings.BOOTSTRAP_TENANT_NAME = "Tenant Inicial"
+        settings.BOOTSTRAP_TENANT_SLUG = "tenant-inicial"
+        settings.BOOTSTRAP_TENANT_TIMEZONE = "America/Bogota"
+        settings.BOOTSTRAP_USER_AUTH0_SUB = "auth0|bootstrap-user"
+        settings.BOOTSTRAP_USER_EMAIL = "admin@example.com"
+        settings.BOOTSTRAP_USER_NAME = "Admin Inicial"
+        settings.BOOTSTRAP_USER_ROLE = "tenant_admin"
+
+        with SessionLocal() as db:
+            user = User(
+                external_auth_id="auth0|bootstrap-user",
+                email="admin@example.com",
+                name="Auto-created User",
+                is_internal=False,
+                status="active",
+            )
+            db.add(user)
+            db.commit()
+
+            result = IdentityBootstrapService(db).run_initial_bootstrap()
+
+            self.assertFalse(result.created_user)
+            self.assertTrue(result.created_membership)
+            db.refresh(user)
+            self.assertTrue(user.is_internal)
+            self.assertEqual(db.query(TenantMembership).count(), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

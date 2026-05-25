@@ -471,6 +471,9 @@ class OnboardingService:
         )
 
     def _ensure_tenant_can_be_deleted(self, tenant: Tenant) -> None:
+        if tenant.slug == settings.BOOTSTRAP_TENANT_SLUG:
+            raise TenantDeletionBlockedError("Bootstrap tenant cannot be deleted")
+
         internal_membership = self.db.scalar(
             select(TenantMembership)
             .join(User)

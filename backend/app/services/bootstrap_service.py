@@ -73,9 +73,15 @@ class IdentityBootstrapService:
         user = self.db.scalar(
             select(User).where(User.external_auth_id == settings.BOOTSTRAP_USER_AUTH0_SUB)
         )
+        if user is None:
+            user = self.db.scalar(
+                select(User).where(User.email == settings.BOOTSTRAP_USER_EMAIL)
+            )
         if user is not None:
+            user.external_auth_id = settings.BOOTSTRAP_USER_AUTH0_SUB
             user.email = settings.BOOTSTRAP_USER_EMAIL
             user.name = settings.BOOTSTRAP_USER_NAME or user.name
+            user.is_internal = True
             user.status = ACTIVE
             return user, False
 
@@ -93,9 +99,6 @@ class IdentityBootstrapService:
     def _get_or_create_membership(
         self, tenant: Tenant, user: User
     ) -> tuple[TenantMembership | None, bool]:
-        if user.is_internal:
-            return None, False
-
         membership = self.db.scalar(
             select(TenantMembership).where(
                 TenantMembership.tenant_id == tenant.id,
