@@ -86,10 +86,16 @@ class FakeAuth0Response:
 
 
 class RecordingAuth0HttpClient:
-    def __init__(self, *, management_token_status: int = 200) -> None:
+    def __init__(
+        self,
+        *,
+        management_token_status: int = 200,
+        delete_status: int = 204,
+    ) -> None:
         self.posts: list[dict] = []
         self.deletes: list[dict] = []
         self.management_token_status = management_token_status
+        self.delete_status = delete_status
 
     def post(self, url: str, *, json: dict | None = None, headers: dict | None = None):
         self.posts.append({"url": url, "json": json, "headers": headers})
@@ -133,7 +139,7 @@ class RecordingAuth0HttpClient:
 
     def delete(self, url: str, *, headers: dict | None = None):
         self.deletes.append({"url": url, "headers": headers})
-        return FakeAuth0Response(204)
+        return FakeAuth0Response(self.delete_status)
 
 
 class FakeAuth0Settings:
@@ -678,6 +684,19 @@ class Sprint7AIdentityTests(unittest.TestCase):
         self.assertIn("https://fallback.auth0.com/dbconnections/signup", post_urls)
         self.assertNotIn("https://fallback.auth0.com/api/v2/users", post_urls)
 
+    def test_auth0_delete_user_treats_missing_user_as_success(self):
+        """Auth0 404 means the external user is already absent."""
+        http_client = RecordingAuth0HttpClient(delete_status=404)
+        service = Auth0ProvisioningService(
+            http_client=http_client,
+            settings_obj=FakeAuth0Settings,
+        )
+
+        service.delete_user("auth0|already-deleted")
+
+        self.assertEqual(len(http_client.deletes), 1)
+        self.assertIn("auth0%7Calready-deleted", http_client.deletes[0]["url"])
+
     def test_delete_tenant_removes_tenant_owned_records_and_users(self):
         """Deleting a tenant removes tenant data and tenant-only identity users."""
         slug = f"tenant-{uuid.uuid4().hex[:8]}"
@@ -774,8 +793,8 @@ class Sprint7AIdentityTests(unittest.TestCase):
             )
             self.assertIsNone(db.scalar(select(User).where(User.email == email)))
 
-    def test_delete_tenant_auth0_failure_allows_tenant_deletion(self):
-        """Auth0 delete failures don't block tenant deletion — tenant is still removed locally."""
+    def test_delete_tenant_auth0_failure_blocks_local_deletion(self):
+        """Auth0 delete failures block local deletion so the systems stay aligned."""
         slug = f"tenant-{uuid.uuid4().hex[:8]}"
         payload = self._make_admin_payload(slug, agent_count=0)
         email = payload["admin"]["email"]
@@ -789,13 +808,11 @@ class Sprint7AIdentityTests(unittest.TestCase):
 
         deleted = self.client.delete(f"/api/v1/admin/tenants/{tenant_id}")
 
-        self.assertEqual(deleted.status_code, 200)
-        data = deleted.json()
-        self.assertTrue(data["deleted"])
-        self.assertEqual(data["deleted_counts"]["auth0_users"], 0)
+        self.assertEqual(deleted.status_code, 502)
+        self.assertEqual(deleted.json()["detail"], "Auth0 delete failed")
         with SessionLocal() as db:
-            self.assertIsNone(db.scalar(select(Tenant).where(Tenant.id == tenant_id)))
-            self.assertIsNone(db.scalar(select(User).where(User.email == email)))
+            self.assertIsNotNone(db.scalar(select(Tenant).where(Tenant.id == tenant_id)))
+            self.assertIsNotNone(db.scalar(select(User).where(User.email == email)))
 
     def test_delete_bootstrap_tenant_is_blocked(self):
         """Bootstrap tenant cannot be deleted even without an internal membership."""

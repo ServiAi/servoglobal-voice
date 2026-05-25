@@ -216,6 +216,8 @@ class Auth0ProvisioningService:
             operation="delete Auth0 user",
             headers=self._authorization_headers(),
         )
+        if response.status_code == 404:
+            return
         self._ensure_success(
             response,
             operation="delete Auth0 user",

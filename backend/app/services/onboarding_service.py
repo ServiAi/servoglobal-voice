@@ -216,6 +216,27 @@ class OnboardingService:
         deleted_auth0_users = 0
         deleted_users = 0
         try:
+            memberships = self.db.scalars(
+                select(TenantMembership).where(
+                    TenantMembership.tenant_id == tenant_id
+                )
+            ).all()
+            membership_user_ids = list(dict.fromkeys(m.user_id for m in memberships))
+            tenant_users = [
+                user
+                for user in (
+                    self.db.scalar(select(User).where(User.id == user_id))
+                    for user_id in membership_user_ids
+                )
+                if user is not None
+            ]
+            for user in tenant_users:
+                if user.external_auth_id:
+                    self.auth0_provisioning_service.delete_user(
+                        user.external_auth_id
+                    )
+                    deleted_auth0_users += 1
+
             deleted_call_events = self._delete_count(
                 delete(CallEvent).where(CallEvent.tenant_id == tenant_id)
             )
@@ -230,12 +251,6 @@ class OnboardingService:
             deleted_agents = self._delete_count(
                 delete(Agent).where(Agent.tenant_id == tenant_id)
             )
-            memberships = self.db.scalars(
-                select(TenantMembership).where(
-                    TenantMembership.tenant_id == tenant_id
-                )
-            ).all()
-            membership_user_ids = list(dict.fromkeys(m.user_id for m in memberships))
             deleted_memberships = self._delete_count(
                 delete(TenantMembership).where(
                     TenantMembership.tenant_id == tenant_id
@@ -245,20 +260,9 @@ class OnboardingService:
                 delete(AccessAuditLog).where(AccessAuditLog.tenant_id == tenant_id)
             )
 
-            for user_id in membership_user_ids:
-                user = self.db.scalar(select(User).where(User.id == user_id))
-                if user:
-                    if user.external_auth_id:
-                        try:
-                            self.auth0_provisioning_service.delete_user(
-                                user.external_auth_id
-                            )
-                            deleted_auth0_users += 1
-                        except Auth0ProvisioningError:
-                            pass
-
-                    self.db.delete(user)
-                    deleted_users += 1
+            for user in tenant_users:
+                self.db.delete(user)
+                deleted_users += 1
 
             self.db.delete(tenant)
             self.db.commit()
