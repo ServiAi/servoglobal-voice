@@ -226,7 +226,7 @@ export function NewTenantClient({ locale }: NewTenantClientProps) {
                 placeholder="inmobiliaria-central"
               />
               <p className="mt-1 text-xs text-zinc-600">
-                Identificador operativo. Se genera autom\u00e1ticamente desde el nombre.
+                Identificador operativo. Se genera automáticamente desde el nombre.
               </p>
             </div>
 
@@ -282,7 +282,7 @@ export function NewTenantClient({ locale }: NewTenantClientProps) {
                 value={adminName}
                 onChange={(e) => setAdminName(e.target.value)}
                 className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-200 placeholder:text-zinc-600 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
-                placeholder="Juan P\u00e9rez"
+                placeholder="Juan Pérez"
               />
             </div>
 
@@ -339,7 +339,7 @@ export function NewTenantClient({ locale }: NewTenantClientProps) {
 
           {agents.length === 0 && (
             <p className="py-8 text-center text-sm text-zinc-600">
-              Los agentes son opcionales. Puedes agregarlos despu\u00e9s desde el detalle del tenant.
+              Los agentes son opcionales. Puedes agregarlos después desde el detalle del tenant.
             </p>
           )}
 

@@ -456,7 +456,7 @@ export function TenantDetailClient({
                   {tenant.is_ready_for_calls ? (
                     <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-400">
                       <CheckCircle2 className="h-3 w-3" />
-                      S\u00ed
+                      Sí
                     </span>
                   ) : (
                     <span className="inline-flex items-center gap-1 rounded-full bg-zinc-500/10 px-2 py-0.5 text-xs font-medium text-zinc-500">
@@ -475,7 +475,7 @@ export function TenantDetailClient({
           <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-6">
             <h3 className="mb-3 flex items-center gap-2 text-sm font-medium text-zinc-400">
               <Users className="h-4 w-4" />
-              Membres\u00edas
+              Membresías
             </h3>
             <p className="text-2xl font-semibold text-zinc-100">{tenant.memberships.length}</p>
             <p className="text-xs text-zinc-600">usuarios conectados</p>
@@ -497,7 +497,7 @@ export function TenantDetailClient({
         <div className="mb-4 flex items-center justify-between">
           <h2 className="flex items-center gap-2 text-lg font-medium text-zinc-200">
             <Users className="h-5 w-5 text-cyan-400" />
-            Membres\u00edas
+            Membresías
           </h2>
           <button
             type="button"
@@ -505,7 +505,7 @@ export function TenantDetailClient({
             className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 px-3 py-1.5 text-xs font-medium text-zinc-300 transition hover:border-cyan-500/50 hover:text-cyan-400"
           >
             <Plus className="h-3.5 w-3.5" />
-            Agregar membres\u00eda
+            Agregar membresía
           </button>
         </div>
 
@@ -558,7 +558,7 @@ export function TenantDetailClient({
         )}
 
         {tenant.memberships.length === 0 ? (
-          <p className="py-4 text-center text-sm text-zinc-600">Sin membres\u00edas</p>
+          <p className="py-4 text-center text-sm text-zinc-600">Sin membresías</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
