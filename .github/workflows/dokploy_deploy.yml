@@ -3,7 +3,7 @@ name: Deploy to Dokploy
 on:
   push:
     branches:
-      - develop
+      - feature/fase-2-dashboard-metricas
 
 jobs:
   deploy:

@@ -4,8 +4,44 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     ULTRAVOX_API_KEY: str
     ULTRAVOX_MODEL: str = "fixie-ai/ultravox-70b"
+    ULTRAVOX_WEBHOOK_SECRET: str = ""
+    ULTRAVOX_WEBHOOK_SIGNATURE_TOLERANCE_SECONDS: int = 60
+    ULTRAVOX_ALLOW_UNSIGNED_WEBHOOKS: bool = False
     PORT: int = 8000
     DEFAULT_AGENT_ID: str | None = None
+    DATABASE_URL: str = "postgresql+psycopg://serviai:serviai@localhost:5432/serviai"
+    CORS_ORIGINS: str = (
+        "https://staging.serviglobal-ia.com,"
+        "http://localhost:3000,"
+        "http://127.0.0.1:3000"
+    )
+
+    # Auth0
+    AUTH0_DOMAIN: str = ""
+    AUTH0_CLIENT_ID: str = ""
+    AUTH0_CLIENT_SECRET: str = ""
+    AUTH0_AUDIENCE: str = ""
+    AUTH0_ISSUER: str = ""
+    AUTH0_ALGORITHMS: str = "RS256"
+    AUTH0_AUTO_CREATE_USERS: bool = True
+    AUTH0_MANAGEMENT_DOMAIN: str = ""
+    AUTH0_MANAGEMENT_CLIENT_ID: str = ""
+    AUTH0_MANAGEMENT_CLIENT_SECRET: str = ""
+    AUTH0_MANAGEMENT_AUDIENCE: str = ""
+    AUTH0_ONBOARDING_CONNECTION: str = ""
+    AUTH0_ONBOARDING_APP_CLIENT_ID: str = ""
+    AUTH0_ONBOARDING_SEND_VERIFICATION_EMAIL: bool = True
+    AUTH0_ONBOARDING_TRIGGER_PASSWORD_RESET: bool = True
+    AUTH0_ONBOARDING_ALLOW_AUTHENTICATION_SIGNUP_FALLBACK: bool = True
+
+    # Initial private app bootstrap
+    BOOTSTRAP_TENANT_NAME: str = "ServiGlobal IA"
+    BOOTSTRAP_TENANT_SLUG: str = "serviglobal-ia"
+    BOOTSTRAP_TENANT_TIMEZONE: str = "America/Bogota"
+    BOOTSTRAP_USER_AUTH0_SUB: str = ""
+    BOOTSTRAP_USER_EMAIL: str = ""
+    BOOTSTRAP_USER_NAME: str = ""
+    BOOTSTRAP_USER_ROLE: str = "tenant_admin"
 
     # SIP / Asterisk Configuration
     ASTERISK_PUBLIC_HOST: str = "54.243.24.145"

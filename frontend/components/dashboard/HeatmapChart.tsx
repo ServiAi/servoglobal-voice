@@ -1,0 +1,119 @@
+'use client';
+
+import { useMemo } from 'react';
+import { parseISO, getDay } from 'date-fns';
+import type { DashboardHeatmapResponse } from '@/lib/api/dashboard';
+import { useTheme } from 'next-themes';
+import { useEffect, useState } from 'react';
+
+interface HeatmapChartProps {
+  data: DashboardHeatmapResponse;
+}
+
+const DAYS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+const HOURS = Array.from({ length: 24 }, (_, i) => i);
+
+export function HeatmapChart({ data }: HeatmapChartProps) {
+  const { resolvedTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const isDark = resolvedTheme === 'dark' || !mounted;
+
+  const { grid, maxCount } = useMemo(() => {
+    let max = 0;
+    const map = new Map<string, number>();
+
+    if (data?.matrix) {
+      data.matrix.forEach((p) => {
+        if (p.calls > max) max = p.calls;
+
+        let dayOfWeek = 0;
+        try {
+          const dateObj = parseISO(p.day);
+          const rawDay = getDay(dateObj); // 0 = Sunday, 1 = Monday
+          dayOfWeek = rawDay === 0 ? 6 : rawDay - 1; // map so Monday = 0
+        } catch {
+          // fallback
+        }
+
+        map.set(`${dayOfWeek}-${p.hour}`, p.calls);
+      });
+    }
+
+    return { grid: map, maxCount: max };
+  }, [data]);
+
+  if (!data?.matrix || !Array.isArray(data.matrix) || data.matrix.length === 0) {
+    return (
+      <div className="flex h-[300px] items-center justify-center rounded-xl border border-border bg-card">
+        <p className="text-sm text-muted-foreground">No hay datos de calor.</p>
+      </div>
+    );
+  }
+
+  // Function to determine color intensity based on value relative to maxCount
+  const getIntensityColor = (count: number) => {
+    if (count === 0) return isDark ? 'bg-zinc-800/30' : 'bg-zinc-100';
+    const ratio = count / maxCount;
+    if (ratio < 0.2) return isDark ? 'bg-cyan-900/40' : 'bg-cyan-100';
+    if (ratio < 0.4) return isDark ? 'bg-cyan-800/60' : 'bg-cyan-200';
+    if (ratio < 0.6) return isDark ? 'bg-cyan-600/80' : 'bg-cyan-300';
+    if (ratio < 0.8) return isDark ? 'bg-cyan-500' : 'bg-cyan-500';
+    return isDark ? 'bg-cyan-400' : 'bg-cyan-600';
+  };
+
+  return (
+    <div className="rounded-xl border border-border bg-card p-5 overflow-x-auto">
+      <h3 className="mb-6 text-lg font-medium text-foreground">Mapa de Calor (Volumen)</h3>
+      <div className="min-w-[600px]">
+        {/* Header - Hours */}
+        <div className="flex ml-10 mb-2">
+          {HOURS.map((hour) => (
+            <div key={hour} className="flex-1 text-center text-[10px] text-muted-foreground">
+              {hour}
+            </div>
+          ))}
+        </div>
+
+        {/* Grid - Days */}
+        <div className="flex flex-col gap-1">
+          {DAYS.map((day, dIdx) => (
+            <div key={day} className="flex items-center">
+              <div className="w-10 text-xs font-medium text-muted-foreground">{day}</div>
+              <div className="flex flex-1 gap-1">
+                {HOURS.map((hour) => {
+                  const count = grid.get(`${dIdx}-${hour}`) || 0;
+                  return (
+                    <div
+                      key={`${dIdx}-${hour}`}
+                      title={`${day} a las ${hour}:00 - ${count} llamadas`}
+                      className={`flex-1 rounded-[2px] transition-colors hover:ring-1 hover:ring-primary h-6 ${getIntensityColor(count)}`}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Legend */}
+        <div className="mt-4 flex items-center justify-end gap-2 text-xs text-muted-foreground">
+          <span>Menos</span>
+          <div className="flex gap-1">
+            <div className={`h-3 w-3 rounded-sm ${isDark ? 'bg-zinc-800/30' : 'bg-zinc-100'}`} />
+            <div className={`h-3 w-3 rounded-sm ${isDark ? 'bg-cyan-900/40' : 'bg-cyan-100'}`} />
+            <div className={`h-3 w-3 rounded-sm ${isDark ? 'bg-cyan-800/60' : 'bg-cyan-200'}`} />
+            <div className={`h-3 w-3 rounded-sm ${isDark ? 'bg-cyan-600/80' : 'bg-cyan-300'}`} />
+            <div className={`h-3 w-3 rounded-sm ${isDark ? 'bg-cyan-500' : 'bg-cyan-500'}`} />
+            <div className={`h-3 w-3 rounded-sm ${isDark ? 'bg-cyan-400' : 'bg-cyan-600'}`} />
+          </div>
+          <span>Más</span>
+        </div>
+      </div>
+    </div>
+  );
+}

@@ -22,5 +22,5 @@ COPY . .
 # Expose port 8000
 EXPOSE 8000
 
-# Run app.main:app with uvicorn
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Best-effort database readiness for staging; the API must still boot if DB setup fails.
+CMD ["sh", "-c", "(alembic upgrade head && PYTHONPATH=. python scripts/bootstrap_identity.py) || echo 'WARNING: database migration/bootstrap failed'; uvicorn app.main:app --host 0.0.0.0 --port 8000"]

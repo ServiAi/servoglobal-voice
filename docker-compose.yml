@@ -1,0 +1,39 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: serviai_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-serviai}
+      POSTGRES_USER: ${POSTGRES_USER:-serviai}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-serviai}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - serviai_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-serviai} -d ${POSTGRES_DB:-serviai}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  pgadmin:
+    image: dpage/pgadmin4:8
+    container_name: serviai_pgadmin
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-admin@serviglobal-ia.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:-serviai}
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+    ports:
+      - "${PGADMIN_PORT:-5050}:80"
+    volumes:
+      - serviai_pgadmin_data:/var/lib/pgadmin
+
+volumes:
+  serviai_postgres_data:
+  serviai_pgadmin_data:
