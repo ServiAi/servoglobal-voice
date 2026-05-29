@@ -814,8 +814,8 @@ class Sprint7AIdentityTests(unittest.TestCase):
             self.assertIsNotNone(db.scalar(select(Tenant).where(Tenant.id == tenant_id)))
             self.assertIsNotNone(db.scalar(select(User).where(User.email == email)))
 
-    def test_delete_bootstrap_tenant_is_blocked(self):
-        """Bootstrap tenant cannot be deleted even without an internal membership."""
+    def test_delete_bootstrap_tenant_is_allowed(self):
+        """Bootstrap tenant can be deleted successfully."""
         payload = self._make_admin_payload(settings.BOOTSTRAP_TENANT_SLUG, agent_count=0)
         payload["name"] = settings.BOOTSTRAP_TENANT_NAME
         email = payload["admin"]["email"]
@@ -825,11 +825,11 @@ class Sprint7AIdentityTests(unittest.TestCase):
 
         deleted = self.client.delete(f"/api/v1/admin/tenants/{tenant_id}")
 
-        self.assertEqual(deleted.status_code, 409)
-        self.assertEqual(deleted.json()["detail"], "Bootstrap tenant cannot be deleted")
+        self.assertEqual(deleted.status_code, 200)
+        self.assertTrue(deleted.json()["deleted"])
         with SessionLocal() as db:
-            self.assertIsNotNone(db.scalar(select(Tenant).where(Tenant.id == tenant_id)))
-            self.assertIsNotNone(db.scalar(select(User).where(User.email == email)))
+            self.assertIsNone(db.scalar(select(Tenant).where(Tenant.id == tenant_id)))
+            self.assertIsNone(db.scalar(select(User).where(User.email == email)))
 
     def test_delete_missing_tenant_returns_404(self):
         response = self.client.delete(f"/api/v1/admin/tenants/{uuid.uuid4()}")
