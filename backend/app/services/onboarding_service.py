@@ -484,7 +484,12 @@ class OnboardingService:
         )
 
     def _ensure_tenant_can_be_deleted(self, tenant: Tenant) -> None:
-        pass
+        from app.core.config import settings
+
+        if tenant.slug == settings.BOOTSTRAP_TENANT_SLUG:
+            raise TenantDeletionBlockedError(
+                f"Tenant '{tenant.slug}' is the bootstrap tenant and cannot be deleted"
+            )
 
     def _delete_count(self, statement) -> int:
         result = self.db.execute(statement)
