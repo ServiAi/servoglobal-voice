@@ -19,6 +19,7 @@ import {
   Globe,
   Trash2,
   X,
+  ArrowLeft,
 } from 'lucide-react';
 
 import {
@@ -290,9 +291,10 @@ export function TenantDetailClient({
         <div>
           <Link
             href={`/${locale}/admin/tenants`}
-            className="mb-3 inline-block text-sm text-zinc-500 transition hover:text-zinc-300"
+            className="mb-3 inline-flex items-center gap-1.5 text-sm text-zinc-500 transition hover:text-zinc-300"
           >
-            \u2190 Volver a tenants
+            <ArrowLeft className="h-4 w-4" />
+            Volver a tenants
           </Link>
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-zinc-800 text-zinc-400">

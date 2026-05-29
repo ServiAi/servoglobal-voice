@@ -11,6 +11,7 @@ import {
   CheckCircle2,
   Clock,
   LogOut,
+  ArrowLeft,
 } from 'lucide-react';
 
 import { type TenantListItem } from '@/lib/api/tenants';
@@ -110,9 +111,10 @@ export function TenantsListClient({
       <div className="mb-6">
         <Link
           href={`/${locale}/dashboard`}
-          className="text-sm text-zinc-500 transition hover:text-zinc-300"
+          className="inline-flex items-center gap-1.5 text-sm text-zinc-500 transition hover:text-zinc-300"
         >
-          \u2190 Volver al dashboard
+          <ArrowLeft className="h-4 w-4" />
+          Volver al dashboard
         </Link>
       </div>
 

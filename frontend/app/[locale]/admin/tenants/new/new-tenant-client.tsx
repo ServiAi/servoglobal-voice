@@ -12,6 +12,7 @@ import {
   CheckCircle2,
   User,
   Mic,
+  ArrowLeft,
 } from 'lucide-react';
 
 import {
@@ -164,9 +165,10 @@ export function NewTenantClient({ locale }: NewTenantClientProps) {
       <div className="mb-8">
         <Link
           href={`/${locale}/admin/tenants`}
-          className="mb-4 inline-block text-sm text-zinc-500 transition hover:text-zinc-300"
+          className="mb-4 inline-flex items-center gap-1.5 text-sm text-zinc-500 transition hover:text-zinc-300"
         >
-          \u2190 Volver a tenants
+          <ArrowLeft className="h-4 w-4" />
+          Volver a tenants
         </Link>
         <h1 className="text-2xl font-semibold text-zinc-100 sm:text-3xl">
           Nuevo tenant
