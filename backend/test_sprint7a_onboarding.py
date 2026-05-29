@@ -793,8 +793,8 @@ class Sprint7AIdentityTests(unittest.TestCase):
             )
             self.assertIsNone(db.scalar(select(User).where(User.email == email)))
 
-    def test_delete_tenant_auth0_failure_blocks_local_deletion(self):
-        """Auth0 delete failures block local deletion so the systems stay aligned."""
+    def test_delete_tenant_auth0_failure_does_not_block_local_deletion(self):
+        """Auth0 delete failures do not block local deletion."""
         slug = f"tenant-{uuid.uuid4().hex[:8]}"
         payload = self._make_admin_payload(slug, agent_count=0)
         email = payload["admin"]["email"]
@@ -808,11 +808,11 @@ class Sprint7AIdentityTests(unittest.TestCase):
 
         deleted = self.client.delete(f"/api/v1/admin/tenants/{tenant_id}")
 
-        self.assertEqual(deleted.status_code, 502)
-        self.assertEqual(deleted.json()["detail"], "Auth0 delete failed")
+        self.assertEqual(deleted.status_code, 200)
+        self.assertTrue(deleted.json()["deleted"])
         with SessionLocal() as db:
-            self.assertIsNotNone(db.scalar(select(Tenant).where(Tenant.id == tenant_id)))
-            self.assertIsNotNone(db.scalar(select(User).where(User.email == email)))
+            self.assertIsNone(db.scalar(select(Tenant).where(Tenant.id == tenant_id)))
+            self.assertIsNone(db.scalar(select(User).where(User.email == email)))
 
     def test_delete_bootstrap_tenant_is_allowed(self):
         """Bootstrap tenant can be deleted successfully."""
