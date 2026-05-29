@@ -232,19 +232,10 @@ class OnboardingService:
             ]
             for user in tenant_users:
                 if user.external_auth_id:
-                    try:
-                        self.auth0_provisioning_service.delete_user(
-                            user.external_auth_id
-                        )
-                        deleted_auth0_users += 1
-                    except Auth0ProvisioningError as exc:
-                        import logging
-                        logger = logging.getLogger(__name__)
-                        logger.warning(
-                            "Failed to delete Auth0 user %s: %s",
-                            user.external_auth_id,
-                            exc,
-                        )
+                    self.auth0_provisioning_service.delete_user(
+                        user.external_auth_id
+                    )
+                    deleted_auth0_users += 1
 
             deleted_call_events = self._delete_count(
                 delete(CallEvent).where(CallEvent.tenant_id == tenant_id)
