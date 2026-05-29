@@ -89,21 +89,26 @@ export function FloatingCTA() {
               className="bg-white dark:bg-zinc-900 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden shadow-2xl border border-zinc-200 dark:border-white/10"
             >
               {/* Modal Header */}
-              <div className="flex items-center justify-between p-4 border-b border-zinc-200 dark:border-white/10">
-                <h3 className="text-lg font-bold text-zinc-900 dark:text-white">
-                  {tDemo('title')}
-                </h3>
+              <div className="flex items-start justify-between gap-4 p-4 border-b border-zinc-200 dark:border-white/10">
+                <div>
+                  <h3 className="text-lg font-bold text-zinc-900 dark:text-white">
+                    {tDemo('title')}
+                  </h3>
+                  <p className="mt-1 text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
+                    {tDemo('disclaimer')}
+                  </p>
+                </div>
                 <button
                   onClick={() => setIsDemoOpen(false)}
-                  className="size-10 rounded-full hover:bg-zinc-100 dark:hover:bg-white/10 flex items-center justify-center transition-colors"
+                  className="size-10 shrink-0 rounded-full hover:bg-zinc-100 dark:hover:bg-white/10 flex items-center justify-center transition-colors"
                 >
                   <X className="size-5 text-zinc-500" />
                 </button>
               </div>
 
               {/* Tabs */}
-              <div className="flex justify-center p-4 border-b border-zinc-100 dark:border-white/5">
-                <div className="flex p-1 bg-zinc-100 dark:bg-zinc-800 rounded-xl">
+              <div className="p-4 border-b border-zinc-100 dark:border-white/5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 p-1 bg-zinc-100 dark:bg-zinc-800 rounded-xl">
                   <button
                     onClick={() => setActiveTab('inbound')}
                     className={cn(
@@ -127,6 +132,9 @@ export function FloatingCTA() {
                     {tDemo('outboundTab')}
                   </button>
                 </div>
+                <p className="mt-3 text-center text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
+                  {activeTab === 'inbound' ? tDemo('inboundHint') : tDemo('outboundHint')}
+                </p>
               </div>
 
               {/* Demo Content */}

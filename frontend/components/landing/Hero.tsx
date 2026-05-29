@@ -14,9 +14,23 @@ import {
   useSectionParallax,
 } from '@/hooks/useSectionParallax';
 
-const HeroFuturistic = dynamic(() => import('../hero-futuristic').then(mod => mod.HeroFuturistic), { 
+function GlobeLoadingFallback() {
+  return (
+    <div
+      aria-hidden="true"
+      className="relative flex h-full min-h-[500px] w-full items-center justify-center"
+    >
+      <div className="absolute h-[78%] w-[78%] rounded-full bg-[radial-gradient(circle_at_35%_30%,rgba(255,255,255,0.98),rgba(255,255,255,0.72)_36%,rgba(255,255,255,0.12)_66%,rgba(255,255,255,0)_72%)] shadow-[0_0_70px_rgba(184,0,245,0.26)] dark:bg-[radial-gradient(circle_at_35%_30%,rgba(30,22,36,0.96),rgba(9,0,12,0.94)_45%,rgba(0,0,0,0.98)_72%)]" />
+      <div className="absolute h-[64%] w-[64%] rounded-full border border-fuchsia-500/20 opacity-70 shadow-[inset_0_0_35px_rgba(184,0,245,0.22)]" />
+      <div className="absolute h-[78%] w-[78%] rounded-full bg-[repeating-radial-gradient(circle_at_center,transparent_0,transparent_22px,rgba(184,0,245,0.12)_23px,transparent_24px)] opacity-50" />
+      <div className="absolute h-2 w-2 rounded-full bg-[#ff0033] shadow-[0_0_24px_rgba(255,0,51,0.9)]" />
+    </div>
+  );
+}
+
+const RotatingEarth = dynamic(() => import('../ui/wireframe-dotted-globe'), {
   ssr: false,
-  loading: () => <div className="w-full h-full min-h-[500px] bg-transparent" />
+  loading: () => <GlobeLoadingFallback />,
 });
 
 const AnimatedShaderBackground = dynamic(() => import('../ui/animated-shader-background'), { 
@@ -51,11 +65,11 @@ export function Hero() {
       {/* Desktop Background Effects */}
       <motion.div
         style={{ y: yBackground }}
-        className="hidden md:block absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-violet-100/50 via-white to-white dark:from-violet-900/20 dark:via-black dark:to-black opacity-60 dark:opacity-40"
+        className="hidden md:block absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-zinc-100/40 via-white to-white dark:from-white/5 dark:via-black dark:to-black opacity-60 dark:opacity-40"
       />
       <motion.div
         style={{ y: yBlob }}
-        className="hidden md:block absolute top-1/4 right-0 w-[600px] h-[600px] bg-violet-600/10 rounded-full blur-[120px] pointer-events-none"
+        className="hidden md:block absolute top-1/4 right-0 w-[600px] h-[600px] bg-white/5 rounded-full blur-[120px] pointer-events-none"
       />
       <motion.div
         style={{ y: yBackground }}
@@ -145,16 +159,25 @@ export function Hero() {
           </motion.div>
         </motion.div>
 
-        {/* RIGHT COLUMN: HERO FUTURISTIC - Hidden on mobile, visible from md */}
+        {/* RIGHT COLUMN: DIGITAL GLOBE - Hidden on mobile, visible from md */}
         <div className="hidden md:flex relative items-center justify-center h-full w-full">
              <motion.div
                 style={{ y: ySphere }}
                 initial={{ opacity: 0, scale: 0.8 }}
                 animate={{ opacity: 1, scale: 1.10 }}
                 transition={{ duration: 1.2, delay: 0.4 }}
-                className="relative w-full max-w-[600px] lg:max-w-[700px] xl:max-w-[850px] aspect-square lg:-mr-12"
+                 className="relative -top-8 w-full max-w-[600px] lg:max-w-[700px] xl:max-w-[850px] aspect-square lg:-mr-12"
              >
-                <HeroFuturistic />
+                <RotatingEarth
+                  width={820}
+                  height={820}
+                  className="w-full h-full scale-95 origin-center"
+                  dotColor="#b800f5"
+                  glowColor="rgba(184, 0, 245, 0.72)"
+                  backgroundColor="transparent"
+                  rotationSpeed={0.32}
+                  showControlsHint={false}
+                />
              </motion.div>
         </div>
 

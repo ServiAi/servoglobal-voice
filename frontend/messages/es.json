@@ -48,7 +48,7 @@
     "cases": "Soluciones",
     "howItWorks": "Cómo funciona",
     "integrations": "Integraciones",
-    "demo": "Demo",
+    "demo": "Servi-IA en acción",
     "pricing": "Precios",
     "contact": "Contáctanos",
     "cta": "Agendar preconsultoría"
@@ -72,7 +72,7 @@
     "microcopySetup": "Diagnóstico inicial → Piloto funcional → Optimización continua.",
     "microcopySuperPlus": "No te entregamos una plataforma vacía; implementamos Servi-IA sobre tu operación real.",
     "ctaPrimary": "Agendar Preconsultoría",
-    "ctaSecondary": "Probar Demo (Llamar Ahora)"
+    "ctaSecondary": "Probar Servi-IA en acción"
   },
   "demoCommon": {
     "fillAllFields": "Por favor, completa todos los campos para continuar.",
@@ -309,7 +309,7 @@
           "Llama con contexto para validar intención y urgencia",
           "Registra el lead y prioriza el seguimiento comercial"
         ],
-        "cta": "Probar demo"
+        "cta": "Probar experiencia de voz"
       },
       "triage": {
         "title": "Atención automatizada / triage",
@@ -319,7 +319,7 @@
           "Responde preguntas frecuentes con criterios consistentes",
           "Crea contexto para soporte, ventas o back office"
         ],
-        "cta": "Ver demo"
+        "cta": "Ver Servi-IA en acción"
       }
     }
   },
@@ -590,21 +590,27 @@
     "consentRequired": "Debes autorizar el tratamiento de datos para continuar."
   },
   "voiceDemo": {
-    "title": "Prueba Clic para Llamar con Servi-IA ahora",
-    "subtitle": "Tu embudo en redes/web: Formulario → Contexto al Agente → Cierre inmediato.",
-    "disclaimer": "Esta demo es un ejemplo. En la preconsultoría se diseña tu flujo real con tus reglas e integraciones.",
-    "inboundTab": "Clic para Llamar con Servi-IA (Web)",
-    "outboundTab": "Servi-IA te llama ahora"
+    "title": "Prueba Servi-IA en acción",
+    "subtitle": "Escucha cómo funciona una experiencia real de voz y, si tu operación lo requiere, solicita una llamada o agenda una preconsultoría con ServiGlobal · IA.",
+    "disclaimer": "Esta experiencia muestra un flujo real de voz. La implementación final se diseña en preconsultoría según tus reglas, canales e integraciones.",
+    "exploreLabel": "Explorar la experiencia",
+    "exploreText": "Prueba cómo Servi-IA recibe contexto desde un formulario y conversa por voz en un flujo guiado.",
+    "commercialLabel": "Avanzar comercialmente",
+    "commercialText": "Solicita una llamada con contexto o agenda una preconsultoría para aterrizar tu caso real.",
+    "inboundTab": "Probar Clic para Llamar",
+    "outboundTab": "Solicitar llamada con Servi-IA",
+    "inboundHint": "Experiencia funcional para ver cómo Servi-IA puede operar desde web, campañas o formularios.",
+    "outboundHint": "Solicitud de devolución de llamada para vivir cómo Servi-IA inicia contacto con contexto."
   },
   "demoInbound": {
     "callEnded": "¡Interacción finalizada!",
-    "callEndedDesc": "Así funciona Clic para Llamar con Servi-IA. ¿Listo para diseñar tu flujo real?",
+    "callEndedDesc": "Esta muestra refleja cómo Servi-IA puede conversar con contexto desde un formulario. En preconsultoría diseñamos tu flujo real con reglas, canales e integraciones.",
     "scheduleConsultation": "Agendar Preconsultoría",
     "tryAgain": "Volver a probar",
-    "simulatorVersion": "Demo Clic para Llamar con Servi-IA",
+    "simulatorVersion": "Experiencia Clic para Llamar con Servi-IA",
     "online": "En línea",
-    "webCall": "Llamada con Servi-IA (Demo)",
-    "selectAgentDesc": "Completa el formulario y conecta con Servi-IA con contexto.",
+    "webCall": "Experiencia Clic para Llamar con Servi-IA",
+    "selectAgentDesc": "Completa el formulario para probar una llamada de voz con contexto, como podría operar desde tu web o campañas.",
     "agentType": "Vertical",
     "agentSales": "Ventas",
     "agentSupport": "Soporte",
@@ -622,35 +628,35 @@
   },
   "demoOutbound": {
     "requestCompleted": "Solicitud enviada",
-    "requestCompletedDesc": "Hemos recibido tus datos. Servi-IA te contactará con el contexto de tu formulario.",
+    "requestCompletedDesc": "Hemos recibido tus datos. Esta solicitud muestra cómo Servi-IA puede iniciar contacto con contexto; la preconsultoría define el flujo real para tu operación.",
     "scheduleConsultation": "Agendar preconsultoría",
     "back": "Volver",
-    "weCallYou": "Servi-IA te llama ahora",
-    "weCallYouDesc": "Deja tus datos, completa el formulario y Servi-IA te llama con contexto.",
+    "weCallYou": "Solicita una llamada con Servi-IA",
+    "weCallYouDesc": "Deja tus datos para experimentar una devolución de llamada con contexto y avanzar hacia una preconsultoría si tu caso aplica.",
     "name": "Nombre",
     "namePlaceholder": "Tu nombre",
     "email": "Correo Electrónico",
     "emailPlaceholder": "tu@email.com",
     "phone": "Teléfono",
     "phonePlaceholder": "Teléfono",
-    "wantCall": "Solicitar llamada con Servi-IA",
-    "submitDisclaimer": "Al enviar, aceptas ser contactado. Tus datos serán utilizados únicamente para esta interacción.",
+    "wantCall": "Solicitar llamada ahora",
+    "submitDisclaimer": "Al enviar, solicitas una interacción funcional con Servi-IA. Tus datos se usarán únicamente para esta llamada y seguimiento comercial relacionado.",
     "processingRequest": "Generando Paquete de Contexto...",
-    "simulatingCall": "Solicitud Recibida",
-    "agentDialing": "Servi-IA te llamará con el contexto de tu formulario.",
+    "simulatingCall": "Solicitud recibida",
+    "agentDialing": "Servi-IA iniciará la llamada con el contexto de tu formulario.",
     "hangUp": "Finalizar",
     "callScheduled": "¡Devolución de Llamada Agendada!",
     "callScheduledDesc": "Te llamaremos el",
     "scheduleAnother": "Agendar otra",
-    "callNow": "Llamar Ahora",
+    "callNow": "Llamar ahora",
     "scheduleLater": "Agendar para después",
     "preferredTime": "Hora preferida",
-    "scheduleCall": "Agendar Devolución de Llamada",
+    "scheduleCall": "Agendar devolución de llamada",
     "errorInitiatingCall": "No pudimos iniciar la llamada. Inténtalo de nuevo en un momento."
   },
   "floatingCta": {
     "scheduleButton": "Agendar Ahora",
-    "demoButton": "Probar Servi-IA"
+    "demoButton": "Probar Servi-IA en acción"
   },
   "footer": {
     "tagline": "ServiGlobal · IA implementa Servi-IA para operaciones reales de voz, agenda y servicio.",
@@ -659,7 +665,7 @@
     "links": {
       "cases": "Casos",
       "pricing": "Precios",
-      "demo": "Demo"
+      "demo": "Servi-IA en acción"
     },
     "services": "Servicios",
     "servicesItems": {

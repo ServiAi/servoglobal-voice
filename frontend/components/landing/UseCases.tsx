@@ -5,6 +5,7 @@ import { useRef } from 'react';
 import { ArrowRight, Briefcase, CalendarCheck, CheckCircle2, Headphones, ShoppingBag, Sparkles, Target } from 'lucide-react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
+import RadialOrbitalTimeline from '@/components/ui/radial-orbital-timeline';
 import {
   sectionDesktop,
   useParallaxLayer,
@@ -16,26 +17,59 @@ const PRIORITY_VERTICAL_IDS = ['realEstateLeads', 'healthBooking', 'collectionsR
 const OTHER_SECTOR_IDS = ['atencion', 'soporte', 'ventas', 'reclutamiento', 'ecommerce'] as const;
 
 const RESULT_ICONS = {
-  scheduling: CalendarCheck,
-  leads: Target,
-  triage: Headphones,
+  scheduling: { icon: CalendarCheck, color: 'blue' },
+  leads: { icon: Target, color: 'violet' },
+  triage: { icon: Headphones, color: 'cyan' },
 } as const;
 
 const SECTOR_ICONS = {
-  atencion: Headphones,
-  soporte: CheckCircle2,
-  cobranza: Sparkles,
-  ventas: Target,
-  reclutamiento: Briefcase,
-  reservas: CalendarCheck,
-  ecommerce: ShoppingBag,
+  atencion: { icon: Headphones, color: 'emerald' },
+  soporte: { icon: CheckCircle2, color: 'blue' },
+  cobranza: { icon: Sparkles, color: 'rose' },
+  ventas: { icon: Target, color: 'amber' },
+  reclutamiento: { icon: Briefcase, color: 'violet' },
+  reservas: { icon: CalendarCheck, color: 'cyan' },
+  ecommerce: { icon: ShoppingBag, color: 'rose' },
 } as const;
 
 const PRIORITY_ICONS = {
-  realEstateLeads: Briefcase,
-  healthBooking: CalendarCheck,
-  collectionsRecovery: Sparkles,
+  realEstateLeads: { icon: Briefcase, color: 'amber' },
+  healthBooking: { icon: CalendarCheck, color: 'emerald' },
+  collectionsRecovery: { icon: Sparkles, color: 'rose' },
 } as const;
+
+const ucColorMap: Record<string, { bg: string; icon: string; glow: string }> = {
+  emerald: {
+    bg: 'bg-emerald-100 dark:bg-emerald-950/60',
+    icon: 'text-emerald-600 dark:text-emerald-400',
+    glow: 'shadow-md shadow-emerald-200/50 dark:shadow-emerald-500/20',
+  },
+  blue: {
+    bg: 'bg-blue-100 dark:bg-blue-950/60',
+    icon: 'text-blue-600 dark:text-blue-400',
+    glow: 'shadow-md shadow-blue-200/50 dark:shadow-blue-500/20',
+  },
+  violet: {
+    bg: 'bg-violet-100 dark:bg-violet-950/60',
+    icon: 'text-violet-600 dark:text-violet-400',
+    glow: 'shadow-md shadow-violet-200/50 dark:shadow-violet-500/20',
+  },
+  amber: {
+    bg: 'bg-amber-100 dark:bg-amber-950/60',
+    icon: 'text-amber-600 dark:text-amber-400',
+    glow: 'shadow-md shadow-amber-200/50 dark:shadow-amber-500/20',
+  },
+  rose: {
+    bg: 'bg-rose-100 dark:bg-rose-950/60',
+    icon: 'text-rose-600 dark:text-rose-400',
+    glow: 'shadow-md shadow-rose-200/50 dark:shadow-rose-500/20',
+  },
+  cyan: {
+    bg: 'bg-cyan-100 dark:bg-cyan-950/60',
+    icon: 'text-cyan-600 dark:text-cyan-400',
+    glow: 'shadow-md shadow-cyan-200/50 dark:shadow-cyan-500/20',
+  },
+};
 
 export function UseCases() {
   const t = useTranslations('useCases');
@@ -51,6 +85,30 @@ export function UseCases() {
   const yPriority = useParallaxLayer(scrollYProgress, profile, 'accent');
   const yResults = useParallaxLayer(scrollYProgress, profile, 'accent');
   const ySectors = useParallaxLayer(scrollYProgress, profile, 'content');
+  const sectorTimelineData = OTHER_SECTOR_IDS.map((id, index) => {
+    const { icon: Icon } = SECTOR_ICONS[id];
+    const relatedIdsByIndex = [
+      [2, 3],
+      [1, 3],
+      [1, 2, 5],
+      [2, 5],
+      [1, 3],
+    ];
+    const statuses = ['completed', 'completed', 'in-progress', 'pending', 'in-progress'] as const;
+    const energies = [94, 86, 92, 72, 80];
+
+    return {
+      id: index + 1,
+      title: t(`verticals.${id}.title`),
+      date: ['24/7', 'SLA', 'CRM', 'HR', 'SHOP'][index],
+      content: t(`verticals.${id}.promise`),
+      category: t('typicalIntegrations'),
+      icon: Icon,
+      relatedIds: relatedIdsByIndex[index],
+      status: statuses[index],
+      energy: energies[index],
+    };
+  });
 
   return (
     <section ref={containerRef} id="casos" className="relative py-24 bg-zinc-50 dark:bg-zinc-950 transition-colors duration-300 overflow-hidden z-0">
@@ -86,7 +144,8 @@ export function UseCases() {
 
           <div className="grid gap-6 lg:grid-cols-3">
             {PRIORITY_VERTICAL_IDS.map((id, idx) => {
-              const Icon = PRIORITY_ICONS[id];
+              const { icon: Icon, color } = PRIORITY_ICONS[id];
+              const colors = ucColorMap[color];
               const tasks = t.raw(`priorityVerticals.${id}.tasks`) as string[];
 
               return (
@@ -99,8 +158,8 @@ export function UseCases() {
                   className="rounded-3xl border border-violet-200 dark:border-violet-500/20 bg-white dark:bg-zinc-900 p-7 shadow-sm dark:shadow-none"
                 >
                   <div className="flex items-start justify-between gap-4">
-                    <div className="size-12 rounded-xl bg-violet-100 dark:bg-violet-950/40 flex items-center justify-center">
-                      <Icon className="size-6 text-violet-700 dark:text-violet-300" />
+                    <div className={`size-12 rounded-xl ${colors.bg} ${colors.glow} flex items-center justify-center`}>
+                      <Icon className={`size-6 ${colors.icon}`} />
                     </div>
                     <span className="rounded-full bg-zinc-100 dark:bg-white/5 px-3 py-1 text-xs font-semibold text-zinc-600 dark:text-neutral-300">
                       {t('priorityBadge')}
@@ -137,7 +196,8 @@ export function UseCases() {
 
         <motion.div style={{ y: yResults }} className="grid md:grid-cols-3 gap-6 lg:gap-8 mb-14">
           {RESULT_IDS.map((id, idx) => {
-            const Icon = RESULT_ICONS[id];
+            const { icon: Icon, color } = RESULT_ICONS[id];
+            const colors = ucColorMap[color];
             const tasks = t.raw(`results.${id}.tasks`) as string[];
             const href = id === 'scheduling' ? '#agendar' : '#demos';
 
@@ -150,8 +210,8 @@ export function UseCases() {
                 transition={{ delay: idx * 0.1 }}
                 className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 rounded-3xl p-7 flex flex-col shadow-sm dark:shadow-none hover:border-violet-300 dark:hover:border-violet-500/30 transition-colors"
               >
-                <div className="size-12 rounded-xl bg-violet-100 dark:bg-violet-950/40 flex items-center justify-center mb-5">
-                  <Icon className="size-6 text-violet-600 dark:text-violet-300" />
+                <div className={`size-12 rounded-xl ${colors.bg} ${colors.glow} flex items-center justify-center mb-5`}>
+                  <Icon className={`size-6 ${colors.icon}`} />
                 </div>
                 <h3 className="text-2xl font-bold text-zinc-900 dark:text-white mb-3">
                   {t(`results.${id}.title`)}
@@ -184,45 +244,27 @@ export function UseCases() {
           initial={{ opacity: 0, scale: 0.98 }}
           whileInView={{ opacity: 1, scale: 1 }}
           viewport={{ once: true }}
-          className="rounded-3xl border border-zinc-200 dark:border-white/10 bg-white dark:bg-zinc-900 p-6 md:p-8"
+          className="overflow-hidden rounded-3xl border border-violet-200 bg-white p-6 text-zinc-950 shadow-xl shadow-violet-500/10 dark:border-violet-300/20 dark:bg-zinc-950 dark:text-white dark:shadow-2xl dark:shadow-violet-950/30 md:p-8"
         >
           <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-6">
             <div>
               <h3 className="text-2xl font-bold text-zinc-900 dark:text-white mb-2">
                 {t('sectorsTitle')}
               </h3>
-              <p className="text-zinc-600 dark:text-neutral-400 max-w-2xl">
+              <p className="text-zinc-600 dark:text-white/60 max-w-2xl">
                 {t('sectorsSubtitle')}
               </p>
             </div>
             <Link
               href="#agendar"
-              className="inline-flex items-center gap-2 text-violet-700 dark:text-violet-300 font-semibold hover:underline"
+              className="inline-flex items-center gap-2 text-violet-700 font-semibold hover:text-fuchsia-700 dark:text-violet-200 dark:hover:text-fuchsia-200"
             >
               {t('sectorCta')}
               <ArrowRight className="size-4" />
             </Link>
           </div>
 
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            {OTHER_SECTOR_IDS.map((id) => {
-              const Icon = SECTOR_ICONS[id];
-              return (
-                <div
-                  key={id}
-                  className="rounded-xl border border-zinc-200 dark:border-white/10 bg-zinc-50 dark:bg-black/20 p-4"
-                >
-                  <Icon className="size-5 text-violet-600 dark:text-violet-300 mb-3" />
-                  <p className="font-semibold text-zinc-900 dark:text-white text-sm">
-                    {t(`verticals.${id}.title`)}
-                  </p>
-                  <p className="text-xs text-zinc-600 dark:text-neutral-400 mt-2">
-                    {t(`verticals.${id}.promise`)}
-                  </p>
-                </div>
-              );
-            })}
-          </div>
+          <RadialOrbitalTimeline timelineData={sectorTimelineData} />
         </motion.div>
       </div>
     </section>

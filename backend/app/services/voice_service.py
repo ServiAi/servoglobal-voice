@@ -138,10 +138,11 @@ async def create_sip_call_via_pbx(
     url = f"https://api.ultravox.ai/api/agents/{final_agent_id}/calls"
 
     logger.info(
-        "Creating Ultravox SIP call via PBX | pbx_uri=%s | username=%s | agent_id=%s",
+        "Creating Ultravox SIP call via PBX | pbx_uri=%s | username=%s | agent_id=%s | payload=%s",
         pbx_uri,
         settings.UVX_SIP_USERNAME,
         final_agent_id,
+        payload,
     )
 
     try:
@@ -225,10 +226,11 @@ async def create_scheduled_sip_call_via_pbx(
     url = f"https://api.ultravox.ai/api/agents/{final_agent_id}/scheduled_batches"
 
     logger.info(
-        "Creating Ultravox SIP call via PBX | pbx_uri=%s | username=%s | agent_id=%s",
+        "Creating scheduled Ultravox SIP call via PBX | pbx_uri=%s | username=%s | agent_id=%s | payload=%s",
         pbx_uri,
         settings.UVX_SIP_USERNAME,
         final_agent_id,
+        payload,
     )
 
     try:

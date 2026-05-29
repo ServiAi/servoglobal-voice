@@ -156,7 +156,6 @@ export const HeroFuturistic = () => {
         camera={{ position: [0, 0, 1.45], fov: 50 }}
         style={{ background: 'transparent' }}
         gl={{ antialias: false }} 
-        onCreated={() => console.log('Canvas Created')}
       >
         <Suspense fallback={<Html center><div className="text-white text-center">Loading 3D Scene...</div></Html>}>
           <Scene />
