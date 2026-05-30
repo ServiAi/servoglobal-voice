@@ -24,6 +24,7 @@ import {
 
 import {
   type TenantDetail,
+  type TenantPlanPayload,
 } from '@/lib/api/tenants';
 import {
   addTenantAgent,
@@ -31,8 +32,13 @@ import {
   deleteTenant,
   fetchTenantDetail,
   updateTenant,
+  updateTenantPlan,
 } from '@/lib/api/admin-tenants-client';
 import { getAdminAccessRedirect } from '@/lib/auth/admin-client';
+import { PlanUpdateForm } from '@/components/tenant-usage/PlanUpdateForm';
+import { TenantSavingsComparison } from '@/components/tenant-usage/TenantSavingsComparison';
+import { TenantUsageAlerts } from '@/components/tenant-usage/TenantUsageAlerts';
+import { TenantUsageCard } from '@/components/tenant-usage/TenantUsageCard';
 
 function StatusBadge({ status }: { status: string }) {
   if (status === 'active') {
@@ -125,6 +131,7 @@ export function TenantDetailClient({
   const [editTimezone, setEditTimezone] = useState(initialTenant?.timezone ?? 'America/Bogota');
   const [editStatus, setEditStatus] = useState(initialTenant?.status ?? 'active');
   const [saving, setSaving] = useState(false);
+  const [planSaving, setPlanSaving] = useState(false);
 
   // Add membership state
   const [showAddMembership, setShowAddMembership] = useState(false);
@@ -193,6 +200,19 @@ export function TenantDetailClient({
     if (result.ok) {
       setTenant(result.data);
       setEditing(false);
+    } else if (!redirectOnAccessFailure(result.status)) {
+      setError(result.detail);
+    }
+  };
+
+  const handlePlanUpdate = async (payload: TenantPlanPayload) => {
+    setPlanSaving(true);
+    setError(null);
+    const result = await updateTenantPlan(tenantId, payload);
+    setPlanSaving(false);
+
+    if (result.ok) {
+      await load();
     } else if (!redirectOnAccessFailure(result.status)) {
       setError(result.detail);
     }
@@ -347,6 +367,26 @@ export function TenantDetailClient({
           {JSON.stringify({ tenant_slug: tenant.slug }, null, 2)}
         </pre>
       </section>
+
+      {tenant.usage && (
+        <div className="mb-6 grid gap-6 lg:grid-cols-2">
+          <TenantUsageCard usage={tenant.usage} />
+          <PlanUpdateForm
+            usage={tenant.usage}
+            saving={planSaving}
+            onSubmit={handlePlanUpdate}
+          />
+        </div>
+      )}
+
+      {tenant.usage && (
+        <div className="mb-6 grid gap-6 lg:grid-cols-2">
+          <TenantUsageAlerts alerts={tenant.usage.alerts} />
+          {tenant.savings_comparison && (
+            <TenantSavingsComparison comparison={tenant.savings_comparison} />
+          )}
+        </div>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Tenant Data */}

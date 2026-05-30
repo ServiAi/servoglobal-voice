@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 
 import { type TenantListItem } from '@/lib/api/tenants';
+import { AdminTenantUsageBadge } from '@/components/tenant-usage/AdminTenantUsageBadge';
 
 function StatusBadge({ status }: { status: string }) {
   if (status === 'active') {
@@ -169,6 +170,15 @@ function TenantCard({
           {tenant.timezone}
         </span>
       </div>
+
+      {tenant.usage && (
+        <div className="mt-4 flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-950/50 px-3 py-2">
+          <span className="text-xs text-zinc-500">
+            {tenant.usage.plan.plan_name}
+          </span>
+          <AdminTenantUsageBadge usage={tenant.usage} />
+        </div>
+      )}
 
       <div className="mt-4 flex items-center justify-end text-xs text-zinc-600 group-hover:text-cyan-500">
         Ver detalle

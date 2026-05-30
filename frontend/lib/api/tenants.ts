@@ -4,6 +4,7 @@ export type TenantListItem = {
   slug: string;
   timezone: string;
   status: string;
+  usage?: TenantUsage;
 };
 
 export type TenantDetail = {
@@ -14,7 +15,75 @@ export type TenantDetail = {
   status: string;
   memberships: TenantMembership[];
   agents: TenantAgent[];
+  usage?: TenantUsage;
+  savings_comparison?: TenantSavingsComparison;
   is_ready_for_calls: boolean;
+};
+
+export type TenantPlanKey = 'web_conversion' | 'voice_cloud_pbx' | 'enterprise';
+
+export type TenantPlanPayload = {
+  plan_key: TenantPlanKey;
+  included_minutes?: number;
+  price_per_minute_usd?: number;
+};
+
+export type TenantPlan = {
+  tenant_id: string;
+  plan_key: TenantPlanKey;
+  plan_name: string;
+  included_minutes: number;
+  price_per_minute_usd: number;
+  usage_status: string;
+  billing_period_start: string;
+  billing_period_end: string;
+  alert_thresholds: number[];
+  last_usage_recalculated_at: string | null;
+};
+
+export type TenantUsageAlert = {
+  id: string;
+  tenant_id: string;
+  alert_type: string;
+  threshold_percent: number;
+  billing_period_start: string;
+  message: string;
+  status: string;
+  created_at: string;
+};
+
+export type TenantUsage = {
+  tenant_id: string;
+  plan: TenantPlan;
+  minutes_used: number;
+  minutes_remaining: number;
+  usage_percent: number;
+  amount_spent_usd: number;
+  usage_status: string;
+  alerts: TenantUsageAlert[];
+};
+
+export type SavingsComparisonProvider = {
+  provider_key: string;
+  provider_name: string;
+  provider_price_per_minute_usd: number | null;
+  price_min_per_minute_usd: number | null;
+  price_max_per_minute_usd: number | null;
+  price_source: string;
+  source_url: string | null;
+  estimated_cost_usd: number | null;
+  serviglobal_cost_usd: number;
+  estimated_savings_usd: number | null;
+  estimated_savings_percent: number | null;
+  notes: string | null;
+};
+
+export type TenantSavingsComparison = {
+  tenant_id: string;
+  minutes_used: number;
+  serviglobal_price_per_minute_usd: number;
+  serviglobal_cost_usd: number;
+  providers: SavingsComparisonProvider[];
 };
 
 export type TenantMembership = {
@@ -42,6 +111,7 @@ export type TenantCreatePayload = {
   slug: string;
   timezone: string;
   status: string;
+  plan: TenantPlanPayload;
   admin: {
     name: string;
     email: string;
@@ -60,6 +130,11 @@ export type TenantUpdatePayload = {
   name?: string;
   timezone?: string;
   status?: string;
+};
+
+export type TenantPlanUpdateResult = {
+  usage: TenantUsage;
+  savings_comparison: TenantSavingsComparison;
 };
 
 export type MembershipCreatePayload = {
@@ -166,6 +241,37 @@ export function updateTenant(
       body: JSON.stringify(payload),
     }
   );
+}
+
+export function updateTenantPlan(
+  accessToken: string,
+  tenantId: string,
+  payload: TenantPlanPayload
+): Promise<FetchResult<TenantPlanUpdateResult>> {
+  return adminFetch<TenantPlanUpdateResult>(
+    `/api/v1/admin/tenants/${tenantId}/plan`,
+    accessToken,
+    {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }
+  );
+}
+
+export function fetchTenantUsage(
+  accessToken: string,
+  tenantId: string
+): Promise<FetchResult<TenantPlanUpdateResult & { alerts: TenantUsageAlert[] }>> {
+  return adminFetch<TenantPlanUpdateResult & { alerts: TenantUsageAlert[] }>(
+    `/api/v1/admin/tenants/${tenantId}/usage`,
+    accessToken
+  );
+}
+
+export function fetchUsageAlerts(
+  accessToken: string
+): Promise<FetchResult<TenantUsageAlert[]>> {
+  return adminFetch<TenantUsageAlert[]>('/api/v1/admin/usage-alerts', accessToken);
 }
 
 export function deleteTenant(

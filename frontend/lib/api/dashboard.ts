@@ -1,3 +1,5 @@
+import type { TenantSavingsComparison, TenantUsage } from '@/lib/api/tenants';
+
 export type DashboardFilters = {
   from?: string;
   to?: string;
@@ -180,4 +182,12 @@ export function fetchHeatmap(accessToken: string, filters?: DashboardFilters) {
 
 export function fetchRecentCalls(accessToken: string, filters?: DashboardFilters) {
   return fetchDashboardEndpoint<DashboardRecentCallsResponse>('recent-calls', accessToken, filters);
+}
+
+export function fetchUsage(accessToken: string) {
+  return fetchDashboardEndpoint<TenantUsage>('usage', accessToken);
+}
+
+export function fetchSavingsComparison(accessToken: string) {
+  return fetchDashboardEndpoint<TenantSavingsComparison>('savings-comparison', accessToken);
 }

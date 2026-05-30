@@ -5,12 +5,15 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.core.config import settings
 from app.models.analytics import Agent, Call, CallEvent, MetricSnapshotDaily
+from app.models.billing import TenantBillingPlan, TenantUsageAlert
 from app.models.identity import AccessAuditLog, Tenant, TenantMembership, User
+from app.schemas.billing import TenantPlanRequest
 from app.services.auth0_provisioning_service import (
     Auth0ProvisionedUser,
     Auth0ProvisioningError,
     Auth0ProvisioningService,
 )
+from app.services.tenant_usage_service import TenantUsageService
 
 
 class OnboardingConsistencyError(RuntimeError):
@@ -54,6 +57,7 @@ class OnboardingService:
         admin_email: str,
         admin_role: str = "tenant_admin",
         agents: list[dict] | None = None,
+        plan: TenantPlanRequest | None = None,
     ) -> dict:
         slug = slug.strip().lower()
         normalized_admin_email = admin_email.strip().lower()
@@ -82,6 +86,7 @@ class OnboardingService:
             )
             self.db.add(tenant)
             self.db.flush()
+            TenantUsageService(self.db).create_plan_for_tenant(tenant, plan)
 
             if existing_user is None:
                 admin_user = User(
@@ -240,6 +245,12 @@ class OnboardingService:
             deleted_call_events = self._delete_count(
                 delete(CallEvent).where(CallEvent.tenant_id == tenant_id)
             )
+            deleted_usage_alerts = self._delete_count(
+                delete(TenantUsageAlert).where(TenantUsageAlert.tenant_id == tenant_id)
+            )
+            deleted_billing_plans = self._delete_count(
+                delete(TenantBillingPlan).where(TenantBillingPlan.tenant_id == tenant_id)
+            )
             deleted_metric_snapshots = self._delete_count(
                 delete(MetricSnapshotDaily).where(
                     MetricSnapshotDaily.tenant_id == tenant_id
@@ -276,6 +287,8 @@ class OnboardingService:
             "deleted": True,
             "deleted_counts": {
                 "call_events": deleted_call_events,
+                "usage_alerts": deleted_usage_alerts,
+                "billing_plans": deleted_billing_plans,
                 "metric_snapshots": deleted_metric_snapshots,
                 "calls": deleted_calls,
                 "agents": deleted_agents,
@@ -417,6 +430,7 @@ class OnboardingService:
             }
             for a in agents
         ]
+        usage = TenantUsageService(self.db).get_usage(tenant, persist_alerts=False)
 
         return {
             "id": tenant.id,
@@ -463,6 +477,7 @@ class OnboardingService:
             },
             "memberships": member_dicts,
             "agents": agent_dicts,
+            "usage": usage.model_dump(mode="json"),
             "is_ready_for_calls": len(agent_dicts) > 0,
         }
 

@@ -4,12 +4,17 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.schemas.billing import TenantPlanRequest, TenantUsageResponse
+
 
 class TenantCreateRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     slug: str = Field(..., min_length=1, max_length=120)
     timezone: str = Field(default="America/Bogota", max_length=80)
     status: str = Field(default="active", max_length=32)
+    plan: TenantPlanRequest = Field(
+        default_factory=lambda: TenantPlanRequest(plan_key="web_conversion")
+    )
     admin: AdminCreateRequest = Field(...)
     agents: list[AgentCreateRequest] = Field(default_factory=list)
 
@@ -50,6 +55,7 @@ class TenantResponse(BaseModel):
     admin: dict[str, Any] | None = None
     memberships: list[dict[str, Any]] = Field(default_factory=list)
     agents: list[dict[str, Any]] = Field(default_factory=list)
+    usage: TenantUsageResponse | None = None
     is_ready_for_calls: bool = False
 
 

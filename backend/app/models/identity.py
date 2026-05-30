@@ -42,6 +42,17 @@ class Tenant(Base, TimestampMixin):
     calls = relationship("Call", back_populates="tenant")
     call_events = relationship("CallEvent", back_populates="tenant")
     metric_snapshots = relationship("MetricSnapshotDaily", back_populates="tenant")
+    billing_plan = relationship(
+        "TenantBillingPlan",
+        back_populates="tenant",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+    usage_alerts = relationship(
+        "TenantUsageAlert",
+        back_populates="tenant",
+        cascade="all, delete-orphan",
+    )
 
 
 class User(Base, TimestampMixin):

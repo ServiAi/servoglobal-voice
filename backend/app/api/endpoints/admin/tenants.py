@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.api.auth.deps import AuthContext, get_current_auth_context
 from app.db.session import get_db
 from app.models.identity import User
+from app.schemas.billing import TenantPlanRequest
 from app.schemas.onboarding import (
     AgentCreateRequest,
     AgentResponse,
@@ -26,6 +27,7 @@ from app.services.onboarding_service import (
     OnboardingService,
     TenantDeletionBlockedError,
 )
+from app.services.tenant_usage_service import TenantUsageService
 
 
 router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
@@ -78,6 +80,7 @@ def create_tenant(
             admin_email=payload.admin.email,
             admin_role=payload.admin.role,
             agents=agents,
+            plan=payload.plan,
         )
     except ValueError as exc:
         raise HTTPException(
@@ -112,6 +115,7 @@ def list_tenants(
     db: Session = Depends(get_current_internal_db),
 ) -> list[dict]:
     service = OnboardingService(db)
+    usage_service = TenantUsageService(db)
     tenants = service.list_tenants()
     return [
         {
@@ -120,8 +124,29 @@ def list_tenants(
             "slug": t.slug,
             "timezone": t.timezone,
             "status": t.status,
+            "usage": usage_service.get_usage(t).model_dump(mode="json"),
         }
         for t in tenants
+    ]
+
+
+@router.get("/tenants/usage-summary", response_model=list[dict[str, Any]])
+def list_tenants_usage_summary(
+    db: Session = Depends(get_current_internal_db),
+) -> list[dict]:
+    return [
+        item.model_dump(mode="json")
+        for item in TenantUsageService(db).list_usage_summary()
+    ]
+
+
+@router.get("/usage-alerts", response_model=list[dict[str, Any]])
+def list_usage_alerts(
+    db: Session = Depends(get_current_internal_db),
+) -> list[dict]:
+    return [
+        item.model_dump(mode="json")
+        for item in TenantUsageService(db).list_usage_alerts()
     ]
 
 
@@ -131,9 +156,12 @@ def get_tenant(
     db: Session = Depends(get_current_internal_db),
 ) -> dict:
     service = OnboardingService(db)
+    usage_service = TenantUsageService(db)
     tenant = service.get_tenant(tenant_id)
     members = service.list_memberships(tenant_id)
     agents = service.list_agents(tenant_id)
+    usage = usage_service.get_usage(tenant)
+    savings = usage_service.get_savings_comparison(tenant)
 
     member_dicts = [
         {
@@ -169,6 +197,8 @@ def get_tenant(
         "status": tenant.status,
         "memberships": member_dicts,
         "agents": agent_dicts,
+        "usage": usage.model_dump(mode="json"),
+        "savings_comparison": savings.model_dump(mode="json"),
         "is_ready_for_calls": len(agent_dicts) > 0,
     }
 
@@ -180,6 +210,7 @@ def update_tenant(
     db: Session = Depends(get_current_internal_db),
 ) -> dict:
     service = OnboardingService(db)
+    usage_service = TenantUsageService(db)
     tenant = service.update_tenant(
         tenant_id,
         name=payload.name,
@@ -188,6 +219,8 @@ def update_tenant(
     )
     members = service.list_memberships(tenant_id)
     agents = service.list_agents(tenant_id)
+    usage = usage_service.get_usage(tenant)
+    savings = usage_service.get_savings_comparison(tenant)
 
     member_dicts = [
         {
@@ -223,7 +256,51 @@ def update_tenant(
         "status": tenant.status,
         "memberships": member_dicts,
         "agents": agent_dicts,
+        "usage": usage.model_dump(mode="json"),
+        "savings_comparison": savings.model_dump(mode="json"),
         "is_ready_for_calls": len(agent_dicts) > 0,
+    }
+
+
+@router.get("/tenants/{tenant_id}/usage", response_model=dict[str, Any])
+def get_tenant_usage(
+    tenant_id: str,
+    db: Session = Depends(get_current_internal_db),
+) -> dict:
+    service = OnboardingService(db)
+    tenant = service.get_tenant(tenant_id)
+    usage_service = TenantUsageService(db)
+    usage = usage_service.get_usage(tenant)
+    savings = usage_service.get_savings_comparison(tenant)
+    return {
+        "usage": usage.model_dump(mode="json"),
+        "savings_comparison": savings.model_dump(mode="json"),
+        "alerts": [
+            alert.model_dump(mode="json")
+            for alert in usage_service.list_usage_alerts(tenant_id)
+        ],
+    }
+
+
+@router.patch("/tenants/{tenant_id}/plan", response_model=dict[str, Any])
+def update_tenant_plan(
+    tenant_id: str,
+    payload: TenantPlanRequest,
+    db: Session = Depends(get_current_internal_db),
+) -> dict:
+    usage_service = TenantUsageService(db)
+    try:
+        usage = usage_service.update_plan(tenant_id, payload)
+        tenant = OnboardingService(db).get_tenant(tenant_id)
+        savings = usage_service.get_savings_comparison(tenant)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
+    return {
+        "usage": usage.model_dump(mode="json"),
+        "savings_comparison": savings.model_dump(mode="json"),
     }
 
 

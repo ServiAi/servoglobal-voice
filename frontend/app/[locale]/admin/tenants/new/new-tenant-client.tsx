@@ -19,8 +19,10 @@ import {
   createTenant,
   type TenantCreatePayload,
   type TenantAgent,
+  type TenantPlanKey,
 } from '@/lib/api/admin-tenants-client';
 import { getAdminAccessRedirect } from '@/lib/auth/admin-client';
+import { TenantPlanFields } from '@/components/tenant-usage/TenantPlanFields';
 
 const TIMEZONES = [
   'America/Bogota',
@@ -61,6 +63,9 @@ export function NewTenantClient({ locale }: NewTenantClientProps) {
   const [slug, setSlug] = useState('');
   const [timezone, setTimezone] = useState('America/Bogota');
   const [status, setStatus] = useState('active');
+  const [planKey, setPlanKey] = useState<TenantPlanKey>('web_conversion');
+  const [includedMinutes, setIncludedMinutes] = useState('2000');
+  const [pricePerMinuteUsd, setPricePerMinuteUsd] = useState('0.16');
 
   const [adminName, setAdminName] = useState('');
   const [adminEmail, setAdminEmail] = useState('');
@@ -103,12 +108,32 @@ export function NewTenantClient({ locale }: NewTenantClientProps) {
     setError(null);
     setSuccess(false);
     setLoading(true);
+    const minutes = Number.parseFloat(includedMinutes);
+    const price = Number.parseFloat(pricePerMinuteUsd);
+
+    if (planKey === 'enterprise') {
+      if (!Number.isFinite(minutes) || minutes < 2000) {
+        setError('Enterprise requiere minimo 2000 minutos.');
+        setLoading(false);
+        return;
+      }
+      if (!Number.isFinite(price) || price < 0.14 || price > 0.15) {
+        setError('Enterprise requiere precio entre 0.14 y 0.15 USD/min.');
+        setLoading(false);
+        return;
+      }
+    }
 
     const payload: TenantCreatePayload = {
       name: name.trim(),
       slug: slug.trim().toLowerCase(),
       timezone,
       status,
+      plan: {
+        plan_key: planKey,
+        included_minutes: minutes,
+        price_per_minute_usd: price,
+      },
       admin: {
         name: adminName.trim(),
         email: adminEmail.trim().toLowerCase(),
@@ -262,6 +287,23 @@ export function NewTenantClient({ locale }: NewTenantClientProps) {
               </select>
             </div>
           </div>
+        </section>
+
+        {/* Plan comercial */}
+        <section className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-6">
+          <h2 className="mb-4 flex items-center gap-2 text-lg font-medium text-zinc-200">
+            <Building2 className="h-5 w-5 text-cyan-400" />
+            Plan comercial
+          </h2>
+          <TenantPlanFields
+            planKey={planKey}
+            includedMinutes={includedMinutes}
+            pricePerMinuteUsd={pricePerMinuteUsd}
+            disabled={loading}
+            onPlanKeyChange={setPlanKey}
+            onIncludedMinutesChange={setIncludedMinutes}
+            onPricePerMinuteUsdChange={setPricePerMinuteUsd}
+          />
         </section>
 
         {/* Admin inicial */}

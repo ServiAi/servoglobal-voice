@@ -13,9 +13,12 @@ from app.models import (  # noqa: F401
     Agent,
     Call,
     CallEvent,
+    ExternalProviderPricing,
     MetricSnapshotDaily,
     Tenant,
+    TenantBillingPlan,
     TenantMembership,
+    TenantUsageAlert,
     User,
 )
 
