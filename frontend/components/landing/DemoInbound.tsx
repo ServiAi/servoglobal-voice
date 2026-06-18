@@ -5,7 +5,8 @@ import { Turnstile } from '@marsidev/react-turnstile';
 import React from 'react';
 import Image from 'next/image';
 import { useUltravox } from '@/hooks/useUltravox';
-import { Phone, PhoneOff, User, Loader2, ChevronDown } from 'lucide-react';
+import { Phone, PhoneOff, User, Loader2, ChevronDown, AlertTriangle } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
@@ -26,7 +27,14 @@ export function DemoInbound() {
   const tCommon = useTranslations('demoCommon');
   const tLegal = useTranslations('legal');
   // Use the new Ultravox hook instead of the simulation
-  const { demoState, volumeLevels, startCall, endCall, resetDemo } = useUltravox();
+  const { demoState, volumeLevels, startCall, endCall, resetDemo, error, setError } = useUltravox();
+
+  const isLimitModalOpen = error === 'limit_exceeded';
+  const handleLimitModalClose = () => {
+    setError(null);
+    resetDemo();
+  };
+
   // Timer logic
   const [duration, setDuration] = React.useState(0);
   const [formData, setFormData] = React.useState({
@@ -59,7 +67,7 @@ export function DemoInbound() {
 
   const handleStartCall = () => {
     if (!formData.name || !formData.email || !formData.phone || !token || !hasConsent) return;
-    
+
     const industryTranslated = formData.industry ? tCommon(`options.industry.${formData.industry}`) : '';
     const useCaseTranslated = formData.useCase ? tCommon(`options.useCase.${formData.useCase}`) : '';
     const volumeTranslated = formData.volume ? tCommon(`options.volume.${formData.volume}`) : '';
@@ -79,7 +87,7 @@ export function DemoInbound() {
 
   React.useEffect(() => {
     let interval: NodeJS.Timeout;
-    
+
     if (demoState === 'connected') {
       interval = setInterval(() => {
         setDuration(prev => prev + 1);
@@ -184,10 +192,10 @@ export function DemoInbound() {
                         return (
                           <>
                             <div className="relative w-6 h-4 overflow-hidden rounded-sm shadow-sm shrink-0">
-                                <Image 
-                                    src={selected.flag} 
-                                    alt={selected.name} 
-                                    fill 
+                                <Image
+                                    src={selected.flag}
+                                    alt={selected.name}
+                                    fill
                                     className="object-cover"
                                 />
                             </div>
@@ -211,10 +219,10 @@ export function DemoInbound() {
                             className="w-full px-4 py-2 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800 flex items-center gap-3"
                           >
                              <div className="relative w-6 h-4 overflow-hidden rounded-sm shadow-sm shrink-0">
-                                <Image 
-                                    src={country.flag} 
-                                    alt={country.name} 
-                                    fill 
+                                <Image
+                                    src={country.flag}
+                                    alt={country.name}
+                                    fill
                                     className="object-cover"
                                 />
                             </div>
@@ -272,7 +280,7 @@ export function DemoInbound() {
                         <option value="other">{tCommon('options.useCase.other')}</option>
                     </select>
                </div>
-               
+
                <select
                     value={formData.volume}
                     onChange={(e) => setFormData({ ...formData, volume: e.target.value })}
@@ -299,12 +307,12 @@ export function DemoInbound() {
                 </select>
 
               <div className="flex justify-center my-2 w-full min-h-[65px]">
-                  <Turnstile 
+                  <Turnstile
                       siteKey={
                         typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
                           ? '1x00000000000000000000AA'
                           : (process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || '1x00000000000000000000AA')
-                      } 
+                      }
                       onSuccess={setToken}
                       options={{ theme: 'auto' }}
                   />
@@ -387,6 +395,39 @@ export function DemoInbound() {
           </div>
         )}
       </div>
+
+      <Dialog open={isLimitModalOpen} onOpenChange={(open) => { if (!open) handleLimitModalClose(); }}>
+        <DialogContent className="sm:max-w-md bg-white dark:bg-zinc-950 border-zinc-200 dark:border-white/10 p-6">
+          <DialogHeader className="flex flex-col items-center text-center">
+            <div className="size-12 rounded-full bg-red-100 dark:bg-red-950/50 flex items-center justify-center text-red-500 mb-4">
+              <AlertTriangle className="size-6" />
+            </div>
+            <DialogTitle className="text-xl font-bold text-zinc-900 dark:text-white mb-2">
+              {t('limitExceededTitle')}
+            </DialogTitle>
+            <DialogDescription className="text-zinc-600 dark:text-zinc-400 text-sm leading-relaxed">
+              {t('limitExceededDesc')}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="mt-4 flex flex-col gap-3">
+            <button
+              data-cal-namespace="serviglobal-ventas-ia"
+              data-cal-link="serviglobal/serviglobal-ventas-ia"
+              data-cal-config='{"layout":"month_view","useSlotsViewOnSmallScreen":"true"}'
+              onClick={handleLimitModalClose}
+              className="w-full py-3 bg-violet-600 hover:bg-violet-500 text-white rounded-lg font-semibold text-center transition-all shadow-lg shadow-violet-500/20 active:scale-[0.98] text-sm cursor-pointer"
+            >
+              {t('limitExceededAction')}
+            </button>
+            <button
+              onClick={handleLimitModalClose}
+              className="w-full py-2.5 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-900 dark:hover:bg-zinc-800 text-zinc-900 dark:text-white rounded-lg font-medium transition-all text-xs"
+            >
+              {t('limitExceededClose')}
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

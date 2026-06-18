@@ -3,7 +3,8 @@ import { Turnstile } from '@marsidev/react-turnstile';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useAudioSimulation } from '@/hooks/useAudioSimulation';
-import { PhoneIncoming, Loader2, CheckCircle2, PhoneOff, ChevronDown, Calendar, Clock } from 'lucide-react';
+import { PhoneIncoming, Loader2, CheckCircle2, PhoneOff, ChevronDown, Calendar, Clock, AlertTriangle } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { useTranslations } from 'next-intl';
@@ -21,6 +22,7 @@ const COUNTRY_CODES = [
 
 export function DemoOutbound() {
   const t = useTranslations('demoOutbound');
+  const tInbound = useTranslations('demoInbound');
   const tCommon = useTranslations('demoCommon');
   const tLegal = useTranslations('legal');
   const { demoState, startCall, endCall, resetDemo } = useAudioSimulation();
@@ -28,6 +30,7 @@ export function DemoOutbound() {
   const [countryCode, setCountryCode] = useState('+57');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [token, setToken] = useState<string | null>(null);
+  const [showLimitModal, setShowLimitModal] = useState(false);
   
   // Form State
   const [name, setName] = useState('');
@@ -98,7 +101,18 @@ export function DemoOutbound() {
 
         if (!response.ok) {
             const errorText = await response.text();
-            throw new Error(`Server error: ${response.status} ${errorText}`);
+            let detail = '';
+            try {
+              const parsed = JSON.parse(errorText);
+              detail = parsed.detail || '';
+            } catch {}
+            const err = new Error(detail || `Server error: ${response.status}`) as Error & {
+              status?: number;
+              detail?: string;
+            };
+            err.status = response.status;
+            err.detail = detail;
+            throw err;
         }
 
         const data = await response.json();
@@ -112,9 +126,15 @@ export function DemoOutbound() {
              startCall();
         }
         
-    } catch (error) {
+    } catch (error: unknown) {
         console.error("Error initiating call:", error);
-        alert(t('errorInitiatingCall'));
+        const callError = error as Error & { status?: number; detail?: string };
+        const detail = callError.detail ?? '';
+        if (callError.status === 402 || (detail && (detail.toLowerCase().includes('limit') || detail.toLowerCase().includes('exhausted')))) {
+            setShowLimitModal(true);
+        } else {
+            alert(t('errorInitiatingCall'));
+        }
         setFormStep('form');
     }
   };
@@ -457,10 +477,42 @@ export function DemoOutbound() {
                       <PhoneOff className="size-4" />
                       {t('hangUp')}
                    </button>
-               </div>
-           </div>
-       )}
+                </div>
+            </div>
+        )}
+
+      <Dialog open={showLimitModal} onOpenChange={setShowLimitModal}>
+        <DialogContent className="sm:max-w-md bg-white dark:bg-zinc-950 border-zinc-200 dark:border-white/10 p-6">
+          <DialogHeader className="flex flex-col items-center text-center">
+            <div className="size-12 rounded-full bg-red-100 dark:bg-red-950/50 flex items-center justify-center text-red-500 mb-4">
+              <AlertTriangle className="size-6" />
+            </div>
+            <DialogTitle className="text-xl font-bold text-zinc-900 dark:text-white mb-2">
+              {tInbound('limitExceededTitle')}
+            </DialogTitle>
+            <DialogDescription className="text-zinc-600 dark:text-zinc-400 text-sm leading-relaxed">
+              {tInbound('limitExceededDesc')}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="mt-4 flex flex-col gap-3">
+            <button
+              data-cal-namespace="serviglobal-ventas-ia"
+              data-cal-link="serviglobal/serviglobal-ventas-ia"
+              data-cal-config='{"layout":"month_view","useSlotsViewOnSmallScreen":"true"}'
+              onClick={() => setShowLimitModal(false)}
+              className="w-full py-3 bg-violet-600 hover:bg-violet-500 text-white rounded-lg font-semibold text-center transition-all shadow-lg shadow-violet-500/20 active:scale-[0.98] text-sm cursor-pointer"
+            >
+              {tInbound('limitExceededAction')}
+            </button>
+            <button
+              onClick={() => setShowLimitModal(false)}
+              className="w-full py-2.5 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-900 dark:hover:bg-zinc-800 text-zinc-900 dark:text-white rounded-lg font-medium transition-all text-xs"
+            >
+              {tInbound('limitExceededClose')}
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
-
