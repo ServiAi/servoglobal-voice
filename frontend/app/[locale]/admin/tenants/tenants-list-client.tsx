@@ -16,6 +16,7 @@ import {
 
 import { type TenantListItem } from '@/lib/api/tenants';
 import { AdminTenantUsageBadge } from '@/components/tenant-usage/AdminTenantUsageBadge';
+import { ThemeToggle } from '@/components/ui/ThemeToggle';
 
 function StatusBadge({ status }: { status: string }) {
   if (status === 'active') {
@@ -88,8 +89,9 @@ export function TenantsListClient({
               Gestión de empresas y accesos multitenant
             </p>
           </div>
-          <div className="flex items-center gap-3">
-            <form action="/api/auth/logout" method="get">
+<div className="flex items-center gap-3">
+          <ThemeToggle />
+          <form action="/api/auth/logout" method="get">
               <button
                 type="submit"
                 className="inline-flex items-center gap-2 rounded-lg border border-zinc-300 bg-white px-4 py-2.5 text-sm font-medium text-zinc-700 transition hover:border-zinc-400 hover:text-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:border-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"

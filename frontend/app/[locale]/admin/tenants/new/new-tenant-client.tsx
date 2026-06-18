@@ -23,6 +23,7 @@ import {
 } from '@/lib/api/admin-tenants-client';
 import { getAdminAccessRedirect } from '@/lib/auth/admin-client';
 import { TenantPlanFields } from '@/components/tenant-usage/TenantPlanFields';
+import { ThemeToggle } from '@/components/ui/ThemeToggle';
 
 const TIMEZONES = [
   'America/Bogota',
@@ -188,19 +189,24 @@ export function NewTenantClient({ locale }: NewTenantClientProps) {
     <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6">
       {/* Header */}
       <div className="mb-8">
-        <Link
-          href={`/${locale}/admin/tenants`}
-          className="mb-4 inline-flex items-center gap-1.5 text-sm text-zinc-500 transition hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Volver a tenants
-        </Link>
-        <h1 className="text-2xl font-semibold text-zinc-900 sm:text-3xl dark:text-zinc-100">
-          Nuevo tenant
-        </h1>
-        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-          Crea una empresa, su admin inicial y agentes opcionales.
-        </p>
+        <div className="flex items-start justify-between">
+          <div>
+            <Link
+              href={`/${locale}/admin/tenants`}
+              className="mb-4 inline-flex items-center gap-1.5 text-sm text-zinc-500 transition hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Volver a tenants
+            </Link>
+            <h1 className="text-2xl font-semibold text-zinc-900 sm:text-3xl dark:text-zinc-100">
+              Nuevo tenant
+            </h1>
+            <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+              Crea una empresa, su admin inicial y agentes opcionales.
+            </p>
+          </div>
+          <ThemeToggle />
+        </div>
       </div>
 
       {error && (

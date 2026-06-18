@@ -39,6 +39,7 @@ import { PlanUpdateForm } from '@/components/tenant-usage/PlanUpdateForm';
 import { TenantSavingsComparison } from '@/components/tenant-usage/TenantSavingsComparison';
 import { TenantUsageAlerts } from '@/components/tenant-usage/TenantUsageAlerts';
 import { TenantUsageCard } from '@/components/tenant-usage/TenantUsageCard';
+import { ThemeToggle } from '@/components/ui/ThemeToggle';
 
 function StatusBadge({ status }: { status: string }) {
   if (status === 'active') {
@@ -329,6 +330,7 @@ export function TenantDetailClient({
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <ThemeToggle />
           <StatusBadge status={tenant.status} />
           <button
             type="button"
