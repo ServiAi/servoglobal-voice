@@ -45,17 +45,17 @@ export function TenantUsageAlerts({ alerts }: TenantUsageAlertsProps) {
           {alerts.map((alert) => (
             <div
               key={alert.id}
-              className="rounded-lg border border-amber-500/20 bg-amber-500/10 p-3 dark:border-amber-400/20 dark:bg-amber-400/10"
+              className="rounded-lg border border-amber-300 bg-amber-50 p-3 dark:border-amber-700 dark:bg-amber-950/30"
             >
               <div className="flex items-center justify-between gap-3">
-                <p className="text-sm font-medium text-amber-300 dark:text-amber-200">
+                <p className="text-sm font-medium text-amber-700 dark:text-amber-300">
                   {alertLabel(alert.alert_type)}
                 </p>
-                <span className="text-xs text-amber-200/70 dark:text-amber-100/70">
+                <span className="text-xs text-amber-600 dark:text-amber-400">
                   {alert.threshold_percent.toFixed(0)}%
                 </span>
               </div>
-              <p className="mt-1 text-xs text-amber-100/80 dark:text-amber-50/80">{alert.message}</p>
+              <p className="mt-1 text-xs text-amber-600 dark:text-amber-300">{alert.message}</p>
             </div>
           ))}
         </div>

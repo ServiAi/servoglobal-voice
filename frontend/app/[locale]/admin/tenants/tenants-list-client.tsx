@@ -20,14 +20,14 @@ import { AdminTenantUsageBadge } from '@/components/tenant-usage/AdminTenantUsag
 function StatusBadge({ status }: { status: string }) {
   if (status === 'active') {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-xs font-medium text-emerald-400 dark:bg-emerald-400/10 dark:text-emerald-300">
+      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-xs font-medium text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400">
         <CheckCircle2 className="h-3 w-3" />
         Activo
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-zinc-500/10 px-2.5 py-0.5 text-xs font-medium text-zinc-400 dark:bg-zinc-400/10 dark:text-zinc-300">
+    <span className="inline-flex items-center gap-1 rounded-full bg-zinc-500/10 px-2.5 py-0.5 text-xs font-medium text-zinc-600 dark:bg-zinc-500/20 dark:text-zinc-400">
       <Clock className="h-3 w-3" />
       {status}
     </span>
@@ -36,9 +36,9 @@ function StatusBadge({ status }: { status: string }) {
 
 function EmptyState() {
   return (
-    <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-zinc-700/50 bg-zinc-900/30 py-20 text-center dark:border-zinc-600/50 dark:bg-zinc-800/30">
-      <Building2 className="mb-4 h-10 w-10 text-zinc-600 dark:text-zinc-400" />
-      <h3 className="text-lg font-medium text-zinc-300 dark:text-zinc-200">Sin tenants</h3>
+    <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-zinc-300 bg-zinc-50 py-20 text-center dark:border-zinc-700 dark:bg-zinc-900/50">
+      <Building2 className="mb-4 h-10 w-10 text-zinc-400 dark:text-zinc-500" />
+      <h3 className="text-lg font-medium text-zinc-700 dark:text-zinc-200">Sin tenants</h3>
       <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
         No hay tenants registrados. Crea el primero.
       </p>
@@ -48,9 +48,9 @@ function EmptyState() {
 
 function ErrorState({ message }: { message: string }) {
   return (
-    <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-6 text-center dark:border-red-400/20 dark:bg-red-400/5">
-      <AlertCircle className="mx-auto mb-2 h-8 w-8 text-red-400 dark:text-red-300" />
-      <p className="text-sm text-red-300 dark:text-red-200">{message}</p>
+    <div className="rounded-xl border border-red-300 bg-red-50 p-6 text-center dark:border-red-700 dark:bg-red-950/30">
+      <AlertCircle className="mx-auto mb-2 h-8 w-8 text-red-500 dark:text-red-400" />
+      <p className="text-sm text-red-700 dark:text-red-300">{message}</p>
     </div>
   );
 }
@@ -74,50 +74,50 @@ export function TenantsListClient({
   }
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
-      {/* Header */}
-      <div className="mb-8 flex items-center justify-between">
-        <div>
-          <p className="text-sm font-medium uppercase text-cyan-400 dark:text-cyan-300">
-            Admin
-          </p>
-          <h1 className="mt-1 text-2xl font-semibold text-zinc-100 sm:text-3xl dark:text-zinc-100">
-            Tenants
-          </h1>
-          <p className="mt-1 text-sm text-zinc-400 dark:text-zinc-300">
-            Gestión de empresas y accesos multitenant
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <form action="/api/auth/logout" method="get">
-            <button
-              type="submit"
-              className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-2.5 text-sm font-medium text-zinc-300 transition hover:border-zinc-600 hover:text-zinc-100 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:border-zinc-500 dark:hover:bg-zinc-700 dark:hover:text-zinc-100"
+      <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
+        {/* Header */}
+        <div className="mb-8 flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium uppercase text-cyan-600 dark:text-cyan-400">
+              Admin
+            </p>
+            <h1 className="mt-1 text-2xl font-semibold text-zinc-900 sm:text-3xl dark:text-zinc-100">
+              Tenants
+            </h1>
+            <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+              Gestión de empresas y accesos multitenant
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <form action="/api/auth/logout" method="get">
+              <button
+                type="submit"
+                className="inline-flex items-center gap-2 rounded-lg border border-zinc-300 bg-white px-4 py-2.5 text-sm font-medium text-zinc-700 transition hover:border-zinc-400 hover:text-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:border-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+              >
+                <LogOut className="h-4 w-4" />
+                Cerrar sesión
+              </button>
+            </form>
+            <Link
+              href={`/${locale}/admin/tenants/new`}
+              className="inline-flex items-center gap-2 rounded-lg bg-cyan-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-cyan-700 dark:bg-cyan-500 dark:hover:bg-cyan-400"
             >
-              <LogOut className="h-4 w-4" />
-              Cerrar sesión
-            </button>
-          </form>
+              <Plus className="h-4 w-4" />
+              Nuevo tenant
+            </Link>
+          </div>
+        </div>
+
+        {/* Back link */}
+        <div className="mb-6">
           <Link
-            href={`/${locale}/admin/tenants/new`}
-            className="inline-flex items-center gap-2 rounded-lg bg-cyan-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-cyan-500 dark:bg-cyan-500 dark:hover:bg-cyan-400"
+            href={`/${locale}/dashboard`}
+            className="inline-flex items-center gap-1.5 text-sm text-zinc-500 transition hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
           >
-            <Plus className="h-4 w-4" />
-            Nuevo tenant
+            <ArrowLeft className="h-4 w-4" />
+            Volver al dashboard
           </Link>
         </div>
-      </div>
-
-      {/* Back link */}
-      <div className="mb-6">
-        <Link
-          href={`/${locale}/dashboard`}
-          className="inline-flex items-center gap-1.5 text-sm text-zinc-500 transition hover:text-zinc-300 dark:text-zinc-400 dark:hover:text-zinc-200"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Volver al dashboard
-        </Link>
-      </div>
 
       {/* List */}
       {tenants.length === 0 ? (
@@ -143,15 +143,15 @@ function TenantCard({
   return (
     <Link
       href={`/${locale}/admin/tenants/${tenant.id}`}
-      className="group block rounded-xl border border-zinc-800 bg-zinc-900/50 p-5 transition hover:border-cyan-500/30 hover:bg-zinc-900 dark:border-zinc-700 dark:bg-zinc-800/50 dark:hover:border-cyan-400/30 dark:hover:bg-zinc-700"
+      className="group block rounded-xl border border-zinc-200 bg-white p-5 transition hover:border-cyan-400 hover:bg-cyan-50 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-cyan-500 dark:hover:bg-zinc-800"
     >
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-zinc-800 text-zinc-400 group-hover:bg-cyan-500/10 group-hover:text-cyan-400 dark:bg-zinc-700 dark:text-zinc-300 dark:group-hover:bg-cyan-400/10 dark:group-hover:text-cyan-300">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-zinc-100 text-zinc-500 group-hover:bg-cyan-100 group-hover:text-cyan-600 dark:bg-zinc-800 dark:text-zinc-400 dark:group-hover:bg-cyan-900 dark:group-hover:text-cyan-400">
             <Building2 className="h-5 w-5" />
           </div>
           <div>
-            <h3 className="font-medium text-zinc-200 group-hover:text-cyan-300 dark:text-zinc-100 dark:group-hover:text-cyan-200">
+            <h3 className="font-medium text-zinc-900 group-hover:text-cyan-700 dark:text-zinc-100 dark:group-hover:text-cyan-300">
               {tenant.name}
             </h3>
             <p className="text-xs text-zinc-500 font-mono dark:text-zinc-400">{tenant.slug}</p>
@@ -172,15 +172,15 @@ function TenantCard({
       </div>
 
       {tenant.usage && (
-        <div className="mt-4 flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-950/50 px-3 py-2 dark:border-zinc-600 dark:bg-zinc-900/50">
-          <span className="text-xs text-zinc-500 dark:text-zinc-400">
+        <div className="mt-4 flex items-center justify-between rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-800">
+          <span className="text-xs text-zinc-600 dark:text-zinc-400">
             {tenant.usage.plan.plan_name}
           </span>
           <AdminTenantUsageBadge usage={tenant.usage} />
         </div>
       )}
 
-      <div className="mt-4 flex items-center justify-end text-xs text-zinc-600 group-hover:text-cyan-500 dark:text-zinc-500 dark:group-hover:text-cyan-300">
+      <div className="mt-4 flex items-center justify-end text-xs text-zinc-500 group-hover:text-cyan-600 dark:text-zinc-400 dark:group-hover:text-cyan-400">
         Ver detalle
         <ArrowRight className="ml-1 h-3 w-3 transition-transform group-hover:translate-x-1" />
       </div>

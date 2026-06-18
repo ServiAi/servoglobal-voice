@@ -34,14 +34,14 @@ export function TenantPlanFields({
   return (
     <div className="grid gap-4 sm:grid-cols-3">
       <div className="sm:col-span-3">
-        <label className="mb-1.5 block text-sm font-medium text-zinc-400 dark:text-zinc-300">
+        <label className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
           Plan comercial
         </label>
         <select
           value={planKey}
           onChange={(event) => handlePlanChange(event.target.value)}
           disabled={disabled}
-          className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-200 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 disabled:opacity-60 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:focus:border-cyan-400 dark:focus:ring-cyan-400"
+          className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 disabled:opacity-60 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:focus:border-cyan-400 dark:focus:ring-cyan-400"
         >
           {TENANT_PLAN_OPTIONS.map((plan) => (
             <option key={plan.key} value={plan.key}>
@@ -52,7 +52,7 @@ export function TenantPlanFields({
       </div>
 
       <div>
-        <label className="mb-1.5 block text-sm font-medium text-zinc-400 dark:text-zinc-300">
+        <label className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
           Minutos incluidos
         </label>
         <input
@@ -62,12 +62,12 @@ export function TenantPlanFields({
           value={includedMinutes}
           onChange={(event) => onIncludedMinutesChange(event.target.value)}
           disabled={disabled || fieldsLocked}
-          className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-200 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:focus:border-cyan-400 dark:focus:ring-cyan-400"
+          className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:focus:border-cyan-400 dark:focus:ring-cyan-400"
         />
       </div>
 
       <div>
-        <label className="mb-1.5 block text-sm font-medium text-zinc-400 dark:text-zinc-300">
+        <label className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
           USD/min
         </label>
         <input
@@ -78,13 +78,13 @@ export function TenantPlanFields({
           value={pricePerMinuteUsd}
           onChange={(event) => onPricePerMinuteUsdChange(event.target.value)}
           disabled={disabled || fieldsLocked}
-          className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-200 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:focus:border-cyan-400 dark:focus:ring-cyan-400"
+          className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:focus:border-cyan-400 dark:focus:ring-cyan-400"
         />
       </div>
 
-      <div className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2.5 dark:border-zinc-700 dark:bg-zinc-900">
+      <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2.5 dark:border-zinc-700 dark:bg-zinc-900">
         <p className="text-xs text-zinc-500 dark:text-zinc-400">Politica</p>
-        <p className="mt-1 text-sm text-zinc-300 dark:text-zinc-200">
+        <p className="mt-1 text-sm text-zinc-700 dark:text-zinc-200">
           {fieldsLocked ? 'Valores bloqueados' : 'Enterprise configurable'}
         </p>
       </div>

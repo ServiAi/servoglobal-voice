@@ -177,9 +177,9 @@ export function NewTenantClient({ locale }: NewTenantClientProps) {
   if (success) {
     return (
       <div className="flex min-h-[60vh] flex-col items-center justify-center">
-        <CheckCircle2 className="mb-4 h-12 w-12 text-emerald-400 dark:text-emerald-300" />
-        <h2 className="text-xl font-semibold text-zinc-100 dark:text-zinc-100">Tenant creado correctamente</h2>
-        <p className="mt-2 text-sm text-zinc-400 dark:text-zinc-300">Redirigiendo al detalle...</p>
+        <CheckCircle2 className="mb-4 h-12 w-12 text-emerald-500 dark:text-emerald-400" />
+        <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">Tenant creado correctamente</h2>
+        <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">Redirigiendo al detalle...</p>
       </div>
     );
   }
@@ -190,26 +190,26 @@ export function NewTenantClient({ locale }: NewTenantClientProps) {
       <div className="mb-8">
         <Link
           href={`/${locale}/admin/tenants`}
-          className="mb-4 inline-flex items-center gap-1.5 text-sm text-zinc-500 transition hover:text-zinc-300 dark:text-zinc-400 dark:hover:text-zinc-200"
+          className="mb-4 inline-flex items-center gap-1.5 text-sm text-zinc-500 transition hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
         >
           <ArrowLeft className="h-4 w-4" />
           Volver a tenants
         </Link>
-        <h1 className="text-2xl font-semibold text-zinc-100 sm:text-3xl dark:text-zinc-100">
+        <h1 className="text-2xl font-semibold text-zinc-900 sm:text-3xl dark:text-zinc-100">
           Nuevo tenant
         </h1>
-        <p className="mt-1 text-sm text-zinc-400 dark:text-zinc-300">
+        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
           Crea una empresa, su admin inicial y agentes opcionales.
         </p>
       </div>
 
       {error && (
-        <div className="mb-6 rounded-xl border border-red-500/20 bg-red-500/5 p-4 dark:border-red-400/20 dark:bg-red-400/5">
+        <div className="mb-6 rounded-xl border border-red-300 bg-red-50 p-4 dark:border-red-700 dark:bg-red-950/30">
           <div className="flex items-start gap-3">
-            <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-400 dark:text-red-300" />
+            <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-500 dark:text-red-400" />
             <div>
-              <p className="text-sm font-medium text-red-300 dark:text-red-200">Error</p>
-              <p className="text-sm text-red-400/80 dark:text-red-300/80">{error}</p>
+              <p className="text-sm font-medium text-red-700 dark:text-red-300">Error</p>
+              <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
             </div>
           </div>
         </div>
@@ -217,15 +217,15 @@ export function NewTenantClient({ locale }: NewTenantClientProps) {
 
       <form onSubmit={handleSubmit} className="space-y-8">
         {/* Empresa */}
-        <section className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-6 dark:border-zinc-700 dark:bg-zinc-800/50">
-          <h2 className="mb-4 flex items-center gap-2 text-lg font-medium text-zinc-200 dark:text-zinc-100">
-            <Building2 className="h-5 w-5 text-cyan-400 dark:text-cyan-300" />
+        <section className="rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-700 dark:bg-zinc-900">
+          <h2 className="mb-4 flex items-center gap-2 text-lg font-medium text-zinc-900 dark:text-zinc-100">
+            <Building2 className="h-5 w-5 text-cyan-600 dark:text-cyan-400" />
             Empresa
           </h2>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="sm:col-span-2">
-              <label className="mb-1.5 block text-sm font-medium text-zinc-400 dark:text-zinc-300">
+              <label className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
                 Nombre *
               </label>
               <input
@@ -233,13 +233,13 @@ export function NewTenantClient({ locale }: NewTenantClientProps) {
                 required
                 value={name}
                 onChange={(e) => handleNameChange(e.target.value)}
-                className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-200 placeholder:text-zinc-600 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-cyan-400 dark:focus:ring-cyan-400"
+                className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-cyan-400 dark:focus:ring-cyan-400"
                 placeholder="Ej: Inmobiliaria Central"
               />
             </div>
 
             <div className="sm:col-span-2">
-              <label className="mb-1.5 block text-sm font-medium text-zinc-400 dark:text-zinc-300">
+              <label className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
                 Slug *
               </label>
               <input
@@ -247,22 +247,22 @@ export function NewTenantClient({ locale }: NewTenantClientProps) {
                 required
                 value={slug}
                 onChange={(e) => setSlug(e.target.value)}
-                className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2.5 text-sm font-mono text-zinc-200 placeholder:text-zinc-600 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-cyan-400 dark:focus:ring-cyan-400"
+                className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-sm font-mono text-zinc-900 placeholder:text-zinc-400 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-cyan-400 dark:focus:ring-cyan-400"
                 placeholder="inmobiliaria-central"
               />
-              <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-500">
+              <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-500">
                 Identificador operativo. Se genera automáticamente desde el nombre.
               </p>
             </div>
 
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-zinc-400 dark:text-zinc-300">
+              <label className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
                 Zona horaria
               </label>
               <select
                 value={timezone}
                 onChange={(e) => setTimezone(e.target.value)}
-                className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-200 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:focus:border-cyan-400 dark:focus:ring-cyan-400"
+                className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:focus:border-cyan-400 dark:focus:ring-cyan-400"
               >
                 {TIMEZONES.map((tz) => (
                   <option key={tz} value={tz}>
@@ -273,13 +273,13 @@ export function NewTenantClient({ locale }: NewTenantClientProps) {
             </div>
 
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-zinc-400 dark:text-zinc-300">
+              <label className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
                 Estado
               </label>
               <select
                 value={status}
                 onChange={(e) => setStatus(e.target.value)}
-                className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-200 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:focus:border-cyan-400 dark:focus:ring-cyan-400"
+                className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:focus:border-cyan-400 dark:focus:ring-cyan-400"
               >
                 <option value="active">Activo</option>
                 <option value="inactive">Inactivo</option>
@@ -290,9 +290,9 @@ export function NewTenantClient({ locale }: NewTenantClientProps) {
         </section>
 
         {/* Plan comercial */}
-        <section className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-6 dark:border-zinc-700 dark:bg-zinc-800/50">
-          <h2 className="mb-4 flex items-center gap-2 text-lg font-medium text-zinc-200 dark:text-zinc-100">
-            <Building2 className="h-5 w-5 text-cyan-400 dark:text-cyan-300" />
+        <section className="rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-700 dark:bg-zinc-900">
+          <h2 className="mb-4 flex items-center gap-2 text-lg font-medium text-zinc-900 dark:text-zinc-100">
+            <Building2 className="h-5 w-5 text-cyan-600 dark:text-cyan-400" />
             Plan comercial
           </h2>
           <TenantPlanFields
@@ -307,15 +307,15 @@ export function NewTenantClient({ locale }: NewTenantClientProps) {
         </section>
 
         {/* Admin inicial */}
-        <section className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-6 dark:border-zinc-700 dark:bg-zinc-800/50">
-          <h2 className="mb-4 flex items-center gap-2 text-lg font-medium text-zinc-200 dark:text-zinc-100">
-            <User className="h-5 w-5 text-cyan-400 dark:text-cyan-300" />
+        <section className="rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-700 dark:bg-zinc-900">
+          <h2 className="mb-4 flex items-center gap-2 text-lg font-medium text-zinc-900 dark:text-zinc-100">
+            <User className="h-5 w-5 text-cyan-600 dark:text-cyan-400" />
             Admin inicial
           </h2>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="sm:col-span-2">
-              <label className="mb-1.5 block text-sm font-medium text-zinc-400 dark:text-zinc-300">
+              <label className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
                 Nombre *
               </label>
               <input
@@ -323,13 +323,13 @@ export function NewTenantClient({ locale }: NewTenantClientProps) {
                 required
                 value={adminName}
                 onChange={(e) => setAdminName(e.target.value)}
-                className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-200 placeholder:text-zinc-600 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-cyan-400 dark:focus:ring-cyan-400"
+                className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-cyan-400 dark:focus:ring-cyan-400"
                 placeholder="Juan Pérez"
               />
             </div>
 
             <div className="sm:col-span-2">
-              <label className="mb-1.5 block text-sm font-medium text-zinc-400 dark:text-zinc-300">
+              <label className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
                 Email *
               </label>
               <input
@@ -337,22 +337,22 @@ export function NewTenantClient({ locale }: NewTenantClientProps) {
                 required
                 value={adminEmail}
                 onChange={(e) => setAdminEmail(e.target.value)}
-                className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-200 placeholder:text-zinc-600 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-cyan-400 dark:focus:ring-cyan-400"
+                className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-cyan-400 dark:focus:ring-cyan-400"
                 placeholder="juan@inmobiliaria.com"
               />
-              <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-500">
+              <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-500">
                 El vinculo con Auth0 sub se completa en el primer login real.
               </p>
             </div>
 
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-zinc-400 dark:text-zinc-300">
+              <label className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
                 Rol
               </label>
               <select
                 value={adminRole}
                 onChange={(e) => setAdminRole(e.target.value)}
-                className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-200 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:focus:border-cyan-400 dark:focus:ring-cyan-400"
+                className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:focus:border-cyan-400 dark:focus:ring-cyan-400"
               >
                 <option value="tenant_admin">Tenant admin</option>
                 <option value="tenant_analyst">Tenant analyst</option>
@@ -363,16 +363,16 @@ export function NewTenantClient({ locale }: NewTenantClientProps) {
         </section>
 
         {/* Agentes opcionales */}
-        <section className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-6 dark:border-zinc-700 dark:bg-zinc-800/50">
+        <section className="rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-700 dark:bg-zinc-900">
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="flex items-center gap-2 text-lg font-medium text-zinc-200 dark:text-zinc-100">
-              <Mic className="h-5 w-5 text-cyan-400 dark:text-cyan-300" />
+            <h2 className="flex items-center gap-2 text-lg font-medium text-zinc-900 dark:text-zinc-100">
+              <Mic className="h-5 w-5 text-cyan-600 dark:text-cyan-400" />
               Agentes (opcionales)
             </h2>
             <button
               type="button"
               onClick={addAgent}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 px-3 py-1.5 text-xs font-medium text-zinc-300 transition hover:border-cyan-500/50 hover:text-cyan-400 dark:border-zinc-600 dark:text-zinc-200 dark:hover:border-cyan-400/50 dark:hover:text-cyan-300"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-600 transition hover:border-cyan-500 hover:text-cyan-600 dark:border-zinc-600 dark:text-zinc-300 dark:hover:border-cyan-500 dark:hover:text-cyan-400"
             >
               <Plus className="h-3.5 w-3.5" />
               Agregar agente
@@ -380,7 +380,7 @@ export function NewTenantClient({ locale }: NewTenantClientProps) {
           </div>
 
           {agents.length === 0 && (
-            <p className="py-8 text-center text-sm text-zinc-600 dark:text-zinc-500">
+            <p className="py-8 text-center text-sm text-zinc-500 dark:text-zinc-400">
               Los agentes son opcionales. Puedes agregarlos después desde el detalle del tenant.
             </p>
           )}
@@ -389,16 +389,16 @@ export function NewTenantClient({ locale }: NewTenantClientProps) {
             {agents.map((agent, index) => (
               <div
                 key={index}
-                className="rounded-lg border border-zinc-800 bg-zinc-950/50 p-4 dark:border-zinc-700 dark:bg-zinc-900/50"
+                className="rounded-lg border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-800"
               >
                 <div className="mb-3 flex items-center justify-between">
-                  <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                  <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
                     Agente {index + 1}
                   </span>
                   <button
                     type="button"
                     onClick={() => removeAgent(index)}
-                    className="text-zinc-600 transition hover:text-red-400 dark:text-zinc-500 dark:hover:text-red-300"
+                    className="text-zinc-500 transition hover:text-red-600 dark:text-zinc-500 dark:hover:text-red-400"
                   >
                     <X className="h-4 w-4" />
                   </button>
@@ -406,7 +406,7 @@ export function NewTenantClient({ locale }: NewTenantClientProps) {
 
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="sm:col-span-2">
-                    <label className="mb-1.5 block text-xs font-medium text-zinc-400 dark:text-zinc-300">
+                    <label className="mb-1.5 block text-xs font-medium text-zinc-700 dark:text-zinc-300">
                       Nombre *
                     </label>
                     <input
@@ -414,19 +414,19 @@ export function NewTenantClient({ locale }: NewTenantClientProps) {
                       required
                       value={agent.name}
                       onChange={(e) => updateAgent(index, 'name', e.target.value)}
-                      className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-200 placeholder:text-zinc-600 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-cyan-400 dark:focus:ring-cyan-400"
+                      className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-cyan-400 dark:focus:ring-cyan-400"
                       placeholder="Agente Inmobiliario"
                     />
                   </div>
 
                   <div>
-                    <label className="mb-1.5 block text-xs font-medium text-zinc-400 dark:text-zinc-300">
+                    <label className="mb-1.5 block text-xs font-medium text-zinc-700 dark:text-zinc-300">
                       Provider *
                     </label>
                     <select
                       value={agent.external_provider}
                       onChange={(e) => updateAgent(index, 'external_provider', e.target.value)}
-                      className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-200 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:focus:border-cyan-400 dark:focus:ring-cyan-400"
+                      className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:focus:border-cyan-400 dark:focus:ring-cyan-400"
                     >
                       {PROVIDERS.map((p) => (
                         <option key={p} value={p}>
@@ -437,7 +437,7 @@ export function NewTenantClient({ locale }: NewTenantClientProps) {
                   </div>
 
                   <div>
-                    <label className="mb-1.5 block text-xs font-medium text-zinc-400 dark:text-zinc-300">
+                    <label className="mb-1.5 block text-xs font-medium text-zinc-700 dark:text-zinc-300">
                       Agent ID *
                     </label>
                     <input
@@ -445,19 +445,19 @@ export function NewTenantClient({ locale }: NewTenantClientProps) {
                       required
                       value={agent.external_agent_id}
                       onChange={(e) => updateAgent(index, 'external_agent_id', e.target.value)}
-                      className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm font-mono text-zinc-200 placeholder:text-zinc-600 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-cyan-400 dark:focus:ring-cyan-400"
+                      className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-mono text-zinc-900 placeholder:text-zinc-400 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-cyan-400 dark:focus:ring-cyan-400"
                       placeholder="uv-001"
                     />
                   </div>
 
                   <div>
-                    <label className="mb-1.5 block text-xs font-medium text-zinc-400 dark:text-zinc-300">
+                    <label className="mb-1.5 block text-xs font-medium text-zinc-700 dark:text-zinc-300">
                       Canal
                     </label>
                     <select
                       value={agent.channel_type || 'voice'}
                       onChange={(e) => updateAgent(index, 'channel_type', e.target.value)}
-                      className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-200 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:focus:border-cyan-400 dark:focus:ring-cyan-400"
+                      className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:focus:border-cyan-400 dark:focus:ring-cyan-400"
                     >
                       {CHANNEL_TYPES.map((c) => (
                         <option key={c} value={c}>
@@ -468,13 +468,13 @@ export function NewTenantClient({ locale }: NewTenantClientProps) {
                   </div>
 
                   <div>
-                    <label className="mb-1.5 block text-xs font-medium text-zinc-400 dark:text-zinc-300">
+                    <label className="mb-1.5 block text-xs font-medium text-zinc-700 dark:text-zinc-300">
                       Estado
                     </label>
                     <select
                       value={agent.status || 'active'}
                       onChange={(e) => updateAgent(index, 'status', e.target.value)}
-                      className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-200 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:focus:border-cyan-400 dark:focus:ring-cyan-400"
+                      className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:focus:border-cyan-400 dark:focus:ring-cyan-400"
                     >
                       <option value="active">Activo</option>
                       <option value="inactive">Inactivo</option>
@@ -490,14 +490,14 @@ export function NewTenantClient({ locale }: NewTenantClientProps) {
         <div className="flex items-center justify-end gap-3">
           <Link
             href={`/${locale}/admin/tenants`}
-            className="rounded-lg border border-zinc-700 px-5 py-2.5 text-sm font-medium text-zinc-300 transition hover:bg-zinc-800 dark:border-zinc-600 dark:text-zinc-200 dark:hover:bg-zinc-700"
+            className="rounded-lg border border-zinc-300 px-5 py-2.5 text-sm font-medium text-zinc-600 transition hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800"
           >
             Cancelar
           </Link>
           <button
             type="submit"
             disabled={loading}
-            className="inline-flex items-center gap-2 rounded-lg bg-cyan-600 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-cyan-500 disabled:opacity-50 dark:bg-cyan-500 dark:hover:bg-cyan-400"
+            className="inline-flex items-center gap-2 rounded-lg bg-cyan-600 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-cyan-700 disabled:opacity-50 dark:bg-cyan-500 dark:hover:bg-cyan-400"
           >
             {loading && <Loader2 className="h-4 w-4 animate-spin" />}
             {loading ? 'Creando...' : 'Crear tenant'}
