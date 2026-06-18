@@ -68,6 +68,30 @@
         "qwen3.6": {
           "name": "Qwen 3.6",
         },
+          "gemma4": {
+          "name": "Gemma 4",
+          "contextWindow": 262144,
+          "modalities": {
+            "input": ["text", "image"],
+            "output": ["text"],
+          },
+        },
+        "deepseek-v4-flash": {
+          "name": "DeepSeek V4 Flash",
+          "contextWindow": 500000,
+          "modalities": {
+            "input": ["text"],
+            "output": ["text"],
+          },
+        },
+        "mimo-v2.5": {
+          "name": "Xiaomi MiMo V2.5",
+          "contextWindow": 500000,
+          "modalities": {
+            "input": ["text", "image", "audio"],
+            "output": ["text"],
+          },
+        },
       },
     },
   },
