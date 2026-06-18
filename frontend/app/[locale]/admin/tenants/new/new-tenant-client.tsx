@@ -19,8 +19,10 @@ import {
   createTenant,
   type TenantCreatePayload,
   type TenantAgent,
+  type TenantPlanKey,
 } from '@/lib/api/admin-tenants-client';
 import { getAdminAccessRedirect } from '@/lib/auth/admin-client';
+import { TenantPlanFields } from '@/components/tenant-usage/TenantPlanFields';
 
 const TIMEZONES = [
   'America/Bogota',
@@ -61,6 +63,9 @@ export function NewTenantClient({ locale }: NewTenantClientProps) {
   const [slug, setSlug] = useState('');
   const [timezone, setTimezone] = useState('America/Bogota');
   const [status, setStatus] = useState('active');
+  const [planKey, setPlanKey] = useState<TenantPlanKey>('web_conversion');
+  const [includedMinutes, setIncludedMinutes] = useState('2000');
+  const [pricePerMinuteUsd, setPricePerMinuteUsd] = useState('0.16');
 
   const [adminName, setAdminName] = useState('');
   const [adminEmail, setAdminEmail] = useState('');
@@ -103,12 +108,32 @@ export function NewTenantClient({ locale }: NewTenantClientProps) {
     setError(null);
     setSuccess(false);
     setLoading(true);
+    const minutes = Number.parseFloat(includedMinutes);
+    const price = Number.parseFloat(pricePerMinuteUsd);
+
+    if (planKey === 'enterprise') {
+      if (!Number.isFinite(minutes) || minutes < 2000) {
+        setError('Enterprise requiere minimo 2000 minutos.');
+        setLoading(false);
+        return;
+      }
+      if (!Number.isFinite(price) || price < 0.14 || price > 0.15) {
+        setError('Enterprise requiere precio entre 0.14 y 0.15 USD/min.');
+        setLoading(false);
+        return;
+      }
+    }
 
     const payload: TenantCreatePayload = {
       name: name.trim(),
       slug: slug.trim().toLowerCase(),
       timezone,
       status,
+      plan: {
+        plan_key: planKey,
+        included_minutes: minutes,
+        price_per_minute_usd: price,
+      },
       admin: {
         name: adminName.trim(),
         email: adminEmail.trim().toLowerCase(),
@@ -152,9 +177,9 @@ export function NewTenantClient({ locale }: NewTenantClientProps) {
   if (success) {
     return (
       <div className="flex min-h-[60vh] flex-col items-center justify-center">
-        <CheckCircle2 className="mb-4 h-12 w-12 text-emerald-600 dark:text-emerald-400" />
-        <h2 className="text-xl font-semibold text-foreground">Tenant creado correctamente</h2>
-        <p className="mt-2 text-sm text-muted-foreground">Redirigiendo al detalle...</p>
+        <CheckCircle2 className="mb-4 h-12 w-12 text-emerald-400" />
+        <h2 className="text-xl font-semibold text-zinc-100">Tenant creado correctamente</h2>
+        <p className="mt-2 text-sm text-zinc-400">Redirigiendo al detalle...</p>
       </div>
     );
   }
@@ -165,26 +190,26 @@ export function NewTenantClient({ locale }: NewTenantClientProps) {
       <div className="mb-8">
         <Link
           href={`/${locale}/admin/tenants`}
-          className="mb-4 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition hover:text-foreground"
+          className="mb-4 inline-flex items-center gap-1.5 text-sm text-zinc-500 transition hover:text-zinc-300"
         >
           <ArrowLeft className="h-4 w-4" />
           Volver a tenants
         </Link>
-        <h1 className="text-2xl font-semibold text-foreground sm:text-3xl">
+        <h1 className="text-2xl font-semibold text-zinc-100 sm:text-3xl">
           Nuevo tenant
         </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
+        <p className="mt-1 text-sm text-zinc-400">
           Crea una empresa, su admin inicial y agentes opcionales.
         </p>
       </div>
 
       {error && (
-        <div className="mb-6 rounded-xl border border-destructive/20 bg-destructive/10 p-4">
+        <div className="mb-6 rounded-xl border border-red-500/20 bg-red-500/5 p-4">
           <div className="flex items-start gap-3">
-            <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-destructive" />
+            <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-400" />
             <div>
-              <p className="text-sm font-medium text-destructive">Error</p>
-              <p className="text-sm text-destructive/80">{error}</p>
+              <p className="text-sm font-medium text-red-300">Error</p>
+              <p className="text-sm text-red-400/80">{error}</p>
             </div>
           </div>
         </div>
@@ -192,15 +217,15 @@ export function NewTenantClient({ locale }: NewTenantClientProps) {
 
       <form onSubmit={handleSubmit} className="space-y-8">
         {/* Empresa */}
-        <section className="rounded-xl border border-border bg-card p-6 shadow-sm">
-          <h2 className="mb-4 flex items-center gap-2 text-lg font-medium text-foreground">
-            <Building2 className="h-5 w-5 text-cyan-600 dark:text-cyan-400" />
+        <section className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-6">
+          <h2 className="mb-4 flex items-center gap-2 text-lg font-medium text-zinc-200">
+            <Building2 className="h-5 w-5 text-cyan-400" />
             Empresa
           </h2>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="sm:col-span-2">
-              <label className="mb-1.5 block text-sm font-medium text-muted-foreground">
+              <label className="mb-1.5 block text-sm font-medium text-zinc-400">
                 Nombre *
               </label>
               <input
@@ -208,13 +233,13 @@ export function NewTenantClient({ locale }: NewTenantClientProps) {
                 required
                 value={name}
                 onChange={(e) => handleNameChange(e.target.value)}
-                className="w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-200 placeholder:text-zinc-600 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
                 placeholder="Ej: Inmobiliaria Central"
               />
             </div>
 
             <div className="sm:col-span-2">
-              <label className="mb-1.5 block text-sm font-medium text-muted-foreground">
+              <label className="mb-1.5 block text-sm font-medium text-zinc-400">
                 Slug *
               </label>
               <input
@@ -222,22 +247,22 @@ export function NewTenantClient({ locale }: NewTenantClientProps) {
                 required
                 value={slug}
                 onChange={(e) => setSlug(e.target.value)}
-                className="w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm font-mono text-foreground placeholder:text-muted-foreground focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2.5 text-sm font-mono text-zinc-200 placeholder:text-zinc-600 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
                 placeholder="inmobiliaria-central"
               />
-              <p className="mt-1 text-xs text-muted-foreground">
+              <p className="mt-1 text-xs text-zinc-600">
                 Identificador operativo. Se genera automáticamente desde el nombre.
               </p>
             </div>
 
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-muted-foreground">
+              <label className="mb-1.5 block text-sm font-medium text-zinc-400">
                 Zona horaria
               </label>
               <select
                 value={timezone}
                 onChange={(e) => setTimezone(e.target.value)}
-                className="w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm text-foreground focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-200 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
               >
                 {TIMEZONES.map((tz) => (
                   <option key={tz} value={tz}>
@@ -248,13 +273,13 @@ export function NewTenantClient({ locale }: NewTenantClientProps) {
             </div>
 
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-muted-foreground">
+              <label className="mb-1.5 block text-sm font-medium text-zinc-400">
                 Estado
               </label>
               <select
                 value={status}
                 onChange={(e) => setStatus(e.target.value)}
-                className="w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm text-foreground focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-200 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
               >
                 <option value="active">Activo</option>
                 <option value="inactive">Inactivo</option>
@@ -264,16 +289,33 @@ export function NewTenantClient({ locale }: NewTenantClientProps) {
           </div>
         </section>
 
+        {/* Plan comercial */}
+        <section className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-6">
+          <h2 className="mb-4 flex items-center gap-2 text-lg font-medium text-zinc-200">
+            <Building2 className="h-5 w-5 text-cyan-400" />
+            Plan comercial
+          </h2>
+          <TenantPlanFields
+            planKey={planKey}
+            includedMinutes={includedMinutes}
+            pricePerMinuteUsd={pricePerMinuteUsd}
+            disabled={loading}
+            onPlanKeyChange={setPlanKey}
+            onIncludedMinutesChange={setIncludedMinutes}
+            onPricePerMinuteUsdChange={setPricePerMinuteUsd}
+          />
+        </section>
+
         {/* Admin inicial */}
-        <section className="rounded-xl border border-border bg-card p-6 shadow-sm">
-          <h2 className="mb-4 flex items-center gap-2 text-lg font-medium text-foreground">
-            <User className="h-5 w-5 text-cyan-600 dark:text-cyan-400" />
+        <section className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-6">
+          <h2 className="mb-4 flex items-center gap-2 text-lg font-medium text-zinc-200">
+            <User className="h-5 w-5 text-cyan-400" />
             Admin inicial
           </h2>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="sm:col-span-2">
-              <label className="mb-1.5 block text-sm font-medium text-muted-foreground">
+              <label className="mb-1.5 block text-sm font-medium text-zinc-400">
                 Nombre *
               </label>
               <input
@@ -281,13 +323,13 @@ export function NewTenantClient({ locale }: NewTenantClientProps) {
                 required
                 value={adminName}
                 onChange={(e) => setAdminName(e.target.value)}
-                className="w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-200 placeholder:text-zinc-600 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
                 placeholder="Juan Pérez"
               />
             </div>
 
             <div className="sm:col-span-2">
-              <label className="mb-1.5 block text-sm font-medium text-muted-foreground">
+              <label className="mb-1.5 block text-sm font-medium text-zinc-400">
                 Email *
               </label>
               <input
@@ -295,22 +337,22 @@ export function NewTenantClient({ locale }: NewTenantClientProps) {
                 required
                 value={adminEmail}
                 onChange={(e) => setAdminEmail(e.target.value)}
-                className="w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-200 placeholder:text-zinc-600 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
                 placeholder="juan@inmobiliaria.com"
               />
-              <p className="mt-1 text-xs text-muted-foreground">
+              <p className="mt-1 text-xs text-zinc-600">
                 El vinculo con Auth0 sub se completa en el primer login real.
               </p>
             </div>
 
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-muted-foreground">
+              <label className="mb-1.5 block text-sm font-medium text-zinc-400">
                 Rol
               </label>
               <select
                 value={adminRole}
                 onChange={(e) => setAdminRole(e.target.value)}
-                className="w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm text-foreground focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-200 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
               >
                 <option value="tenant_admin">Tenant admin</option>
                 <option value="tenant_analyst">Tenant analyst</option>
@@ -321,16 +363,16 @@ export function NewTenantClient({ locale }: NewTenantClientProps) {
         </section>
 
         {/* Agentes opcionales */}
-        <section className="rounded-xl border border-border bg-card p-6 shadow-sm">
+        <section className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-6">
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="flex items-center gap-2 text-lg font-medium text-foreground">
-              <Mic className="h-5 w-5 text-cyan-600 dark:text-cyan-400" />
+            <h2 className="flex items-center gap-2 text-lg font-medium text-zinc-200">
+              <Mic className="h-5 w-5 text-cyan-400" />
               Agentes (opcionales)
             </h2>
             <button
               type="button"
               onClick={addAgent}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition hover:bg-muted"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 px-3 py-1.5 text-xs font-medium text-zinc-300 transition hover:border-cyan-500/50 hover:text-cyan-400"
             >
               <Plus className="h-3.5 w-3.5" />
               Agregar agente
@@ -338,7 +380,7 @@ export function NewTenantClient({ locale }: NewTenantClientProps) {
           </div>
 
           {agents.length === 0 && (
-            <p className="py-8 text-center text-sm text-muted-foreground">
+            <p className="py-8 text-center text-sm text-zinc-600">
               Los agentes son opcionales. Puedes agregarlos después desde el detalle del tenant.
             </p>
           )}
@@ -347,16 +389,16 @@ export function NewTenantClient({ locale }: NewTenantClientProps) {
             {agents.map((agent, index) => (
               <div
                 key={index}
-                className="rounded-lg border border-border bg-muted/30 p-4"
+                className="rounded-lg border border-zinc-800 bg-zinc-950/50 p-4"
               >
                 <div className="mb-3 flex items-center justify-between">
-                  <span className="text-xs font-medium text-muted-foreground">
+                  <span className="text-xs font-medium text-zinc-500">
                     Agente {index + 1}
                   </span>
                   <button
                     type="button"
                     onClick={() => removeAgent(index)}
-                    className="text-muted-foreground transition hover:text-destructive"
+                    className="text-zinc-600 transition hover:text-red-400"
                   >
                     <X className="h-4 w-4" />
                   </button>
@@ -364,7 +406,7 @@ export function NewTenantClient({ locale }: NewTenantClientProps) {
 
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="sm:col-span-2">
-                    <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+                    <label className="mb-1.5 block text-xs font-medium text-zinc-400">
                       Nombre *
                     </label>
                     <input
@@ -372,19 +414,19 @@ export function NewTenantClient({ locale }: NewTenantClientProps) {
                       required
                       value={agent.name}
                       onChange={(e) => updateAgent(index, 'name', e.target.value)}
-                      className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                      className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-200 placeholder:text-zinc-600 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
                       placeholder="Agente Inmobiliario"
                     />
                   </div>
 
                   <div>
-                    <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+                    <label className="mb-1.5 block text-xs font-medium text-zinc-400">
                       Provider *
                     </label>
                     <select
                       value={agent.external_provider}
                       onChange={(e) => updateAgent(index, 'external_provider', e.target.value)}
-                      className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                      className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-200 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
                     >
                       {PROVIDERS.map((p) => (
                         <option key={p} value={p}>
@@ -395,7 +437,7 @@ export function NewTenantClient({ locale }: NewTenantClientProps) {
                   </div>
 
                   <div>
-                    <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+                    <label className="mb-1.5 block text-xs font-medium text-zinc-400">
                       Agent ID *
                     </label>
                     <input
@@ -403,19 +445,19 @@ export function NewTenantClient({ locale }: NewTenantClientProps) {
                       required
                       value={agent.external_agent_id}
                       onChange={(e) => updateAgent(index, 'external_agent_id', e.target.value)}
-                      className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm font-mono text-foreground placeholder:text-muted-foreground focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                      className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm font-mono text-zinc-200 placeholder:text-zinc-600 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
                       placeholder="uv-001"
                     />
                   </div>
 
                   <div>
-                    <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+                    <label className="mb-1.5 block text-xs font-medium text-zinc-400">
                       Canal
                     </label>
                     <select
                       value={agent.channel_type || 'voice'}
                       onChange={(e) => updateAgent(index, 'channel_type', e.target.value)}
-                      className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                      className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-200 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
                     >
                       {CHANNEL_TYPES.map((c) => (
                         <option key={c} value={c}>
@@ -426,13 +468,13 @@ export function NewTenantClient({ locale }: NewTenantClientProps) {
                   </div>
 
                   <div>
-                    <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+                    <label className="mb-1.5 block text-xs font-medium text-zinc-400">
                       Estado
                     </label>
                     <select
                       value={agent.status || 'active'}
                       onChange={(e) => updateAgent(index, 'status', e.target.value)}
-                      className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                      className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-200 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
                     >
                       <option value="active">Activo</option>
                       <option value="inactive">Inactivo</option>
@@ -448,7 +490,7 @@ export function NewTenantClient({ locale }: NewTenantClientProps) {
         <div className="flex items-center justify-end gap-3">
           <Link
             href={`/${locale}/admin/tenants`}
-            className="rounded-lg border border-border bg-background px-5 py-2.5 text-sm font-medium text-foreground transition hover:bg-muted"
+            className="rounded-lg border border-zinc-700 px-5 py-2.5 text-sm font-medium text-zinc-300 transition hover:bg-zinc-800"
           >
             Cancelar
           </Link>

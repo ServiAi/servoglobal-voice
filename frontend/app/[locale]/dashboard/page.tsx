@@ -10,6 +10,8 @@ import {
   fetchAgentDistribution,
   fetchHeatmap,
   fetchRecentCalls,
+  fetchSavingsComparison,
+  fetchUsage,
   type DashboardFilters
 } from '@/lib/api/dashboard';
 
@@ -22,6 +24,10 @@ import { AgentDistributionChart } from '@/components/dashboard/AgentDistribution
 import { HeatmapChart } from '@/components/dashboard/HeatmapChart';
 import { RecentCallsTable } from '@/components/dashboard/RecentCallsTable';
 import { ThemeToggle } from '@/components/shared/ThemeToggle';
+import { TenantSavingsComparison } from '@/components/tenant-usage/TenantSavingsComparison';
+import { TenantUsageAlerts } from '@/components/tenant-usage/TenantUsageAlerts';
+import { TenantUsageCard } from '@/components/tenant-usage/TenantUsageCard';
+import { isUsageLimitStatus } from '@/lib/tenant-plans';
 
 type Props = {
   params: Promise<{ locale: string }>;
@@ -89,14 +95,18 @@ export default async function PrivateDashboardBase({ params, searchParams }: Pro
     statusRes,
     agentRes,
     heatmapRes,
-    recentRes
+    recentRes,
+    usageRes,
+    savingsRes
   ] = await Promise.all([
     fetchKpis(accessToken, filters),
     fetchTrends(accessToken, filters),
     fetchStatusDistribution(accessToken, filters),
     fetchAgentDistribution(accessToken, filters),
     fetchHeatmap(accessToken, filters),
-    fetchRecentCalls(accessToken, filters)
+    fetchRecentCalls(accessToken, filters),
+    fetchUsage(accessToken),
+    fetchSavingsComparison(accessToken)
   ]);
 
   return (
@@ -138,6 +148,40 @@ export default async function PrivateDashboardBase({ params, searchParams }: Pro
         ) : (
           <div className="rounded-xl border border-destructive/20 bg-destructive/10 p-4 text-destructive mb-8">
             Error cargando KPIs: {kpisRes.detail}
+          </div>
+        )}
+
+        {usageRes.ok && isUsageLimitStatus(usageRes.data.usage_status) && (
+          <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-red-300">
+            El paquete de minutos esta agotado. El dashboard queda en modo lectura
+            hasta que un admin interno actualice o reactive el plan.
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 mb-6">
+          {usageRes.ok ? (
+            <TenantUsageCard usage={usageRes.data} />
+          ) : (
+            <div className="rounded-xl border border-destructive/20 bg-destructive/10 p-4 text-destructive">
+              Error cargando consumo.
+            </div>
+          )}
+          {usageRes.ok ? (
+            <TenantUsageAlerts alerts={usageRes.data.alerts} />
+          ) : (
+            <div className="rounded-xl border border-destructive/20 bg-destructive/10 p-4 text-destructive">
+              Error cargando alertas.
+            </div>
+          )}
+        </div>
+
+        {savingsRes.ok ? (
+          <div className="mb-6">
+            <TenantSavingsComparison comparison={savingsRes.data} />
+          </div>
+        ) : (
+          <div className="rounded-xl border border-destructive/20 bg-destructive/10 p-4 text-destructive mb-6">
+            Error cargando comparativa.
           </div>
         )}
 

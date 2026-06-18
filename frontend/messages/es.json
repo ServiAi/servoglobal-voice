@@ -624,7 +624,11 @@
     "emailPlaceholder": "Correo electrónico",
     "phonePlaceholder": "Teléfono",
     "offline": "Desconectado",
-    "poweredBy": "Con tecnología de ServiGlobal · IA Voice Engine"
+    "poweredBy": "Con tecnología de ServiGlobal · IA Voice Engine",
+    "limitExceededTitle": "Límite de minutos alcanzado",
+    "limitExceededDesc": "El paquete de minutos para esta demostración se ha agotado. Para poder continuar realizando llamadas de prueba y experimentar las capacidades de Servi-IA, es necesario recargar o actualizar tu plan.",
+    "limitExceededAction": "Agendar preconsultoría para recargar",
+    "limitExceededClose": "Entendido"
   },
   "demoOutbound": {
     "requestCompleted": "Solicitud enviada",

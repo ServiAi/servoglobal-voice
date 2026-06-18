@@ -1,7 +1,12 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
+
+from app.core.config import settings
+from app.db.session import get_db
 from app.services.voice_service import create_call_session, create_sip_call_via_pbx
 from app.services.notification_service import notification_service
+from app.services.tenant_usage_service import TenantUsageService
 from app.api.deps import verify_turnstile
 
 router = APIRouter(prefix="/api/v1", tags=["Voice"])
@@ -26,11 +31,12 @@ class CreateOutboundCallRequest(BaseModel):
     turnstile_token: str | None = None
 
 @router.post("/calls")
-async def create_call(request: CreateCallRequest):
+async def create_call(request: CreateCallRequest, db: Session = Depends(get_db)):
     if not request.turnstile_token:
         raise HTTPException(status_code=400, detail="Turnstile token missing")
 
     await verify_turnstile(request.turnstile_token)
+    TenantUsageService(db).ensure_tenant_can_start_call_by_slug(settings.BOOTSTRAP_TENANT_SLUG)
 
     from datetime import datetime
     import pytz
@@ -55,15 +61,18 @@ async def create_call(request: CreateCallRequest):
             await notification_service.notify_demo_start(context)
 
         return {"joinUrl": join_url}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/call-outbound")
-async def create_outbound_call(request: CreateOutboundCallRequest):
+async def create_outbound_call(request: CreateOutboundCallRequest, db: Session = Depends(get_db)):
     if not request.turnstile_token:
         raise HTTPException(status_code=400, detail="Turnstile token missing")
 
     await verify_turnstile(request.turnstile_token)
+    TenantUsageService(db).ensure_tenant_can_start_call_by_slug(settings.BOOTSTRAP_TENANT_SLUG)
 
     try:
         from datetime import datetime
@@ -115,5 +124,7 @@ async def create_outbound_call(request: CreateOutboundCallRequest):
         await notification_service.notify_demo_start(context)
         
         return result
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

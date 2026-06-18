@@ -14,6 +14,7 @@ from app.services.auth0_service import AuthenticatedIdentity
 
 
 ACTIVE = "active"
+USAGE_LIMIT_SUSPENDED = "suspended_usage_limit"
 FALLBACK_EMAIL_DOMAIN = "auth0.local"
 
 
@@ -148,7 +149,7 @@ class IdentityService:
                 TenantMembership.status == ACTIVE,
             )
             .join(Tenant)
-            .where(Tenant.status == ACTIVE)
+            .where(Tenant.status.in_([ACTIVE, USAGE_LIMIT_SUSPENDED]))
             .order_by(TenantMembership.created_at.asc())
         )
         if membership is None:

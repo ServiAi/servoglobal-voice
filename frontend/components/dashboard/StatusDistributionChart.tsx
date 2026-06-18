@@ -85,7 +85,7 @@ export function StatusDistributionChart({ data }: StatusDistributionChartProps) 
                 <Cell key={`cell-${index}`} fill={entry.color} />
               ))}
             </Pie>
-            <Tooltip
+            <Tooltip 
               contentStyle={{ backgroundColor: isDark ? '#18181b' : '#ffffff', borderColor: isDark ? '#3f3f46' : '#e4e4e7', borderRadius: '8px' }}
               itemStyle={{ color: isDark ? '#e4e4e7' : '#18181b' }}
             />

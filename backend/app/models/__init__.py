@@ -1,4 +1,5 @@
 from app.models.analytics import Agent, Call, CallEvent, MetricSnapshotDaily
+from app.models.billing import ExternalProviderPricing, TenantBillingPlan, TenantUsageAlert
 from app.models.identity import AccessAuditLog, Tenant, TenantMembership, User
 
 __all__ = [
@@ -6,8 +7,11 @@ __all__ = [
     "Agent",
     "Call",
     "CallEvent",
+    "ExternalProviderPricing",
     "MetricSnapshotDaily",
     "Tenant",
+    "TenantBillingPlan",
     "TenantMembership",
+    "TenantUsageAlert",
     "User",
 ]

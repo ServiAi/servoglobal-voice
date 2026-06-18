@@ -7,6 +7,8 @@ import {
   type TenantDetail,
   type TenantDeleteResult,
   type TenantListItem,
+  type TenantPlanPayload,
+  type TenantPlanUpdateResult,
   type TenantUpdatePayload,
 } from '@/lib/api/tenants';
 
@@ -19,7 +21,12 @@ export type {
   TenantDetail,
   TenantDeleteResult,
   TenantListItem,
+  TenantPlanKey,
+  TenantPlanPayload,
+  TenantPlanUpdateResult,
+  TenantSavingsComparison,
   TenantUpdatePayload,
+  TenantUsageAlert,
 } from '@/lib/api/tenants';
 
 async function localAdminFetch<T>(
@@ -86,6 +93,19 @@ export function updateTenant(
 ): Promise<FetchResult<TenantDetail>> {
   return localAdminFetch<TenantDetail>(
     `/api/admin/tenants/${encodeURIComponent(tenantId)}`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }
+  );
+}
+
+export function updateTenantPlan(
+  tenantId: string,
+  payload: TenantPlanPayload
+): Promise<FetchResult<TenantPlanUpdateResult>> {
+  return localAdminFetch<TenantPlanUpdateResult>(
+    `/api/admin/tenants/${encodeURIComponent(tenantId)}/plan`,
     {
       method: 'PATCH',
       body: JSON.stringify(payload),

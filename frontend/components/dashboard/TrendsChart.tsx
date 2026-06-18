@@ -57,9 +57,9 @@ export function TrendsChart({ data }: TrendsChartProps) {
     } catch {
       // Ignore parse error
     }
-
+    
     const answerRate = item.calls_total > 0 ? (item.calls_answered / item.calls_total) : 0;
-
+    
     return {
       ...item,
       displayDate,
@@ -81,27 +81,27 @@ export function TrendsChart({ data }: TrendsChartProps) {
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke={isDark ? "#3f3f46" : "#e4e4e7"} vertical={false} />
-            <XAxis
-              dataKey="displayDate"
-              stroke={isDark ? "#a1a1aa" : "#71717a"}
-              fontSize={12}
+            <XAxis 
+              dataKey="displayDate" 
+              stroke={isDark ? "#a1a1aa" : "#71717a"} 
+              fontSize={12} 
               tickLine={false}
               axisLine={false}
               dy={10}
             />
-            <YAxis
+            <YAxis 
               yAxisId="left"
-              stroke={isDark ? "#a1a1aa" : "#71717a"}
-              fontSize={12}
+              stroke={isDark ? "#a1a1aa" : "#71717a"} 
+              fontSize={12} 
               tickLine={false}
               axisLine={false}
               dx={-10}
             />
-            <YAxis
+            <YAxis 
               yAxisId="right"
               orientation="right"
-              stroke={isDark ? "#a1a1aa" : "#71717a"}
-              fontSize={12}
+              stroke={isDark ? "#a1a1aa" : "#71717a"} 
+              fontSize={12} 
               tickLine={false}
               axisLine={false}
               dx={10}
@@ -112,22 +112,22 @@ export function TrendsChart({ data }: TrendsChartProps) {
               itemStyle={{ color: isDark ? '#e4e4e7' : '#18181b' }}
               labelStyle={{ color: isDark ? '#a1a1aa' : '#71717a', marginBottom: '4px' }}
             />
-            <Area
+            <Area 
               yAxisId="left"
-              type="monotone"
-              dataKey="total_calls"
+              type="monotone" 
+              dataKey="total_calls" 
               name="Llamadas"
-              stroke="#22d3ee"
+              stroke="#22d3ee" 
               strokeWidth={2}
-              fillOpacity={1}
-              fill="url(#colorCalls)"
+              fillOpacity={1} 
+              fill="url(#colorCalls)" 
             />
-            <Line
+            <Line 
               yAxisId="right"
-              type="monotone"
-              dataKey="successPercent"
+              type="monotone" 
+              dataKey="successPercent" 
               name="% Éxito"
-              stroke="#a78bfa"
+              stroke="#a78bfa" 
               strokeWidth={2}
               dot={{ r: 4, fill: '#a78bfa' }}
             />

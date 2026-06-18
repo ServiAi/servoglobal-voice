@@ -54,17 +54,17 @@ export function AgentDistributionChart({ data }: AgentDistributionChartProps) {
         <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
           <BarChart data={sortedData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke={isDark ? "#3f3f46" : "#e4e4e7"} vertical={false} />
-            <XAxis
-              dataKey="agent_name"
-              stroke={isDark ? "#a1a1aa" : "#71717a"}
-              fontSize={12}
+            <XAxis 
+              dataKey="agent_name" 
+              stroke={isDark ? "#a1a1aa" : "#71717a"} 
+              fontSize={12} 
               tickLine={false}
               axisLine={false}
               dy={10}
             />
-            <YAxis
-              stroke={isDark ? "#a1a1aa" : "#71717a"}
-              fontSize={12}
+            <YAxis 
+              stroke={isDark ? "#a1a1aa" : "#71717a"} 
+              fontSize={12} 
               tickLine={false}
               axisLine={false}
               dx={-10}

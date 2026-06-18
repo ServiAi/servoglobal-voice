@@ -35,3 +35,4 @@ pretty_print("4. Agent", client.get("/api/v1/dashboard/agent-distribution"))
 pretty_print("5. Heatmap", client.get("/api/v1/dashboard/heatmap"))
 pretty_print("6. Recent", client.get("/api/v1/dashboard/recent-calls?page_size=3"))
 pretty_print("7. Filters (answered)", client.get("/api/v1/dashboard/recent-calls?status=answered&page_size=2"))
+

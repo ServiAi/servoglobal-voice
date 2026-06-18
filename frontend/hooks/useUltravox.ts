@@ -8,7 +8,8 @@ export function useUltravox() {
   const [demoState, setDemoState] = useState<DemoState>('idle');
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [volumeLevels, setVolumeLevels] = useState<number[]>(new Array(5).fill(10));
-  const sessionRef = useRef<UltravoxSession | null>(null); 
+  const [error, setError] = useState<'limit_exceeded' | 'general_error' | null>(null);
+  const sessionRef = useRef<UltravoxSession | null>(null);
 
   // Initialize session
   useEffect(() => {
@@ -17,7 +18,7 @@ export function useUltravox() {
 
     const handleStatusChange = (newStatus: UltravoxSessionStatus) => {
       setStatus(newStatus);
-      
+
       switch (newStatus) {
         case UltravoxSessionStatus.CONNECTING:
           setDemoState('connecting');
@@ -29,12 +30,12 @@ export function useUltravox() {
           setDemoState('connected');
           break;
         case UltravoxSessionStatus.DISCONNECTED:
-          // differentiating between initial idle and ended requires context, 
+          // differentiating between initial idle and ended requires context,
           // but for simple flow we can handle 'ended' manually on hangup
           setDemoState(prev => prev !== 'idle' ? 'ended' : prev);
           break;
       }
-      
+
       setIsSpeaking(newStatus === UltravoxSessionStatus.SPEAKING);
     };
 
@@ -63,7 +64,8 @@ export function useUltravox() {
 
   const startCall = useCallback(async (context?: Record<string, any>, token?: string) => {
     if (!sessionRef.current) return;
-    
+    setError(null);
+
     // TODO: url de fast api
     let joinUrl = ''; // Initialize joinUrl as mutable
 
@@ -84,7 +86,20 @@ export function useUltravox() {
       if (!response.ok) {
         const errorText = await response.text();
         console.error('Failed to get join URL:', errorText);
-        throw new Error(`Failed to get join URL: ${errorText}`);
+
+        let detail = '';
+        try {
+          const parsed = JSON.parse(errorText);
+          detail = parsed.detail || '';
+        } catch (_) {}
+
+        if (response.status === 402 || detail.toLowerCase().includes('limit') || detail.toLowerCase().includes('exhausted')) {
+          setError('limit_exceeded');
+        } else {
+          setError('general_error');
+        }
+
+        throw new Error(detail || `Failed to get join URL: ${response.status}`);
       }
 
       const data = await response.json();
@@ -118,6 +133,7 @@ export function useUltravox() {
     }
     setDemoState('idle');
     setStatus(UltravoxSessionStatus.DISCONNECTED);
+    setError(null);
   }, []);
 
   return {
@@ -127,6 +143,8 @@ export function useUltravox() {
     volumeLevels, // Exposed for visualizer
     startCall,
     endCall,
-    resetDemo
+    resetDemo,
+    error,
+    setError
   };
 }

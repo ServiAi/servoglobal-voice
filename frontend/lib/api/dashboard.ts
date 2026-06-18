@@ -1,3 +1,5 @@
+import type { TenantSavingsComparison, TenantUsage } from '@/lib/api/tenants';
+
 export type DashboardFilters = {
   from?: string;
   to?: string;
@@ -95,7 +97,7 @@ function buildQueryString(filters?: DashboardFilters): string {
   if (filters.status) params.set('status', filters.status);
   if (filters.page !== undefined) params.set('page', filters.page.toString());
   if (filters.page_size !== undefined) params.set('page_size', filters.page_size.toString());
-
+  
   const str = params.toString();
   return str ? `?${str}` : '';
 }
@@ -180,4 +182,12 @@ export function fetchHeatmap(accessToken: string, filters?: DashboardFilters) {
 
 export function fetchRecentCalls(accessToken: string, filters?: DashboardFilters) {
   return fetchDashboardEndpoint<DashboardRecentCallsResponse>('recent-calls', accessToken, filters);
+}
+
+export function fetchUsage(accessToken: string) {
+  return fetchDashboardEndpoint<TenantUsage>('usage', accessToken);
+}
+
+export function fetchSavingsComparison(accessToken: string) {
+  return fetchDashboardEndpoint<TenantSavingsComparison>('savings-comparison', accessToken);
 }

@@ -24,6 +24,7 @@ import {
 
 import {
   type TenantDetail,
+  type TenantPlanPayload,
 } from '@/lib/api/tenants';
 import {
   addTenantAgent,
@@ -31,20 +32,25 @@ import {
   deleteTenant,
   fetchTenantDetail,
   updateTenant,
+  updateTenantPlan,
 } from '@/lib/api/admin-tenants-client';
 import { getAdminAccessRedirect } from '@/lib/auth/admin-client';
+import { PlanUpdateForm } from '@/components/tenant-usage/PlanUpdateForm';
+import { TenantSavingsComparison } from '@/components/tenant-usage/TenantSavingsComparison';
+import { TenantUsageAlerts } from '@/components/tenant-usage/TenantUsageAlerts';
+import { TenantUsageCard } from '@/components/tenant-usage/TenantUsageCard';
 
 function StatusBadge({ status }: { status: string }) {
   if (status === 'active') {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-xs font-medium text-emerald-400">
         <CheckCircle2 className="h-3 w-3" />
         Activo
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
+    <span className="inline-flex items-center gap-1 rounded-full bg-zinc-500/10 px-2.5 py-0.5 text-xs font-medium text-zinc-400">
       <Clock className="h-3 w-3" />
       {status}
     </span>
@@ -53,9 +59,9 @@ function StatusBadge({ status }: { status: string }) {
 
 function ErrorState({ message }: { message: string }) {
   return (
-    <div className="rounded-xl border border-destructive/20 bg-destructive/10 p-6 text-center">
-      <AlertCircle className="mx-auto mb-2 h-8 w-8 text-destructive" />
-      <p className="text-sm text-destructive">{message}</p>
+    <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-6 text-center">
+      <AlertCircle className="mx-auto mb-2 h-8 w-8 text-red-400" />
+      <p className="text-sm text-red-300">{message}</p>
     </div>
   );
 }
@@ -71,14 +77,14 @@ function CopyableField({ value, label }: { value: string; label: string }) {
 
   return (
     <div className="flex items-center gap-2">
-      <span className="font-mono text-sm text-foreground">{value}</span>
+      <span className="font-mono text-sm text-zinc-300">{value}</span>
       <button
         type="button"
         onClick={handleCopy}
-        className="rounded p-1 text-muted-foreground transition hover:text-foreground"
+        className="rounded p-1 text-zinc-600 transition hover:text-zinc-300"
         title={`Copiar ${label}`}
       >
-        {copied ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
+        {copied ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
       </button>
     </div>
   );
@@ -125,6 +131,7 @@ export function TenantDetailClient({
   const [editTimezone, setEditTimezone] = useState(initialTenant?.timezone ?? 'America/Bogota');
   const [editStatus, setEditStatus] = useState(initialTenant?.status ?? 'active');
   const [saving, setSaving] = useState(false);
+  const [planSaving, setPlanSaving] = useState(false);
 
   // Add membership state
   const [showAddMembership, setShowAddMembership] = useState(false);
@@ -193,6 +200,19 @@ export function TenantDetailClient({
     if (result.ok) {
       setTenant(result.data);
       setEditing(false);
+    } else if (!redirectOnAccessFailure(result.status)) {
+      setError(result.detail);
+    }
+  };
+
+  const handlePlanUpdate = async (payload: TenantPlanPayload) => {
+    setPlanSaving(true);
+    setError(null);
+    const result = await updateTenantPlan(tenantId, payload);
+    setPlanSaving(false);
+
+    if (result.ok) {
+      await load();
     } else if (!redirectOnAccessFailure(result.status)) {
       setError(result.detail);
     }
@@ -275,7 +295,7 @@ export function TenantDetailClient({
   if (loading) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        <Loader2 className="h-8 w-8 animate-spin text-zinc-500" />
       </div>
     );
   }
@@ -291,20 +311,20 @@ export function TenantDetailClient({
         <div>
           <Link
             href={`/${locale}/admin/tenants`}
-            className="mb-3 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition hover:text-foreground"
+            className="mb-3 inline-flex items-center gap-1.5 text-sm text-zinc-500 transition hover:text-zinc-300"
           >
             <ArrowLeft className="h-4 w-4" />
             Volver a tenants
           </Link>
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-zinc-800 text-zinc-400">
               <Building2 className="h-5 w-5" />
             </div>
             <div>
-              <h1 className="text-2xl font-semibold text-foreground sm:text-3xl">
+              <h1 className="text-2xl font-semibold text-zinc-100 sm:text-3xl">
                 {tenant.name}
               </h1>
-              <p className="text-sm text-muted-foreground font-mono">{tenant.slug}</p>
+              <p className="text-sm text-zinc-500 font-mono">{tenant.slug}</p>
             </div>
           </div>
         </div>
@@ -313,7 +333,7 @@ export function TenantDetailClient({
           <button
             type="button"
             onClick={handleOpenDeleteModal}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-destructive/30 px-3 py-1.5 text-xs font-medium text-destructive transition hover:bg-destructive/10"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-red-500/30 px-3 py-1.5 text-xs font-medium text-red-300 transition hover:bg-red-500/10"
             title="Borrar tenant"
           >
             <Trash2 className="h-3.5 w-3.5" />
@@ -323,12 +343,12 @@ export function TenantDetailClient({
       </div>
 
       {error && (
-        <div className="mb-6 rounded-xl border border-destructive/20 bg-destructive/10 p-4">
+        <div className="mb-6 rounded-xl border border-red-500/20 bg-red-500/5 p-4">
           <div className="flex items-start gap-3">
-            <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-destructive" />
+            <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-400" />
             <div>
-              <p className="text-sm font-medium text-destructive">Error</p>
-              <p className="text-sm text-destructive/80">{error}</p>
+              <p className="text-sm font-medium text-red-300">Error</p>
+              <p className="text-sm text-red-400/80">{error}</p>
             </div>
           </div>
         </div>
@@ -336,31 +356,51 @@ export function TenantDetailClient({
 
       {/* Integration Info */}
       <section className="mb-8 rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-5">
-        <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase text-cyan-600 dark:text-cyan-400">
+        <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase text-cyan-400">
           <ExternalLink className="h-4 w-4" />
           Identificador operativo
         </h2>
-        <p className="mb-3 text-xs text-muted-foreground">
-          Usa <code className="rounded bg-muted px-1.5 py-0.5 text-cyan-600 dark:text-cyan-400">{tenant.slug}</code> como identificador operativo en metadata de llamadas y webhooks.
+        <p className="mb-3 text-xs text-zinc-400">
+          Usa <code className="rounded bg-zinc-800 px-1.5 py-0.5 text-cyan-300">{tenant.slug}</code> como identificador operativo en metadata de llamadas y webhooks.
         </p>
-        <pre className="rounded-lg bg-background border border-border p-3 font-mono text-sm text-foreground overflow-auto">
+        <pre className="rounded-lg bg-zinc-950 p-3 font-mono text-sm text-zinc-300">
           {JSON.stringify({ tenant_slug: tenant.slug }, null, 2)}
         </pre>
       </section>
 
+      {tenant.usage && (
+        <div className="mb-6 grid gap-6 lg:grid-cols-2">
+          <TenantUsageCard usage={tenant.usage} />
+          <PlanUpdateForm
+            usage={tenant.usage}
+            saving={planSaving}
+            onSubmit={handlePlanUpdate}
+          />
+        </div>
+      )}
+
+      {tenant.usage && (
+        <div className="mb-6 grid gap-6 lg:grid-cols-2">
+          <TenantUsageAlerts alerts={tenant.usage.alerts} />
+          {tenant.savings_comparison && (
+            <TenantSavingsComparison comparison={tenant.savings_comparison} />
+          )}
+        </div>
+      )}
+
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Tenant Data */}
-        <section className="rounded-xl border border-border bg-card p-6">
+        <section className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-6">
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="flex items-center gap-2 text-lg font-medium text-foreground">
-              <Building2 className="h-5 w-5 text-cyan-600 dark:text-cyan-400" />
+            <h2 className="flex items-center gap-2 text-lg font-medium text-zinc-200">
+              <Building2 className="h-5 w-5 text-cyan-400" />
               Datos del tenant
             </h2>
             {!editing ? (
               <button
                 type="button"
                 onClick={() => setEditing(true)}
-                className="rounded-lg border border-border bg-background p-1.5 text-muted-foreground transition hover:border-cyan-500/50 hover:text-cyan-600 dark:hover:text-cyan-400"
+                className="rounded-lg border border-zinc-700 p-1.5 text-zinc-500 transition hover:border-cyan-500/50 hover:text-cyan-400"
                 title="Editar"
               >
                 <Pencil className="h-3.5 w-3.5" />
@@ -370,7 +410,7 @@ export function TenantDetailClient({
                 type="button"
                 onClick={handleSaveEdit}
                 disabled={saving}
-                className="rounded-lg border border-emerald-500/30 p-1.5 text-emerald-600 dark:text-emerald-400 transition hover:bg-emerald-500/10"
+                className="rounded-lg border border-emerald-500/30 p-1.5 text-emerald-400 transition hover:bg-emerald-500/10"
                 title="Guardar"
               >
                 <Save className="h-3.5 w-3.5" />
@@ -380,32 +420,32 @@ export function TenantDetailClient({
 
           <div className="space-y-4">
             <div>
-              <label className="mb-1.5 block text-xs font-medium text-muted-foreground">ID</label>
+              <label className="mb-1.5 block text-xs font-medium text-zinc-500">ID</label>
               <CopyableField value={tenant.id} label="Tenant ID" />
             </div>
 
             <div>
-              <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Slug</label>
+              <label className="mb-1.5 block text-xs font-medium text-zinc-500">Slug</label>
               <CopyableField value={tenant.slug} label="Tenant slug" />
             </div>
 
             {editing ? (
               <>
                 <div>
-                  <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Nombre</label>
+                  <label className="mb-1.5 block text-xs font-medium text-zinc-500">Nombre</label>
                   <input
                     type="text"
                     value={editName}
                     onChange={(e) => setEditName(e.target.value)}
-                    className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                    className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-200 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
                   />
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Zona horaria</label>
+                  <label className="mb-1.5 block text-xs font-medium text-zinc-500">Zona horaria</label>
                   <select
                     value={editTimezone}
                     onChange={(e) => setEditTimezone(e.target.value)}
-                    className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                    className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-200 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
                   >
                     <option value="America/Bogota">America/Bogota</option>
                     <option value="America/Mexico_City">America/Mexico_City</option>
@@ -417,11 +457,11 @@ export function TenantDetailClient({
                   </select>
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Estado</label>
+                  <label className="mb-1.5 block text-xs font-medium text-zinc-500">Estado</label>
                   <select
                     value={editStatus}
                     onChange={(e) => setEditStatus(e.target.value)}
-                    className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                    className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-200 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
                   >
                     <option value="active">Activo</option>
                     <option value="inactive">Inactivo</option>
@@ -432,7 +472,7 @@ export function TenantDetailClient({
                   <button
                     type="button"
                     onClick={() => setEditing(false)}
-                    className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs text-muted-foreground transition hover:bg-muted"
+                    className="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs text-zinc-400 transition hover:bg-zinc-800"
                   >
                     Cancelar
                   </button>
@@ -441,25 +481,25 @@ export function TenantDetailClient({
             ) : (
               <>
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-muted-foreground">Nombre</span>
-                  <span className="text-sm text-foreground">{tenant.name}</span>
+                  <span className="text-xs text-zinc-500">Nombre</span>
+                  <span className="text-sm text-zinc-200">{tenant.name}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-muted-foreground">Zona horaria</span>
-                  <span className="flex items-center gap-1 text-sm text-foreground">
-                    <Globe className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span className="text-xs text-zinc-500">Zona horaria</span>
+                  <span className="flex items-center gap-1 text-sm text-zinc-300">
+                    <Globe className="h-3.5 w-3.5 text-zinc-600" />
                     {tenant.timezone}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-muted-foreground">Ready for calls</span>
+                  <span className="text-xs text-zinc-500">Ready for calls</span>
                   {tenant.is_ready_for_calls ? (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-400">
                       <CheckCircle2 className="h-3 w-3" />
                       Sí
                     </span>
                   ) : (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-zinc-500/10 px-2 py-0.5 text-xs font-medium text-zinc-500">
                       <Clock className="h-3 w-3" />
                       No
                     </span>
@@ -472,37 +512,37 @@ export function TenantDetailClient({
 
         {/* Quick Stats */}
         <section className="space-y-4">
-          <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
-            <h3 className="mb-3 flex items-center gap-2 text-sm font-medium text-muted-foreground">
+          <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-6">
+            <h3 className="mb-3 flex items-center gap-2 text-sm font-medium text-zinc-400">
               <Users className="h-4 w-4" />
               Membresías
             </h3>
-            <p className="text-2xl font-semibold text-foreground">{tenant.memberships.length}</p>
-            <p className="text-xs text-muted-foreground">usuarios conectados</p>
+            <p className="text-2xl font-semibold text-zinc-100">{tenant.memberships.length}</p>
+            <p className="text-xs text-zinc-600">usuarios conectados</p>
           </div>
 
-          <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
-            <h3 className="mb-3 flex items-center gap-2 text-sm font-medium text-muted-foreground">
+          <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-6">
+            <h3 className="mb-3 flex items-center gap-2 text-sm font-medium text-zinc-400">
               <Mic className="h-4 w-4" />
               Agentes
             </h3>
-            <p className="text-2xl font-semibold text-foreground">{tenant.agents.length}</p>
-            <p className="text-xs text-muted-foreground">agentes configurados</p>
+            <p className="text-2xl font-semibold text-zinc-100">{tenant.agents.length}</p>
+            <p className="text-xs text-zinc-600">agentes configurados</p>
           </div>
         </section>
       </div>
 
       {/* Memberships Section */}
-      <section className="mt-6 rounded-xl border border-border bg-card p-6 shadow-sm">
+      <section className="mt-6 rounded-xl border border-zinc-800 bg-zinc-900/50 p-6">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="flex items-center gap-2 text-lg font-medium text-foreground">
-            <Users className="h-5 w-5 text-cyan-600 dark:text-cyan-400" />
+          <h2 className="flex items-center gap-2 text-lg font-medium text-zinc-200">
+            <Users className="h-5 w-5 text-cyan-400" />
             Membresías
           </h2>
           <button
             type="button"
             onClick={() => setShowAddMembership(!showAddMembership)}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition hover:bg-muted"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 px-3 py-1.5 text-xs font-medium text-zinc-300 transition hover:border-cyan-500/50 hover:text-cyan-400"
           >
             <Plus className="h-3.5 w-3.5" />
             Agregar membresía
@@ -510,24 +550,24 @@ export function TenantDetailClient({
         </div>
 
         {showAddMembership && (
-          <div className="mb-4 rounded-lg border border-border bg-muted/30 p-4">
+          <div className="mb-4 rounded-lg border border-zinc-700 bg-zinc-950/50 p-4">
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="sm:col-span-2">
-                <label className="mb-1 block text-xs text-muted-foreground">Email del usuario *</label>
+                <label className="mb-1 block text-xs text-zinc-500">Email del usuario *</label>
                 <input
                   type="email"
                   value={membershipEmail}
                   onChange={(e) => setMembershipEmail(e.target.value)}
-                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                  className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-200 placeholder:text-zinc-600 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
                   placeholder="usuario@empresa.com"
                 />
               </div>
               <div>
-                <label className="mb-1 block text-xs text-muted-foreground">Rol</label>
+                <label className="mb-1 block text-xs text-zinc-500">Rol</label>
                 <select
                   value={membershipRole}
                   onChange={(e) => setMembershipRole(e.target.value)}
-                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                  className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-200 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
                 >
                   <option value="tenant_admin">Tenant admin</option>
                   <option value="tenant_analyst">Tenant analyst</option>
@@ -545,25 +585,25 @@ export function TenantDetailClient({
                 <button
                   type="button"
                   onClick={() => setShowAddMembership(false)}
-                  className="rounded-lg border border-border bg-background px-4 py-2 text-xs text-muted-foreground transition hover:bg-muted"
+                  className="rounded-lg border border-zinc-700 px-4 py-2 text-xs text-zinc-400 transition hover:bg-zinc-800"
                 >
                   Cancelar
                 </button>
               </div>
             </div>
             {membershipError && (
-              <p className="mt-2 text-xs text-destructive">{membershipError}</p>
+              <p className="mt-2 text-xs text-red-400">{membershipError}</p>
             )}
           </div>
         )}
 
         {tenant.memberships.length === 0 ? (
-          <p className="py-4 text-center text-sm text-muted-foreground">Sin membresías</p>
+          <p className="py-4 text-center text-sm text-zinc-600">Sin membresías</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-border text-left text-xs text-muted-foreground">
+                <tr className="border-b border-zinc-800 text-left text-xs text-zinc-500">
                   <th className="pb-2 pr-4 font-medium">Email</th>
                   <th className="pb-2 pr-4 font-medium">Nombre</th>
                   <th className="pb-2 pr-4 font-medium">Rol</th>
@@ -572,10 +612,10 @@ export function TenantDetailClient({
               </thead>
               <tbody>
                 {tenant.memberships.map((m) => (
-                  <tr key={m.id} className="border-b border-border">
-                    <td className="py-2.5 pr-4 text-foreground">{m.user_email || <span className="text-muted-foreground/65">—</span>}</td>
-                    <td className="py-2.5 pr-4 text-foreground">{m.user_name || <span className="text-muted-foreground/65">—</span>}</td>
-                    <td className="py-2.5 pr-4 text-muted-foreground">{m.role}</td>
+                  <tr key={m.id} className="border-b border-zinc-800/50">
+                    <td className="py-2.5 pr-4 text-zinc-300">{m.user_email || <span className="text-zinc-600">—</span>}</td>
+                    <td className="py-2.5 pr-4 text-zinc-300">{m.user_name || <span className="text-zinc-600">—</span>}</td>
+                    <td className="py-2.5 pr-4 text-zinc-400">{m.role}</td>
                     <td className="py-2.5">
                       <StatusBadge status={m.status} />
                     </td>
@@ -588,16 +628,16 @@ export function TenantDetailClient({
       </section>
 
       {/* Agents Section */}
-      <section className="mt-6 rounded-xl border border-border bg-card p-6 shadow-sm">
+      <section className="mt-6 rounded-xl border border-zinc-800 bg-zinc-900/50 p-6">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="flex items-center gap-2 text-lg font-medium text-foreground">
-            <Mic className="h-5 w-5 text-cyan-600 dark:text-cyan-400" />
+          <h2 className="flex items-center gap-2 text-lg font-medium text-zinc-200">
+            <Mic className="h-5 w-5 text-cyan-400" />
             Agentes
           </h2>
           <button
             type="button"
             onClick={() => setShowAddAgent(!showAddAgent)}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition hover:bg-muted"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 px-3 py-1.5 text-xs font-medium text-zinc-300 transition hover:border-cyan-500/50 hover:text-cyan-400"
           >
             <Plus className="h-3.5 w-3.5" />
             Agregar agente
@@ -605,43 +645,43 @@ export function TenantDetailClient({
         </div>
 
         {showAddAgent && (
-          <div className="mb-4 rounded-lg border border-border bg-muted/30 p-4">
+          <div className="mb-4 rounded-lg border border-zinc-700 bg-zinc-950/50 p-4">
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
-                <label className="mb-1 block text-xs text-muted-foreground">Nombre *</label>
+                <label className="mb-1 block text-xs text-zinc-500">Nombre *</label>
                 <input
                   type="text"
                   value={agentName}
                   onChange={(e) => setAgentName(e.target.value)}
-                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                  className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-200 placeholder:text-zinc-600 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
                   placeholder="Agente Inmobiliario"
                 />
               </div>
               <div>
-                <label className="mb-1 block text-xs text-muted-foreground">Provider *</label>
+                <label className="mb-1 block text-xs text-zinc-500">Provider *</label>
                 <input
                   type="text"
                   value={agentProvider}
                   onChange={(e) => setAgentProvider(e.target.value)}
-                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                  className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-200 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
                 />
               </div>
               <div>
-                <label className="mb-1 block text-xs text-muted-foreground">Agent ID *</label>
+                <label className="mb-1 block text-xs text-zinc-500">Agent ID *</label>
                 <input
                   type="text"
                   value={agentAgentId}
                   onChange={(e) => setAgentAgentId(e.target.value)}
-                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm font-mono text-foreground placeholder:text-muted-foreground focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                  className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm font-mono text-zinc-200 placeholder:text-zinc-600 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
                   placeholder="uv-001"
                 />
               </div>
               <div>
-                <label className="mb-1 block text-xs text-muted-foreground">Canal</label>
+                <label className="mb-1 block text-xs text-zinc-500">Canal</label>
                 <select
                   value={agentChannel}
                   onChange={(e) => setAgentChannel(e.target.value)}
-                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                  className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-200 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
                 >
                   <option value="voice">voice</option>
                   <option value="whatsapp">whatsapp</option>
@@ -660,27 +700,27 @@ export function TenantDetailClient({
                 <button
                   type="button"
                   onClick={() => setShowAddAgent(false)}
-                  className="rounded-lg border border-border bg-background px-4 py-2 text-xs text-muted-foreground transition hover:bg-muted"
+                  className="rounded-lg border border-zinc-700 px-4 py-2 text-xs text-zinc-400 transition hover:bg-zinc-800"
                 >
                   Cancelar
                 </button>
               </div>
             </div>
             {agentError && (
-              <p className="mt-2 text-xs text-destructive">{agentError}</p>
+              <p className="mt-2 text-xs text-red-400">{agentError}</p>
             )}
           </div>
         )}
 
         {tenant.agents.length === 0 ? (
-          <p className="py-4 text-center text-sm text-muted-foreground">
+          <p className="py-4 text-center text-sm text-zinc-600">
             Sin agentes. Configura al menos uno para estar listo para llamadas.
           </p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-border text-left text-xs text-muted-foreground">
+                <tr className="border-b border-zinc-800 text-left text-xs text-zinc-500">
                   <th className="pb-2 pr-4 font-medium">Nombre</th>
                   <th className="pb-2 pr-4 font-medium">Provider</th>
                   <th className="pb-2 pr-4 font-medium">Agent ID</th>
@@ -690,11 +730,11 @@ export function TenantDetailClient({
               </thead>
               <tbody>
                 {tenant.agents.map((a) => (
-                  <tr key={a.id} className="border-b border-border">
-                    <td className="py-2.5 pr-4 text-foreground">{a.name}</td>
-                    <td className="py-2.5 pr-4 text-muted-foreground">{a.external_provider}</td>
-                    <td className="py-2.5 pr-4 font-mono text-foreground">{a.external_agent_id}</td>
-                    <td className="py-2.5 pr-4 text-muted-foreground">{a.channel_type || '—'}</td>
+                  <tr key={a.id} className="border-b border-zinc-800/50">
+                    <td className="py-2.5 pr-4 text-zinc-300">{a.name}</td>
+                    <td className="py-2.5 pr-4 text-zinc-400">{a.external_provider}</td>
+                    <td className="py-2.5 pr-4 font-mono text-zinc-300">{a.external_agent_id}</td>
+                    <td className="py-2.5 pr-4 text-zinc-400">{a.channel_type || '—'}</td>
                     <td className="py-2.5">
                       <StatusBadge status={a.status} />
                     </td>
@@ -712,18 +752,18 @@ export function TenantDetailClient({
             role="dialog"
             aria-modal="true"
             aria-labelledby="delete-tenant-title"
-            className="w-full max-w-md rounded-xl border border-destructive/30 bg-card p-6 shadow-2xl"
+            className="w-full max-w-md rounded-xl border border-red-500/30 bg-zinc-950 p-6 shadow-2xl"
           >
             <div className="mb-4 flex items-start justify-between gap-4">
               <div>
                 <h2
                   id="delete-tenant-title"
-                  className="flex items-center gap-2 text-lg font-semibold text-destructive"
+                  className="flex items-center gap-2 text-lg font-semibold text-red-200"
                 >
                   <Trash2 className="h-5 w-5" />
                   Borrar tenant
                 </h2>
-                <p className="mt-2 text-sm text-muted-foreground">
+                <p className="mt-2 text-sm text-zinc-400">
                   Esta accion elimina el tenant, sus membresias, agentes, llamadas,
                   eventos, metricas y registros de auditoria asociados.
                 </p>
@@ -732,36 +772,36 @@ export function TenantDetailClient({
                 type="button"
                 onClick={handleCloseDeleteModal}
                 disabled={deleting}
-                className="rounded-lg p-1 text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-lg p-1 text-zinc-500 transition hover:bg-zinc-900 hover:text-zinc-200 disabled:cursor-not-allowed disabled:opacity-50"
                 title="Cerrar"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
-            <div className="rounded-lg border border-destructive/20 bg-destructive/10 p-4">
-              <p className="text-xs font-medium uppercase tracking-wide text-destructive">
+            <div className="rounded-lg border border-red-500/20 bg-red-500/5 p-4">
+              <p className="text-xs font-medium uppercase tracking-wide text-red-300">
                 Codigo de confirmacion
               </p>
-              <p className="mt-2 select-all rounded-md bg-background border border-border px-3 py-2 font-mono text-lg font-semibold tracking-[0.2em] text-destructive text-center">
+              <p className="mt-2 select-all rounded-md bg-zinc-950 px-3 py-2 font-mono text-lg font-semibold tracking-[0.2em] text-red-100">
                 {deleteCode}
               </p>
             </div>
 
-            <label className="mt-4 block text-xs font-medium text-muted-foreground">
+            <label className="mt-4 block text-xs font-medium text-zinc-400">
               Escribe el codigo para confirmar
             </label>
             <input
               type="text"
               value={deleteConfirmation}
               onChange={(event) => setDeleteConfirmation(event.target.value.toUpperCase())}
-              className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 font-mono text-sm uppercase tracking-wider text-foreground placeholder:text-muted-foreground focus:border-destructive focus:outline-none focus:ring-1 focus:ring-destructive"
+              className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 font-mono text-sm uppercase tracking-wider text-zinc-100 placeholder:text-zinc-600 focus:border-red-400 focus:outline-none focus:ring-1 focus:ring-red-400"
               placeholder={deleteCode}
               disabled={deleting}
             />
 
             {deleteError && (
-              <div className="mt-3 rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
+              <div className="mt-3 rounded-lg border border-red-500/20 bg-red-500/5 p-3 text-sm text-red-300">
                 {deleteError}
               </div>
             )}
@@ -771,7 +811,7 @@ export function TenantDetailClient({
                 type="button"
                 onClick={handleCloseDeleteModal}
                 disabled={deleting}
-                className="rounded-lg border border-border bg-background px-4 py-2 text-sm text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-300 transition hover:bg-zinc-900 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Cancelar
               </button>
@@ -779,7 +819,7 @@ export function TenantDetailClient({
                 type="button"
                 onClick={handleDeleteTenant}
                 disabled={!deleteReady || deleting}
-                className="inline-flex items-center gap-2 rounded-lg bg-destructive px-4 py-2 text-sm font-medium text-destructive-foreground transition hover:bg-destructive/90 disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-500 disabled:cursor-not-allowed disabled:bg-red-950 disabled:text-red-300/50"
               >
                 {deleting ? (
                   <Loader2 className="h-4 w-4 animate-spin" />

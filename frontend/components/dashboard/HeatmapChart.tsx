@@ -26,11 +26,11 @@ export function HeatmapChart({ data }: HeatmapChartProps) {
   const { grid, maxCount } = useMemo(() => {
     let max = 0;
     const map = new Map<string, number>();
-
+    
     if (data?.matrix) {
       data.matrix.forEach((p) => {
         if (p.calls > max) max = p.calls;
-
+        
         let dayOfWeek = 0;
         try {
           const dateObj = parseISO(p.day);
@@ -39,7 +39,7 @@ export function HeatmapChart({ data }: HeatmapChartProps) {
         } catch {
           // fallback
         }
-
+        
         map.set(`${dayOfWeek}-${p.hour}`, p.calls);
       });
     }
@@ -78,7 +78,7 @@ export function HeatmapChart({ data }: HeatmapChartProps) {
             </div>
           ))}
         </div>
-
+        
         {/* Grid - Days */}
         <div className="flex flex-col gap-1">
           {DAYS.map((day, dIdx) => (
