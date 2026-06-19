@@ -471,7 +471,54 @@ class CrmSprint2Tests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         data = response.json()
         new_stage = [s for s in data["stages"] if s["key"] == "new"][0]
-        self.assertLessEqual(len(new_stage["leads"]), 2)
+        self.assertEqual(len(new_stage["leads"]), 2)
+        self.assertEqual(new_stage["count"], 5)  # Real count, not limited
+
+    def test_crm_leads_has_phone_filter(self):
+        tenant, agent, user = self.seed_tenant_agent_user()
+        with SessionLocal() as db:
+            pipeline = CrmPipelineService(db)
+            stage = pipeline.get_stage_by_key(tenant.id, "new")
+            c1 = CrmContact(tenant_id=tenant.id, name="With Phone", phone="+573001112233")
+            db.add(c1)
+            db.commit()
+            db.refresh(c1)
+            self.seed_lead(db, tenant.id, stage.id, contact=c1)
+            c2 = CrmContact(tenant_id=tenant.id, name="Without Phone")
+            db.add(c2)
+            db.commit()
+            db.refresh(c2)
+            self.seed_lead(db, tenant.id, stage.id, contact=c2)
+
+        self.override_auth(user, tenant)
+        response = self.client.get("/api/v1/crm/leads?has_phone=true")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["total"], 1)
+        self.assertIsNotNone(data["items"][0]["contact_phone"])
+
+    def test_crm_leads_has_email_filter(self):
+        tenant, agent, user = self.seed_tenant_agent_user()
+        with SessionLocal() as db:
+            pipeline = CrmPipelineService(db)
+            stage = pipeline.get_stage_by_key(tenant.id, "new")
+            c1 = CrmContact(tenant_id=tenant.id, name="With Email", email="test@test.com")
+            db.add(c1)
+            db.commit()
+            db.refresh(c1)
+            self.seed_lead(db, tenant.id, stage.id, contact=c1)
+            c2 = CrmContact(tenant_id=tenant.id, name="Without Email")
+            db.add(c2)
+            db.commit()
+            db.refresh(c2)
+            self.seed_lead(db, tenant.id, stage.id, contact=c2)
+
+        self.override_auth(user, tenant)
+        response = self.client.get("/api/v1/crm/leads?has_email=true")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["total"], 1)
+        self.assertIsNotNone(data["items"][0]["contact_email"])
 
     # === Actividades ===
 
