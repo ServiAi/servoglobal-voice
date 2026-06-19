@@ -107,9 +107,12 @@ def upgrade() -> None:
         sa.Column("occurred_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("payload_json", sa.JSON(), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-        sa.UniqueConstraint("tenant_id", "call_id", "activity_type", name="uq_crm_activities_tenant_call_type"),
+        sa.Column("from_stage_id", sa.String(36), sa.ForeignKey("crm_pipeline_stages.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("to_stage_id", sa.String(36), sa.ForeignKey("crm_pipeline_stages.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("deduplication_key", sa.String(120), nullable=False, server_default=""),
+        sa.UniqueConstraint("tenant_id", "call_id", "activity_type", "deduplication_key", name="uq_crm_activities_tenant_call_type_dedup"),
     )
-    op.create_index("ix_crm_activities_tenant_call_type", "crm_activities", ["tenant_id", "call_id", "activity_type"])
+    op.create_index("ix_crm_activities_tenant_call_type_dedup", "crm_activities", ["tenant_id", "call_id", "activity_type", "deduplication_key"])
     op.create_index("ix_crm_activities_tenant_contact", "crm_activities", ["tenant_id", "contact_id"])
     op.create_index("ix_crm_activities_occurred_at", "crm_activities", ["occurred_at"])
 

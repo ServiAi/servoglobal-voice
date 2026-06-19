@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
@@ -65,9 +65,48 @@ class ActivitySchema(BaseModel):
     description: Optional[str] = None
     outcome: Optional[str] = None
     occurred_at: datetime
-    payload_json: dict
+    call_id: Optional[str] = None
+
+    # Sanitized fields from payload_json
+    provider_event: Optional[str] = None
+    recording_url: Optional[str] = None
+    summary: Optional[str] = None
+    short_summary: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+    @model_validator(mode="before")
+    @classmethod
+    def sanitize_payload(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            payload = data.get("payload_json") or {}
+            call_obj = payload.get("call") or {}
+
+            data["provider_event"] = payload.get("event") or payload.get("event_type") or payload.get("eventType")
+            data["recording_url"] = call_obj.get("recordingUrl") or call_obj.get("recording_url") or payload.get("recordingUrl")
+            data["summary"] = call_obj.get("summary") or payload.get("summary")
+            data["short_summary"] = call_obj.get("shortSummary") or call_obj.get("short_summary") or payload.get("shortSummary")
+
+            if "payload_json" in data:
+                del data["payload_json"]
+        else:
+            payload = getattr(data, "payload_json", {}) or {}
+            call_obj = payload.get("call") or {}
+
+            return {
+                "id": getattr(data, "id", None),
+                "activity_type": getattr(data, "activity_type", None),
+                "title": getattr(data, "title", None),
+                "description": getattr(data, "description", None),
+                "outcome": getattr(data, "outcome", None),
+                "occurred_at": getattr(data, "occurred_at", None),
+                "call_id": getattr(data, "call_id", None),
+                "provider_event": payload.get("event") or payload.get("event_type") or payload.get("eventType"),
+                "recording_url": call_obj.get("recordingUrl") or call_obj.get("recording_url") or payload.get("recordingUrl"),
+                "summary": call_obj.get("summary") or payload.get("summary"),
+                "short_summary": call_obj.get("shortSummary") or call_obj.get("short_summary") or payload.get("shortSummary"),
+            }
+        return data
 
 class LeadDetailResponse(BaseModel):
     id: str

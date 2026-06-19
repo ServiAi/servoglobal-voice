@@ -474,5 +474,362 @@ class CrmSprint1Tests(unittest.TestCase):
         self.assertEqual(data["total"], 1)
         self.assertEqual(data["items"][0]["id"], lead_b.id)
 
+    def test_ingestion_call_billed_creates_activity(self):
+        tenant, agent, _ = self.seed_tenant_agent_user()
+        with SessionLocal() as db:
+            call = Call(
+                tenant_id=tenant.id,
+                external_provider="ultravox",
+                external_call_id="uvx-billed-test",
+                agent_id=agent.id,
+                normalized_status="answered",
+                started_at=datetime.now(UTC),
+            )
+            db.add(call)
+            db.commit()
+            db.refresh(call)
+
+            payload = {
+                "event": "call.billed",
+                "call": {
+                    "callId": "uvx-billed-test",
+                    "billedDuration": "120s",
+                    "sipDetails": {
+                        "billedDuration": "90s"
+                    }
+                }
+            }
+
+            ingestion = CrmIngestionService(db)
+            ingestion.process_ultravox_event(payload, call)
+
+            # Assert activity was created and parsed billed duration
+            activity = db.scalar(
+                select(CrmActivity).where(
+                    CrmActivity.tenant_id == tenant.id,
+                    CrmActivity.call_id == call.id,
+                    CrmActivity.activity_type == "call_billed"
+                )
+            )
+            self.assertIsNotNone(activity)
+            self.assertIn("120s", activity.description)
+
+    def test_ingestion_duplicate_event_does_not_duplicate_activity(self):
+        tenant, agent, _ = self.seed_tenant_agent_user()
+        with SessionLocal() as db:
+            call = Call(
+                tenant_id=tenant.id,
+                external_provider="ultravox",
+                external_call_id="uvx-dup-test",
+                agent_id=agent.id,
+                normalized_status="in_progress",
+                started_at=datetime.now(UTC),
+            )
+            db.add(call)
+            db.commit()
+            db.refresh(call)
+
+            payload = {
+                "event": "call.joined",
+                "call": {
+                    "callId": "uvx-dup-test",
+                    "customerPhone": "3112223344"
+                }
+            }
+
+            ingestion = CrmIngestionService(db)
+            # Process twice
+            ingestion.process_ultravox_event(payload, call)
+            ingestion.process_ultravox_event(payload, call)
+
+            activities = db.scalars(
+                select(CrmActivity).where(
+                    CrmActivity.tenant_id == tenant.id,
+                    CrmActivity.call_id == call.id,
+                    CrmActivity.activity_type == "call_joined"
+                )
+            ).all()
+            self.assertEqual(len(activities), 1)
+
+    def test_ingestion_missing_tenant_metadata_does_not_create_crm(self):
+        tenant, agent, _ = self.seed_tenant_agent_user()
+        with SessionLocal() as db:
+            # Keep as transient Call to avoid DB NOT NULL constraint violation
+            call = Call(
+                tenant_id=None, # Missing tenant ID
+                external_provider="ultravox",
+                external_call_id="uvx-no-tenant-test",
+                agent_id=agent.id,
+                normalized_status="in_progress",
+                started_at=datetime.now(UTC),
+            )
+
+            payload = {
+                "event": "call.joined",
+                "call": {
+                    "callId": "uvx-no-tenant-test",
+                    "customerPhone": "3112223344"
+                }
+            }
+
+            ingestion = CrmIngestionService(db)
+            ingestion.process_ultravox_event(payload, call)
+
+            # Assert no contact was created
+            contact = db.scalar(select(CrmContact).where(CrmContact.name == "Lead sin nombre"))
+            self.assertIsNone(contact)
+
+    def test_crm_lead_detail_success(self):
+        tenant, agent, user = self.seed_tenant_agent_user()
+        with SessionLocal() as db:
+            pipeline_service = CrmPipelineService(db)
+            stage = pipeline_service.get_stage_by_key(tenant.id, "new")
+            contact = CrmContact(tenant_id=tenant.id, name="Test Contact Detail")
+            db.add(contact)
+            db.commit()
+            db.refresh(contact)
+
+            lead = CrmLead(
+                tenant_id=tenant.id,
+                contact_id=contact.id,
+                current_stage_id=stage.id,
+                status="open",
+            )
+            db.add(lead)
+            db.commit()
+            db.refresh(lead)
+
+            # Create an activity
+            activity = CrmActivity(
+                tenant_id=tenant.id,
+                contact_id=contact.id,
+                lead_id=lead.id,
+                activity_type="note",
+                title="Nota de prueba",
+                occurred_at=datetime.now(UTC)
+            )
+            db.add(activity)
+            db.commit()
+
+        self.override_auth(user, tenant)
+        response = self.client.get(f"/api/v1/crm/leads/{lead.id}")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["id"], lead.id)
+        self.assertEqual(len(data["activities"]), 1)
+        self.assertEqual(data["activities"][0]["title"], "Nota de prueba")
+
+    def test_ingestion_voicemail_moves_lead_to_voicemail(self):
+        tenant, agent, _ = self.seed_tenant_agent_user()
+        with SessionLocal() as db:
+            call = Call(
+                tenant_id=tenant.id,
+                external_provider="ultravox",
+                external_call_id="uvx-voicemail",
+                agent_id=agent.id,
+                normalized_status="voicemail",
+                started_at=datetime.now(UTC),
+            )
+            db.add(call)
+            db.commit()
+            db.refresh(call)
+
+            payload = {
+                "event": "call.ended",
+                "call": {
+                    "callId": "uvx-voicemail",
+                    "customerPhone": "3112223344",
+                    "endReason": "voicemail"
+                }
+            }
+
+            ingestion = CrmIngestionService(db)
+            ingestion.process_ultravox_event(payload, call)
+
+            lead = db.scalar(select(CrmLead).where(CrmLead.tenant_id == tenant.id))
+            stage = db.scalar(select(CrmPipelineStage).where(CrmPipelineStage.id == lead.current_stage_id))
+            self.assertEqual(stage.key, "voicemail")
+
+    def test_ingestion_not_interested_moves_lead_to_not_interested(self):
+        tenant, agent, _ = self.seed_tenant_agent_user()
+        with SessionLocal() as db:
+            call = Call(
+                tenant_id=tenant.id,
+                external_provider="ultravox",
+                external_call_id="uvx-not-interested",
+                agent_id=agent.id,
+                normalized_status="answered",
+                started_at=datetime.now(UTC),
+            )
+            db.add(call)
+            db.commit()
+            db.refresh(call)
+
+            payload = {
+                "event": "call.ended",
+                "call": {
+                    "callId": "uvx-not-interested",
+                    "customerPhone": "3112223344",
+                    "summary": "El cliente dice que no le interesa y que no quiere recibir más llamadas.",
+                    "shortSummary": "No interesado"
+                }
+            }
+
+            ingestion = CrmIngestionService(db)
+            ingestion.process_ultravox_event(payload, call)
+
+            lead = db.scalar(select(CrmLead).where(CrmLead.tenant_id == tenant.id))
+            stage = db.scalar(select(CrmPipelineStage).where(CrmPipelineStage.id == lead.current_stage_id))
+            self.assertEqual(stage.key, "not_interested")
+            self.assertEqual(lead.status, "lost")
+
+    def test_call_ended_before_call_joined_creates_minimal_crm_structure(self):
+        tenant, agent, _ = self.seed_tenant_agent_user()
+        with SessionLocal() as db:
+            call = Call(
+                tenant_id=tenant.id,
+                external_provider="ultravox",
+                external_call_id="uvx-out-of-order",
+                agent_id=agent.id,
+                normalized_status="answered",
+                started_at=datetime.now(UTC),
+            )
+            db.add(call)
+            db.commit()
+            db.refresh(call)
+
+            payload = {
+                "event": "call.ended",
+                "call": {
+                    "callId": "uvx-out-of-order",
+                    "customerPhone": "3112223344",
+                    "summary": "El cliente quiere una cotización rápida.",
+                    "shortSummary": "Quiere cotización"
+                }
+            }
+
+            ingestion = CrmIngestionService(db)
+            ingestion.process_ultravox_event(payload, call)
+
+            # Contact and lead must exist
+            contact = db.scalar(select(CrmContact).where(CrmContact.tenant_id == tenant.id))
+            self.assertIsNotNone(contact)
+
+            lead = db.scalar(select(CrmLead).where(CrmLead.tenant_id == tenant.id))
+            self.assertIsNotNone(lead)
+
+            stage = db.scalar(select(CrmPipelineStage).where(CrmPipelineStage.id == lead.current_stage_id))
+            self.assertEqual(stage.key, "qualified")
+
+    def test_stage_changed_history_is_not_overwritten(self):
+        tenant, agent, _ = self.seed_tenant_agent_user()
+        with SessionLocal() as db:
+            call = Call(
+                tenant_id=tenant.id,
+                external_provider="ultravox",
+                external_call_id="uvx-history-test",
+                agent_id=agent.id,
+                normalized_status="answered",
+                started_at=datetime.now(UTC),
+            )
+            db.add(call)
+            db.commit()
+            db.refresh(call)
+
+            ingestion = CrmIngestionService(db)
+
+            # 1. Process call.joined (connected)
+            joined_payload = {
+                "event": "call.joined",
+                "call": {
+                    "callId": "uvx-history-test",
+                    "customerPhone": "3112223344"
+                }
+            }
+            ingestion.process_ultravox_event(joined_payload, call)
+
+            # 2. Process call.ended (qualified)
+            ended_payload = {
+                "event": "call.ended",
+                "call": {
+                    "callId": "uvx-history-test",
+                    "customerPhone": "3112223344",
+                    "summary": "Quiere cotización de propuesta",
+                    "shortSummary": "Quiere propuesta"
+                }
+            }
+            ingestion.process_ultravox_event(ended_payload, call)
+
+            # Assert there are two separate stage_changed activities
+            activities = db.scalars(
+                select(CrmActivity).where(
+                    CrmActivity.tenant_id == tenant.id,
+                    CrmActivity.call_id == call.id,
+                    CrmActivity.activity_type == "stage_changed"
+                ).order_by(CrmActivity.occurred_at.asc())
+            ).all()
+
+            self.assertEqual(len(activities), 2)
+            self.assertEqual(activities[0].deduplication_key, "connected")
+            self.assertEqual(activities[1].deduplication_key, "qualified")
+            self.assertIsNotNone(activities[0].to_stage_id)
+            self.assertIsNotNone(activities[1].to_stage_id)
+
+    def test_activity_response_does_not_expose_raw_payload_json(self):
+        tenant, agent, user = self.seed_tenant_agent_user()
+        with SessionLocal() as db:
+            pipeline_service = CrmPipelineService(db)
+            stage = pipeline_service.get_stage_by_key(tenant.id, "new")
+            contact = CrmContact(tenant_id=tenant.id, name="Test Contact Payload")
+            db.add(contact)
+            db.commit()
+            db.refresh(contact)
+
+            lead = CrmLead(
+                tenant_id=tenant.id,
+                contact_id=contact.id,
+                current_stage_id=stage.id,
+                status="open",
+            )
+            db.add(lead)
+            db.commit()
+            db.refresh(lead)
+
+            # Create an activity with raw payload
+            activity = CrmActivity(
+                tenant_id=tenant.id,
+                contact_id=contact.id,
+                lead_id=lead.id,
+                activity_type="call_joined",
+                title="Llamada establecida",
+                occurred_at=datetime.now(UTC),
+                payload_json={
+                    "event": "call.joined",
+                    "systemPrompt": "secret prompt",
+                    "callbacks": ["http://secret-callback"],
+                    "call": {
+                        "recordingUrl": "http://recording-url",
+                        "summary": "Test summary",
+                    }
+                }
+            )
+            db.add(activity)
+            db.commit()
+
+        self.override_auth(user, tenant)
+        response = self.client.get("/api/v1/crm/activities")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(len(data), 1)
+        activity_data = data[0]
+
+        # Verify raw fields are hidden, but clean ones are exposed
+        self.assertNotIn("payload_json", activity_data)
+        self.assertNotIn("systemPrompt", activity_data)
+        self.assertNotIn("callbacks", activity_data)
+        self.assertEqual(activity_data["recording_url"], "http://recording-url")
+        self.assertEqual(activity_data["summary"], "Test summary")
+        self.assertEqual(activity_data["provider_event"], "call.joined")
+
 if __name__ == "__main__":
     unittest.main()

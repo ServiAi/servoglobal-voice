@@ -104,8 +104,8 @@ class CrmLead(Base, TimestampMixin):
 class CrmActivity(Base):
     __tablename__ = "crm_activities"
     __table_args__ = (
-        UniqueConstraint("tenant_id", "call_id", "activity_type", name="uq_crm_activities_tenant_call_type"),
-        Index("ix_crm_activities_tenant_call_type", "tenant_id", "call_id", "activity_type"),
+        UniqueConstraint("tenant_id", "call_id", "activity_type", "deduplication_key", name="uq_crm_activities_tenant_call_type_dedup"),
+        Index("ix_crm_activities_tenant_call_type_dedup", "tenant_id", "call_id", "activity_type", "deduplication_key"),
         Index("ix_crm_activities_tenant_contact", "tenant_id", "contact_id"),
         Index("ix_crm_activities_occurred_at", "occurred_at"),
     )
@@ -123,10 +123,19 @@ class CrmActivity(Base):
     payload_json: Mapped[dict] = mapped_column(sa.JSON, nullable=False, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, nullable=False)
 
+    # Stage history & deduplication columns
+    from_stage_id: Mapped[str | None] = mapped_column(ForeignKey("crm_pipeline_stages.id"), nullable=True)
+    to_stage_id: Mapped[str | None] = mapped_column(ForeignKey("crm_pipeline_stages.id"), nullable=True)
+    deduplication_key: Mapped[str] = mapped_column(String(120), nullable=False, default="")
+
     tenant = relationship("Tenant")
     contact: Mapped[CrmContact] = relationship(back_populates="activities")
     lead: Mapped[CrmLead | None] = relationship(back_populates="activities")
     call = relationship("Call")
+
+    # Stage history relationships
+    from_stage = relationship("CrmPipelineStage", foreign_keys=[from_stage_id])
+    to_stage = relationship("CrmPipelineStage", foreign_keys=[to_stage_id])
 
 
 class CrmTask(Base, TimestampMixin):

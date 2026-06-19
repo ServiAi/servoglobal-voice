@@ -103,6 +103,9 @@ class CrmIngestionService:
                         description=f"El lead avanzó automáticamente a '{connected_stage.name}' al establecerse la llamada.",
                         outcome=None,
                         payload_json={},
+                        from_stage_id=previous_stage_id,
+                        to_stage_id=connected_stage.id,
+                        deduplication_key=connected_stage.key,
                     )
 
                 self._create_or_update_activity(
@@ -163,6 +166,9 @@ class CrmIngestionService:
                             description=f"El lead cambió de etapa a '{target_stage.name}' basado en el análisis de la llamada.",
                             outcome=None,
                             payload_json={},
+                            from_stage_id=previous_stage_id,
+                            to_stage_id=target_stage.id,
+                            deduplication_key=target_stage.key,
                         )
                 
                 # Create call ended activity
@@ -185,9 +191,17 @@ class CrmIngestionService:
                 
             elif event_type == "call.billed":
                 # Create call billed activity
-                billed_duration = payload.get("billedDuration") or payload.get("billed_duration")
-                if not billed_duration and "sipDetails" in payload:
-                    billed_duration = payload["sipDetails"].get("billedDuration")
+                call_obj = payload.get("call") or {}
+                billed_duration = (
+                    call_obj.get("billedDuration") or
+                    call_obj.get("billed_duration") or
+                    payload.get("billedDuration") or
+                    payload.get("billed_duration")
+                )
+                
+                sip_details = call_obj.get("sipDetails") or call_obj.get("sip_details") or payload.get("sipDetails") or payload.get("sip_details")
+                if not billed_duration and isinstance(sip_details, dict):
+                    billed_duration = sip_details.get("billedDuration") or sip_details.get("billed_duration")
                 
                 desc = "Llamada facturada."
                 if billed_duration:
@@ -293,6 +307,9 @@ class CrmIngestionService:
         description: str | None,
         outcome: str | None,
         payload_json: dict,
+        from_stage_id: str | None = None,
+        to_stage_id: str | None = None,
+        deduplication_key: str = "",
     ) -> CrmActivity:
         activity = None
         if call_id:
@@ -301,6 +318,7 @@ class CrmIngestionService:
                     CrmActivity.tenant_id == tenant_id,
                     CrmActivity.call_id == call_id,
                     CrmActivity.activity_type == activity_type,
+                    CrmActivity.deduplication_key == deduplication_key,
                 )
             )
 
@@ -309,6 +327,8 @@ class CrmIngestionService:
             activity.description = description
             activity.outcome = outcome
             activity.payload_json = payload_json
+            activity.from_stage_id = from_stage_id
+            activity.to_stage_id = to_stage_id
             self.db.commit()
             self.db.refresh(activity)
         else:
@@ -323,6 +343,9 @@ class CrmIngestionService:
                 outcome=outcome,
                 payload_json=payload_json,
                 occurred_at=_utcnow(),
+                from_stage_id=from_stage_id,
+                to_stage_id=to_stage_id,
+                deduplication_key=deduplication_key,
             )
             self.db.add(activity)
             self.db.commit()
