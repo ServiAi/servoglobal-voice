@@ -458,7 +458,7 @@ class CrmSprint1Tests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertEqual(data["total"], 1)
-        self.assertEqual(data["items"][0]["id"], lead_a.id)
+        self.assertEqual(data["items"][0]["lead_id"], lead_a.id)
         
         # Trying to access lead B directly should return 404
         response_detail = self.client.get(f"/api/v1/crm/leads/{lead_b.id}")
@@ -472,7 +472,7 @@ class CrmSprint1Tests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertEqual(data["total"], 1)
-        self.assertEqual(data["items"][0]["id"], lead_b.id)
+        self.assertEqual(data["items"][0]["lead_id"], lead_b.id)
 
     def test_ingestion_call_billed_creates_activity(self):
         tenant, agent, _ = self.seed_tenant_agent_user()
