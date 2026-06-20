@@ -1,4 +1,6 @@
 import { redirect } from 'next/navigation';
+import Link from 'next/link';
+
 
 import { fetchMeProfile } from '@/lib/api/me';
 import { getAccessToken } from '@/lib/auth/server';
@@ -125,6 +127,12 @@ export default async function PrivateDashboardBase({ params, searchParams }: Pro
             </p>
           </div>
           <div className="flex items-center gap-4">
+            <Link
+              href={`/${locale}/crm`}
+              className="inline-flex h-10 items-center justify-center rounded-md bg-violet-600 px-4 text-sm font-semibold text-white transition hover:bg-violet-500 shadow-md shadow-violet-500/10"
+            >
+              Ir al CRM
+            </Link>
             <ThemeToggle />
             <form action="/api/auth/logout" method="get">
               <button
