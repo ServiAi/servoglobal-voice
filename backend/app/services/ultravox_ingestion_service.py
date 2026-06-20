@@ -54,6 +54,15 @@ class UltravoxIngestionService:
                 ),
             )
         )
+        # Ingest into CRM base
+        try:
+            import logging
+            from app.services.crm_ingestion_service import CrmIngestionService
+            CrmIngestionService(self.db).process_ultravox_event(payload, call)
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception("Error calling CrmIngestionService from UltravoxIngestionService")
+
         return IngestionResult(call=call, event=event)
 
     def reconcile_call(self, payload: dict[str, Any]) -> IngestionResult:

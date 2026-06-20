@@ -1,6 +1,7 @@
 from app.models.analytics import Agent, Call, CallEvent, MetricSnapshotDaily
 from app.models.billing import ExternalProviderPricing, TenantBillingPlan, TenantUsageAlert
 from app.models.identity import AccessAuditLog, Tenant, TenantMembership, User
+from app.models.crm import CrmContact, CrmPipelineStage, CrmLead, CrmActivity, CrmTask
 
 __all__ = [
     "AccessAuditLog",
@@ -14,4 +15,9 @@ __all__ = [
     "TenantMembership",
     "TenantUsageAlert",
     "User",
+    "CrmContact",
+    "CrmPipelineStage",
+    "CrmLead",
+    "CrmActivity",
+    "CrmTask",
 ]
