@@ -1,0 +1,288 @@
+from __future__ import annotations
+
+from datetime import datetime
+from typing import Any, List, Optional
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+
+# --- Pipeline ---
+
+class PipelineStageSchema(BaseModel):
+    id: str
+    key: str
+    name: str
+    position: int
+    is_default: bool
+    is_terminal: bool
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# --- Contact ---
+
+class ContactBriefSchema(BaseModel):
+    id: str
+    name: str
+    phone: Optional[str] = None
+    email: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# --- Lead ---
+
+class LeadStageCount(BaseModel):
+    stage_key: str
+    stage_name: str
+    count: int
+
+
+class LeadListItem(BaseModel):
+    lead_id: str
+    contact_name: str
+    contact_phone: Optional[str] = None
+    contact_email: Optional[str] = None
+    company: Optional[str] = None
+    stage_key: str
+    stage_name: str
+    status: str
+    interest: Optional[str] = None
+    use_case: Optional[str] = None
+    source: Optional[str] = None
+    campaign: Optional[str] = None
+    short_summary: Optional[str] = None
+    last_activity_at: Optional[datetime] = None
+    last_call_id: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class LeadBriefSchema(BaseModel):
+    id: str
+    status: str
+    lead_score: Optional[int] = None
+    interest: Optional[str] = None
+    use_case: Optional[str] = None
+    short_summary: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+    contact: ContactBriefSchema
+    stage: PipelineStageSchema
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class LeadsListResponse(BaseModel):
+    items: List[LeadListItem]
+    total: int
+    page: int
+    page_size: int
+    total_pages: int
+    filters_applied: dict
+
+
+class ActivitySchema(BaseModel):
+    id: str
+    activity_type: str
+    title: str
+    description: Optional[str] = None
+    outcome: Optional[str] = None
+    occurred_at: datetime
+    call_id: Optional[str] = None
+
+    provider_event: Optional[str] = None
+    recording_url: Optional[str] = None
+    summary: Optional[str] = None
+    short_summary: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+    @model_validator(mode="before")
+    @classmethod
+    def sanitize_payload(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            payload = data.get("payload_json") or {}
+            call_obj = payload.get("call") or {}
+
+            data["provider_event"] = payload.get("event") or payload.get("event_type") or payload.get("eventType")
+            data["recording_url"] = call_obj.get("recordingUrl") or call_obj.get("recording_url") or payload.get("recordingUrl")
+            data["summary"] = call_obj.get("summary") or payload.get("summary")
+            data["short_summary"] = call_obj.get("shortSummary") or call_obj.get("short_summary") or payload.get("shortSummary")
+
+            if "payload_json" in data:
+                del data["payload_json"]
+        else:
+            payload = getattr(data, "payload_json", {}) or {}
+            call_obj = payload.get("call") or {}
+
+            return {
+                "id": getattr(data, "id", None),
+                "activity_type": getattr(data, "activity_type", None),
+                "title": getattr(data, "title", None),
+                "description": getattr(data, "description", None),
+                "outcome": getattr(data, "outcome", None),
+                "occurred_at": getattr(data, "occurred_at", None),
+                "call_id": getattr(data, "call_id", None),
+                "provider_event": payload.get("event") or payload.get("event_type") or payload.get("eventType"),
+                "recording_url": call_obj.get("recordingUrl") or call_obj.get("recording_url") or payload.get("recordingUrl"),
+                "summary": call_obj.get("summary") or payload.get("summary"),
+                "short_summary": call_obj.get("shortSummary") or call_obj.get("short_summary") or payload.get("shortSummary"),
+            }
+        return data
+
+
+class TaskResponse(BaseModel):
+    id: str
+    tenant_id: str
+    lead_id: Optional[str] = None
+    contact_id: Optional[str] = None
+    assigned_to_user_id: Optional[str] = None
+    title: str
+    description: Optional[str] = None
+    due_at: Optional[datetime] = None
+    status: str
+    priority: str
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class TaskCreateRequest(BaseModel):
+    lead_id: Optional[str] = None
+    contact_id: Optional[str] = None
+    title: str = Field(..., min_length=1, max_length=255)
+    description: Optional[str] = None
+    due_at: Optional[datetime] = None
+    priority: str = "medium"
+    assigned_to_user_id: Optional[str] = None
+
+
+class TaskUpdateRequest(BaseModel):
+    title: Optional[str] = Field(None, min_length=1, max_length=255)
+    description: Optional[str] = None
+    due_at: Optional[datetime] = None
+    status: Optional[str] = None
+    priority: Optional[str] = None
+    assigned_to_user_id: Optional[str] = None
+
+
+class LeadUpdateRequest(BaseModel):
+    interest: Optional[str] = None
+    industry: Optional[str] = None
+    use_case: Optional[str] = None
+    volume: Optional[str] = None
+    pain_point: Optional[str] = None
+    budget_range: Optional[str] = None
+    intent_level: Optional[str] = None
+    next_action: Optional[str] = None
+    lead_score: Optional[int] = Field(None, ge=0, le=100)
+    status: Optional[str] = None
+    source: Optional[str] = None
+    campaign: Optional[str] = None
+
+
+class StageUpdateRequest(BaseModel):
+    stage_key: str = Field(..., min_length=1)
+    reason: Optional[str] = None
+
+
+class NoteCreateRequest(BaseModel):
+    note: str = Field(..., min_length=1)
+
+
+class LeadDetailResponse(BaseModel):
+    id: str
+    status: str
+    lead_score: Optional[int] = None
+    interest: Optional[str] = None
+    industry: Optional[str] = None
+    use_case: Optional[str] = None
+    volume: Optional[str] = None
+    pain_point: Optional[str] = None
+    budget_range: Optional[str] = None
+    intent_level: Optional[str] = None
+    next_action: Optional[str] = None
+    short_summary: Optional[str] = None
+    summary: Optional[str] = None
+    source: Optional[str] = None
+    campaign: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+    contact: ContactBriefSchema
+    stage: PipelineStageSchema
+    activities: List[ActivitySchema]
+    tasks: List[TaskResponse]
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CrmSummaryResponse(BaseModel):
+    total_leads: int
+    total_contacts: int
+    leads_by_stage: List[LeadStageCount]
+
+
+# --- Pipeline Board ---
+
+class PipelineBoardLeadItem(BaseModel):
+    id: str
+    contact_name: str
+    phone: Optional[str] = None
+    company: Optional[str] = None
+    short_summary: Optional[str] = None
+    last_activity_at: Optional[datetime] = None
+    status: str
+
+
+class PipelineStageLeads(BaseModel):
+    id: str
+    key: str
+    name: str
+    position: int
+    count: int
+    leads: List[PipelineBoardLeadItem]
+
+
+class PipelineBoardResponse(BaseModel):
+    stages: List[PipelineStageLeads]
+
+
+# --- Metrics ---
+
+class LeadsByStageMetric(BaseModel):
+    stage_key: str
+    stage_name: str
+    count: int
+
+
+class LeadsBySourceMetric(BaseModel):
+    source: str
+    count: int
+
+
+class LeadsByCampaignMetric(BaseModel):
+    campaign: str
+    count: int
+
+
+class CrmMetricsResponse(BaseModel):
+    total_contacts: int
+    total_leads: int
+    open_leads: int
+    won_leads: int
+    lost_leads: int
+    unqualified_leads: int
+    leads_by_stage: List[LeadsByStageMetric]
+    leads_by_source: List[LeadsBySourceMetric]
+    leads_by_campaign: List[LeadsByCampaignMetric]
+    leads_created_today: int
+    leads_created_this_week: int
+    leads_created_this_month: int
+    scheduled_leads: int
+    voicemail_leads: int
+    follow_up_leads: int
+    pending_tasks: int
+    overdue_tasks: int
+    conversion_rate: float
+    contact_completion_rate: float
