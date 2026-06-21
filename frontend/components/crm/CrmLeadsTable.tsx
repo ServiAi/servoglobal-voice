@@ -1,15 +1,17 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import type { LeadsListResponse } from '@/types/crm';
-import { ChevronLeft, ChevronRight, Eye, Calendar, User, Phone, Mail } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Eye, Calendar, User, Phone, Mail, Trash2, Trash, ShieldAlert } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { deleteCrmLead, deleteAllCrmLeads } from '@/lib/api/crm';
 
 type CrmLeadsTableProps = {
   data: LeadsListResponse;
   locale: string;
+  accessToken?: string;
 };
 
 const STAGE_TRANSLATIONS: Record<string, string> = {
@@ -38,10 +40,65 @@ const STAGE_BADGES: Record<string, string> = {
   lost: 'bg-red-500/10 text-red-500 border-red-500/20',
 };
 
-export function CrmLeadsTable({ data, locale }: CrmLeadsTableProps) {
+export function CrmLeadsTable({ data, locale, accessToken }: CrmLeadsTableProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  const handleDeleteOne = async (leadId: string) => {
+    if (!accessToken) return;
+    const confirmed = window.confirm(
+      '¿Estás seguro de que deseas eliminar este lead? Esta acción eliminará también sus tareas y actividades.'
+    );
+    if (!confirmed) return;
+
+    setError(null);
+    setSuccessMsg(null);
+    try {
+      const res = await deleteCrmLead(accessToken, leadId);
+      if (res.ok) {
+        setSuccessMsg('Lead eliminado con éxito.');
+        startTransition(() => {
+          router.refresh();
+        });
+        setTimeout(() => setSuccessMsg(null), 3000);
+      } else {
+        setError(`Error al eliminar lead: ${res.detail}`);
+      }
+    } catch (err) {
+      console.error(err);
+      setError('Ocurrió un error inesperado al eliminar el lead.');
+    }
+  };
+
+  const handleDeleteAll = async () => {
+    if (!accessToken) return;
+    const confirmed = window.confirm(
+      '¡ATENCIÓN! ¿Estás seguro de que deseas eliminar TODOS los leads de tu cuenta? Esta acción no se puede deshacer y borrará permanentemente todos los contactos, leads, tareas e historial de actividades.'
+    );
+    if (!confirmed) return;
+
+    setError(null);
+    setSuccessMsg(null);
+    try {
+      const res = await deleteAllCrmLeads(accessToken);
+      if (res.ok) {
+        setSuccessMsg('Todos los leads fueron eliminados.');
+        startTransition(() => {
+          router.refresh();
+        });
+        setTimeout(() => setSuccessMsg(null), 3000);
+      } else {
+        setError(`Error al eliminar leads: ${res.detail}`);
+      }
+    } catch (err) {
+      console.error(err);
+      setError('Ocurrió un error inesperado al eliminar todos los leads.');
+    }
+  };
 
   const items = Array.isArray(data?.items) ? data.items : [];
   const { page = 1, page_size = 20, total = 0, total_pages = 1 } = data ?? {};
@@ -86,10 +143,46 @@ export function CrmLeadsTable({ data, locale }: CrmLeadsTableProps) {
   };
 
   return (
-    <div className="rounded-xl border border-border bg-card overflow-hidden shadow-xs">
+    <div className="rounded-xl border border-border bg-card overflow-hidden shadow-xs relative">
+      {/* Toast Alert Feedback */}
+      {(error || successMsg || isPending) && (
+        <div className="fixed bottom-5 right-5 z-50 max-w-sm rounded-lg border bg-card p-4 shadow-lg transition-all duration-300">
+          {isPending && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-violet-500 border-t-transparent" />
+              <span>Actualizando datos...</span>
+            </div>
+          )}
+          {error && (
+            <div className="flex items-center gap-2 text-sm text-destructive">
+              <ShieldAlert className="h-4 w-4" />
+              <span>{error}</span>
+            </div>
+          )}
+          {successMsg && !isPending && (
+            <div className="flex items-center gap-2 text-sm text-emerald-500">
+              <div className="h-2 w-2 rounded-full bg-emerald-500 animate-ping" />
+              <span>{successMsg}</span>
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="p-5 border-b border-border flex flex-row items-center justify-between">
-        <h3 className="text-lg font-bold text-foreground">Leads Encontrados</h3>
-        <span className="text-xs text-muted-foreground">Total: {total}</span>
+        <div>
+          <h3 className="text-lg font-bold text-foreground">Leads Encontrados</h3>
+          <span className="text-xs text-muted-foreground">Total: {total}</span>
+        </div>
+        {total > 0 && accessToken && (
+          <button
+            onClick={handleDeleteAll}
+            className="inline-flex items-center gap-1.5 rounded-md border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-xs font-bold text-red-500 hover:bg-red-500/20 shadow-2xs transition cursor-pointer"
+            type="button"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            Eliminar todos los leads
+          </button>
+        )}
       </div>
 
       <div className="overflow-x-auto">
@@ -176,7 +269,7 @@ export function CrmLeadsTable({ data, locale }: CrmLeadsTableProps) {
                     <span>{formatDate(lead.created_at)}</span>
                   </td>
                   {/* Actions */}
-                  <td className="whitespace-nowrap px-6 py-4 text-right">
+                  <td className="whitespace-nowrap px-6 py-4 text-right flex items-center justify-end gap-2">
                     <Link
                       href={`/${locale}/crm/leads/${lead.lead_id}`}
                       className="inline-flex items-center justify-center gap-1.5 rounded-md bg-violet-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-violet-500 shadow-sm transition"
@@ -184,6 +277,16 @@ export function CrmLeadsTable({ data, locale }: CrmLeadsTableProps) {
                       <Eye className="h-3.5 w-3.5" />
                       Detalle
                     </Link>
+                    {accessToken && (
+                      <button
+                        onClick={() => handleDeleteOne(lead.lead_id)}
+                        className="inline-flex items-center justify-center rounded-md border border-red-500/30 bg-red-500/10 p-2 text-red-500 hover:bg-red-500/20 shadow-sm transition cursor-pointer"
+                        title="Eliminar lead"
+                        type="button"
+                      >
+                        <Trash className="h-3.5 w-3.5" />
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))

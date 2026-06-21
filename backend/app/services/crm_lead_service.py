@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.orm import Session
-from app.models.crm import CrmLead, CrmPipelineStage
+from app.models.crm import CrmLead, CrmPipelineStage, CrmContact
 from app.services.crm_pipeline_service import CrmPipelineService
 from app.services.crm_activity_service import CrmActivityService
 
@@ -212,3 +212,42 @@ class CrmLeadService:
         )
 
         return lead
+
+    def delete_lead(self, tenant_id: str, lead_id: str) -> bool:
+        lead = self.get_lead_by_id(tenant_id, lead_id)
+        if not lead:
+            return False
+
+        contact = lead.contact
+        self.db.delete(lead)
+        self.db.commit()
+
+        # Check if the associated contact has no other leads and delete it if so
+        if contact:
+            other_leads_count = self.db.scalar(
+                select(func.count()).select_from(CrmLead).where(CrmLead.contact_id == contact.id)
+            ) or 0
+            if other_leads_count == 0:
+                self.db.delete(contact)
+                self.db.commit()
+
+        return True
+
+    def delete_all_leads(self, tenant_id: str) -> int:
+        leads = self.db.scalars(
+            select(CrmLead).where(CrmLead.tenant_id == tenant_id)
+        ).all()
+        count = len(leads)
+        for lead in leads:
+            self.db.delete(lead)
+
+        # Also delete all contacts for this tenant
+        contacts = self.db.scalars(
+            select(CrmContact).where(CrmContact.tenant_id == tenant_id)
+        ).all()
+        for contact in contacts:
+            self.db.delete(contact)
+
+        self.db.commit()
+        return count
+

@@ -98,7 +98,7 @@ export default async function CrmLeadsPage({ params, searchParams }: Props) {
       <CrmLeadFilters />
 
       {/* Leads Table */}
-      <CrmLeadsTable data={result.data} locale={locale} />
+      <CrmLeadsTable data={result.data} locale={locale} accessToken={accessToken} />
     </div>
   );
 }

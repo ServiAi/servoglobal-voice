@@ -831,5 +831,83 @@ class CrmSprint1Tests(unittest.TestCase):
         self.assertEqual(activity_data["summary"], "Test summary")
         self.assertEqual(activity_data["provider_event"], "call.joined")
 
+    def test_delete_lead_and_bulk_delete(self):
+        from sqlalchemy import func
+        tenant, agent, user = self.seed_tenant_agent_user()
+        
+        # Create a contact and a lead
+        with SessionLocal() as db:
+            contact = CrmContact(tenant_id=tenant.id, name="Lead to delete", phone="+573001234567")
+            db.add(contact)
+            db.commit()
+            db.refresh(contact)
+            
+            stage = CrmPipelineStage(tenant_id=tenant.id, key="new", name="Nuevo", position=1)
+            db.add(stage)
+            db.commit()
+            db.refresh(stage)
+            
+            lead = CrmLead(
+                tenant_id=tenant.id,
+                contact_id=contact.id,
+                current_stage_id=stage.id,
+                status="open",
+            )
+            db.add(lead)
+            db.commit()
+            db.refresh(lead)
+            
+            # Add a task and activity for cascade verify
+            task = CrmTask(tenant_id=tenant.id, lead_id=lead.id, title="Test Task")
+            activity = CrmActivity(tenant_id=tenant.id, lead_id=lead.id, contact_id=contact.id, activity_type="note", title="Test Activity")
+            db.add(task)
+            db.add(activity)
+            db.commit()
+            
+            lead_id = lead.id
+            contact_id = contact.id
+            task_id = task.id
+            activity_id = activity.id
+
+        self.override_auth(user, tenant)
+        
+        # Test DELETE /api/v1/crm/leads/{lead_id}
+        res_del = self.client.delete(f"/api/v1/crm/leads/{lead_id}")
+        self.assertEqual(res_del.status_code, 204)
+        
+        # Verify cascades and orphaned contact cleanup
+        with SessionLocal() as db:
+            self.assertIsNone(db.scalar(select(CrmLead).where(CrmLead.id == lead_id)))
+            self.assertIsNone(db.scalar(select(CrmTask).where(CrmTask.id == task_id)))
+            self.assertIsNone(db.scalar(select(CrmActivity).where(CrmActivity.id == activity_id)))
+            self.assertIsNone(db.scalar(select(CrmContact).where(CrmContact.id == contact_id)))
+
+        # Seed again for bulk delete verification
+        with SessionLocal() as db:
+            contact2 = CrmContact(tenant_id=tenant.id, name="Lead to delete 2", phone="+573001234568")
+            db.add(contact2)
+            db.commit()
+            db.refresh(contact2)
+            
+            lead2 = CrmLead(
+                tenant_id=tenant.id,
+                contact_id=contact2.id,
+                current_stage_id=stage.id,
+                status="open",
+            )
+            db.add(lead2)
+            db.commit()
+            db.refresh(lead2)
+            
+            lead2_id = lead2.id
+
+        # Test DELETE /api/v1/crm/leads
+        res_bulk = self.client.delete("/api/v1/crm/leads")
+        self.assertEqual(res_bulk.status_code, 204)
+        
+        with SessionLocal() as db:
+            self.assertEqual(db.scalar(select(func.count()).select_from(CrmLead).where(CrmLead.tenant_id == tenant.id)), 0)
+            self.assertEqual(db.scalar(select(func.count()).select_from(CrmContact).where(CrmContact.tenant_id == tenant.id)), 0)
+
 if __name__ == "__main__":
     unittest.main()

@@ -599,3 +599,33 @@ def get_crm_metrics(
     )
 
     return CrmMetricsResponse(**metrics)
+
+
+# --- Leads Deletion ---
+
+@router.delete("/leads/{lead_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_crm_lead(
+    lead_id: str,
+    context: AuthContext = Depends(get_current_auth_context),
+    db: Session = Depends(get_db),
+) -> None:
+    tenant_id = context.tenant.id
+    lead_service = CrmLeadService(db)
+
+    deleted = lead_service.delete_lead(tenant_id, lead_id)
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Lead not found",
+        )
+
+
+@router.delete("/leads", status_code=status.HTTP_204_NO_CONTENT)
+def delete_all_crm_leads(
+    context: AuthContext = Depends(get_current_auth_context),
+    db: Session = Depends(get_db),
+) -> None:
+    tenant_id = context.tenant.id
+    lead_service = CrmLeadService(db)
+
+    lead_service.delete_all_leads(tenant_id)

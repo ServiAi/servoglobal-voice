@@ -208,3 +208,13 @@ export function updateCrmTask(accessToken: string, taskId: string, payload: Task
 export function deleteCrmTask(accessToken: string, taskId: string) {
   return requestCrmEndpoint<void>('DELETE', `tasks/${taskId}`, accessToken);
 }
+
+// --- Lead Delete ---
+export function deleteCrmLead(accessToken: string, leadId: string) {
+  return requestCrmEndpoint<void>('DELETE', `leads/${leadId}`, accessToken);
+}
+
+export function deleteAllCrmLeads(accessToken: string) {
+  return requestCrmEndpoint<void>('DELETE', 'leads', accessToken);
+}
+
