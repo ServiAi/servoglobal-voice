@@ -122,14 +122,14 @@ class CrmSprint1Tests(unittest.TestCase):
         with SessionLocal() as db:
             service = CrmPipelineService(db)
             stages = service.ensure_default_pipeline(tenant.id)
-            self.assertEqual(len(stages), 10)
+            self.assertEqual(len(stages), 9)
             self.assertEqual(stages[0].key, "new")
             self.assertTrue(stages[0].is_default)
             self.assertEqual(stages[2].key, "connected")
             
             # Check duplicate calls are idempotent
             stages_dup = service.ensure_default_pipeline(tenant.id)
-            self.assertEqual(len(stages_dup), 10)
+            self.assertEqual(len(stages_dup), 9)
             self.assertEqual(stages_dup[0].id, stages[0].id)
 
     def test_contact_creation_and_deduplication(self):
@@ -219,15 +219,14 @@ class CrmSprint1Tests(unittest.TestCase):
         classifier = CrmClassifierService()
         
         # Voicemail check
-        self.assertEqual(classifier.classify_lead_stage("voicemail", None, None), "voicemail")
+        self.assertEqual(classifier.classify_lead_stage("voicemail", None, None), "follow_up")
         
         # Unanswered check
         self.assertEqual(classifier.classify_lead_stage("unanswered", None, None), "follow_up")
         
-        # Scheduled keyword check
-        self.assertEqual(
+        # Scheduling language alone must not move a lead to scheduled.
+        self.assertIsNone(
             classifier.classify_lead_stage("answered", "Reunión agendada para el lunes.", None),
-            "scheduled"
         )
         
         # Not Interested keyword check
@@ -340,12 +339,12 @@ class CrmSprint1Tests(unittest.TestCase):
             ingestion = CrmIngestionService(db)
             ingestion.process_ultravox_event(payload, call)
             
-            # Check lead stage classified as scheduled
+            # Scheduling language without crear_evento must not classify as scheduled.
             lead = db.scalar(select(CrmLead).where(CrmLead.tenant_id == tenant.id))
-            scheduled_stage = db.scalar(
-                select(CrmPipelineStage).where(CrmPipelineStage.tenant_id == tenant.id, CrmPipelineStage.key == "scheduled")
+            qualified_stage = db.scalar(
+                select(CrmPipelineStage).where(CrmPipelineStage.tenant_id == tenant.id, CrmPipelineStage.key == "qualified")
             )
-            self.assertEqual(lead.current_stage_id, scheduled_stage.id)
+            self.assertEqual(lead.current_stage_id, qualified_stage.id)
             self.assertEqual(lead.summary, "Reunión agendada para presentar propuesta técnica.")
             self.assertEqual(lead.short_summary, "Cita agendada")
             
@@ -356,6 +355,112 @@ class CrmSprint1Tests(unittest.TestCase):
             self.assertEqual(len(activities), 2)
             self.assertEqual(activities[0].activity_type, "call_ended")
             self.assertEqual(activities[1].activity_type, "stage_changed")
+
+    def test_ingestion_call_ended_schedules_only_when_crear_evento_tool_runs(self):
+        tenant, agent, _ = self.seed_tenant_agent_user()
+
+        with SessionLocal() as db:
+            call = Call(
+                tenant_id=tenant.id,
+                external_provider="ultravox",
+                external_call_id="uvx-tool-scheduled-test",
+                agent_id=agent.id,
+                normalized_status="answered",
+                started_at=datetime.now(UTC),
+            )
+            db.add(call)
+            db.commit()
+            db.refresh(call)
+
+            payload = {
+                "event": "call.ended",
+                "eventId": "evt-ended-tool-1",
+                "call": {
+                    "callId": "uvx-tool-scheduled-test",
+                    "customerPhone": "3112223344",
+                    "summary": "Se confirmó una reunión con el cliente.",
+                    "shortSummary": "Reunión confirmada",
+                    "metadata": {"user_name": "Maria Lopez"},
+                    "toolCalls": [
+                        {
+                            "name": "crear_evento",
+                            "status": "success",
+                            "result": {"event_id": "cal-123"},
+                        }
+                    ],
+                },
+            }
+
+            ingestion = CrmIngestionService(db)
+            ingestion.process_ultravox_event(payload, call)
+
+            lead = db.scalar(select(CrmLead).where(CrmLead.tenant_id == tenant.id))
+            scheduled_stage = db.scalar(
+                select(CrmPipelineStage).where(CrmPipelineStage.tenant_id == tenant.id, CrmPipelineStage.key == "scheduled")
+            )
+            self.assertEqual(lead.current_stage_id, scheduled_stage.id)
+
+    def test_ingestion_reuses_one_lead_across_events_for_same_call(self):
+        tenant, agent, _ = self.seed_tenant_agent_user()
+
+        with SessionLocal() as db:
+            call = Call(
+                tenant_id=tenant.id,
+                external_provider="ultravox",
+                external_call_id="uvx-single-call",
+                agent_id=agent.id,
+                normalized_status="answered",
+                customer_phone="3112223344",
+                started_at=datetime.now(UTC),
+            )
+            db.add(call)
+            db.commit()
+            db.refresh(call)
+
+            ingestion = CrmIngestionService(db)
+            for payload in (
+                {
+                    "event": "call.started",
+                    "eventId": "evt-single-started",
+                    "call": {"callId": "uvx-single-call"},
+                },
+                {
+                    "event": "call.joined",
+                    "eventId": "evt-single-joined",
+                    "call": {
+                        "callId": "uvx-single-call",
+                        "customerPhone": "3112223344",
+                        "metadata": {"user_name": "Maria Lopez"},
+                    },
+                },
+                {
+                    "event": "call.ended",
+                    "eventId": "evt-single-ended",
+                    "call": {
+                        "callId": "uvx-single-call",
+                        "summary": "Quiere cotizar una propuesta comercial.",
+                        "shortSummary": "Quiere cotización",
+                    },
+                },
+                {
+                    "event": "call.billed",
+                    "eventId": "evt-single-billed",
+                    "call": {
+                        "callId": "uvx-single-call",
+                        "billedDuration": "60s",
+                    },
+                },
+            ):
+                ingestion.process_ultravox_event(payload, call)
+
+            contacts = db.scalars(select(CrmContact).where(CrmContact.tenant_id == tenant.id)).all()
+            leads = db.scalars(select(CrmLead).where(CrmLead.tenant_id == tenant.id)).all()
+            self.assertEqual(len(contacts), 1)
+            self.assertEqual(len(leads), 1)
+            self.assertEqual(contacts[0].phone_normalized, "+573112223344")
+
+            stage = db.scalar(select(CrmPipelineStage).where(CrmPipelineStage.id == leads[0].current_stage_id))
+            self.assertEqual(stage.key, "qualified")
 
     def test_webhook_crm_integration_does_not_break_on_crm_failure(self):
         tenant, agent, _ = self.seed_tenant_agent_user()
@@ -619,7 +724,7 @@ class CrmSprint1Tests(unittest.TestCase):
         self.assertEqual(len(data["activities"]), 1)
         self.assertEqual(data["activities"][0]["title"], "Nota de prueba")
 
-    def test_ingestion_voicemail_moves_lead_to_voicemail(self):
+    def test_ingestion_voicemail_moves_lead_to_follow_up(self):
         tenant, agent, _ = self.seed_tenant_agent_user()
         with SessionLocal() as db:
             call = Call(
@@ -648,7 +753,7 @@ class CrmSprint1Tests(unittest.TestCase):
 
             lead = db.scalar(select(CrmLead).where(CrmLead.tenant_id == tenant.id))
             stage = db.scalar(select(CrmPipelineStage).where(CrmPipelineStage.id == lead.current_stage_id))
-            self.assertEqual(stage.key, "voicemail")
+            self.assertEqual(stage.key, "follow_up")
 
     def test_ingestion_not_interested_moves_lead_to_not_interested(self):
         tenant, agent, _ = self.seed_tenant_agent_user()
