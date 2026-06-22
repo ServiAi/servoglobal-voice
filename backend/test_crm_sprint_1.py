@@ -275,7 +275,7 @@ class CrmSprint1Tests(unittest.TestCase):
                     }
                 }
             }
-            
+
             ingestion = CrmIngestionService(db)
             ingestion.process_ultravox_event(payload, call)
             
@@ -316,6 +316,7 @@ class CrmSprint1Tests(unittest.TestCase):
                 agent_id=agent.id,
                 normalized_status="answered",
                 started_at=datetime.now(UTC),
+                joined_at=datetime.now(UTC),
             )
             db.add(call)
             db.commit()
@@ -335,7 +336,7 @@ class CrmSprint1Tests(unittest.TestCase):
                     }
                 }
             }
-            
+
             ingestion = CrmIngestionService(db)
             ingestion.process_ultravox_event(payload, call)
             
@@ -367,6 +368,7 @@ class CrmSprint1Tests(unittest.TestCase):
                 agent_id=agent.id,
                 normalized_status="answered",
                 started_at=datetime.now(UTC),
+                joined_at=datetime.now(UTC),
             )
             db.add(call)
             db.commit()
@@ -606,6 +608,14 @@ class CrmSprint1Tests(unittest.TestCase):
             }
 
             ingestion = CrmIngestionService(db)
+            joined_payload = {
+                "event": "call.joined",
+                "call": {
+                    "callId": "uvx-billed-test",
+                    "customerPhone": "3112223344",
+                },
+            }
+            ingestion.process_ultravox_event(joined_payload, call)
             ingestion.process_ultravox_event(payload, call)
 
             # Assert activity was created and parsed billed duration
@@ -734,6 +744,7 @@ class CrmSprint1Tests(unittest.TestCase):
                 agent_id=agent.id,
                 normalized_status="voicemail",
                 started_at=datetime.now(UTC),
+                joined_at=datetime.now(UTC),
             )
             db.add(call)
             db.commit()
@@ -765,6 +776,7 @@ class CrmSprint1Tests(unittest.TestCase):
                 agent_id=agent.id,
                 normalized_status="answered",
                 started_at=datetime.now(UTC),
+                joined_at=datetime.now(UTC),
             )
             db.add(call)
             db.commit()
@@ -788,7 +800,7 @@ class CrmSprint1Tests(unittest.TestCase):
             self.assertEqual(stage.key, "not_interested")
             self.assertEqual(lead.status, "lost")
 
-    def test_call_ended_before_call_joined_creates_minimal_crm_structure(self):
+    def test_call_ended_before_call_joined_without_joined_at_does_not_create_crm(self):
         tenant, agent, _ = self.seed_tenant_agent_user()
         with SessionLocal() as db:
             call = Call(
@@ -816,15 +828,12 @@ class CrmSprint1Tests(unittest.TestCase):
             ingestion = CrmIngestionService(db)
             ingestion.process_ultravox_event(payload, call)
 
-            # Contact and lead must exist
+            # Commercial CRM records should not be created without a real connection.
             contact = db.scalar(select(CrmContact).where(CrmContact.tenant_id == tenant.id))
-            self.assertIsNotNone(contact)
+            self.assertIsNone(contact)
 
             lead = db.scalar(select(CrmLead).where(CrmLead.tenant_id == tenant.id))
-            self.assertIsNotNone(lead)
-
-            stage = db.scalar(select(CrmPipelineStage).where(CrmPipelineStage.id == lead.current_stage_id))
-            self.assertEqual(stage.key, "qualified")
+            self.assertIsNone(lead)
 
     def test_stage_changed_history_is_not_overwritten(self):
         tenant, agent, _ = self.seed_tenant_agent_user()

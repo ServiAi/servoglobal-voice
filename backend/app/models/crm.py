@@ -67,6 +67,14 @@ class CrmLead(Base, TimestampMixin):
     __table_args__ = (
         Index("ix_crm_leads_tenant_contact_status", "tenant_id", "contact_id", "status"),
         Index("ix_crm_leads_tenant_last_call", "tenant_id", "last_call_id"),
+        Index(
+            "ix_crm_leads_tenant_created_call_unique",
+            "tenant_id",
+            "created_from_call_id",
+            unique=True,
+            postgresql_where=sa.text("created_from_call_id IS NOT NULL"),
+            sqlite_where=sa.text("created_from_call_id IS NOT NULL"),
+        ),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
@@ -99,6 +107,44 @@ class CrmLead(Base, TimestampMixin):
     last_call = relationship("Call", foreign_keys=[last_call_id])
     activities: Mapped[list[CrmActivity]] = relationship(back_populates="lead", cascade="all, delete-orphan")
     tasks: Mapped[list[CrmTask]] = relationship(back_populates="lead", cascade="all, delete-orphan")
+
+
+class CrmCallContext(Base, TimestampMixin):
+    __tablename__ = "crm_call_contexts"
+    __table_args__ = (
+        Index("ix_crm_call_contexts_tenant_provider_call", "tenant_id", "external_provider", "external_call_id"),
+        Index("ix_crm_call_contexts_tenant_form_submission", "tenant_id", "form_submission_id"),
+        Index("ix_crm_call_contexts_tenant_context", "tenant_id", "context_id"),
+        Index("ix_crm_call_contexts_tenant_phone", "tenant_id", "phone_normalized"),
+        Index("ix_crm_call_contexts_tenant_created_at", "tenant_id", "created_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False)
+    external_provider: Mapped[str] = mapped_column(String(80), nullable=False)
+    external_call_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    form_submission_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    context_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    phone: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    phone_normalized: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    company: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    interest: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    industry: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    use_case: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    volume: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    pain_point: Mapped[str | None] = mapped_column(Text, nullable=True)
+    budget_range: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    intent_level: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    source: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    campaign: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    utm_source: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    utm_campaign: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    raw_context_json: Mapped[dict] = mapped_column(sa.JSON, nullable=False, default=dict)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending")
+
+    tenant = relationship("Tenant")
 
 
 class CrmActivity(Base):
