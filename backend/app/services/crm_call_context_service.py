@@ -6,6 +6,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.models.identity import _uuid
 from app.models.crm import CrmCallContext
 from app.services.crm_contact_service import normalize_phone
 
@@ -26,13 +27,18 @@ class CrmCallContextService:
         context: dict[str, Any] | None = None,
         status: str = "pending",
     ) -> CrmCallContext:
-        data = context or {}
+        data = dict(context or {})
+        form_submission_id = self._string_value(data, "form_submission_id", "submission_id") or _uuid()
+        context_id = self._string_value(data, "context_id", "crm_context_id") or _uuid()
+        data["form_submission_id"] = form_submission_id
+        data["context_id"] = context_id
+        data["crm_context_id"] = context_id
         call_context = CrmCallContext(
             tenant_id=tenant_id,
             external_provider=external_provider,
             external_call_id=external_call_id,
-            form_submission_id=self._string_value(data, "form_submission_id", "submission_id"),
-            context_id=self._string_value(data, "context_id", "crm_context_id"),
+            form_submission_id=form_submission_id,
+            context_id=context_id,
             phone=self._string_value(data, "phone", "user_phone", "customer_phone", "lead_phone", "telefono", "celular", "mobile"),
             email=self._string_value(data, "email", "user_email", "customer_email", "lead_email", "correo"),
             name=self._string_value(data, "name", "user_name", "customer_name", "lead_name", "full_name", "nombre"),
