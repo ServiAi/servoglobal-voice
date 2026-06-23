@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.analytics import Call
-from app.models.crm import CrmActivity, CrmContact, CrmLead, CrmPipelineStage
+from app.models.crm import CrmActivity, CrmContact, CrmLead
 from app.models.identity import _utcnow
 from app.services.crm_booking_detector_service import BookingDetectionResult, CrmBookingDetectorService
 from app.services.crm_call_context_service import CrmCallContextService
@@ -16,11 +16,9 @@ from app.services.crm_contact_service import CrmContactService, normalize_phone
 from app.services.crm_context_extractor_service import CrmContextExtractorService
 from app.services.crm_lead_resolver_service import CrmLeadResolverService
 from app.services.crm_pipeline_service import CrmPipelineService
+from app.services.crm_stage_transition_service import CrmStageTransitionService
 
 logger = logging.getLogger(__name__)
-
-
-BOOKING_INTENT_KEYWORDS = ("agend", "reun", "cita", "confirm", "schedul", "book", "appointment")
 
 
 class CrmIngestionService:
@@ -33,6 +31,7 @@ class CrmIngestionService:
         self.context_extractor = CrmContextExtractorService()
         self.lead_resolver = CrmLeadResolverService(db)
         self.booking_detector = CrmBookingDetectorService()
+        self.transition_service = CrmStageTransitionService(db)
 
     def process_ultravox_event(self, payload: dict[str, Any], call_record: Call) -> None:
         try:
@@ -44,27 +43,45 @@ class CrmIngestionService:
             event_type = self._event_type(payload)
 
             if event_type == "call.started":
+                context = self._extract_context(tenant_id, payload, call_record)
+                lead = self.lead_resolver.resolve_existing_lead_for_call(tenant_id, call_record, context=context)
+                if lead is None:
+                    return
+                self._attach_call_to_lead(lead, call_record)
+                self.transition_service.move_to_contacted(tenant_id, lead, call_id=call_record.id)
+                self._create_or_update_activity(
+                    tenant_id=tenant_id,
+                    lead_id=lead.id,
+                    contact_id=lead.contact_id,
+                    call_id=call_record.id,
+                    activity_type="call_started",
+                    title="Intento de llamada iniciado",
+                    description="Ultravox reporto el inicio del intento de contacto.",
+                    outcome="contacted",
+                    payload_json=payload,
+                )
                 return
 
             if event_type == "call.joined":
                 context = self._extract_context(tenant_id, payload, call_record)
-                contact = self._get_or_create_contact(tenant_id, context)
-                lead = self.lead_resolver.resolve_or_create_lead_for_connected_call(
-                    tenant_id=tenant_id,
-                    call=call_record,
-                    contact=contact,
-                    metadata=self._lead_metadata(context),
-                    stage_key="connected",
-                )
+                lead = self.lead_resolver.resolve_existing_lead_for_call(tenant_id, call_record, context=context)
+                contact = lead.contact if lead is not None else None
+                if lead is None:
+                    if not self._has_sufficient_context(context):
+                        return
+                    contact = self._get_or_create_contact(tenant_id, context)
+                    lead = self.lead_resolver.resolve_or_create_lead_for_connected_call(
+                        tenant_id=tenant_id,
+                        call=call_record,
+                        contact=contact,
+                        metadata=self._lead_metadata(context),
+                        stage_key="connected",
+                    )
+                self._attach_call_to_lead(lead, call_record)
+                contact = contact or lead.contact
                 self._enrich_contact_from_context(contact, context)
-                self._move_lead_to_stage(
-                    tenant_id=tenant_id,
-                    lead=lead,
-                    contact_id=contact.id,
-                    call_id=call_record.id,
-                    stage_key="connected",
-                    description="El lead avanzo automaticamente a 'Conectado' al establecerse la llamada.",
-                )
+                self._enrich_lead_from_context(lead, context)
+                self.transition_service.move_to_connected(tenant_id, lead, call_id=call_record.id)
                 self._create_or_update_activity(
                     tenant_id=tenant_id,
                     lead_id=lead.id,
@@ -79,12 +96,13 @@ class CrmIngestionService:
                 return
 
             if event_type == "call.ended":
-                lead = self.lead_resolver.resolve_existing_lead_for_call(tenant_id, call_record)
-                context = None
+                context = self._extract_context(tenant_id, payload, call_record)
+                lead = self.lead_resolver.resolve_existing_lead_for_call(tenant_id, call_record, context=context)
                 contact = lead.contact if lead is not None else None
 
                 if lead is None and call_record.joined_at is not None:
-                    context = self._extract_context(tenant_id, payload, call_record)
+                    if not self._has_sufficient_context(context):
+                        return
                     contact = self._get_or_create_contact(tenant_id, context)
                     lead = self.lead_resolver.resolve_or_create_lead_for_connected_call(
                         tenant_id=tenant_id,
@@ -97,50 +115,49 @@ class CrmIngestionService:
                 if lead is None or contact is None:
                     return
 
-                if context is None:
-                    context = self._extract_context(tenant_id, payload, call_record)
+                self._attach_call_to_lead(lead, call_record)
                 self._enrich_contact_from_context(contact, context)
                 self._enrich_lead_from_context(lead, context)
                 self._update_lead_summary(lead, payload, call_record)
 
                 booking = self.booking_detector.detect_successful_booking(payload)
                 if booking.created:
-                    self._move_lead_to_stage(
-                        tenant_id=tenant_id,
-                        lead=lead,
-                        contact_id=contact.id,
-                        call_id=call_record.id,
-                        stage_key="scheduled",
-                        description="El lead cambio a 'Agendado' porque se verifico un evento real de agenda.",
-                    )
+                    self.transition_service.move_to_scheduled(tenant_id, lead, call_id=call_record.id)
                     self._create_booking_activity(tenant_id, lead, contact.id, call_record.id, booking, payload)
                 else:
-                    stage_key = self.classifier_service.classify_lead_stage(
+                    classification = self.classifier_service.classify_after_call(
                         call_record.normalized_status,
                         lead.summary,
                         lead.short_summary,
+                        payload,
                     )
-                    if self._has_booking_intent(lead.summary, lead.short_summary):
-                        lead.next_action = "confirm_booking"
-                        if stage_key is None:
-                            stage_key = "follow_up"
+                    if classification.next_action:
+                        lead.next_action = classification.next_action
                         self.db.commit()
                         self.db.refresh(lead)
-                    if stage_key:
-                        self._move_lead_to_stage(
-                            tenant_id=tenant_id,
-                            lead=lead,
-                            contact_id=contact.id,
+                    if classification.stage_key == "not_interested":
+                        self.transition_service.move_to_not_interested(tenant_id, lead, call_id=call_record.id)
+                    elif classification.stage_key == "qualified":
+                        self.transition_service.move_to_qualified(
+                            tenant_id,
+                            lead,
                             call_id=call_record.id,
-                            stage_key=stage_key,
-                            description="El lead cambio de etapa basado en reglas deterministicas de la llamada.",
+                            description="El lead cambio a 'Calificado' por reglas deterministicas de la llamada.",
+                        )
+                    elif classification.stage_key == "follow_up":
+                        self.transition_service.move_to_follow_up(
+                            tenant_id,
+                            lead,
+                            call_id=call_record.id,
+                            description="El lead cambio a 'En seguimiento' por resultado deterministico de la llamada.",
                         )
 
                 self._create_call_ended_activity(tenant_id, lead, contact.id, call_record.id, payload, call_record)
                 return
 
             if event_type == "call.billed":
-                lead = self.lead_resolver.resolve_existing_lead_for_call(tenant_id, call_record)
+                context = self._extract_context(tenant_id, payload, call_record)
+                lead = self.lead_resolver.resolve_existing_lead_for_call(tenant_id, call_record, context=context)
                 if lead is None:
                     return
                 self._create_call_billed_activity(tenant_id, lead, lead.contact_id, call_record.id, payload, call_record)
@@ -185,6 +202,8 @@ class CrmIngestionService:
             "intent_level": context.get("intent_level"),
             "source": context.get("source") or context.get("utm_source"),
             "campaign": context.get("campaign") or context.get("utm_campaign"),
+            "form_submission_id": context.get("form_submission_id"),
+            "context_id": context.get("context_id"),
         }
 
     def _enrich_contact_from_context(self, contact: CrmContact, context: dict[str, Any]) -> None:
@@ -221,8 +240,14 @@ class CrmIngestionService:
 
     def _update_lead_summary(self, lead: CrmLead, payload: dict[str, Any], call_record: Call) -> None:
         call_obj = payload.get("call") if isinstance(payload.get("call"), dict) else {}
-        summary = call_obj.get("summary") or call_record.summary
-        short_summary = call_obj.get("shortSummary") or call_obj.get("short_summary") or call_record.short_summary
+        summary = call_obj.get("summary") or payload.get("summary") or call_record.summary
+        short_summary = (
+            call_obj.get("shortSummary")
+            or call_obj.get("short_summary")
+            or payload.get("shortSummary")
+            or payload.get("short_summary")
+            or call_record.short_summary
+        )
         if summary:
             lead.summary = summary
         if short_summary:
@@ -232,73 +257,30 @@ class CrmIngestionService:
         self.db.commit()
         self.db.refresh(lead)
 
-    def _move_lead_to_stage(
-        self,
-        tenant_id: str,
-        lead: CrmLead,
-        contact_id: str,
-        call_id: str | None,
-        stage_key: str,
-        description: str,
-    ) -> None:
-        target_stage = self.pipeline_service.get_stage_by_key(tenant_id, stage_key)
-        current_stage = self.db.get(CrmPipelineStage, lead.current_stage_id)
-        if current_stage and current_stage.id == target_stage.id:
-            existing_activity = self.db.scalar(
-                select(CrmActivity).where(
-                    CrmActivity.tenant_id == tenant_id,
-                    CrmActivity.call_id == call_id,
-                    CrmActivity.activity_type == "stage_changed",
-                    CrmActivity.deduplication_key == target_stage.key,
-                )
-            )
-            if existing_activity is None:
-                self._create_or_update_activity(
-                    tenant_id=tenant_id,
-                    lead_id=lead.id,
-                    contact_id=contact_id,
-                    call_id=call_id,
-                    activity_type="stage_changed",
-                    title=f"Etapa cambiada a {target_stage.name}",
-                    description=description,
-                    outcome=None,
-                    payload_json={},
-                    from_stage_id=None,
-                    to_stage_id=target_stage.id,
-                    deduplication_key=target_stage.key,
-                )
+    def _attach_call_to_lead(self, lead: CrmLead, call_record: Call) -> None:
+        if not call_record.id:
             return
-        if current_stage and current_stage.position > target_stage.position:
-            return
-
-        previous_stage_id = lead.current_stage_id
-        lead.current_stage_id = target_stage.id
-        if target_stage.is_terminal:
-            if stage_key == "won":
-                lead.status = "won"
-            elif stage_key in {"lost", "not_interested"}:
-                lead.status = "lost"
-
+        if not lead.created_from_call_id:
+            lead.created_from_call_id = call_record.id
+        lead.last_call_id = call_record.id
         self.db.commit()
         self.db.refresh(lead)
-        self._create_or_update_activity(
-            tenant_id=tenant_id,
-            lead_id=lead.id,
-            contact_id=contact_id,
-            call_id=call_id,
-            activity_type="stage_changed",
-            title=f"Etapa cambiada a {target_stage.name}",
-            description=description,
-            outcome=None,
-            payload_json={},
-            from_stage_id=previous_stage_id,
-            to_stage_id=target_stage.id,
-            deduplication_key=target_stage.key,
-        )
 
-    def _has_booking_intent(self, summary: str | None, short_summary: str | None) -> bool:
-        text = " ".join(filter(None, [summary, short_summary])).lower()
-        return any(keyword in text for keyword in BOOKING_INTENT_KEYWORDS)
+    def _has_sufficient_context(self, context: dict[str, Any]) -> bool:
+        for key in (
+            "phone",
+            "email",
+            "name",
+            "company",
+            "interest",
+            "industry",
+            "use_case",
+            "form_submission_id",
+            "context_id",
+        ):
+            if context.get(key):
+                return True
+        return False
 
     def _create_booking_activity(
         self,

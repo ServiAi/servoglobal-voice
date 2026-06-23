@@ -67,6 +67,24 @@ class CrmLead(Base, TimestampMixin):
     __table_args__ = (
         Index("ix_crm_leads_tenant_contact_status", "tenant_id", "contact_id", "status"),
         Index("ix_crm_leads_tenant_last_call", "tenant_id", "last_call_id"),
+        Index("ix_crm_leads_tenant_form_submission", "tenant_id", "form_submission_id"),
+        Index("ix_crm_leads_tenant_context_id", "tenant_id", "context_id"),
+        Index(
+            "uq_crm_leads_tenant_form_submission",
+            "tenant_id",
+            "form_submission_id",
+            unique=True,
+            postgresql_where=sa.text("form_submission_id IS NOT NULL"),
+            sqlite_where=sa.text("form_submission_id IS NOT NULL"),
+        ),
+        Index(
+            "uq_crm_leads_tenant_context_id",
+            "tenant_id",
+            "context_id",
+            unique=True,
+            postgresql_where=sa.text("context_id IS NOT NULL"),
+            sqlite_where=sa.text("context_id IS NOT NULL"),
+        ),
         Index(
             "ix_crm_leads_tenant_created_call_unique",
             "tenant_id",
@@ -94,6 +112,8 @@ class CrmLead(Base, TimestampMixin):
     owner_agent_id: Mapped[str | None] = mapped_column(ForeignKey("agents.id"), nullable=True)
     created_from_call_id: Mapped[str | None] = mapped_column(ForeignKey("calls.id"), nullable=True)
     last_call_id: Mapped[str | None] = mapped_column(ForeignKey("calls.id"), nullable=True)
+    form_submission_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    context_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     short_summary: Mapped[str | None] = mapped_column(String(500), nullable=True)
     summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     source: Mapped[str | None] = mapped_column(String(120), nullable=True)

@@ -7,6 +7,8 @@ from app.core.config import settings
 from app.db.session import get_db
 from app.models.identity import Tenant
 from app.services.crm_call_context_service import CrmCallContextService
+from app.services.crm_contact_service import CrmContactService
+from app.services.crm_lead_resolver_service import CrmLeadResolverService
 from app.services.voice_service import create_call_session, create_sip_call_via_pbx
 from app.services.notification_service import notification_service
 from app.services.tenant_usage_service import TenantUsageService
@@ -54,6 +56,87 @@ def _external_call_id_from_result(result: dict) -> str | None:
                 return str(value)
     return None
 
+
+def _context_value(context: dict, *keys: str) -> str | None:
+    for key in keys:
+        value = context.get(key)
+        if value not in (None, ""):
+            return str(value)
+    return None
+
+
+def _has_commercial_context(context: dict) -> bool:
+    return any(
+        _context_value(context, key)
+        for key in (
+            "phone",
+            "user_phone",
+            "customer_phone",
+            "email",
+            "user_email",
+            "name",
+            "user_name",
+            "company",
+            "user_company",
+            "interest",
+            "use_case",
+            "user_use_case",
+        )
+    )
+
+
+def _lead_metadata_from_context(context: dict) -> dict:
+    return {
+        "interest": _context_value(context, "interest"),
+        "industry": _context_value(context, "industry", "user_industry"),
+        "use_case": _context_value(context, "use_case", "user_use_case", "useCase"),
+        "volume": _context_value(context, "volume", "user_volume"),
+        "pain_point": _context_value(context, "pain_point", "user_pain_point", "painPoint"),
+        "budget_range": _context_value(context, "budget_range", "budgetRange"),
+        "intent_level": _context_value(context, "intent_level", "intentLevel"),
+        "source": _context_value(context, "source", "utm_source"),
+        "campaign": _context_value(context, "campaign", "utm_campaign"),
+        "form_submission_id": _context_value(context, "form_submission_id"),
+        "context_id": _context_value(context, "context_id", "crm_context_id"),
+    }
+
+
+def _create_form_context_and_lead(db: Session, tenant: Tenant, context: dict):
+    context.setdefault("tenant_slug", tenant.slug)
+    context.setdefault("source", "landing")
+    context.setdefault("campaign", "demo-crm")
+
+    call_context = CrmCallContextService(db).create_context(
+        tenant.id,
+        external_provider="ultravox",
+        context=context,
+    )
+    context["form_submission_id"] = call_context.form_submission_id
+    context["context_id"] = call_context.context_id or call_context.id
+    context["crm_context_id"] = call_context.context_id or call_context.id
+
+    if not _has_commercial_context(context):
+        return call_context
+
+    contact = CrmContactService(db).get_or_create_contact(
+        tenant_id=tenant.id,
+        phone=_context_value(context, "phone", "user_phone", "customer_phone", "lead_phone"),
+        email=_context_value(context, "email", "user_email", "customer_email", "lead_email"),
+        name=_context_value(context, "name", "user_name", "customer_name", "lead_name") or "Lead sin nombre",
+        metadata={
+            "company": _context_value(context, "company", "company_name", "user_company"),
+            "source": _context_value(context, "source"),
+            "form_submission_id": call_context.form_submission_id,
+            "context_id": call_context.context_id,
+        },
+    )
+    CrmLeadResolverService(db).resolve_or_create_lead_for_new_context(
+        tenant.id,
+        contact,
+        _lead_metadata_from_context(context),
+    )
+    return call_context
+
 @router.post("/calls")
 async def create_call(request: CreateCallRequest, db: Session = Depends(get_db)):
     if not request.turnstile_token:
@@ -73,13 +156,7 @@ async def create_call(request: CreateCallRequest, db: Session = Depends(get_db))
     context = request.template_context or {}
     context["fecha_ejecucion"] = ahora.strftime("%Y-%m-%d %H:%M:%S")
     context["dia_semana"] = dias_es[ahora.weekday()]
-    call_context = CrmCallContextService(db).create_context(
-        tenant.id,
-        external_provider="ultravox",
-        context=context,
-    )
-    context["context_id"] = call_context.context_id or call_context.id
-    context["crm_context_id"] = call_context.context_id or call_context.id
+    call_context = _create_form_context_and_lead(db, tenant, context)
 
     try:
         join_url = await create_call_session(
@@ -137,13 +214,7 @@ async def create_outbound_call(request: CreateOutboundCallRequest, db: Session =
         if request.painPoint:
             context["user_pain_point"] = request.painPoint
 
-        call_context = CrmCallContextService(db).create_context(
-            tenant.id,
-            external_provider="ultravox",
-            context=context,
-        )
-        context["context_id"] = call_context.context_id or call_context.id
-        context["crm_context_id"] = call_context.context_id or call_context.id
+        call_context = _create_form_context_and_lead(db, tenant, context)
 
         if request.schedule_time:
             from app.services.voice_service import create_scheduled_sip_call_via_pbx
