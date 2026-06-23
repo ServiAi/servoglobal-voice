@@ -18,6 +18,7 @@ from app.models.identity import Tenant
 from app.services.crm_call_context_service import CrmCallContextService
 from app.services.crm_classifier_service import CrmClassifierService
 from app.services.crm_ingestion_service import CrmIngestionService
+from app.services.crm_lead_resolver_service import CrmLeadResolverService
 from app.services.crm_lead_service import CrmLeadService
 
 
@@ -104,6 +105,17 @@ class CrmPipelineFormFirstTests(unittest.TestCase):
         call.update(call_fields)
         return {"event": event, "call": call}
 
+    def context_only_payload(self, event, context, external_call_id="uvx-pipeline", **call_fields):
+        call = {
+            "callId": external_call_id,
+            "metadata": {
+                "context_id": context.context_id,
+                "form_submission_id": context.form_submission_id,
+            },
+        }
+        call.update(call_fields)
+        return {"event": event, "call": call}
+
     def test_form_submission_creates_contact_and_lead_in_new(self):
         tenant, _ = self.seed_tenant_agent()
         with SessionLocal() as db:
@@ -139,6 +151,40 @@ class CrmPipelineFormFirstTests(unittest.TestCase):
             self.assertEqual(attached.external_call_id, "uvx-attached")
             self.assertEqual(attached.status, "attached")
 
+    def test_form_submission_persists_context_ids_on_lead(self):
+        tenant, _ = self.seed_tenant_agent()
+        with SessionLocal() as db:
+            call_context = self.submit_form(db, tenant)
+            lead = self.lead(db, tenant)
+            self.assertEqual(lead.context_id, call_context.context_id)
+            self.assertEqual(lead.form_submission_id, call_context.form_submission_id)
+
+    def test_resolver_finds_lead_by_context_id_without_phone_or_email(self):
+        tenant, agent = self.seed_tenant_agent()
+        call_id = self.seed_call(tenant, agent, phone=None)
+        with SessionLocal() as db:
+            call_context = self.submit_form(db, tenant)
+            lead = self.lead(db, tenant)
+            found = CrmLeadResolverService(db).resolve_existing_lead_for_call(
+                tenant.id,
+                self.get_call(db, call_id),
+                context={"context_id": call_context.context_id},
+            )
+            self.assertEqual(found.id, lead.id)
+
+    def test_resolver_finds_lead_by_form_submission_id_without_phone_or_email(self):
+        tenant, agent = self.seed_tenant_agent()
+        call_id = self.seed_call(tenant, agent, phone=None)
+        with SessionLocal() as db:
+            call_context = self.submit_form(db, tenant)
+            lead = self.lead(db, tenant)
+            found = CrmLeadResolverService(db).resolve_existing_lead_for_call(
+                tenant.id,
+                self.get_call(db, call_id),
+                context={"form_submission_id": call_context.form_submission_id},
+            )
+            self.assertEqual(found.id, lead.id)
+
     def test_call_started_moves_existing_lead_to_contacted(self):
         tenant, agent = self.seed_tenant_agent()
         call_id = self.seed_call(tenant, agent, status="in_progress")
@@ -146,6 +192,17 @@ class CrmPipelineFormFirstTests(unittest.TestCase):
             call_context = self.submit_form(db, tenant)
             CrmIngestionService(db).process_ultravox_event(
                 self.payload("call.started", context=call_context),
+                self.get_call(db, call_id),
+            )
+            self.assertEqual(self.stage_key(db, self.lead(db, tenant)), "contacted")
+
+    def test_call_started_uses_context_id_to_move_lead_to_contacted(self):
+        tenant, agent = self.seed_tenant_agent()
+        call_id = self.seed_call(tenant, agent, status="in_progress", phone=None)
+        with SessionLocal() as db:
+            call_context = self.submit_form(db, tenant)
+            CrmIngestionService(db).process_ultravox_event(
+                self.context_only_payload("call.started", call_context),
                 self.get_call(db, call_id),
             )
             self.assertEqual(self.stage_key(db, self.lead(db, tenant)), "contacted")
@@ -167,6 +224,17 @@ class CrmPipelineFormFirstTests(unittest.TestCase):
             call_context = self.submit_form(db, tenant)
             CrmIngestionService(db).process_ultravox_event(
                 self.payload("call.joined", context=call_context),
+                self.get_call(db, call_id),
+            )
+            self.assertEqual(self.stage_key(db, self.lead(db, tenant)), "connected")
+
+    def test_call_joined_uses_context_id_to_move_lead_to_connected(self):
+        tenant, agent = self.seed_tenant_agent()
+        call_id = self.seed_call(tenant, agent, joined=True, phone=None)
+        with SessionLocal() as db:
+            call_context = self.submit_form(db, tenant)
+            CrmIngestionService(db).process_ultravox_event(
+                self.context_only_payload("call.joined", call_context),
                 self.get_call(db, call_id),
             )
             self.assertEqual(self.stage_key(db, self.lead(db, tenant)), "connected")
@@ -205,6 +273,18 @@ class CrmPipelineFormFirstTests(unittest.TestCase):
             call_context = self.submit_form(db, tenant)
             CrmIngestionService(db).process_ultravox_event(
                 self.payload("call.ended", context=call_context, summary="Quiere cotizar una propuesta."),
+                self.get_call(db, call_id),
+            )
+            self.assertEqual(len(self.leads(db, tenant)), 1)
+            self.assertEqual(self.stage_key(db, self.lead(db, tenant)), "qualified")
+
+    def test_call_ended_uses_context_id_to_reuse_existing_lead(self):
+        tenant, agent = self.seed_tenant_agent()
+        call_id = self.seed_call(tenant, agent, joined=True, phone=None)
+        with SessionLocal() as db:
+            call_context = self.submit_form(db, tenant)
+            CrmIngestionService(db).process_ultravox_event(
+                self.context_only_payload("call.ended", call_context, summary="Quiere cotizar una propuesta."),
                 self.get_call(db, call_id),
             )
             self.assertEqual(len(self.leads(db, tenant)), 1)
@@ -399,6 +479,60 @@ class CrmPipelineFormFirstTests(unittest.TestCase):
             payload = self.payload("call.joined", context=call_context)
             ingestion.process_ultravox_event(payload, self.get_call(db, call_id))
             ingestion.process_ultravox_event(payload, self.get_call(db, call_id))
+            self.assertEqual(len(self.leads(db, tenant)), 1)
+
+    def test_duplicate_context_id_does_not_duplicate_lead(self):
+        tenant, _ = self.seed_tenant_agent()
+        with SessionLocal() as db:
+            self.submit_form(db, tenant, context_id="ctx-dup", user_phone="3001112233")
+            self.submit_form(db, tenant, context_id="ctx-dup", user_phone="3009998888", user_email="otra@test.com")
+            self.assertEqual(len(self.leads(db, tenant)), 1)
+
+    def test_duplicate_form_submission_id_does_not_duplicate_lead(self):
+        tenant, _ = self.seed_tenant_agent()
+        with SessionLocal() as db:
+            self.submit_form(db, tenant, form_submission_id="form-dup", user_phone="3001112233")
+            self.submit_form(db, tenant, form_submission_id="form-dup", user_phone="3009998888", user_email="otra@test.com")
+            self.assertEqual(len(self.leads(db, tenant)), 1)
+
+    def test_context_id_is_not_overwritten_by_different_payload_context(self):
+        tenant, agent = self.seed_tenant_agent()
+        call_id = self.seed_call(tenant, agent, joined=True, phone=None)
+        with SessionLocal() as db:
+            call_context = self.submit_form(db, tenant, context_id="ctx-original")
+            original_lead = self.lead(db, tenant)
+            CrmIngestionService(db).process_ultravox_event(
+                self.context_only_payload("call.started", call_context),
+                self.get_call(db, call_id),
+            )
+            payload = self.context_only_payload("call.joined", call_context)
+            payload["call"]["metadata"]["context_id"] = "ctx-different"
+            CrmIngestionService(db).process_ultravox_event(
+                payload,
+                self.get_call(db, call_id),
+            )
+            db.refresh(original_lead)
+            self.assertEqual(original_lead.context_id, "ctx-original")
+            self.assertEqual(len(self.leads(db, tenant)), 1)
+
+    def test_form_submission_id_is_not_overwritten_by_different_payload_submission(self):
+        tenant, agent = self.seed_tenant_agent()
+        call_id = self.seed_call(tenant, agent, joined=True, phone=None)
+        with SessionLocal() as db:
+            call_context = self.submit_form(db, tenant, form_submission_id="form-original")
+            original_lead = self.lead(db, tenant)
+            CrmIngestionService(db).process_ultravox_event(
+                self.context_only_payload("call.started", call_context),
+                self.get_call(db, call_id),
+            )
+            payload = self.context_only_payload("call.joined", call_context)
+            payload["call"]["metadata"]["form_submission_id"] = "form-different"
+            CrmIngestionService(db).process_ultravox_event(
+                payload,
+                self.get_call(db, call_id),
+            )
+            db.refresh(original_lead)
+            self.assertEqual(original_lead.form_submission_id, "form-original")
             self.assertEqual(len(self.leads(db, tenant)), 1)
 
     def test_events_out_of_order_do_not_duplicate_lead(self):

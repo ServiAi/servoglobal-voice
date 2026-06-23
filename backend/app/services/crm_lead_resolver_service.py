@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from sqlalchemy import select
@@ -9,6 +10,9 @@ from app.models.analytics import Call
 from app.models.crm import CrmCallContext, CrmContact, CrmLead
 from app.services.crm_contact_service import normalize_phone
 from app.services.crm_pipeline_service import CrmPipelineService
+
+
+logger = logging.getLogger(__name__)
 
 
 class CrmLeadResolverService:
@@ -24,6 +28,16 @@ class CrmLeadResolverService:
         context: dict[str, Any] | None = None,
     ) -> CrmLead | None:
         external_call_id = self._value(context, "external_call_id", "call_id", "callId") or call.external_call_id
+        context_id = self._value(context, "context_id", "crm_context_id")
+        form_submission_id = self._value(context, "form_submission_id", "submission_id")
+
+        lead = self._lead_by_context_id(tenant_id, context_id)
+        if lead:
+            return lead
+
+        lead = self._lead_by_form_submission_id(tenant_id, form_submission_id)
+        if lead:
+            return lead
 
         if external_call_id:
             related_call = self.db.scalar(
@@ -77,6 +91,10 @@ class CrmLeadResolverService:
         meta = metadata or {}
         lead = self.resolve_existing_lead_for_call(tenant_id, call, contact.id, meta) if call else None
         if lead is None:
+            lead = self._lead_by_context_id(tenant_id, self._value(meta, "context_id", "crm_context_id"))
+        if lead is None:
+            lead = self._lead_by_form_submission_id(tenant_id, self._value(meta, "form_submission_id", "submission_id"))
+        if lead is None:
             lead = self._open_lead_for_contact(tenant_id, contact.id)
 
         if lead is None:
@@ -88,6 +106,8 @@ class CrmLeadResolverService:
                 status="open",
                 created_from_call_id=call.id if call and call.id else None,
                 last_call_id=call.id if call and call.id else None,
+                form_submission_id=meta.get("form_submission_id"),
+                context_id=meta.get("context_id"),
                 interest=meta.get("interest"),
                 industry=meta.get("industry"),
                 use_case=meta.get("use_case"),
@@ -130,6 +150,8 @@ class CrmLeadResolverService:
                 status="open",
                 created_from_call_id=call.id,
                 last_call_id=call.id,
+                form_submission_id=meta.get("form_submission_id"),
+                context_id=meta.get("context_id"),
                 interest=meta.get("interest"),
                 industry=meta.get("industry"),
                 use_case=meta.get("use_case"),
@@ -170,6 +192,32 @@ class CrmLeadResolverService:
                 return lead
         return None
 
+    def _lead_by_context_id(self, tenant_id: str, context_id: str | None) -> CrmLead | None:
+        if not context_id:
+            return None
+        return self.db.scalar(
+            select(CrmLead)
+            .where(
+                CrmLead.tenant_id == tenant_id,
+                CrmLead.context_id == context_id,
+            )
+            .order_by(CrmLead.updated_at.desc())
+            .limit(1)
+        )
+
+    def _lead_by_form_submission_id(self, tenant_id: str, form_submission_id: str | None) -> CrmLead | None:
+        if not form_submission_id:
+            return None
+        return self.db.scalar(
+            select(CrmLead)
+            .where(
+                CrmLead.tenant_id == tenant_id,
+                CrmLead.form_submission_id == form_submission_id,
+            )
+            .order_by(CrmLead.updated_at.desc())
+            .limit(1)
+        )
+
     def _find_call_context(
         self,
         tenant_id: str,
@@ -206,6 +254,14 @@ class CrmLeadResolverService:
         return None
 
     def _lead_from_context(self, tenant_id: str, call_context: CrmCallContext) -> CrmLead | None:
+        lead = self._lead_by_context_id(tenant_id, call_context.context_id)
+        if lead:
+            return lead
+
+        lead = self._lead_by_form_submission_id(tenant_id, call_context.form_submission_id)
+        if lead:
+            return lead
+
         if call_context.external_call_id:
             related_call = self.db.scalar(
                 select(Call)
@@ -286,6 +342,25 @@ class CrmLeadResolverService:
             value = metadata.get(field)
             if value and not getattr(lead, field):
                 setattr(lead, field, value)
+        self._set_correlation_field(lead, "form_submission_id", metadata.get("form_submission_id"))
+        self._set_correlation_field(lead, "context_id", metadata.get("context_id"))
+
+    def _set_correlation_field(self, lead: CrmLead, field: str, value: Any) -> None:
+        if value in (None, ""):
+            return
+        incoming = str(value)
+        current = getattr(lead, field)
+        if not current:
+            setattr(lead, field, incoming)
+            return
+        if current != incoming:
+            logger.warning(
+                "CRM lead correlation mismatch ignored: lead_id=%s field=%s current=%s incoming=%s",
+                lead.id,
+                field,
+                current,
+                incoming,
+            )
 
     def _value(self, data: dict[str, Any] | None, *keys: str) -> str | None:
         if not isinstance(data, dict):

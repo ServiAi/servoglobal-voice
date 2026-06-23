@@ -202,6 +202,8 @@ class CrmIngestionService:
             "intent_level": context.get("intent_level"),
             "source": context.get("source") or context.get("utm_source"),
             "campaign": context.get("campaign") or context.get("utm_campaign"),
+            "form_submission_id": context.get("form_submission_id"),
+            "context_id": context.get("context_id"),
         }
 
     def _enrich_contact_from_context(self, contact: CrmContact, context: dict[str, Any]) -> None:
