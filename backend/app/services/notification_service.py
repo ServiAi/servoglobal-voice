@@ -48,6 +48,10 @@ logger = logging.getLogger(__name__)
 # ── Números del equipo que reciben la alerta de nuevo lead ───────────────────
 OWNER_PHONES: list[str] = [
     "+573106666709",
+]
+
+# Bloqueados temporalmente: no reciben alerta_lead_owner mientras esta lista exista.
+BLOCKED_OWNER_PHONES: list[str] = [
     "+573014023104",
     "+573178193641",
 ]
