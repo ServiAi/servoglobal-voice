@@ -48,7 +48,23 @@ No se usa IA para crear, clasificar ni extraer datos.
 
 ## No duplicacion
 
-El resolver busca leads en este orden: `external_call_id`, `created_from_call_id`, `last_call_id`, `form_submission_id`, `context_id`, `phone_normalized`, `email`. Si existe un lead abierto para el contacto/contexto, se reutiliza.
+El resolver busca leads en este orden: `context_id`, `form_submission_id`, `external_call_id`, `created_from_call_id`, `last_call_id`, `phone_normalized`, `email`, lead abierto por contacto. Si existe un lead abierto para el contacto/contexto, se reutiliza.
+
+## Correlacion directa CrmCallContext -> CrmLead
+
+Campos agregados en `CrmLead`:
+
+- `form_submission_id`
+- `context_id`
+
+Reglas:
+
+- `context_id` y `form_submission_id` son identificadores de correlacion.
+- No son editables desde frontend.
+- No se sobrescriben con valores diferentes si el lead ya tiene un valor.
+- El resolver usa `context_id` y `form_submission_id` antes que telefono/email.
+- Los webhooks pueden actualizar el mismo lead aunque no llegue telefono ni email.
+- Los leads antiguos quedan con estos campos en `null`; cualquier backfill futuro debe hacerse con script separado y revision manual.
 
 ## Tests ejecutados
 
