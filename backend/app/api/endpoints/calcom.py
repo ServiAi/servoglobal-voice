@@ -3,7 +3,14 @@ from pydantic import BaseModel
 import hmac
 import hashlib
 import os
-from app.services.calcom_service import get_available_slots, create_booking
+from app.services.calcom_service import (
+    CalComConfigurationError,
+    CalComInputError,
+    CalComUpstreamError,
+    SlotUnavailableError,
+    get_available_slots,
+    create_booking,
+)
 from datetime import datetime
 from zoneinfo import ZoneInfo
 import logging
@@ -32,7 +39,9 @@ async def check_availability_get(date: str, jornada: str | None = None):
     try:
         result = await get_available_slots(date, jornada)
         return result
-    except ValueError as e:
+    except CalComInputError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except (CalComConfigurationError, CalComUpstreamError) as e:
         raise HTTPException(status_code=502, detail=str(e))
     except Exception as e:
         raise HTTPException(
@@ -45,7 +54,9 @@ async def check_availability(request: AvailabilityRequest):
     try:
         result = await get_available_slots(request.date, request.jornada)
         return result
-    except ValueError as e:
+    except CalComInputError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except (CalComConfigurationError, CalComUpstreamError) as e:
         raise HTTPException(status_code=502, detail=str(e))
     except Exception as e:
         raise HTTPException(
@@ -64,8 +75,12 @@ async def create_new_booking(request: CreateBookingRequest):
             phone=request.phone,
         )
         return result
-    except ValueError as e:
+    except SlotUnavailableError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except CalComInputError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except (CalComConfigurationError, CalComUpstreamError) as e:
+        raise HTTPException(status_code=502, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al crear reserva: {str(e)}")
 

@@ -20,6 +20,22 @@ logger = logging.getLogger(__name__)
 CAL_API_BASE = "https://api.cal.com/v2"
 CAL_API_VERSION_HEADER = "2024-09-04"
 
+
+class CalComInputError(ValueError):
+    """Expected user/tool input problem before calling Cal.com."""
+
+
+class SlotUnavailableError(ValueError):
+    """Requested booking time is not available according to Cal.com slots."""
+
+
+class CalComConfigurationError(RuntimeError):
+    """Server-side Cal.com configuration is missing or invalid."""
+
+
+class CalComUpstreamError(RuntimeError):
+    """Cal.com returned an unexpected error."""
+
 # ─── Jornada definitions ─────────────────────────────────────────────────────
 # mañana : 09:00 – 11:30
 # tarde  : 12:00 – 16:30
@@ -62,7 +78,10 @@ def _parse_date(date_input: str) -> tuple[str, str]:
     as 'YYYY-MM-DD' strings covering the requested day.
     """
     day_str = date_input[:10]
-    parsed = date.fromisoformat(day_str)
+    try:
+        parsed = date.fromisoformat(day_str)
+    except ValueError as exc:
+        raise CalComInputError(f"Fecha invalida para disponibilidad: {date_input}") from exc
     end_str = (parsed + timedelta(days=1)).isoformat()
     return day_str, end_str
 
@@ -75,12 +94,25 @@ def _resolve_date_input(
         start_date, end_date = _parse_date(date_input)
         return start_date, end_date, None
 
-    resolution = resolve_temporal_expression(
-        expression=date_input,
-        reference_datetime=reference_datetime,
-    )
+    try:
+        resolution = resolve_temporal_expression(
+            expression=date_input,
+            reference_datetime=reference_datetime,
+        )
+    except ValueError as exc:
+        raise CalComInputError(str(exc)) from exc
     start_date, end_date = _parse_date(resolution.date)
     return start_date, end_date, resolution.as_dict()
+
+
+def _normalize_time(time_input: str) -> str:
+    raw_value = (time_input or "").strip()
+    for fmt in ("%H:%M", "%H:%M:%S"):
+        try:
+            return datetime.strptime(raw_value, fmt).strftime("%H:%M")
+        except ValueError:
+            continue
+    raise CalComInputError(f"Hora invalida para agendamiento: {time_input}")
 
 
 async def get_available_slots(
@@ -104,7 +136,7 @@ async def get_available_slots(
     )
 
     if not settings.CAL_API_KEY:
-        raise ValueError("CAL_API_KEY no está configurada en las variables de entorno.")
+        raise CalComConfigurationError("CAL_API_KEY no esta configurada en las variables de entorno.")
 
     # NOTE: When using eventTypeId, do NOT include 'username' — they are mutually exclusive.
     params = {
@@ -132,7 +164,7 @@ async def get_available_slots(
     logger.info(f"[Cal.com] Response {response.status_code}: {response.text[:300]}")
 
     if response.status_code != 200:
-        raise ValueError(
+        raise CalComUpstreamError(
             f"Cal.com API error {response.status_code}: {response.text}"
         )
 
@@ -201,11 +233,25 @@ async def create_booking(date_str: str, time_str: str, name: str, email: str, ph
         dict con el resultado de la reserva (status, data)
     """
     if not settings.CAL_API_KEY:
-        raise ValueError("CAL_API_KEY no está configurada en las variables de entorno.")
+        raise CalComConfigurationError("CAL_API_KEY no esta configurada en las variables de entorno.")
+
+    normalized_time = _normalize_time(time_str)
+    slots_result = await get_available_slots(date_str)
+    available_times = {slot.get("start") for slot in slots_result.get("available_slots", [])}
+    if normalized_time not in available_times:
+        raise SlotUnavailableError(
+            f"El horario {normalized_time} no esta disponible para {date_str}. "
+            "Verifica disponibilidad nuevamente antes de crear el evento."
+        )
         
     # Ensure start_datetime is ISO 8601 with timezone
     tz = pytz.timezone(settings.CAL_TIMEZONE)
-    base_dt = datetime.fromisoformat(f"{date_str}T{time_str}:00")
+    try:
+        base_dt = datetime.fromisoformat(f"{date_str}T{normalized_time}:00")
+    except ValueError as exc:
+        raise CalComInputError(
+            f"Fecha u hora invalida para agendamiento: {date_str} {time_str}"
+        ) from exc
     aware_dt = tz.localize(base_dt)
     start_datetime = aware_dt.isoformat()
     
@@ -241,7 +287,7 @@ async def create_booking(date_str: str, time_str: str, name: str, email: str, ph
     logger.info(f"[Cal.com] POST Response {response.status_code}: {response.text[:300]}")
     
     if response.status_code not in (200, 201):
-        raise ValueError(
+        raise CalComUpstreamError(
             f"Cal.com API error {response.status_code} al crear reserva: {response.text}"
         )
     result_data = response.json()
