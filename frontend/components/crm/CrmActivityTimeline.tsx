@@ -2,7 +2,7 @@
 
 import React from 'react';
 import type { ActivitySchema } from '@/types/crm';
-import { Phone, FileText, ArrowRightLeft, PenTool, CheckCircle, HelpCircle } from 'lucide-react';
+import { Phone, FileText, ArrowRightLeft, PenTool, CheckCircle, HelpCircle, MessageSquare, Calendar } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 type CrmActivityTimelineProps = {
@@ -12,19 +12,37 @@ type CrmActivityTimelineProps = {
 const ACTIVITY_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   call_started: Phone,
   call_completed: Phone,
+  call_joined: Phone,
+  call_ended: Phone,
+  call_billed: Phone,
   stage_changed: ArrowRightLeft,
   lead_updated: PenTool,
   note: FileText,
   task_completed: CheckCircle,
+  task_created: CheckCircle,
+  task_updated: PenTool,
+  booking_detected: Calendar,
+  whatsapp_action_requested: MessageSquare,
+  call_requested: Phone,
+  schedule_requested: Calendar,
 };
 
 const ACTIVITY_COLORS: Record<string, string> = {
   call_started: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
   call_completed: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20',
+  call_joined: 'bg-indigo-500/10 text-indigo-500 border-indigo-500/20',
+  call_ended: 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20',
+  call_billed: 'bg-amber-500/10 text-amber-500 border-amber-500/20',
   stage_changed: 'bg-violet-500/10 text-violet-500 border-violet-500/20',
   lead_updated: 'bg-orange-500/10 text-orange-500 border-orange-500/20',
   note: 'bg-amber-500/10 text-amber-500 border-amber-500/20',
   task_completed: 'bg-teal-500/10 text-teal-500 border-teal-500/20',
+  task_created: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
+  task_updated: 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20',
+  booking_detected: 'bg-fuchsia-500/10 text-fuchsia-500 border-fuchsia-500/20',
+  whatsapp_action_requested: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20',
+  call_requested: 'bg-sky-500/10 text-sky-500 border-sky-500/20',
+  schedule_requested: 'bg-fuchsia-500/10 text-fuchsia-500 border-fuchsia-500/20',
 };
 
 export function CrmActivityTimeline({ activities }: CrmActivityTimelineProps) {
@@ -115,6 +133,30 @@ export function CrmActivityTimeline({ activities }: CrmActivityTimelineProps) {
                   {act.outcome && (
                     <div className="text-2xs text-muted-foreground border-l-2 border-border/80 pl-2">
                       <span className="font-bold text-foreground">Resultado:</span> {act.outcome}
+                    </div>
+                  )}
+
+                  {/* Call stats details */}
+                  {(act.normalized_status || act.duration_seconds !== undefined || act.billed_minutes !== undefined) && (
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 bg-zinc-950/15 p-2 rounded border border-border/20 text-2xs text-muted-foreground">
+                      {act.normalized_status && (
+                        <div>
+                          <span className="font-semibold text-foreground">Estado:</span>{' '}
+                          <span className="capitalize">{act.normalized_status}</span>
+                        </div>
+                      )}
+                      {act.duration_seconds !== undefined && act.duration_seconds !== null && (
+                        <div>
+                          <span className="font-semibold text-foreground">Duración:</span>{' '}
+                          <span>{act.duration_seconds}s</span>
+                        </div>
+                      )}
+                      {act.billed_minutes !== undefined && act.billed_minutes !== null && (
+                        <div>
+                          <span className="font-semibold text-foreground">Facturado:</span>{' '}
+                          <span>{act.billed_minutes} min</span>
+                        </div>
+                      )}
                     </div>
                   )}
 

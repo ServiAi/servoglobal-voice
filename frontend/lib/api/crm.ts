@@ -234,3 +234,16 @@ export function deleteAllCrmLeads(accessToken: string) {
   return requestCrmEndpoint<void>('DELETE', 'leads', accessToken);
 }
 
+// --- Lead Outbound Actions ---
+export function leadActionWhatsapp(accessToken: string, leadId: string) {
+  return requestCrmEndpoint<{ message: string }>('POST', `leads/${leadId}/actions/whatsapp`, accessToken);
+}
+
+export function leadActionCall(accessToken: string, leadId: string) {
+  return requestCrmEndpoint<{ message: string }>('POST', `leads/${leadId}/actions/call`, accessToken);
+}
+
+export function leadActionSchedule(accessToken: string, leadId: string) {
+  return requestCrmEndpoint<{ message: string }>('POST', `leads/${leadId}/actions/schedule`, accessToken);
+}
+

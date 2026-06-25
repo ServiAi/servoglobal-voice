@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.models.crm import CrmActivity, CrmCallContext, CrmContact, CrmLead, CrmPipelineStage
 
-ALLOWED_SORT_FIELDS = {"created_at", "updated_at", "last_activity_at", "stage", "contact_name"}
+ALLOWED_SORT_FIELDS = {"created_at", "updated_at", "last_activity_at", "stage", "contact_name", "lead_score"}
 
 
 class CrmQueryService:
@@ -198,6 +198,7 @@ class CrmQueryService:
                 "short_summary": lead.short_summary,
                 "last_activity_at": last_activity,
                 "last_call_id": lead.last_call_id,
+                "lead_score": lead.lead_score,
                 "created_at": lead.created_at,
                 "updated_at": lead.updated_at,
             })

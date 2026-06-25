@@ -66,6 +66,7 @@ class CrmDashboardMetricsService:
         connected_leads = counts_by_stage_id.get(stage_key_to_id.get("connected"), 0)
         qualified_leads = counts_by_stage_id.get(stage_key_to_id.get("qualified"), 0)
         scheduled_leads = counts_by_stage_id.get(stage_key_to_id.get("scheduled"), 0)
+        voicemail_leads = counts_by_stage_id.get(stage_key_to_id.get("voicemail"), 0)
         follow_up_leads = counts_by_stage_id.get(stage_key_to_id.get("follow_up"), 0)
         not_interested_leads = counts_by_stage_id.get(stage_key_to_id.get("not_interested"), 0)
         won_leads = counts_by_stage_id.get(stage_key_to_id.get("won"), 0)
@@ -107,6 +108,7 @@ class CrmDashboardMetricsService:
             "connected_leads": connected_leads,
             "qualified_leads": qualified_leads,
             "scheduled_leads": scheduled_leads,
+            "voicemail_leads": voicemail_leads,
             "follow_up_leads": follow_up_leads,
             "not_interested_leads": not_interested_leads,
             "won_leads": won_leads,
@@ -121,7 +123,7 @@ class CrmDashboardMetricsService:
         def get_count_of_keys(keys_list: list[str]) -> int:
             return sum(counts_by_stage_id.get(stage_key_to_id.get(k), 0) for k in keys_list if k in stage_key_to_id)
 
-        contacted_cum = get_count_of_keys(["contacted", "connected", "qualified", "scheduled", "won", "follow_up", "not_interested", "lost"])
+        contacted_cum = get_count_of_keys(["contacted", "connected", "qualified", "scheduled", "won", "voicemail", "follow_up", "not_interested", "lost"])
         connected_cum = get_count_of_keys(["connected", "qualified", "scheduled", "won", "follow_up", "not_interested", "lost"])
         qualified_cum = get_count_of_keys(["qualified", "scheduled", "won"])
         scheduled_cum = get_count_of_keys(["scheduled", "won"])

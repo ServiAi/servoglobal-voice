@@ -8,6 +8,7 @@ import { CrmActivityTimeline } from '@/components/crm/CrmActivityTimeline';
 import { CrmTaskList } from '@/components/crm/CrmTaskList';
 import { CrmTaskForm } from '@/components/crm/CrmTaskForm';
 import { CrmNoteForm } from '@/components/crm/CrmNoteForm';
+import { CrmLeadQuickActions } from '@/components/crm/CrmLeadQuickActions';
 import { updateCrmLead, createCrmLeadNote, createCrmTask, updateCrmTask, deleteCrmTask } from '@/lib/api/crm';
 import { ShieldAlert, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
@@ -158,6 +159,13 @@ export function LeadDetailClient({
 
         {/* Notes & Tasks creation/listing (1 col) */}
         <div className="lg:col-span-1 flex flex-col gap-6">
+          {/* Quick Actions */}
+          <CrmLeadQuickActions
+            leadId={lead.id}
+            accessToken={accessToken}
+            currentStageKey={lead.stage.key}
+          />
+
           {/* Notes Form */}
           <CrmNoteForm onSubmit={handleAddNote} />
 

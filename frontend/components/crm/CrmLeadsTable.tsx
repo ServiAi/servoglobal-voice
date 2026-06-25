@@ -21,6 +21,7 @@ type CrmLeadsTableProps = {
   data: LeadsListResponse;
   locale: string;
   accessToken?: string;
+  userRole?: string;
 };
 
 const STAGE_TRANSLATIONS: Record<string, string> = {
@@ -29,6 +30,7 @@ const STAGE_TRANSLATIONS: Record<string, string> = {
   connected: 'Conectado',
   qualified: 'Calificado',
   scheduled: 'Agendado',
+  voicemail: 'Buzón de voz',
   follow_up: 'En seguimiento',
   not_interested: 'No Interesado',
   won: 'Ganado',
@@ -41,13 +43,14 @@ const STAGE_BADGES: Record<string, string> = {
   connected: 'bg-cyan-500/10 text-cyan-500 border-cyan-500/20',
   qualified: 'bg-violet-500/10 text-violet-500 border-violet-500/20',
   scheduled: 'bg-fuchsia-500/10 text-fuchsia-500 border-fuchsia-500/20',
+  voicemail: 'bg-indigo-500/10 text-indigo-500 border-indigo-500/20',
   follow_up: 'bg-amber-500/10 text-amber-500 border-amber-500/20',
   not_interested: 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20',
   won: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20',
   lost: 'bg-red-500/10 text-red-500 border-red-500/20',
 };
 
-export function CrmLeadsTable({ data, locale, accessToken }: CrmLeadsTableProps) {
+export function CrmLeadsTable({ data, locale, accessToken, userRole }: CrmLeadsTableProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -188,7 +191,7 @@ export function CrmLeadsTable({ data, locale, accessToken }: CrmLeadsTableProps)
           <h3 className="text-lg font-bold text-foreground">Leads Encontrados</h3>
           <span className="text-xs text-muted-foreground">Total: {total}</span>
         </div>
-        {total > 0 && accessToken && (
+        {total > 0 && accessToken && userRole === 'platform_admin' && (
           <button
             onClick={() => setDeleteDialog({ type: 'all' })}
             className="inline-flex items-center gap-1.5 rounded-md border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-xs font-bold text-red-500 hover:bg-red-500/20 shadow-2xs transition cursor-pointer"
@@ -292,7 +295,7 @@ export function CrmLeadsTable({ data, locale, accessToken }: CrmLeadsTableProps)
                       <Eye className="h-3.5 w-3.5" />
                       Detalle
                     </Link>
-                    {accessToken && (
+                    {accessToken && (userRole === 'platform_admin' || userRole === 'tenant_admin') && (
                       <button
                         onClick={() => setDeleteDialog({ type: 'one', leadId: lead.lead_id })}
                         className="inline-flex items-center justify-center rounded-md border border-red-500/30 bg-red-500/10 p-2 text-red-500 hover:bg-red-500/20 shadow-sm transition cursor-pointer"

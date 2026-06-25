@@ -56,6 +56,9 @@ export type ActivitySchema = {
   recording_url?: string | null;
   summary?: string | null;
   short_summary?: string | null;
+  normalized_status?: string | null;
+  duration_seconds?: number | null;
+  billed_minutes?: number | null;
 };
 
 export type TaskResponse = {
@@ -214,6 +217,7 @@ export type CrmDashboardKpis = {
   connected_leads: number;
   qualified_leads: number;
   scheduled_leads: number;
+  voicemail_leads: number;
   follow_up_leads: number;
   not_interested_leads: number;
   won_leads: number;

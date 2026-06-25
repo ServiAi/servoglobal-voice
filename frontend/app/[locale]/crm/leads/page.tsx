@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { getAccessToken } from '@/lib/auth/server';
 import { locales, type Locale } from '@/i18n';
 import { fetchCrmLeads } from '@/lib/api/crm';
+import { fetchMeProfile } from '@/lib/api/me';
 import { CrmLeadFilters } from '@/components/crm/CrmLeadFilters';
 import { CrmLeadsTable } from '@/components/crm/CrmLeadsTable';
 import { ArrowLeft } from 'lucide-react';
@@ -54,9 +55,13 @@ export default async function CrmLeadsPage({ params, searchParams }: Props) {
     has_email: parseBoolean(resolvedSearchParams.has_email),
     sort_by: typeof resolvedSearchParams.sort_by === 'string' ? resolvedSearchParams.sort_by : 'updated_at',
     sort_order: typeof resolvedSearchParams.sort_order === 'string' ? resolvedSearchParams.sort_order : 'desc',
+    date_from: typeof resolvedSearchParams.date_from === 'string' ? resolvedSearchParams.date_from : undefined,
+    date_to: typeof resolvedSearchParams.date_to === 'string' ? resolvedSearchParams.date_to : undefined,
   };
 
   const result = await fetchCrmLeads(accessToken, filters);
+  const meResult = await fetchMeProfile(accessToken);
+  const userRole = meResult.ok ? meResult.profile.role : undefined;
 
   if (!result.ok) {
     return (
@@ -98,7 +103,7 @@ export default async function CrmLeadsPage({ params, searchParams }: Props) {
       <CrmLeadFilters />
 
       {/* Leads Table */}
-      <CrmLeadsTable data={result.data} locale={locale} accessToken={accessToken} />
+      <CrmLeadsTable data={result.data} locale={locale} accessToken={accessToken} userRole={userRole} />
     </div>
   );
 }

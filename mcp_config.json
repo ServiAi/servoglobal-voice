@@ -1,0 +1,55 @@
+{
+  "mcpServers": {
+    "postgres": {
+      "command": "cmd",
+      "args": ["/c", "uv", "run", "postgres-mcp", "--access-mode=unrestricted"],
+      "env": {
+        "DATABASE_URI": "{env:DATABASE_URI}"
+      }
+    },
+
+    "stitch": {
+      "serverUrl": "https://stitch.googleapis.com/mcp",
+      "headers": {
+        "X-Goog-Api-Key": "{env:STITCH_API_KEY}"
+      }
+    },
+
+    "codegraph": {
+      "command": "cmd",
+      "args": ["/c", "codegraph", "serve", "--mcp"]
+    },
+
+    "chrome-devtools": {
+      "command": "cmd",
+      "args": ["/c", "npx", "-y", "chrome-devtools-mcp@latest"],
+      "env": {
+        "SystemRoot": "C:\\Windows",
+        "PROGRAMFILES": "C:\\Program Files"
+      }
+    },
+
+    "dokploy-mcp": {
+      "command": "cmd",
+      "args": ["/c", "npx", "-y", "dokploy-mcp@latest"],
+      "env": {
+        "DOKPLOY_API_KEY": "{env:DOKPLOY_API_KEY}",
+        "DOKPLOY_URL": "{env:DOKPLOY_URL}"
+      }
+    },
+    "auth0": {
+      "command": "cmd",
+      "args": ["/c", "npx", "-y", "@auth0/auth0-mcp-server"],
+      "env": {
+        "DEBUG": "auth0-mcp"
+      }
+    },
+    "context7": {
+      "command": "cmd",
+      "args": ["/c", "npx", "-y", "https://mcp.context7.com/mcp"],
+      "env": {
+        "CONTEXT7_API_KEY": "{env:CONTEXT7_API_KEY}"
+      }
+    }
+  }
+}

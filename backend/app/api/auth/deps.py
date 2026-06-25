@@ -70,3 +70,15 @@ def get_current_tenant(context: AuthContext = Depends(get_current_auth_context))
 
 def get_current_role(context: AuthContext = Depends(get_current_auth_context)) -> str:
     return context.role
+
+
+def require_roles(allowed_roles: list[str]):
+    def dependency(context: AuthContext = Depends(get_current_auth_context)) -> AuthContext:
+        if context.role not in allowed_roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Operation not allowed for role: {context.role}",
+            )
+        return context
+    return dependency
+

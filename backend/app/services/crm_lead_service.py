@@ -156,6 +156,9 @@ class CrmLeadService:
         if not target_stage:
             raise ValueError(f"Stage '{stage_key}' not found for this tenant")
 
+        if target_stage.is_terminal and not (reason and reason.strip()):
+            raise ValueError(f"Reason is required when moving to a terminal stage ({stage_key})")
+
         from_stage_id = lead.current_stage_id
         to_stage_id = target_stage.id
 

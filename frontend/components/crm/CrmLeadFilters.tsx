@@ -10,6 +10,7 @@ const STAGE_TRANSLATIONS: Record<string, string> = {
   connected: 'Conectado',
   qualified: 'Calificado',
   scheduled: 'Agendado',
+  voicemail: 'Buzón de voz',
   follow_up: 'En seguimiento',
   not_interested: 'No Interesado',
   won: 'Ganado',
@@ -33,6 +34,8 @@ export function CrmLeadFilters() {
   const [hasEmail, setHasEmail] = useState(searchParams.get('has_email') || '');
   const [sortBy, setSortBy] = useState(searchParams.get('sort_by') || 'updated_at');
   const [sortOrder, setSortOrder] = useState(searchParams.get('sort_order') || 'desc');
+  const [dateFrom, setDateFrom] = useState(searchParams.get('date_from') || '');
+  const [dateTo, setDateTo] = useState(searchParams.get('date_to') || '');
 
   const createQueryString = useCallback(
     (params: Record<string, string>) => {
@@ -66,6 +69,8 @@ export function CrmLeadFilters() {
         has_email: hasEmail,
         sort_by: sortBy,
         sort_order: sortOrder,
+        date_from: dateFrom,
+        date_to: dateTo,
       })}`
     );
   };
@@ -80,6 +85,8 @@ export function CrmLeadFilters() {
     setHasEmail('');
     setSortBy('updated_at');
     setSortOrder('desc');
+    setDateFrom('');
+    setDateTo('');
     router.push(pathname);
   };
 
@@ -211,6 +218,34 @@ export function CrmLeadFilters() {
               <option value="true">Sí</option>
               <option value="false">No</option>
             </select>
+          </div>
+
+          {/* Date From */}
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="dateFrom" className="text-xs font-medium text-muted-foreground">
+              Fecha desde
+            </label>
+            <input
+              type="date"
+              id="dateFrom"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+              className="w-full rounded-md border border-border bg-zinc-950/40 py-2 px-3 text-sm text-foreground focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 transition-all cursor-pointer"
+            />
+          </div>
+
+          {/* Date To */}
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="dateTo" className="text-xs font-medium text-muted-foreground">
+              Fecha hasta
+            </label>
+            <input
+              type="date"
+              id="dateTo"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+              className="w-full rounded-md border border-border bg-zinc-950/40 py-2 px-3 text-sm text-foreground focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 transition-all cursor-pointer"
+            />
           </div>
 
           {/* Sorting */}

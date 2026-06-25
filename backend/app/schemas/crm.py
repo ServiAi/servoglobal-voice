@@ -47,6 +47,7 @@ class LeadListItem(BaseModel):
     stage_key: str
     stage_name: str
     status: str
+    lead_score: Optional[int] = None
     interest: Optional[str] = None
     use_case: Optional[str] = None
     source: Optional[str] = None
@@ -95,12 +96,21 @@ class ActivitySchema(BaseModel):
     recording_url: Optional[str] = None
     summary: Optional[str] = None
     short_summary: Optional[str] = None
+    normalized_status: Optional[str] = None
+    duration_seconds: Optional[float] = None
+    billed_minutes: Optional[float] = None
 
     model_config = ConfigDict(from_attributes=True)
 
     @model_validator(mode="before")
     @classmethod
     def sanitize_payload(cls, data: Any) -> Any:
+        def _to_float(v):
+            try:
+                return float(v) if v is not None else None
+            except (ValueError, TypeError):
+                return None
+
         if isinstance(data, dict):
             payload = data.get("payload_json") or {}
             call_obj = payload.get("call") or {}
@@ -109,6 +119,9 @@ class ActivitySchema(BaseModel):
             data["recording_url"] = call_obj.get("recordingUrl") or call_obj.get("recording_url") or payload.get("recordingUrl")
             data["summary"] = call_obj.get("summary") or payload.get("summary")
             data["short_summary"] = call_obj.get("shortSummary") or call_obj.get("short_summary") or payload.get("shortSummary")
+            data["normalized_status"] = call_obj.get("status") or call_obj.get("normalizedStatus") or call_obj.get("normalized_status") or payload.get("status")
+            data["duration_seconds"] = _to_float(call_obj.get("durationSeconds") or call_obj.get("duration") or call_obj.get("duration_seconds"))
+            data["billed_minutes"] = _to_float(call_obj.get("billedMinutes") or call_obj.get("billedDuration") or call_obj.get("billed_minutes"))
 
             if "payload_json" in data:
                 del data["payload_json"]
@@ -128,6 +141,9 @@ class ActivitySchema(BaseModel):
                 "recording_url": call_obj.get("recordingUrl") or call_obj.get("recording_url") or payload.get("recordingUrl"),
                 "summary": call_obj.get("summary") or payload.get("summary"),
                 "short_summary": call_obj.get("shortSummary") or call_obj.get("short_summary") or payload.get("shortSummary"),
+                "normalized_status": call_obj.get("status") or call_obj.get("normalizedStatus") or call_obj.get("normalized_status") or payload.get("status"),
+                "duration_seconds": _to_float(call_obj.get("durationSeconds") or call_obj.get("duration") or call_obj.get("duration_seconds")),
+                "billed_minutes": _to_float(call_obj.get("billedMinutes") or call_obj.get("billedDuration") or call_obj.get("billed_minutes")),
             }
         return data
 
@@ -306,6 +322,7 @@ class CrmDashboardKpis(BaseModel):
     connected_leads: int
     qualified_leads: int
     scheduled_leads: int
+    voicemail_leads: int
     follow_up_leads: int
     not_interested_leads: int
     won_leads: int

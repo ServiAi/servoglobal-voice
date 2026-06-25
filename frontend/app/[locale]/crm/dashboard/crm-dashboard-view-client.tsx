@@ -30,6 +30,7 @@ const STAGE_TRANSLATIONS: Record<string, string> = {
   connected: 'Conectado',
   qualified: 'Calificado',
   scheduled: 'Agendado',
+  voicemail: 'Buzón de voz',
   follow_up: 'En seguimiento',
   not_interested: 'No Interesado',
   won: 'Ganado',
@@ -250,7 +251,7 @@ export function CrmDashboardViewClient({
           title="Leads Abiertos"
           value={data.kpis.open_leads}
           icon={Target}
-          subtext={`${data.kpis.new_leads} nuevos • ${data.kpis.follow_up_leads} en seguimiento`}
+          subtext={`${data.kpis.new_leads} nuevos • ${data.kpis.voicemail_leads} buzón • ${data.kpis.follow_up_leads} seguimiento`}
           iconClassName="bg-violet-500/10 text-violet-500"
         />
         <CrmMetricCard

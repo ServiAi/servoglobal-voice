@@ -143,13 +143,13 @@ class CrmMetricsService:
             ) or 0
 
         if "voicemail" in stage_key_map:
-            follow_up_leads += self.db.scalar(
+            voicemail_leads = self.db.scalar(
                 select(func.count()).select_from(CrmLead)
                 .where(*lead_base, CrmLead.current_stage_id == stage_key_map["voicemail"])
             ) or 0
 
         if "follow_up" in stage_key_map:
-            follow_up_leads += self.db.scalar(
+            follow_up_leads = self.db.scalar(
                 select(func.count()).select_from(CrmLead)
                 .where(*lead_base, CrmLead.current_stage_id == stage_key_map["follow_up"])
             ) or 0

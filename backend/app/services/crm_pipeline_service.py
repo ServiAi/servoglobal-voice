@@ -10,10 +10,11 @@ DEFAULT_STAGES = [
     {"key": "connected", "name": "Conectado", "position": 3, "is_default": False, "is_terminal": False},
     {"key": "qualified", "name": "Calificado", "position": 4, "is_default": False, "is_terminal": False},
     {"key": "scheduled", "name": "Agendado", "position": 5, "is_default": False, "is_terminal": False},
-    {"key": "follow_up", "name": "En seguimiento", "position": 6, "is_default": False, "is_terminal": False},
-    {"key": "not_interested", "name": "No interesado", "position": 7, "is_default": False, "is_terminal": True},
-    {"key": "won", "name": "Ganado", "position": 8, "is_default": False, "is_terminal": True},
-    {"key": "lost", "name": "Perdido", "position": 9, "is_default": False, "is_terminal": True},
+    {"key": "voicemail", "name": "Buzón de voz", "position": 6, "is_default": False, "is_terminal": False},
+    {"key": "follow_up", "name": "En seguimiento", "position": 7, "is_default": False, "is_terminal": False},
+    {"key": "not_interested", "name": "No interesado", "position": 8, "is_default": False, "is_terminal": True},
+    {"key": "won", "name": "Ganado", "position": 9, "is_default": False, "is_terminal": True},
+    {"key": "lost", "name": "Perdido", "position": 10, "is_default": False, "is_terminal": True},
 ]
 
 DEFAULT_STAGE_KEYS = {stage["key"] for stage in DEFAULT_STAGES}

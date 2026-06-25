@@ -122,14 +122,14 @@ class CrmSprint1Tests(unittest.TestCase):
         with SessionLocal() as db:
             service = CrmPipelineService(db)
             stages = service.ensure_default_pipeline(tenant.id)
-            self.assertEqual(len(stages), 9)
+            self.assertEqual(len(stages), 10)
             self.assertEqual(stages[0].key, "new")
             self.assertTrue(stages[0].is_default)
             self.assertEqual(stages[2].key, "connected")
             
             # Check duplicate calls are idempotent
             stages_dup = service.ensure_default_pipeline(tenant.id)
-            self.assertEqual(len(stages_dup), 9)
+            self.assertEqual(len(stages_dup), 10)
             self.assertEqual(stages_dup[0].id, stages[0].id)
 
     def test_contact_creation_and_deduplication(self):
@@ -1014,6 +1014,18 @@ class CrmSprint1Tests(unittest.TestCase):
             db.refresh(lead2)
             
             lead2_id = lead2.id
+
+        # Change user role to platform_admin for bulk delete
+        with SessionLocal() as db:
+            membership = db.scalar(
+                select(TenantMembership).where(
+                    TenantMembership.tenant_id == tenant.id,
+                    TenantMembership.user_id == user.id,
+                )
+            )
+            membership.role = "platform_admin"
+            db.commit()
+        self.override_auth(user, tenant)
 
         # Test DELETE /api/v1/crm/leads
         res_bulk = self.client.delete("/api/v1/crm/leads")

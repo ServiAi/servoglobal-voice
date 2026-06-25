@@ -85,4 +85,5 @@ dist/
 .agent/
 .rapid-os/
 opencode.json
+opencode.jsonc
 .ponytail-repo/

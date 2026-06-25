@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
-from app.api.auth.deps import AuthContext, get_current_auth_context
+from app.api.auth.deps import AuthContext, get_current_auth_context, require_roles
 from app.db.session import get_db
 from app.models.crm import CrmContact, CrmPipelineStage, CrmLead, CrmActivity, CrmTask
 
@@ -46,7 +46,7 @@ router = APIRouter(prefix="/api/v1/crm", tags=["CRM"])
 
 @router.get("/pipeline", response_model=List[PipelineStageSchema])
 def get_crm_pipeline(
-    context: AuthContext = Depends(get_current_auth_context),
+    context: AuthContext = Depends(require_roles(["platform_admin", "tenant_admin", "tenant_analyst", "tenant_viewer"])),
     db: Session = Depends(get_db),
 ) -> Any:
     pipeline_service = CrmPipelineService(db)
@@ -58,7 +58,7 @@ def get_crm_pipeline(
 
 @router.get("/summary", response_model=CrmSummaryResponse)
 def get_crm_summary(
-    context: AuthContext = Depends(get_current_auth_context),
+    context: AuthContext = Depends(require_roles(["platform_admin", "tenant_admin", "tenant_analyst", "tenant_viewer"])),
     db: Session = Depends(get_db),
 ) -> Any:
     tenant_id = context.tenant.id
@@ -115,7 +115,7 @@ def get_crm_leads(
     has_email: Optional[bool] = Query(default=None),
     sort_by: str = Query(default="updated_at"),
     sort_order: str = Query(default="desc"),
-    context: AuthContext = Depends(get_current_auth_context),
+    context: AuthContext = Depends(require_roles(["platform_admin", "tenant_admin", "tenant_analyst", "tenant_viewer"])),
     db: Session = Depends(get_db),
 ) -> Any:
     tenant_id = context.tenant.id
@@ -154,7 +154,7 @@ def get_crm_leads(
 @router.get("/leads/{lead_id}", response_model=LeadDetailResponse)
 def get_crm_lead_detail(
     lead_id: str,
-    context: AuthContext = Depends(get_current_auth_context),
+    context: AuthContext = Depends(require_roles(["platform_admin", "tenant_admin", "tenant_analyst", "tenant_viewer"])),
     db: Session = Depends(get_db),
 ) -> Any:
     tenant_id = context.tenant.id
@@ -209,7 +209,7 @@ def get_crm_lead_detail(
 def update_crm_lead(
     lead_id: str,
     body: LeadUpdateRequest,
-    context: AuthContext = Depends(get_current_auth_context),
+    context: AuthContext = Depends(require_roles(["platform_admin", "tenant_admin"])),
     db: Session = Depends(get_db),
 ) -> Any:
     tenant_id = context.tenant.id
@@ -246,7 +246,7 @@ def update_crm_lead(
             joinedload(CrmLead.activities),
             joinedload(CrmLead.tasks),
         )
-        .where(CrmLead.id == lead_id)
+        .where(CrmLead.tenant_id == tenant_id, CrmLead.id == lead_id)
     )
 
     lead.activities.sort(key=lambda a: a.occurred_at or datetime.min, reverse=True)
@@ -282,7 +282,7 @@ def update_crm_lead(
 def change_lead_stage(
     lead_id: str,
     body: StageUpdateRequest,
-    context: AuthContext = Depends(get_current_auth_context),
+    context: AuthContext = Depends(require_roles(["platform_admin", "tenant_admin"])),
     db: Session = Depends(get_db),
 ) -> Any:
     tenant_id = context.tenant.id
@@ -316,7 +316,7 @@ def change_lead_stage(
             joinedload(CrmLead.activities),
             joinedload(CrmLead.tasks),
         )
-        .where(CrmLead.id == lead_id)
+        .where(CrmLead.tenant_id == tenant_id, CrmLead.id == lead_id)
     )
 
     lead.activities.sort(key=lambda a: a.occurred_at or datetime.min, reverse=True)
@@ -346,6 +346,93 @@ def change_lead_stage(
     )
 
 
+
+# --- Outbound Actions ---
+
+@router.post("/leads/{lead_id}/actions/whatsapp", response_model=dict)
+def lead_action_whatsapp(
+    lead_id: str,
+    context: AuthContext = Depends(require_roles(["platform_admin", "tenant_admin", "tenant_analyst"])),
+    db: Session = Depends(get_db),
+) -> Any:
+    tenant_id = context.tenant.id
+    lead_service = CrmLeadService(db)
+    lead = lead_service.get_lead_by_id(tenant_id, lead_id)
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    # Log action request activity
+    lead_service.activity_service.create_activity(
+        tenant_id=tenant_id,
+        lead_id=lead.id,
+        contact_id=lead.contact_id,
+        activity_type="whatsapp_action_requested",
+        title="WhatsApp enviado (Intento)",
+        description="El usuario intentó enviar un mensaje de WhatsApp desde el CRM.",
+    )
+
+    raise HTTPException(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        detail="WhatsApp integration is not configured for this tenant. Please contact support to set up Twilio/Meta API.",
+    )
+
+
+@router.post("/leads/{lead_id}/actions/call", response_model=dict)
+def lead_action_call(
+    lead_id: str,
+    context: AuthContext = Depends(require_roles(["platform_admin", "tenant_admin", "tenant_analyst"])),
+    db: Session = Depends(get_db),
+) -> Any:
+    tenant_id = context.tenant.id
+    lead_service = CrmLeadService(db)
+    lead = lead_service.get_lead_by_id(tenant_id, lead_id)
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    # Log action request activity
+    lead_service.activity_service.create_activity(
+        tenant_id=tenant_id,
+        lead_id=lead.id,
+        contact_id=lead.contact_id,
+        activity_type="call_requested",
+        title="Llamada saliente iniciada (Intento)",
+        description="El usuario intentó iniciar una llamada saliente al contacto desde el CRM.",
+    )
+
+    raise HTTPException(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        detail="VoIP/SIP Trunk integration is not configured for this tenant. Please contact support.",
+    )
+
+
+@router.post("/leads/{lead_id}/actions/schedule", response_model=dict)
+def lead_action_schedule(
+    lead_id: str,
+    context: AuthContext = Depends(require_roles(["platform_admin", "tenant_admin", "tenant_analyst"])),
+    db: Session = Depends(get_db),
+) -> Any:
+    tenant_id = context.tenant.id
+    lead_service = CrmLeadService(db)
+    lead = lead_service.get_lead_by_id(tenant_id, lead_id)
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    # Log action request activity
+    lead_service.activity_service.create_activity(
+        tenant_id=tenant_id,
+        lead_id=lead.id,
+        contact_id=lead.contact_id,
+        activity_type="schedule_requested",
+        title="Agendamiento de reunión (Intento)",
+        description="El usuario intentó agendar una reunión desde el CRM.",
+    )
+
+    raise HTTPException(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        detail="Cal.com/Google Calendar integration is not configured for this tenant. Please connect your calendar in settings.",
+    )
+
+
 # --- Pipeline Board ---
 
 @router.get("/pipeline/board", response_model=PipelineBoardResponse)
@@ -356,7 +443,7 @@ def get_pipeline_board(
     source: Optional[str] = Query(default=None),
     campaign: Optional[str] = Query(default=None),
     assigned_agent_id: Optional[str] = Query(default=None),
-    context: AuthContext = Depends(get_current_auth_context),
+    context: AuthContext = Depends(require_roles(["platform_admin", "tenant_admin", "tenant_analyst", "tenant_viewer"])),
     db: Session = Depends(get_db),
 ) -> Any:
     tenant_id = context.tenant.id
@@ -388,7 +475,7 @@ def get_crm_activities(
     date_to: Optional[datetime] = Query(default=None),
     limit: int = Query(default=50, ge=1, le=200),
     page: int = Query(default=1, ge=1),
-    context: AuthContext = Depends(get_current_auth_context),
+    context: AuthContext = Depends(require_roles(["platform_admin", "tenant_admin", "tenant_analyst", "tenant_viewer"])),
     db: Session = Depends(get_db),
 ) -> Any:
     tenant_id = context.tenant.id
@@ -414,7 +501,7 @@ def get_crm_activities(
 def create_lead_note(
     lead_id: str,
     body: NoteCreateRequest,
-    context: AuthContext = Depends(get_current_auth_context),
+    context: AuthContext = Depends(require_roles(["platform_admin", "tenant_admin", "tenant_analyst"])),
     db: Session = Depends(get_db),
 ) -> Any:
     tenant_id = context.tenant.id
@@ -441,7 +528,7 @@ def create_lead_note(
             joinedload(CrmLead.activities),
             joinedload(CrmLead.tasks),
         )
-        .where(CrmLead.id == lead_id)
+        .where(CrmLead.tenant_id == tenant_id, CrmLead.id == lead_id)
     )
 
     lead.activities.sort(key=lambda a: a.occurred_at or datetime.min, reverse=True)
@@ -479,7 +566,7 @@ def list_crm_tasks(
     contact_id: Optional[str] = Query(default=None),
     status: Optional[str] = Query(default=None),
     priority: Optional[str] = Query(default=None),
-    context: AuthContext = Depends(get_current_auth_context),
+    context: AuthContext = Depends(require_roles(["platform_admin", "tenant_admin", "tenant_analyst", "tenant_viewer"])),
     db: Session = Depends(get_db),
 ) -> Any:
     tenant_id = context.tenant.id
@@ -499,7 +586,7 @@ def list_crm_tasks(
 @router.post("/tasks", response_model=TaskResponse, status_code=status.HTTP_201_CREATED)
 def create_crm_task(
     body: TaskCreateRequest,
-    context: AuthContext = Depends(get_current_auth_context),
+    context: AuthContext = Depends(require_roles(["platform_admin", "tenant_admin", "tenant_analyst"])),
     db: Session = Depends(get_db),
 ) -> Any:
     tenant_id = context.tenant.id
@@ -529,7 +616,7 @@ def create_crm_task(
 def update_crm_task(
     task_id: str,
     body: TaskUpdateRequest,
-    context: AuthContext = Depends(get_current_auth_context),
+    context: AuthContext = Depends(require_roles(["platform_admin", "tenant_admin", "tenant_analyst"])),
     db: Session = Depends(get_db),
 ) -> Any:
     tenant_id = context.tenant.id
@@ -562,7 +649,7 @@ def update_crm_task(
 @router.delete("/tasks/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_crm_task(
     task_id: str,
-    context: AuthContext = Depends(get_current_auth_context),
+    context: AuthContext = Depends(require_roles(["platform_admin", "tenant_admin"])),
     db: Session = Depends(get_db),
 ) -> None:
     tenant_id = context.tenant.id
@@ -585,7 +672,7 @@ def get_crm_metrics(
     source: Optional[str] = Query(default=None),
     campaign: Optional[str] = Query(default=None),
     assigned_agent_id: Optional[str] = Query(default=None),
-    context: AuthContext = Depends(get_current_auth_context),
+    context: AuthContext = Depends(require_roles(["platform_admin", "tenant_admin", "tenant_analyst", "tenant_viewer"])),
     db: Session = Depends(get_db),
 ) -> Any:
     tenant_id = context.tenant.id
@@ -608,7 +695,7 @@ def get_crm_metrics(
 @router.delete("/leads/{lead_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_crm_lead(
     lead_id: str,
-    context: AuthContext = Depends(get_current_auth_context),
+    context: AuthContext = Depends(require_roles(["platform_admin", "tenant_admin"])),
     db: Session = Depends(get_db),
 ) -> None:
     tenant_id = context.tenant.id
@@ -624,7 +711,7 @@ def delete_crm_lead(
 
 @router.delete("/leads", status_code=status.HTTP_204_NO_CONTENT)
 def delete_all_crm_leads(
-    context: AuthContext = Depends(get_current_auth_context),
+    context: AuthContext = Depends(require_roles(["platform_admin"])),
     db: Session = Depends(get_db),
 ) -> None:
     tenant_id = context.tenant.id
@@ -642,7 +729,7 @@ def get_crm_dashboard(
     date_to: Optional[str] = Query(default=None),
     source: Optional[str] = Query(default=None),
     campaign: Optional[str] = Query(default=None),
-    context: AuthContext = Depends(get_current_auth_context),
+    context: AuthContext = Depends(require_roles(["platform_admin", "tenant_admin", "tenant_analyst", "tenant_viewer"])),
     db: Session = Depends(get_db),
 ) -> Any:
     if range == "custom" and (not date_from or not date_to):
@@ -661,4 +748,5 @@ def get_crm_dashboard(
         campaign=campaign,
     )
     return dashboard_data
+
 

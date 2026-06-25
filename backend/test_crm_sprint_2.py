@@ -872,6 +872,201 @@ class CrmSprint2Tests(unittest.TestCase):
             db.add(old_lead)
             db.commit()
 
+    def test_crm_task_cross_tenant_404(self):
+        tenant_a, agent, user = self.seed_tenant_agent_user()
+        with SessionLocal() as db:
+            tenant_b = Tenant(name="Empresa B", slug="empresa-b")
+            db.add(tenant_b)
+            db.commit()
+            db.refresh(tenant_b)
+
+            task = CrmTask(tenant_id=tenant_b.id, title="Cross task")
+            db.add(task)
+            db.commit()
+            db.refresh(task)
+
+        self.override_auth(user, tenant_a)
+        response = self.client.patch(
+            f"/api/v1/crm/tasks/{task.id}",
+            json={"title": "Hacked"},
+        )
+        self.assertEqual(response.status_code, 404)
+
+    def test_crm_task_assignee_must_belong_to_tenant(self):
+        tenant, agent, user = self.seed_tenant_agent_user()
+        with SessionLocal() as db:
+            # Create user from another tenant
+            other_user = User(
+                email="other@test.com", name="Other", status="active",
+                external_auth_id="auth0|other",
+            )
+            db.add(other_user)
+            db.commit()
+            db.refresh(other_user)
+
+        self.override_auth(user, tenant)
+        response = self.client.post(
+            "/api/v1/crm/tasks",
+            json={
+                "title": "Invalid assignee",
+                "assigned_to_user_id": other_user.id,
+            },
+        )
+        self.assertEqual(response.status_code, 422)
+
+    def test_crm_delete_task(self):
+        tenant, agent, user = self.seed_tenant_agent_user()
+        with SessionLocal() as db:
+            task = CrmTask(tenant_id=tenant.id, title="Delete me")
+            db.add(task)
+            db.commit()
+            db.refresh(task)
+            task_id = task.id
+
+        self.override_auth(user, tenant)
+        response = self.client.delete(f"/api/v1/crm/tasks/{task_id}")
+        self.assertEqual(response.status_code, 204)
+
+        # Verify it's gone
+        response = self.client.get("/api/v1/crm/tasks")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        ids = [t["id"] for t in data]
+        self.assertNotIn(task_id, ids)
+
+    # === Métricas ===
+
+    def test_crm_metrics_counts(self):
+        tenant, agent, user = self.seed_tenant_agent_user()
+        with SessionLocal() as db:
+            pipeline = CrmPipelineService(db)
+            stages = pipeline.ensure_default_pipeline(tenant.id)
+            stage_map = {s.key: s for s in stages}
+
+            for i in range(3):
+                contact = CrmContact(tenant_id=tenant.id, name=f"Metric Lead {i}")
+                db.add(contact)
+                db.commit()
+                db.refresh(contact)
+
+            # Create leads in various statuses
+            contact1 = CrmContact(tenant_id=tenant.id, name="Won Lead")
+            db.add(contact1)
+            db.commit()
+            db.refresh(contact1)
+            lead_won = CrmLead(
+                tenant_id=tenant.id, contact_id=contact1.id,
+                current_stage_id=stage_map["won"].id, status="won",
+            )
+            db.add(lead_won)
+
+            contact2 = CrmContact(tenant_id=tenant.id, name="Lost Lead")
+            db.add(contact2)
+            db.commit()
+            db.refresh(contact2)
+            lead_lost = CrmLead(
+                tenant_id=tenant.id, contact_id=contact2.id,
+                current_stage_id=stage_map["lost"].id, status="lost",
+            )
+            db.add(lead_lost)
+            db.commit()
+
+        # Create some tasks
+        with SessionLocal() as db:
+            task = CrmTask(tenant_id=tenant.id, title="Pending task")
+            db.add(task)
+            db.commit()
+
+        self.override_auth(user, tenant)
+        response = self.client.get("/api/v1/crm/metrics")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertIn("total_leads", data)
+        self.assertIn("total_contacts", data)
+        self.assertIn("open_leads", data)
+        self.assertIn("won_leads", data)
+        self.assertIn("lost_leads", data)
+
+    def test_crm_metrics_conversion_rate(self):
+        tenant, agent, user = self.seed_tenant_agent_user()
+        with SessionLocal() as db:
+            pipeline = CrmPipelineService(db)
+            stages = pipeline.ensure_default_pipeline(tenant.id)
+            stage_map = {s.key: s for s in stages}
+
+            # 2 won, 2 lost, 1 open = 5 total
+            for i in range(2):
+                c = CrmContact(tenant_id=tenant.id, name=f"Won {i}")
+                db.add(c)
+                db.commit()
+                db.refresh(c)
+                lead = CrmLead(tenant_id=tenant.id, contact_id=c.id,
+                               current_stage_id=stage_map["won"].id, status="won")
+                db.add(lead)
+
+            for i in range(2):
+                c = CrmContact(tenant_id=tenant.id, name=f"Lost {i}")
+                db.add(c)
+                db.commit()
+                db.refresh(c)
+                lead = CrmLead(tenant_id=tenant.id, contact_id=c.id,
+                               current_stage_id=stage_map["lost"].id, status="lost")
+                db.add(lead)
+
+            c = CrmContact(tenant_id=tenant.id, name="Open")
+            db.add(c)
+            db.commit()
+            db.refresh(c)
+            lead = CrmLead(tenant_id=tenant.id, contact_id=c.id,
+                           current_stage_id=stage_map["new"].id, status="open")
+            db.add(lead)
+            db.commit()
+
+        self.override_auth(user, tenant)
+        response = self.client.get("/api/v1/crm/metrics")
+        data = response.json()
+        # 2/5 = 40%
+        self.assertAlmostEqual(data["conversion_rate"], 40.0, places=1)
+
+    def test_crm_metrics_contact_completion_rate(self):
+        tenant, agent, user = self.seed_tenant_agent_user()
+        with SessionLocal() as db:
+            # 2 contacts with phone, 1 with email, 2 with neither
+            for i in range(2):
+                c = CrmContact(tenant_id=tenant.id, name=f"With Phone {i}", phone="+573001112233")
+                db.add(c)
+            c = CrmContact(tenant_id=tenant.id, name="With Email", email="test@test.com")
+            db.add(c)
+            for i in range(2):
+                c = CrmContact(tenant_id=tenant.id, name=f"No Contact {i}")
+                db.add(c)
+            db.commit()
+
+        self.override_auth(user, tenant)
+        response = self.client.get("/api/v1/crm/metrics")
+        data = response.json()
+        # 3/5 = 60%
+        self.assertAlmostEqual(data["contact_completion_rate"], 60.0, places=1)
+
+    def test_crm_metrics_filters_by_date(self):
+        tenant, agent, user = self.seed_tenant_agent_user()
+        with SessionLocal() as db:
+            pipeline = CrmPipelineService(db)
+            stage = pipeline.get_stage_by_key(tenant.id, "new")
+            contact = CrmContact(tenant_id=tenant.id, name="Old Lead")
+            db.add(contact)
+            db.commit()
+            db.refresh(contact)
+
+            from datetime import datetime as dt
+            old_lead = CrmLead(
+                tenant_id=tenant.id, contact_id=contact.id,
+                current_stage_id=stage.id, status="open",
+                created_at=dt(2024, 1, 1, tzinfo=UTC),
+            )
+            db.add(old_lead)
+            db.commit()
+
         self.override_auth(user, tenant)
         # Filter only recent dates
         response = self.client.get(
@@ -880,6 +1075,216 @@ class CrmSprint2Tests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertEqual(data["leads_created_this_month"], 0)
+
+    def test_crm_rbac_viewer_blocked(self):
+        tenant, agent, user = self.seed_tenant_agent_user()
+        with SessionLocal() as db:
+            pipeline = CrmPipelineService(db)
+            stages = pipeline.ensure_default_pipeline(tenant.id)
+            stage_map = {s.key: s for s in stages}
+            contact = CrmContact(tenant_id=tenant.id, name="Lead A")
+            db.add(contact)
+            db.commit()
+            db.refresh(contact)
+            lead = self.seed_lead(db, tenant.id, stage_map["new"].id, contact=contact)
+
+            # Change user role to viewer
+            membership = db.scalar(
+                select(TenantMembership).where(
+                    TenantMembership.tenant_id == tenant.id,
+                    TenantMembership.user_id == user.id,
+                )
+            )
+            membership.role = "tenant_viewer"
+            db.commit()
+
+        self.override_auth(user, tenant)
+
+        # 1. Update lead should be 403
+        res = self.client.patch(f"/api/v1/crm/leads/{lead.id}", json={"interest": "AI"})
+        self.assertEqual(res.status_code, 403)
+
+        # 2. Change stage should be 403
+        res = self.client.patch(f"/api/v1/crm/leads/{lead.id}/stage", json={"stage_key": "contacted"})
+        self.assertEqual(res.status_code, 403)
+
+        # 3. Create note should be 403
+        res = self.client.post(f"/api/v1/crm/leads/{lead.id}/notes", json={"note": "Test Note"})
+        self.assertEqual(res.status_code, 403)
+
+        # 4. Create task should be 403
+        res = self.client.post("/api/v1/crm/tasks", json={"lead_id": lead.id, "title": "Test Task"})
+        self.assertEqual(res.status_code, 403)
+
+        # 5. Delete lead should be 403
+        res = self.client.delete(f"/api/v1/crm/leads/{lead.id}")
+        self.assertEqual(res.status_code, 403)
+
+    def test_crm_rbac_analyst_limits(self):
+        tenant, agent, user = self.seed_tenant_agent_user()
+        with SessionLocal() as db:
+            pipeline = CrmPipelineService(db)
+            stages = pipeline.ensure_default_pipeline(tenant.id)
+            stage_map = {s.key: s for s in stages}
+            contact = CrmContact(tenant_id=tenant.id, name="Lead A")
+            db.add(contact)
+            db.commit()
+            db.refresh(contact)
+            lead = self.seed_lead(db, tenant.id, stage_map["new"].id, contact=contact)
+
+            # Change user role to analyst
+            membership = db.scalar(
+                select(TenantMembership).where(
+                    TenantMembership.tenant_id == tenant.id,
+                    TenantMembership.user_id == user.id,
+                )
+            )
+            membership.role = "tenant_analyst"
+            db.commit()
+
+        self.override_auth(user, tenant)
+
+        # 1. Update lead should be 403
+        res = self.client.patch(f"/api/v1/crm/leads/{lead.id}", json={"interest": "AI"})
+        self.assertEqual(res.status_code, 403)
+
+        # 2. Change stage should be 403
+        res = self.client.patch(f"/api/v1/crm/leads/{lead.id}/stage", json={"stage_key": "contacted"})
+        self.assertEqual(res.status_code, 403)
+
+        # 3. Create note should be 200 (allowed for analyst)
+        res = self.client.post(f"/api/v1/crm/leads/{lead.id}/notes", json={"note": "Test Note"})
+        self.assertEqual(res.status_code, 200)
+
+        # 4. Create task should be 201 (allowed for analyst)
+        res = self.client.post("/api/v1/crm/tasks", json={"lead_id": lead.id, "title": "Test Task"})
+        self.assertEqual(res.status_code, 201)
+
+        # 5. Delete lead should be 403
+        res = self.client.delete(f"/api/v1/crm/leads/{lead.id}")
+        self.assertEqual(res.status_code, 403)
+
+    def test_crm_rbac_bulk_delete_platform_admin(self):
+        tenant, agent, user = self.seed_tenant_agent_user()
+        self.override_auth(user, tenant)
+
+        # Tenant Admin role should get 403 on bulk delete
+        res = self.client.delete("/api/v1/crm/leads")
+        self.assertEqual(res.status_code, 403)
+
+        # Change role to platform_admin
+        with SessionLocal() as db:
+            membership = db.scalar(
+                select(TenantMembership).where(
+                    TenantMembership.tenant_id == tenant.id,
+                    TenantMembership.user_id == user.id,
+                )
+            )
+            membership.role = "platform_admin"
+            db.commit()
+
+        self.override_auth(user, tenant)
+        res = self.client.delete("/api/v1/crm/leads")
+        self.assertEqual(res.status_code, 204) # Bulk delete succeeds (returns 204 No Content)
+
+    def test_crm_won_lost_requires_reason(self):
+        tenant, agent, user = self.seed_tenant_agent_user()
+        with SessionLocal() as db:
+            pipeline = CrmPipelineService(db)
+            stages = pipeline.ensure_default_pipeline(tenant.id)
+            stage_map = {s.key: s for s in stages}
+            contact = CrmContact(tenant_id=tenant.id, name="Lead A")
+            db.add(contact)
+            db.commit()
+            db.refresh(contact)
+            lead = self.seed_lead(db, tenant.id, stage_map["new"].id, contact=contact)
+
+        self.override_auth(user, tenant)
+
+        # Moving to won with reason=None should be 422
+        res = self.client.patch(f"/api/v1/crm/leads/{lead.id}/stage", json={"stage_key": "won", "reason": None})
+        self.assertEqual(res.status_code, 422)
+
+        # Moving to won with empty reason should be 422
+        res = self.client.patch(f"/api/v1/crm/leads/{lead.id}/stage", json={"stage_key": "won", "reason": "  "})
+        self.assertEqual(res.status_code, 422)
+
+        # Moving to won with a valid reason should succeed (200)
+        res = self.client.patch(f"/api/v1/crm/leads/{lead.id}/stage", json={"stage_key": "won", "reason": "Cliente firmo"})
+        self.assertEqual(res.status_code, 200)
+
+    def test_crm_sort_by_lead_score(self):
+        tenant, agent, user = self.seed_tenant_agent_user()
+        with SessionLocal() as db:
+            pipeline = CrmPipelineService(db)
+            stages = pipeline.ensure_default_pipeline(tenant.id)
+            stage_map = {s.key: s for s in stages}
+            
+            c1 = CrmContact(tenant_id=tenant.id, name="Lead 1")
+            db.add(c1)
+            c2 = CrmContact(tenant_id=tenant.id, name="Lead 2")
+            db.add(c2)
+            db.commit()
+            db.refresh(c1)
+            db.refresh(c2)
+            
+            self.seed_lead(db, tenant.id, stage_map["new"].id, contact=c1, lead_score=80)
+            self.seed_lead(db, tenant.id, stage_map["new"].id, contact=c2, lead_score=95)
+
+        self.override_auth(user, tenant)
+
+        # Test sorting DESC
+        res = self.client.get("/api/v1/crm/leads?sort_by=lead_score&sort_order=desc")
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertEqual(data["items"][0]["lead_score"], 95)
+        self.assertEqual(data["items"][1]["lead_score"], 80)
+
+        # Test sorting ASC
+        res = self.client.get("/api/v1/crm/leads?sort_by=lead_score&sort_order=asc")
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertEqual(data["items"][0]["lead_score"], 80)
+        self.assertEqual(data["items"][1]["lead_score"], 95)
+
+    def test_crm_outbound_actions(self):
+        tenant, agent, user = self.seed_tenant_agent_user()
+        with SessionLocal() as db:
+            pipeline = CrmPipelineService(db)
+            stages = pipeline.ensure_default_pipeline(tenant.id)
+            stage_map = {s.key: s for s in stages}
+            contact = CrmContact(tenant_id=tenant.id, name="Lead A")
+            db.add(contact)
+            db.commit()
+            db.refresh(contact)
+            lead = self.seed_lead(db, tenant.id, stage_map["new"].id, contact=contact)
+
+        self.override_auth(user, tenant)
+
+        # 1. WhatsApp action should register activity and return 422
+        res = self.client.post(f"/api/v1/crm/leads/{lead.id}/actions/whatsapp")
+        self.assertEqual(res.status_code, 422)
+        self.assertIn("Twilio/Meta API", res.json()["detail"])
+
+        # 2. Call action should register activity and return 422
+        res = self.client.post(f"/api/v1/crm/leads/{lead.id}/actions/call")
+        self.assertEqual(res.status_code, 422)
+        self.assertIn("VoIP/SIP Trunk", res.json()["detail"])
+
+        # 3. Schedule action should register activity and return 422
+        res = self.client.post(f"/api/v1/crm/leads/{lead.id}/actions/schedule")
+        self.assertEqual(res.status_code, 422)
+        self.assertIn("connect your calendar", res.json()["detail"])
+
+        # Check that activities were created
+        with SessionLocal() as db:
+            activities = db.scalars(
+                select(CrmActivity).where(CrmActivity.lead_id == lead.id)
+            ).all()
+            types = {act.activity_type for act in activities}
+            self.assertIn("whatsapp_action_requested", types)
+            self.assertIn("call_requested", types)
+            self.assertIn("schedule_requested", types)
 
 
 if __name__ == "__main__":
