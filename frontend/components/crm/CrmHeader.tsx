@@ -4,7 +4,7 @@ import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { Globe, LayoutDashboard, Users, CheckSquare, LogOut, Phone } from 'lucide-react';
+import { Globe, LayoutDashboard, Users, CheckSquare, LogOut, Phone, BarChart3 } from 'lucide-react';
 import { ThemeToggle } from '../shared/ThemeToggle';
 
 type CrmHeaderProps = {
@@ -17,6 +17,12 @@ export function CrmHeader({ locale, tenantName, userName }: CrmHeaderProps) {
   const pathname = usePathname();
 
   const NAV_LINKS = [
+    {
+      name: 'Dashboard Comercial',
+      href: `/${locale}/crm/dashboard`,
+      icon: BarChart3,
+      active: pathname === `/${locale}/crm/dashboard`,
+    },
     {
       name: 'Panel CRM / Pipeline',
       href: `/${locale}/crm`,

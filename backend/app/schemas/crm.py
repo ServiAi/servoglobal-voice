@@ -287,3 +287,94 @@ class CrmMetricsResponse(BaseModel):
     overdue_tasks: int
     conversion_rate: float
     contact_completion_rate: float
+
+
+# --- Dashboard Commercial ---
+
+class DashboardPeriod(BaseModel):
+    from_date: str = Field(..., alias="from")
+    to: str
+    range: str
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class CrmDashboardKpis(BaseModel):
+    total_leads: int
+    new_leads: int
+    contacted_leads: int
+    connected_leads: int
+    qualified_leads: int
+    scheduled_leads: int
+    follow_up_leads: int
+    not_interested_leads: int
+    won_leads: int
+    lost_leads: int
+    open_leads: int
+    pending_tasks: int
+    overdue_tasks: int
+    leads_with_next_action: int
+
+
+class CrmDashboardConversion(BaseModel):
+    contact_rate: float
+    connection_rate: float
+    qualification_rate: float
+    schedule_rate: float
+    win_rate: float
+
+
+class CrmDashboardFunnelItem(BaseModel):
+    stage: str
+    label: str
+    count: int
+
+
+class CrmDashboardSourceItem(BaseModel):
+    source: str
+    total_leads: int
+    qualified_leads: int
+    scheduled_leads: int
+    won_leads: int
+    conversion_rate: float
+
+
+class CrmDashboardCampaignItem(BaseModel):
+    campaign: str
+    total_leads: int
+    qualified_leads: int
+    scheduled_leads: int
+    won_leads: int
+    conversion_rate: float
+
+
+class CrmDashboardCallMetrics(BaseModel):
+    total_calls: int
+    answered_calls: int
+    unanswered_calls: int
+    voicemail_calls: int
+    failed_calls: int
+    average_duration_seconds: float
+    total_billed_minutes: float
+
+
+class CrmPendingActionItem(BaseModel):
+    lead_id: str
+    contact_name: str
+    stage: str
+    next_action: Optional[str] = None
+    source: Optional[str] = None
+    campaign: Optional[str] = None
+    updated_at: datetime
+
+
+class CrmDashboardResponse(BaseModel):
+    period: DashboardPeriod
+    kpis: CrmDashboardKpis
+    conversion: CrmDashboardConversion
+    funnel: List[CrmDashboardFunnelItem]
+    sources: List[CrmDashboardSourceItem]
+    campaigns: List[CrmDashboardCampaignItem]
+    calls: CrmDashboardCallMetrics
+    pending_actions: List[CrmPendingActionItem]
+

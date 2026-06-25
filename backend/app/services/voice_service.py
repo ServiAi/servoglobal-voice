@@ -12,6 +12,19 @@ def _ultravox_tenant_metadata() -> dict[str, str]:
     return {"tenant_slug": tenant_slug}
 
 
+def _ultravox_call_metadata(template_context: dict | None = None) -> dict[str, str]:
+    metadata = _ultravox_tenant_metadata()
+    if isinstance(template_context, dict):
+        context_id = template_context.get("context_id") or template_context.get("crm_context_id")
+        form_submission_id = template_context.get("form_submission_id") or template_context.get("submission_id")
+        if context_id:
+            metadata["context_id"] = str(context_id)
+            metadata["crm_context_id"] = str(context_id)
+        if form_submission_id:
+            metadata["form_submission_id"] = str(form_submission_id)
+    return metadata
+
+
 async def create_call_session(
     agent_id: str | None = None,
     system_prompt: str | None = None,
@@ -30,7 +43,7 @@ async def create_call_session(
     final_agent_id = agent_id or settings.DEFAULT_AGENT_ID
 
     payload = {
-        "metadata": _ultravox_tenant_metadata(),
+        "metadata": _ultravox_call_metadata(template_context),
     }
 
     if not final_agent_id:
@@ -123,7 +136,7 @@ async def create_sip_call_via_pbx(
             }
         },
         "firstSpeakerSettings": {"agent": {}},  # Force agent to speak first
-        "metadata": _ultravox_tenant_metadata(),
+        "metadata": _ultravox_call_metadata(template_context),
     }
 
     if template_context:
@@ -194,7 +207,7 @@ async def create_scheduled_sip_call_via_pbx(
             }
         },
         "firstSpeakerSettings": {"agent": {}},
-        "metadata": _ultravox_tenant_metadata(),
+        "metadata": _ultravox_call_metadata(template_context),
     }
 
     if template_context:

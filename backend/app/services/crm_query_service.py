@@ -4,7 +4,7 @@ from datetime import datetime
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, joinedload
 
-from app.models.crm import CrmContact, CrmLead, CrmPipelineStage, CrmActivity
+from app.models.crm import CrmActivity, CrmCallContext, CrmContact, CrmLead, CrmPipelineStage
 
 ALLOWED_SORT_FIELDS = {"created_at", "updated_at", "last_activity_at", "stage", "contact_name"}
 
@@ -12,6 +12,32 @@ ALLOWED_SORT_FIELDS = {"created_at", "updated_at", "last_activity_at", "stage", 
 class CrmQueryService:
     def __init__(self, db: Session) -> None:
         self.db = db
+
+    def _lead_context(self, lead: CrmLead) -> CrmCallContext | None:
+        filters = []
+        if lead.context_id:
+            filters.append(CrmCallContext.context_id == lead.context_id)
+        if lead.form_submission_id:
+            filters.append(CrmCallContext.form_submission_id == lead.form_submission_id)
+        if not filters:
+            return None
+
+        return self.db.scalar(
+            select(CrmCallContext)
+            .where(CrmCallContext.tenant_id == lead.tenant_id, or_(*filters))
+            .order_by(CrmCallContext.created_at.desc())
+            .limit(1)
+        )
+
+    def _display_contact(self, lead: CrmLead) -> dict[str, str | None]:
+        contact = lead.contact
+        context = self._lead_context(lead)
+        return {
+            "name": (context.name if context and context.name else None) or contact.name,
+            "phone": (context.phone if context and context.phone else None) or contact.phone,
+            "email": (context.email if context and context.email else None) or contact.email,
+            "company": (context.company if context and context.company else None) or contact.company,
+        }
 
     def _ensure_contact_joined(self, query, already_joined: bool) -> tuple:
         if not already_joined:
@@ -143,8 +169,8 @@ class CrmQueryService:
 
         result = []
         for lead in leads:
-            contact = lead.contact
             stage = lead.stage
+            display_contact = self._display_contact(lead)
 
             last_activity = self.db.scalar(
                 select(CrmActivity.occurred_at)
@@ -158,10 +184,10 @@ class CrmQueryService:
 
             result.append({
                 "lead_id": lead.id,
-                "contact_name": contact.name,
-                "contact_phone": contact.phone,
-                "contact_email": contact.email,
-                "company": contact.company,
+                "contact_name": display_contact["name"],
+                "contact_phone": display_contact["phone"],
+                "contact_email": display_contact["email"],
+                "company": display_contact["company"],
                 "stage_key": stage.key,
                 "stage_name": stage.name,
                 "status": lead.status,
@@ -266,6 +292,7 @@ class CrmQueryService:
 
             stage_leads = []
             for lead in leads:
+                display_contact = self._display_contact(lead)
                 last_activity = self.db.scalar(
                     select(CrmActivity.occurred_at)
                     .where(
@@ -278,9 +305,9 @@ class CrmQueryService:
 
                 stage_leads.append({
                     "id": lead.id,
-                    "contact_name": lead.contact.name if lead.contact else "Sin nombre",
-                    "phone": lead.contact.phone if lead.contact else None,
-                    "company": lead.contact.company if lead.contact else None,
+                    "contact_name": display_contact["name"] or "Sin nombre",
+                    "phone": display_contact["phone"],
+                    "company": display_contact["company"],
                     "short_summary": lead.short_summary,
                     "last_activity_at": last_activity,
                     "status": lead.status,
