@@ -235,7 +235,7 @@ class CrmSprint2Tests(unittest.TestCase):
         with SessionLocal() as db:
             pipeline = CrmPipelineService(db)
             stage = pipeline.get_stage_by_key(tenant.id, "new")
-            contact = CrmContact(tenant_id=tenant.id, name="Detail Lead")
+            contact = CrmContact(tenant_id=tenant.id, name="Detail Lead", company="Empresa Real")
             db.add(contact)
             db.commit()
             db.refresh(contact)
@@ -258,6 +258,7 @@ class CrmSprint2Tests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertEqual(data["id"], lead.id)
+        self.assertEqual(data["contact"]["company"], "Empresa Real")
         self.assertIn("activities", data)
         self.assertIn("tasks", data)
         self.assertGreaterEqual(len(data["activities"]), 1)

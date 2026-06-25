@@ -12,6 +12,7 @@ export type ContactBriefSchema = {
   name: string;
   phone?: string | null;
   email?: string | null;
+  company?: string | null;
 };
 
 export type LeadListItem = {

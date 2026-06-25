@@ -25,6 +25,7 @@ class ContactBriefSchema(BaseModel):
     name: str
     phone: Optional[str] = None
     email: Optional[str] = None
+    company: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 

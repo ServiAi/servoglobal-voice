@@ -162,8 +162,8 @@ export function CrmLeadDetailPanel({
             </div>
             <div className="truncate">
               <span className="text-3xs uppercase tracking-wider text-muted-foreground block">Empresa</span>
-              {lead.campaign ? (
-                <span className="text-sm text-foreground block">{lead.campaign}</span>
+              {lead.contact.company ? (
+                <span className="text-sm text-foreground block">{lead.contact.company}</span>
               ) : (
                 <span className="text-sm text-muted-foreground/45 block">-</span>
               )}
