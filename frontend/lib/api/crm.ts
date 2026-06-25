@@ -10,6 +10,7 @@ import type {
   LeadUpdateRequest,
   StageUpdateRequest,
   NoteCreateRequest,
+  CrmDashboardResponse,
 } from '@/types/crm';
 
 export type FetchResult<T> =
@@ -109,6 +110,21 @@ export function fetchCrmMetrics(
 ) {
   return requestCrmEndpoint<CrmMetricsResponse>('GET', 'metrics', accessToken, filters);
 }
+
+// --- Dashboard ---
+export function fetchCrmDashboard(
+  accessToken: string,
+  filters?: {
+    range?: string;
+    date_from?: string;
+    date_to?: string;
+    source?: string;
+    campaign?: string;
+  }
+) {
+  return requestCrmEndpoint<CrmDashboardResponse>('GET', 'dashboard', accessToken, filters);
+}
+
 
 // --- Pipeline Board ---
 export function fetchCrmPipelineBoard(

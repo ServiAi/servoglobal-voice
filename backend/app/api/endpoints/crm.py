@@ -29,6 +29,7 @@ from app.schemas.crm import (
     TaskCreateRequest,
     TaskResponse,
     TaskUpdateRequest,
+    CrmDashboardResponse,
 )
 from app.services.crm_pipeline_service import CrmPipelineService
 from app.services.crm_lead_service import CrmLeadService
@@ -36,6 +37,7 @@ from app.services.crm_activity_service import CrmActivityService
 from app.services.crm_task_service import CrmTaskService
 from app.services.crm_metrics_service import CrmMetricsService
 from app.services.crm_query_service import CrmQueryService
+from app.services.crm_dashboard_metrics_service import CrmDashboardMetricsService
 
 router = APIRouter(prefix="/api/v1/crm", tags=["CRM"])
 
@@ -628,4 +630,35 @@ def delete_all_crm_leads(
     tenant_id = context.tenant.id
     lead_service = CrmLeadService(db)
 
-    lead_service.delete_all_leads(tenant_id)
+    lead_service.delete_all_leads(tenant_id)
+
+
+# --- Dashboard ---
+
+@router.get("/dashboard", response_model=CrmDashboardResponse)
+def get_crm_dashboard(
+    range: Optional[str] = Query(default="30d"),
+    date_from: Optional[str] = Query(default=None),
+    date_to: Optional[str] = Query(default=None),
+    source: Optional[str] = Query(default=None),
+    campaign: Optional[str] = Query(default=None),
+    context: AuthContext = Depends(get_current_auth_context),
+    db: Session = Depends(get_db),
+) -> Any:
+    if range == "custom" and (not date_from or not date_to):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="range=custom requires both date_from and date_to parameters",
+        )
+
+    metrics_service = CrmDashboardMetricsService(db)
+    dashboard_data = metrics_service.get_dashboard(
+        tenant=context.tenant,
+        range_val=range,
+        date_from_str=date_from,
+        date_to_str=date_to,
+        source=source,
+        campaign=campaign,
+    )
+    return dashboard_data
+

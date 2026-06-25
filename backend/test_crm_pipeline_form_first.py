@@ -20,6 +20,7 @@ from app.services.crm_classifier_service import CrmClassifierService
 from app.services.crm_ingestion_service import CrmIngestionService
 from app.services.crm_lead_resolver_service import CrmLeadResolverService
 from app.services.crm_lead_service import CrmLeadService
+from app.services.crm_query_service import CrmQueryService
 
 
 class CrmPipelineFormFirstTests(unittest.TestCase):
@@ -164,6 +165,46 @@ class CrmPipelineFormFirstTests(unittest.TestCase):
             self.assertNotEqual(second_lead.id, first_lead.id)
             self.assertEqual(self.stage_key(db, second_lead), "new")
             self.assertEqual(self.stage_key(db, first_lead), "qualified")
+
+    def test_pipeline_board_uses_form_context_display_data_for_new_lead(self):
+        tenant, agent = self.seed_tenant_agent()
+        call_id = self.seed_call(tenant, agent, joined=True)
+        with SessionLocal() as db:
+            first_context = self.submit_form(
+                db,
+                tenant,
+                user_name="Pedro Gomez",
+                user_email="pedro@test.com",
+                user_company="Simpro",
+            )
+            first_lead = self.lead(db, tenant)
+            CrmIngestionService(db).process_ultravox_event(
+                self.payload("call.ended", context=first_context, summary="Quiere cotizar una propuesta."),
+                self.get_call(db, call_id),
+            )
+            db.refresh(first_lead)
+            self.assertEqual(self.stage_key(db, first_lead), "qualified")
+
+            second_context = self.submit_form(
+                db,
+                tenant,
+                user_name="Luis Zuleta",
+                user_email="luis@test.com",
+                user_company="Nueva Empresa",
+            )
+            second_lead = db.scalar(
+                select(CrmLead).where(
+                    CrmLead.tenant_id == tenant.id,
+                    CrmLead.context_id == second_context.context_id,
+                )
+            )
+
+            board = CrmQueryService(db).get_pipeline_board(tenant.id)
+            new_stage = next(stage for stage in board if stage["key"] == "new")
+            new_card = next(lead for lead in new_stage["leads"] if lead["id"] == second_lead.id)
+
+            self.assertEqual(new_card["contact_name"], "Luis Zuleta")
+            self.assertEqual(new_card["company"], "Nueva Empresa")
 
     def test_form_context_is_saved_with_context_id_and_form_submission_id(self):
         tenant, _ = self.seed_tenant_agent()

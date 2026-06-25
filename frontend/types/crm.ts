@@ -200,3 +200,90 @@ export type CrmMetricsResponse = {
   conversion_rate: number;
   contact_completion_rate: number;
 };
+
+export type DashboardPeriod = {
+  from: string;
+  to: string;
+  range: string;
+};
+
+export type CrmDashboardKpis = {
+  total_leads: number;
+  new_leads: number;
+  contacted_leads: number;
+  connected_leads: number;
+  qualified_leads: number;
+  scheduled_leads: number;
+  follow_up_leads: number;
+  not_interested_leads: number;
+  won_leads: number;
+  lost_leads: number;
+  open_leads: number;
+  pending_tasks: number;
+  overdue_tasks: number;
+  leads_with_next_action: number;
+};
+
+export type CrmDashboardConversion = {
+  contact_rate: number;
+  connection_rate: number;
+  qualification_rate: number;
+  schedule_rate: number;
+  win_rate: number;
+};
+
+export type CrmDashboardFunnelItem = {
+  stage: string;
+  label: string;
+  count: number;
+};
+
+export type CrmDashboardSourceItem = {
+  source: string;
+  total_leads: number;
+  qualified_leads: number;
+  scheduled_leads: number;
+  won_leads: number;
+  conversion_rate: number;
+};
+
+export type CrmDashboardCampaignItem = {
+  campaign: string;
+  total_leads: number;
+  qualified_leads: number;
+  scheduled_leads: number;
+  won_leads: number;
+  conversion_rate: number;
+};
+
+export type CrmDashboardCallMetrics = {
+  total_calls: number;
+  answered_calls: number;
+  unanswered_calls: number;
+  voicemail_calls: number;
+  failed_calls: number;
+  average_duration_seconds: number;
+  total_billed_minutes: number;
+};
+
+export type CrmPendingActionItem = {
+  lead_id: string;
+  contact_name: string;
+  stage: string;
+  next_action?: string | null;
+  source?: string | null;
+  campaign?: string | null;
+  updated_at: string;
+};
+
+export type CrmDashboardResponse = {
+  period: DashboardPeriod;
+  kpis: CrmDashboardKpis;
+  conversion: CrmDashboardConversion;
+  funnel: CrmDashboardFunnelItem[];
+  sources: CrmDashboardSourceItem[];
+  campaigns: CrmDashboardCampaignItem[];
+  calls: CrmDashboardCallMetrics;
+  pending_actions: CrmPendingActionItem[];
+};
+
