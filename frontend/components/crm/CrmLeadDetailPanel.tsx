@@ -4,16 +4,20 @@ import React, { useState } from 'react';
 import type { LeadDetailResponse, LeadUpdateRequest } from '@/types/crm';
 import { Card } from '../ui/card';
 import { User, Phone, Mail, Building, PenTool, Save, CheckCircle, AlertCircle } from 'lucide-react';
+import { canEditLead } from '@/lib/permissions/crm';
 
 type CrmLeadDetailPanelProps = {
   lead: LeadDetailResponse;
   onSave: (payload: LeadUpdateRequest) => Promise<void>;
+  userRole?: string;
 };
 
 export function CrmLeadDetailPanel({
   lead,
   onSave,
+  userRole,
 }: CrmLeadDetailPanelProps) {
+  const canEdit = canEditLead(userRole);
   const [isEditing, setIsEditing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -192,20 +196,21 @@ export function CrmLeadDetailPanel({
         </div>
       </Card>
 
-      {/* Lead Qualification Details / Form (right column, 2 spans) */}
-      <Card className="lg:col-span-2 p-6 border-border bg-card">
-        <div className="border-b border-border/60 pb-3 flex items-center justify-between">
-          <h3 className="text-base font-bold text-foreground">Calificación e Interés</h3>
-          {!isEditing && (
-            <button
-              onClick={() => setIsEditing(true)}
-              className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-semibold text-foreground hover:bg-muted transition"
-            >
-              <PenTool className="h-3.5 w-3.5" />
-              Editar Lead
-            </button>
-          )}
-        </div>
+       {/* Lead Qualification Details / Form (right column, 2 spans) */}
+       <Card className="lg:col-span-2 p-6 border-border bg-card">
+         <div className="border-b border-border/60 pb-3 flex items-center justify-between">
+           <h3 className="text-base font-bold text-foreground">Calificación e Interés</h3>
+           {!isEditing && canEdit && (
+             <button
+               onClick={() => setIsEditing(true)}
+               className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-semibold text-foreground hover:bg-muted transition"
+             >
+               <PenTool className="h-3.5 w-3.5" />
+               Editar Lead
+             </button>
+           )}
+         </div>
+
 
         {isEditing ? (
           <form onSubmit={handleSubmit} className="flex flex-col gap-4 mt-4">

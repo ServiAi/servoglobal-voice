@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 import { getAccessToken } from '@/lib/auth/server';
 import { locales, type Locale } from '@/i18n';
-import { fetchCrmLeadDetail } from '@/lib/api/crm';
+import { fetchCrmLeadDetail, fetchMeProfile } from '@/lib/api/crm';
 import { LeadDetailClient } from './lead-detail-client';
 import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
@@ -26,6 +26,7 @@ export default async function LeadDetailPage({ params }: Props) {
   }
 
   const result = await fetchCrmLeadDetail(accessToken, leadId);
+  const profileResult = await fetchMeProfile(accessToken);
 
   if (!result.ok) {
     // If backend returns 404, we MUST show "Recurso no encontrado" without revealing tenant details.
@@ -67,6 +68,7 @@ export default async function LeadDetailPage({ params }: Props) {
       lead={result.data}
       accessToken={accessToken}
       locale={locale}
+      userRole={profileResult.ok ? profileResult.profile.role : undefined}
     />
   );
 }
