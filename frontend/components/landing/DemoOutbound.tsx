@@ -31,6 +31,7 @@ export function DemoOutbound() {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [token, setToken] = useState<string | null>(null);
   const [showLimitModal, setShowLimitModal] = useState(false);
+  const [showCallErrorModal, setShowCallErrorModal] = useState(false);
   
   // Form State
   const [name, setName] = useState('');
@@ -133,7 +134,7 @@ export function DemoOutbound() {
         if (callError.status === 402 || (detail && (detail.toLowerCase().includes('limit') || detail.toLowerCase().includes('exhausted')))) {
             setShowLimitModal(true);
         } else {
-            alert(t('errorInitiatingCall'));
+            setShowCallErrorModal(true);
         }
         setFormStep('form');
     }
@@ -511,6 +512,28 @@ export function DemoOutbound() {
               {tInbound('limitExceededClose')}
             </button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showCallErrorModal} onOpenChange={setShowCallErrorModal}>
+        <DialogContent className="sm:max-w-md bg-white dark:bg-zinc-950 border-zinc-200 dark:border-white/10 p-6">
+          <DialogHeader className="flex flex-col items-center text-center">
+            <div className="size-12 rounded-full bg-red-100 dark:bg-red-950/50 flex items-center justify-center text-red-500 mb-4">
+              <AlertTriangle className="size-6" />
+            </div>
+            <DialogTitle className="text-xl font-bold text-zinc-900 dark:text-white mb-2">
+              {t('errorInitiatingCall')}
+            </DialogTitle>
+            <DialogDescription className="text-zinc-600 dark:text-zinc-400 text-sm leading-relaxed">
+              {t('errorInitiatingCallDesc')}
+            </DialogDescription>
+          </DialogHeader>
+          <button
+            onClick={() => setShowCallErrorModal(false)}
+            className="mt-4 w-full py-2.5 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-900 dark:hover:bg-zinc-800 text-zinc-900 dark:text-white rounded-lg font-medium transition-all text-sm"
+          >
+            {tInbound('limitExceededClose')}
+          </button>
         </DialogContent>
       </Dialog>
     </div>

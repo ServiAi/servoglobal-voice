@@ -3,6 +3,15 @@
 import React, { useState } from 'react';
 import type { TaskResponse } from '@/types/crm';
 import { Card } from '../ui/card';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Trash2, Calendar, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -22,6 +31,7 @@ export function CrmTaskList({
   locale = 'es',
 }: CrmTaskListProps) {
   const [loadingTasks, setLoadingTasks] = useState<Record<string, boolean>>({});
+  const [deleteTaskId, setDeleteTaskId] = useState<string | null>(null);
 
   const handleStatusToggle = async (taskId: string, currentStatus: string) => {
     const nextStatus = currentStatus === 'done' ? 'pending' : 'done';
@@ -37,7 +47,6 @@ export function CrmTaskList({
 
   const handleDelete = async (taskId: string) => {
     if (!onDelete) return;
-    if (!confirm('¿Estás seguro de que deseas eliminar esta tarea?')) return;
     setLoadingTasks((prev) => ({ ...prev, [taskId]: true }));
     try {
       await onDelete(taskId);
@@ -46,6 +55,14 @@ export function CrmTaskList({
     } finally {
       setLoadingTasks((prev) => ({ ...prev, [taskId]: false }));
     }
+  };
+
+  const handleConfirmDelete = async () => {
+    const taskId = deleteTaskId;
+    if (!taskId) return;
+
+    setDeleteTaskId(null);
+    await handleDelete(taskId);
   };
 
   const getPriorityBadge = (priority: string) => {
@@ -167,7 +184,7 @@ export function CrmTaskList({
               {onDelete && (
                 <button
                   type="button"
-                  onClick={() => handleDelete(task.id)}
+                  onClick={() => setDeleteTaskId(task.id)}
                   disabled={isLoading}
                   className="text-muted-foreground hover:text-destructive transition p-1.5 rounded-md hover:bg-muted/50"
                   title="Eliminar tarea"
@@ -179,6 +196,28 @@ export function CrmTaskList({
           );
         })
       )}
+
+      <Dialog open={deleteTaskId !== null} onOpenChange={(open) => !open && setDeleteTaskId(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <div className="mx-auto mb-2 flex size-12 items-center justify-center rounded-full bg-red-500/10 text-red-500">
+              <Trash2 className="h-6 w-6" />
+            </div>
+            <DialogTitle className="text-center">Eliminar tarea</DialogTitle>
+            <DialogDescription className="text-center">
+              Esta acción eliminará la tarea seleccionada de forma permanente.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:justify-center">
+            <Button type="button" variant="outline" onClick={() => setDeleteTaskId(null)}>
+              Cancelar
+            </Button>
+            <Button type="button" variant="destructive" onClick={handleConfirmDelete}>
+              Eliminar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

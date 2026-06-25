@@ -656,7 +656,8 @@
     "scheduleLater": "Agendar para después",
     "preferredTime": "Hora preferida",
     "scheduleCall": "Agendar devolución de llamada",
-    "errorInitiatingCall": "No pudimos iniciar la llamada. Inténtalo de nuevo en un momento."
+    "errorInitiatingCall": "No pudimos iniciar la llamada. Inténtalo de nuevo en un momento.",
+    "errorInitiatingCallDesc": "Verifica los datos ingresados o vuelve a intentarlo en unos segundos."
   },
   "floatingCta": {
     "scheduleButton": "Agendar Ahora",

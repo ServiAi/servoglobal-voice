@@ -133,6 +133,38 @@ class CrmPipelineFormFirstTests(unittest.TestCase):
             self.submit_form(db, tenant, user_name="Maria Segunda")
             self.assertEqual(len(self.leads(db, tenant)), 1)
 
+    def test_form_submission_creates_new_lead_after_previous_was_qualified(self):
+        tenant, agent = self.seed_tenant_agent()
+        call_id = self.seed_call(tenant, agent, joined=True)
+        with SessionLocal() as db:
+            first_context = self.submit_form(db, tenant)
+            first_lead = self.lead(db, tenant)
+            CrmIngestionService(db).process_ultravox_event(
+                self.payload("call.ended", context=first_context, summary="Quiere cotizar una propuesta."),
+                self.get_call(db, call_id),
+            )
+            db.refresh(first_lead)
+            self.assertEqual(self.stage_key(db, first_lead), "qualified")
+
+            second_context = self.submit_form(
+                db,
+                tenant,
+                user_name="Maria Segunda",
+                user_email="maria.segunda@test.com",
+            )
+            leads = self.leads(db, tenant)
+            self.assertEqual(len(leads), 2)
+            second_lead = db.scalar(
+                select(CrmLead).where(
+                    CrmLead.tenant_id == tenant.id,
+                    CrmLead.context_id == second_context.context_id,
+                )
+            )
+            self.assertIsNotNone(second_lead)
+            self.assertNotEqual(second_lead.id, first_lead.id)
+            self.assertEqual(self.stage_key(db, second_lead), "new")
+            self.assertEqual(self.stage_key(db, first_lead), "qualified")
+
     def test_form_context_is_saved_with_context_id_and_form_submission_id(self):
         tenant, _ = self.seed_tenant_agent()
         with SessionLocal() as db:

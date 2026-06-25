@@ -95,7 +95,7 @@ class CrmLeadResolverService:
         if lead is None:
             lead = self._lead_by_form_submission_id(tenant_id, self._value(meta, "form_submission_id", "submission_id"))
         if lead is None:
-            lead = self._open_lead_for_contact(tenant_id, contact.id)
+            lead = self._open_new_stage_lead_for_contact(tenant_id, contact.id)
 
         if lead is None:
             stage = self.pipeline_service.get_stage_by_key(tenant_id, "new")
@@ -316,6 +316,22 @@ class CrmLeadResolverService:
                 CrmLead.tenant_id == tenant_id,
                 CrmLead.contact_id == contact_id,
                 CrmLead.status == "open",
+            )
+            .order_by(CrmLead.updated_at.desc())
+            .limit(1)
+        )
+
+    def _open_new_stage_lead_for_contact(self, tenant_id: str, contact_id: str) -> CrmLead | None:
+        stage = self.pipeline_service.get_stage_by_key(tenant_id, "new")
+        if stage is None:
+            return None
+        return self.db.scalar(
+            select(CrmLead)
+            .where(
+                CrmLead.tenant_id == tenant_id,
+                CrmLead.contact_id == contact_id,
+                CrmLead.status == "open",
+                CrmLead.current_stage_id == stage.id,
             )
             .order_by(CrmLead.updated_at.desc())
             .limit(1)

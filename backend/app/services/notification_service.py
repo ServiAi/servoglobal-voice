@@ -114,23 +114,30 @@ class NotificationService:
         logger.info(f"[Notif] notify_new_booking completado → {results}")
         return results
 
-    async def notify_demo_start(self, context: dict) -> None:
+    async def notify_demo_start(self, context: dict) -> bool:
         """
         Registra el inicio de una llamada de demostración (Web o SIP) en el CRM 
         junto con el contexto del negocio capturado en el formulario frontend.
         """
-        phone = context.get("user_phone")
+        def value(*keys: str) -> str:
+            for key in keys:
+                found = context.get(key)
+                if found not in (None, ""):
+                    return str(found)
+            return ""
+
+        phone = value("user_phone", "phone", "customer_phone", "lead_phone")
         if not phone:
-            logger.warning("[Notif] Demo start call without user_phone, skipping CRM logging.")
-            return
+            logger.warning("[Notif] Demo start call without phone, skipping CRM logging.")
+            return False
 
-        name = context.get("user_name", "Usuario Demo")
-        email = context.get("user_email", "")
+        name = value("user_name", "name", "customer_name", "lead_name") or "Usuario Demo"
+        email = value("user_email", "email", "customer_email", "lead_email")
 
-        industry = context.get("user_industry", "No especificada")
-        use_case = context.get("user_use_case", "No especificado")
-        volume = context.get("user_volume", "No especificado")
-        pain_point = context.get("user_pain_point", "No especificado")
+        industry = value("user_industry", "industry") or "No especificada"
+        use_case = value("user_use_case", "use_case", "useCase") or "No especificado"
+        volume = value("user_volume", "volume") or "No especificado"
+        pain_point = value("user_pain_point", "pain_point", "painPoint") or "No especificado"
 
         note = (
             f"📞 *Demostración de Agente IA Iniciada*\n"
@@ -141,16 +148,16 @@ class NotificationService:
         )
 
         logger.info(f"[Notif] Registrando demo iniciada para {phone} en CRM.")
-        import asyncio
-        asyncio.create_task(
-            self._crm_private_note(
-                phone=phone,
-                note=note,
-                contact_name=name,
-                contact_email=email,
-                labels=["demo-iniciada"]
-            )
+        ok = await self._crm_private_note(
+            phone=phone,
+            note=note,
+            contact_name=name,
+            contact_email=email,
+            labels=["demo-iniciada"],
         )
+        if not ok:
+            logger.warning("[Notif] Demo start note was not registered in Chatwoot for %s", phone)
+        return ok
 
     # ══════════════════════════════════════════════════════════════════════════
     # MÉTODOS PRIVADOS — un método por plantilla
@@ -244,7 +251,7 @@ class NotificationService:
         contact_name: str = "",
         contact_email: str = "",
         labels: list[str] | None = None,
-    ) -> None:
+    ) -> bool:
         """
         Registra una nota privada en Chatwoot CRM (solo visible para agentes).
         Crea el contacto y la conversación si no existen.
@@ -253,25 +260,35 @@ class NotificationService:
         try:
             if not chatwoot_service.api_token:
                 logger.warning("[CRM] CHATWOOT_API_TOKEN no configurado — nota no registrada")
-                return
+                return False
 
             contact_id = await chatwoot_service.get_or_create_contact(
                 phone, contact_name, contact_email
             )
             if not contact_id:
-                return
+                logger.warning("[CRM] Chatwoot contact could not be resolved for %s", phone)
+                return False
 
             conv_id = await chatwoot_service.get_or_create_conversation(contact_id)
             if not conv_id:
-                return
+                logger.warning("[CRM] Chatwoot conversation could not be resolved for contact_id=%s", contact_id)
+                return False
 
-            await chatwoot_service.send_message(conv_id, note, private=True)
+            sent = await chatwoot_service.send_message(conv_id, note, private=True)
+            if not sent:
+                logger.warning("[CRM] Chatwoot private note was rejected for conversation_id=%s", conv_id)
+                return False
 
             if labels:
-                await chatwoot_service.add_label(conv_id, labels)
+                labeled = await chatwoot_service.add_label(conv_id, labels)
+                if not labeled:
+                    logger.warning("[CRM] Chatwoot labels were not applied for conversation_id=%s", conv_id)
+
+            return True
 
         except Exception as e:
             logger.error(f"[CRM] Error registrando nota para {phone}: {e}")
+            return False
 
 
 # Singleton

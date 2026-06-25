@@ -7,6 +7,15 @@ import type { LeadsListResponse } from '@/types/crm';
 import { ChevronLeft, ChevronRight, Eye, Calendar, User, Phone, Mail, Trash2, Trash, ShieldAlert } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { deleteCrmLead, deleteAllCrmLeads } from '@/lib/api/crm';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 type CrmLeadsTableProps = {
   data: LeadsListResponse;
@@ -45,13 +54,12 @@ export function CrmLeadsTable({ data, locale, accessToken }: CrmLeadsTableProps)
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [deleteDialog, setDeleteDialog] = useState<
+    { type: 'one'; leadId: string } | { type: 'all' } | null
+  >(null);
 
   const handleDeleteOne = async (leadId: string) => {
     if (!accessToken) return;
-    const confirmed = window.confirm(
-      '¿Estás seguro de que deseas eliminar este lead? Esta acción eliminará también sus tareas y actividades.'
-    );
-    if (!confirmed) return;
 
     setError(null);
     setSuccessMsg(null);
@@ -74,10 +82,6 @@ export function CrmLeadsTable({ data, locale, accessToken }: CrmLeadsTableProps)
 
   const handleDeleteAll = async () => {
     if (!accessToken) return;
-    const confirmed = window.confirm(
-      '¡ATENCIÓN! ¿Estás seguro de que deseas eliminar TODOS los leads de tu cuenta? Esta acción no se puede deshacer y borrará permanentemente todos los contactos, leads, tareas e historial de actividades.'
-    );
-    if (!confirmed) return;
 
     setError(null);
     setSuccessMsg(null);
@@ -96,6 +100,19 @@ export function CrmLeadsTable({ data, locale, accessToken }: CrmLeadsTableProps)
       console.error(err);
       setError('Ocurrió un error inesperado al eliminar todos los leads.');
     }
+  };
+
+  const handleConfirmDelete = async () => {
+    const pendingDelete = deleteDialog;
+    if (!pendingDelete) return;
+
+    setDeleteDialog(null);
+    if (pendingDelete.type === 'all') {
+      await handleDeleteAll();
+      return;
+    }
+
+    await handleDeleteOne(pendingDelete.leadId);
   };
 
   const items = Array.isArray(data?.items) ? data.items : [];
@@ -173,7 +190,7 @@ export function CrmLeadsTable({ data, locale, accessToken }: CrmLeadsTableProps)
         </div>
         {total > 0 && accessToken && (
           <button
-            onClick={handleDeleteAll}
+            onClick={() => setDeleteDialog({ type: 'all' })}
             className="inline-flex items-center gap-1.5 rounded-md border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-xs font-bold text-red-500 hover:bg-red-500/20 shadow-2xs transition cursor-pointer"
             type="button"
           >
@@ -277,7 +294,7 @@ export function CrmLeadsTable({ data, locale, accessToken }: CrmLeadsTableProps)
                     </Link>
                     {accessToken && (
                       <button
-                        onClick={() => handleDeleteOne(lead.lead_id)}
+                        onClick={() => setDeleteDialog({ type: 'one', leadId: lead.lead_id })}
                         className="inline-flex items-center justify-center rounded-md border border-red-500/30 bg-red-500/10 p-2 text-red-500 hover:bg-red-500/20 shadow-sm transition cursor-pointer"
                         title="Eliminar lead"
                         type="button"
@@ -327,6 +344,32 @@ export function CrmLeadsTable({ data, locale, accessToken }: CrmLeadsTableProps)
           </div>
         </div>
       </div>
+
+      <Dialog open={deleteDialog !== null} onOpenChange={(open) => !open && setDeleteDialog(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <div className="mx-auto mb-2 flex size-12 items-center justify-center rounded-full bg-red-500/10 text-red-500">
+              <ShieldAlert className="h-6 w-6" />
+            </div>
+            <DialogTitle className="text-center">
+              {deleteDialog?.type === 'all' ? 'Eliminar todos los leads' : 'Eliminar lead'}
+            </DialogTitle>
+            <DialogDescription className="text-center">
+              {deleteDialog?.type === 'all'
+                ? 'Esta acción eliminará permanentemente todos los contactos, leads, tareas e historial de actividades.'
+                : 'Esta acción eliminará este lead junto con sus tareas y actividades.'}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:justify-center">
+            <Button type="button" variant="outline" onClick={() => setDeleteDialog(null)}>
+              Cancelar
+            </Button>
+            <Button type="button" variant="destructive" onClick={handleConfirmDelete}>
+              Eliminar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

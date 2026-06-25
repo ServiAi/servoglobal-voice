@@ -656,7 +656,8 @@
     "scheduleLater": "Schedule for later",
     "preferredTime": "Preferred Time",
     "scheduleCall": "Schedule Callback",
-    "errorInitiatingCall": "We couldn't start the call. Please try again in a moment."
+    "errorInitiatingCall": "We couldn't start the call. Please try again in a moment.",
+    "errorInitiatingCallDesc": "Check the information entered or try again in a few seconds."
   },
   "floatingCta": {
     "scheduleButton": "Schedule Now",

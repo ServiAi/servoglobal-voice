@@ -15,6 +15,7 @@ from app.services.calcom_service import SlotUnavailableError, create_booking
 
 class FakeAsyncClient:
     post_called = False
+    post_response = httpx.Response(201, json={"status": "success"})
 
     def __init__(self, *args, **kwargs):
         pass
@@ -40,7 +41,7 @@ class FakeAsyncClient:
 
     async def post(self, *args, **kwargs):
         FakeAsyncClient.post_called = True
-        return httpx.Response(201, json={"status": "success"})
+        return FakeAsyncClient.post_response
 
 
 class CalcomAvailabilityHardeningTests(unittest.TestCase):
@@ -49,6 +50,7 @@ class CalcomAvailabilityHardeningTests(unittest.TestCase):
         calcom_service.settings.CAL_EVENT_TYPE_ID = "123"
         calcom_service.settings.CAL_TIMEZONE = "America/Bogota"
         FakeAsyncClient.post_called = False
+        FakeAsyncClient.post_response = httpx.Response(201, json={"status": "success"})
 
     def test_invalid_availability_input_returns_400_not_502(self):
         client = TestClient(app)
@@ -60,7 +62,17 @@ class CalcomAvailabilityHardeningTests(unittest.TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn("Expresion temporal no soportada", response.json()["detail"])
 
-    def test_create_booking_checks_slot_before_posting_to_calcom(self):
+    def test_create_booking_maps_calcom_unavailable_response(self):
+        FakeAsyncClient.post_response = httpx.Response(
+            400,
+            json={
+                "status": "error",
+                "error": {
+                    "message": "User either already has booking at this time or is not available",
+                },
+            },
+        )
+
         with patch.object(calcom_service.httpx, "AsyncClient", FakeAsyncClient):
             with self.assertRaises(SlotUnavailableError):
                 asyncio.run(
@@ -73,7 +85,7 @@ class CalcomAvailabilityHardeningTests(unittest.TestCase):
                     )
                 )
 
-        self.assertFalse(FakeAsyncClient.post_called)
+        self.assertTrue(FakeAsyncClient.post_called)
 
     def test_booking_endpoint_returns_409_for_unavailable_slot(self):
         async_mock = AsyncMock(side_effect=SlotUnavailableError("Horario ocupado"))

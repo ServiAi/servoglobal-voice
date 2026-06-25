@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -138,7 +138,11 @@ def _create_form_context_and_lead(db: Session, tenant: Tenant, context: dict):
     return call_context
 
 @router.post("/calls")
-async def create_call(request: CreateCallRequest, db: Session = Depends(get_db)):
+async def create_call(
+    request: CreateCallRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
     if not request.turnstile_token:
         raise HTTPException(status_code=400, detail="Turnstile token missing")
 
@@ -167,7 +171,7 @@ async def create_call(request: CreateCallRequest, db: Session = Depends(get_db))
         
         # Registrar el inicio de la demo en el CRM
         if context:
-            await notification_service.notify_demo_start(context)
+            background_tasks.add_task(notification_service.notify_demo_start, dict(context))
 
         return {"joinUrl": join_url}
     except HTTPException:
@@ -176,7 +180,11 @@ async def create_call(request: CreateCallRequest, db: Session = Depends(get_db))
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/call-outbound")
-async def create_outbound_call(request: CreateOutboundCallRequest, db: Session = Depends(get_db)):
+async def create_outbound_call(
+    request: CreateOutboundCallRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
     if not request.turnstile_token:
         raise HTTPException(status_code=400, detail="Turnstile token missing")
 
@@ -242,7 +250,7 @@ async def create_outbound_call(request: CreateOutboundCallRequest, db: Session =
             )
             
         # Registrar el inicio de la demo en el CRM
-        await notification_service.notify_demo_start(context)
+        background_tasks.add_task(notification_service.notify_demo_start, dict(context))
         
         return result
     except HTTPException:

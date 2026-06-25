@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 
 CAL_API_BASE = "https://api.cal.com/v2"
 CAL_API_VERSION_HEADER = "2024-09-04"
+CAL_HTTP_TIMEOUT_SECONDS = 8.0
 
 
 class CalComInputError(ValueError):
@@ -115,6 +116,16 @@ def _normalize_time(time_input: str) -> str:
     raise CalComInputError(f"Hora invalida para agendamiento: {time_input}")
 
 
+def _is_booking_unavailable_response(response_text: str) -> bool:
+    normalized = (response_text or "").lower()
+    return (
+        "not available" in normalized
+        or "already has booking" in normalized
+        or "no esta disponible" in normalized
+        or "no está disponible" in normalized
+    )
+
+
 async def get_available_slots(
     date_input: str,
     jornada: str | None = None,
@@ -154,7 +165,7 @@ async def get_available_slots(
 
     logger.info(f"[Cal.com] GET {CAL_API_BASE}/slots | params={params} | jornada={jornada}")
 
-    async with httpx.AsyncClient(timeout=10.0) as client:
+    async with httpx.AsyncClient(timeout=CAL_HTTP_TIMEOUT_SECONDS) as client:
         response = await client.get(
             f"{CAL_API_BASE}/slots",
             params=params,
@@ -236,13 +247,6 @@ async def create_booking(date_str: str, time_str: str, name: str, email: str, ph
         raise CalComConfigurationError("CAL_API_KEY no esta configurada en las variables de entorno.")
 
     normalized_time = _normalize_time(time_str)
-    slots_result = await get_available_slots(date_str)
-    available_times = {slot.get("start") for slot in slots_result.get("available_slots", [])}
-    if normalized_time not in available_times:
-        raise SlotUnavailableError(
-            f"El horario {normalized_time} no esta disponible para {date_str}. "
-            "Verifica disponibilidad nuevamente antes de crear el evento."
-        )
         
     # Ensure start_datetime is ISO 8601 with timezone
     tz = pytz.timezone(settings.CAL_TIMEZONE)
@@ -277,7 +281,7 @@ async def create_booking(date_str: str, time_str: str, name: str, email: str, ph
     
     logger.info(f"[Cal.com] POST {CAL_API_BASE}/bookings | start={start_datetime} | email={email}")
     
-    async with httpx.AsyncClient(timeout=10.0) as client:
+    async with httpx.AsyncClient(timeout=CAL_HTTP_TIMEOUT_SECONDS) as client:
         response = await client.post(
             f"{CAL_API_BASE}/bookings",
             json=payload,
@@ -287,6 +291,11 @@ async def create_booking(date_str: str, time_str: str, name: str, email: str, ph
     logger.info(f"[Cal.com] POST Response {response.status_code}: {response.text[:300]}")
     
     if response.status_code not in (200, 201):
+        if response.status_code == 400 and _is_booking_unavailable_response(response.text):
+            raise SlotUnavailableError(
+                f"El horario {normalized_time} no esta disponible para {date_str}. "
+                "Verifica disponibilidad nuevamente antes de crear el evento."
+            )
         raise CalComUpstreamError(
             f"Cal.com API error {response.status_code} al crear reserva: {response.text}"
         )
