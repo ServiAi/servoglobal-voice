@@ -5,6 +5,15 @@ from app.core.config import settings
 logger = logging.getLogger(__name__)
 
 
+def _mask_phone(value: str | None) -> str | None:
+    if not value:
+        return None
+    digits = "".join(ch for ch in str(value) if ch.isdigit())
+    if len(digits) <= 4:
+        return "***"
+    return f"***{digits[-4:]}"
+
+
 def _ultravox_tenant_metadata() -> dict[str, str]:
     tenant_slug = (settings.BOOTSTRAP_TENANT_SLUG or "").strip()
     if not tenant_slug:
@@ -67,8 +76,9 @@ async def create_call_session(
             data = response.json()
             return data["joinUrl"]
     except httpx.HTTPStatusError as e:
-        error_msg = f"Ultravox API error: {e.response.text}. Payload: {payload}, AgentID: {settings.DEFAULT_AGENT_ID}"
-        logger.error(error_msg)
+        response_text = e.response.text[:500]
+        error_msg = f"Ultravox API error: {response_text}. AgentID: {final_agent_id}"
+        logger.error("Ultravox API error: %s | AgentID: %s", response_text, final_agent_id)
         raise Exception(error_msg)
     except Exception as e:
         logger.error(f"Unexpected error creating call: {e}")
@@ -147,15 +157,18 @@ async def create_sip_call_via_pbx(
         payload["model"] = model
     if voice:
         payload["voice"] = voice
-
     url = f"https://api.ultravox.ai/api/agents/{final_agent_id}/calls"
 
+    context = template_context or {}
+    safe_context_id = context.get("context_id") or context.get("crm_context_id")
+    safe_form_submission_id = context.get("form_submission_id") or context.get("submission_id")
+
     logger.info(
-        "Creating Ultravox SIP call via PBX | pbx_uri=%s | username=%s | agent_id=%s | payload=%s",
-        pbx_uri,
-        settings.UVX_SIP_USERNAME,
+        "Creating Ultravox SIP call via PBX | agent_id=%s | phone_tail=%s | has_context_id=%s | has_form_submission_id=%s",
         final_agent_id,
-        payload,
+        _mask_phone(phone),
+        bool(safe_context_id),
+        bool(safe_form_submission_id),
     )
 
     try:
@@ -164,7 +177,12 @@ async def create_sip_call_via_pbx(
             r.raise_for_status()
             return r.json()  # normalmente te devuelve callId/estado
     except httpx.HTTPStatusError as e:
-        logger.error("Ultravox API error: %s | payload=%s", e.response.text, payload)
+        response_text = e.response.text[:500]
+        logger.error(
+            "Ultravox API error creating SIP call | status=%s | response=%s",
+            e.response.status_code,
+            response_text,
+        )
         raise
 
 
@@ -235,15 +253,19 @@ async def create_scheduled_sip_call_via_pbx(
         "windowEnd": window_end,
         "calls": [call_config],
     }
-
     url = f"https://api.ultravox.ai/api/agents/{final_agent_id}/scheduled_batches"
 
+    context = template_context or {}
+    safe_context_id = context.get("context_id") or context.get("crm_context_id")
+    safe_form_submission_id = context.get("form_submission_id") or context.get("submission_id")
+
     logger.info(
-        "Creating scheduled Ultravox SIP call via PBX | pbx_uri=%s | username=%s | agent_id=%s | payload=%s",
-        pbx_uri,
-        settings.UVX_SIP_USERNAME,
+        "Creating scheduled Ultravox SIP call via PBX | agent_id=%s | schedule_time=%s | phone_tail=%s | has_context_id=%s | has_form_submission_id=%s",
         final_agent_id,
-        payload,
+        schedule_time,
+        _mask_phone(phone),
+        bool(safe_context_id),
+        bool(safe_form_submission_id),
     )
 
     try:
@@ -252,7 +274,10 @@ async def create_scheduled_sip_call_via_pbx(
             r.raise_for_status()
             return r.json()
     except httpx.HTTPStatusError as e:
+        response_text = e.response.text[:500]
         logger.error(
-            "Ultravox API Batch error: %s | payload=%s", e.response.text, payload
+            "Ultravox API Batch error creating scheduled SIP call | status=%s | response=%s",
+            e.response.status_code,
+            response_text,
         )
         raise
