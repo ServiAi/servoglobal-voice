@@ -3,7 +3,7 @@ import unittest
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from fastapi.testclient import TestClient
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 TEST_DB_PATH = Path("serviai_crm_sprint2_test.db")
 os.environ["DATABASE_URL"] = f"sqlite:///./{TEST_DB_PATH.as_posix()}"
@@ -987,6 +987,31 @@ class CrmSprint2Tests(unittest.TestCase):
         self.assertIn("won_leads", data)
         self.assertIn("lost_leads", data)
 
+    def test_crm_metrics_counts_voicemail_and_follow_up_separately(self):
+        tenant, agent, user = self.seed_tenant_agent_user()
+        with SessionLocal() as db:
+            pipeline = CrmPipelineService(db)
+            stages = pipeline.ensure_default_pipeline(tenant.id)
+            stage_map = {s.key: s for s in stages}
+
+            voicemail_contact = CrmContact(tenant_id=tenant.id, name="Voicemail Lead")
+            follow_up_contact = CrmContact(tenant_id=tenant.id, name="Follow Up Lead")
+            db.add(voicemail_contact)
+            db.add(follow_up_contact)
+            db.commit()
+            db.refresh(voicemail_contact)
+            db.refresh(follow_up_contact)
+
+            self.seed_lead(db, tenant.id, stage_map["voicemail"].id, contact=voicemail_contact)
+            self.seed_lead(db, tenant.id, stage_map["follow_up"].id, contact=follow_up_contact)
+
+        self.override_auth(user, tenant)
+        response = self.client.get("/api/v1/crm/metrics")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["voicemail_leads"], 1)
+        self.assertEqual(data["follow_up_leads"], 1)
+
     def test_crm_metrics_conversion_rate(self):
         tenant, agent, user = self.seed_tenant_agent_user()
         with SessionLocal() as db:
@@ -1253,7 +1278,12 @@ class CrmSprint2Tests(unittest.TestCase):
             pipeline = CrmPipelineService(db)
             stages = pipeline.ensure_default_pipeline(tenant.id)
             stage_map = {s.key: s for s in stages}
-            contact = CrmContact(tenant_id=tenant.id, name="Lead A")
+            contact = CrmContact(
+                tenant_id=tenant.id,
+                name="Lead A",
+                phone="+573001112233",
+                email="lead@example.com",
+            )
             db.add(contact)
             db.commit()
             db.refresh(contact)
@@ -1276,6 +1306,16 @@ class CrmSprint2Tests(unittest.TestCase):
         self.assertEqual(res.status_code, 422)
         self.assertIn("connect your calendar", res.json()["detail"])
 
+        # 4. Chatwoot action should register activity and return controlled 422
+        res = self.client.post(f"/api/v1/crm/leads/{lead.id}/actions/chatwoot")
+        self.assertEqual(res.status_code, 422)
+        self.assertIn("Chatwoot integration is not configured", res.json()["detail"])
+
+        # 5. Email action should register activity and return controlled 422
+        res = self.client.post(f"/api/v1/crm/leads/{lead.id}/actions/email")
+        self.assertEqual(res.status_code, 422)
+        self.assertIn("Email integration is not configured", res.json()["detail"])
+
         # Check that activities were created
         with SessionLocal() as db:
             activities = db.scalars(
@@ -1285,6 +1325,86 @@ class CrmSprint2Tests(unittest.TestCase):
             self.assertIn("whatsapp_action_requested", types)
             self.assertIn("call_requested", types)
             self.assertIn("schedule_requested", types)
+            self.assertIn("chatwoot_action_requested", types)
+            self.assertIn("email_action_requested", types)
+
+    def test_crm_whatsapp_action_without_phone_does_not_register_activity(self):
+        tenant, agent, user = self.seed_tenant_agent_user()
+        with SessionLocal() as db:
+            pipeline = CrmPipelineService(db)
+            stages = pipeline.ensure_default_pipeline(tenant.id)
+            stage_map = {s.key: s for s in stages}
+            contact = CrmContact(tenant_id=tenant.id, name="Lead Sin Telefono")
+            db.add(contact)
+            db.commit()
+            db.refresh(contact)
+            lead = self.seed_lead(db, tenant.id, stage_map["new"].id, contact=contact)
+
+        self.override_auth(user, tenant)
+        res = self.client.post(f"/api/v1/crm/leads/{lead.id}/actions/whatsapp")
+        self.assertEqual(res.status_code, 422)
+        self.assertEqual(res.json()["detail"], "Lead does not have a phone number for WhatsApp.")
+
+        with SessionLocal() as db:
+            count = db.scalar(
+                select(func.count()).select_from(CrmActivity).where(
+                    CrmActivity.lead_id == lead.id,
+                    CrmActivity.activity_type == "whatsapp_action_requested",
+                )
+            )
+            self.assertEqual(count, 0)
+
+    def test_crm_call_action_without_phone_does_not_register_activity(self):
+        tenant, agent, user = self.seed_tenant_agent_user()
+        with SessionLocal() as db:
+            pipeline = CrmPipelineService(db)
+            stages = pipeline.ensure_default_pipeline(tenant.id)
+            stage_map = {s.key: s for s in stages}
+            contact = CrmContact(tenant_id=tenant.id, name="Lead Sin Telefono")
+            db.add(contact)
+            db.commit()
+            db.refresh(contact)
+            lead = self.seed_lead(db, tenant.id, stage_map["new"].id, contact=contact)
+
+        self.override_auth(user, tenant)
+        res = self.client.post(f"/api/v1/crm/leads/{lead.id}/actions/call")
+        self.assertEqual(res.status_code, 422)
+        self.assertEqual(res.json()["detail"], "Lead does not have a phone number for outbound call.")
+
+        with SessionLocal() as db:
+            count = db.scalar(
+                select(func.count()).select_from(CrmActivity).where(
+                    CrmActivity.lead_id == lead.id,
+                    CrmActivity.activity_type == "call_requested",
+                )
+            )
+            self.assertEqual(count, 0)
+
+    def test_crm_email_action_without_email_does_not_register_activity(self):
+        tenant, agent, user = self.seed_tenant_agent_user()
+        with SessionLocal() as db:
+            pipeline = CrmPipelineService(db)
+            stages = pipeline.ensure_default_pipeline(tenant.id)
+            stage_map = {s.key: s for s in stages}
+            contact = CrmContact(tenant_id=tenant.id, name="Lead Sin Email", phone="+573001112233")
+            db.add(contact)
+            db.commit()
+            db.refresh(contact)
+            lead = self.seed_lead(db, tenant.id, stage_map["new"].id, contact=contact)
+
+        self.override_auth(user, tenant)
+        res = self.client.post(f"/api/v1/crm/leads/{lead.id}/actions/email")
+        self.assertEqual(res.status_code, 422)
+        self.assertEqual(res.json()["detail"], "Lead does not have an email address.")
+
+        with SessionLocal() as db:
+            count = db.scalar(
+                select(func.count()).select_from(CrmActivity).where(
+                    CrmActivity.lead_id == lead.id,
+                    CrmActivity.activity_type == "email_action_requested",
+                )
+            )
+            self.assertEqual(count, 0)
 
 
 if __name__ == "__main__":

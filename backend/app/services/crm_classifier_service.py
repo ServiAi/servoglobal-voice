@@ -77,7 +77,7 @@ class CrmClassifierService:
         "appointment",
         "book",
     ]
-    FOLLOW_UP_STATUSES = {"voicemail", "unanswered", "failed", "rejected", "cancelled"}
+    FOLLOW_UP_STATUSES = {"unanswered", "failed", "rejected", "cancelled"}
 
     def classify_lead_stage(
         self,
@@ -129,6 +129,13 @@ class CrmClassifierService:
         payload: dict[str, Any] | None = None,
     ) -> ClassificationResult:
         status = (call_status or "").strip().lower()
+
+        if status == "voicemail":
+            return ClassificationResult(
+                stage_key="voicemail",
+                next_action="retry_call_or_send_whatsapp",
+                reason="voicemail_detected",
+            )
 
         if self.is_not_interested(summary, short_summary, payload):
             return ClassificationResult(

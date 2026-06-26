@@ -420,7 +420,7 @@ class CrmPipelineFormFirstTests(unittest.TestCase):
             )
             self.assertEqual(self.stage_key(db, self.lead(db, tenant)), "follow_up")
 
-    def test_voicemail_goes_to_follow_up(self):
+    def test_voicemail_goes_to_voicemail(self):
         tenant, agent = self.seed_tenant_agent()
         call_id = self.seed_call(tenant, agent, joined=True, status="voicemail")
         with SessionLocal() as db:
@@ -429,7 +429,7 @@ class CrmPipelineFormFirstTests(unittest.TestCase):
                 self.payload("call.ended", context=call_context, endReason="voicemail"),
                 self.get_call(db, call_id),
             )
-            self.assertEqual(self.stage_key(db, self.lead(db, tenant)), "follow_up")
+            self.assertEqual(self.stage_key(db, self.lead(db, tenant)), "voicemail")
 
     def test_unanswered_goes_to_follow_up(self):
         tenant, agent = self.seed_tenant_agent()

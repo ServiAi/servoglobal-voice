@@ -2,15 +2,20 @@
 
 import React, { useState } from 'react';
 import { Send, FileText } from 'lucide-react';
+import { canCreateNote } from '@/lib/permissions/crm';
 
 type CrmNoteFormProps = {
   onSubmit: (note: string) => Promise<void>;
+  userRole?: string;
 };
 
-export function CrmNoteForm({ onSubmit }: CrmNoteFormProps) {
+export function CrmNoteForm({ onSubmit, userRole }: CrmNoteFormProps) {
   const [note, setNote] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const canCreate = canCreateNote(userRole);
+
+  if (!canCreate) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

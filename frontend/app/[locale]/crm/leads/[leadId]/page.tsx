@@ -1,7 +1,8 @@
 import { redirect } from 'next/navigation';
 import { getAccessToken } from '@/lib/auth/server';
 import { locales, type Locale } from '@/i18n';
-import { fetchCrmLeadDetail, fetchMeProfile } from '@/lib/api/crm';
+import { fetchCrmLeadDetail } from '@/lib/api/crm';
+import { fetchMeProfile } from '@/lib/api/me';
 import { LeadDetailClient } from './lead-detail-client';
 import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';

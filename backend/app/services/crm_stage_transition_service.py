@@ -10,11 +10,12 @@ from app.services.crm_pipeline_service import CrmPipelineService
 
 TERMINAL_STAGES = {"not_interested", "won", "lost"}
 AUTOMATIC_TRANSITIONS = {
-    "new": {"contacted", "connected", "qualified", "scheduled", "follow_up", "not_interested"},
-    "contacted": {"connected", "qualified", "scheduled", "follow_up", "not_interested"},
-    "connected": {"qualified", "scheduled", "follow_up", "not_interested"},
-    "qualified": {"scheduled", "follow_up", "not_interested"},
-    "follow_up": {"qualified", "scheduled", "not_interested"},
+    "new": {"contacted", "connected", "qualified", "scheduled", "voicemail", "follow_up", "not_interested"},
+    "contacted": {"connected", "qualified", "scheduled", "voicemail", "follow_up", "not_interested"},
+    "connected": {"qualified", "scheduled", "voicemail", "follow_up", "not_interested"},
+    "qualified": {"scheduled", "voicemail", "follow_up", "not_interested"},
+    "voicemail": {"contacted", "connected", "qualified", "scheduled", "follow_up", "not_interested"},
+    "follow_up": {"contacted", "connected", "qualified", "scheduled", "voicemail", "not_interested"},
     "scheduled": set(),
     "not_interested": set(),
     "won": set(),
@@ -84,6 +85,22 @@ class CrmStageTransitionService:
             "follow_up",
             call_id=call_id,
             description=description or "El lead cambio a 'En seguimiento' porque requiere accion posterior.",
+        )
+
+    def move_to_voicemail(
+        self,
+        tenant_id: str,
+        lead: CrmLead,
+        *,
+        call_id: str | None = None,
+        description: str | None = None,
+    ) -> bool:
+        return self.move(
+            tenant_id,
+            lead,
+            "voicemail",
+            call_id=call_id,
+            description=description or "El lead cambio a 'Buzon de voz' por resultado deterministico de la llamada.",
         )
 
     def move_to_not_interested(self, tenant_id: str, lead: CrmLead, *, call_id: str | None = None) -> bool:

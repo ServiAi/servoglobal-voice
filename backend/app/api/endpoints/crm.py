@@ -349,6 +349,39 @@ def change_lead_stage(
 
 # --- Outbound Actions ---
 
+def _get_action_lead_or_404(db: Session, tenant_id: str, lead_id: str) -> CrmLead:
+    lead_service = CrmLeadService(db)
+    lead = lead_service.get_lead_by_id(tenant_id, lead_id)
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    return lead
+
+
+def _require_contact_phone(lead: CrmLead, detail: str) -> None:
+    if not lead.contact or not (lead.contact.phone or "").strip():
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=detail,
+        )
+
+
+def _require_contact_email(lead: CrmLead) -> None:
+    if not lead.contact or not (lead.contact.email or "").strip():
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Lead does not have an email address.",
+        )
+
+
+def _require_contact_name(lead: CrmLead) -> None:
+    contact_name = (lead.contact.name or "").strip() if lead.contact else ""
+    if not contact_name or contact_name.lower() == "lead sin nombre":
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Lead does not have a contact name.",
+        )
+
+
 @router.post("/leads/{lead_id}/actions/whatsapp", response_model=dict)
 def lead_action_whatsapp(
     lead_id: str,
@@ -357,9 +390,8 @@ def lead_action_whatsapp(
 ) -> Any:
     tenant_id = context.tenant.id
     lead_service = CrmLeadService(db)
-    lead = lead_service.get_lead_by_id(tenant_id, lead_id)
-    if not lead:
-        raise HTTPException(status_code=404, detail="Lead not found")
+    lead = _get_action_lead_or_404(db, tenant_id, lead_id)
+    _require_contact_phone(lead, "Lead does not have a phone number for WhatsApp.")
 
     # Log action request activity
     lead_service.activity_service.create_activity(
@@ -385,9 +417,8 @@ def lead_action_call(
 ) -> Any:
     tenant_id = context.tenant.id
     lead_service = CrmLeadService(db)
-    lead = lead_service.get_lead_by_id(tenant_id, lead_id)
-    if not lead:
-        raise HTTPException(status_code=404, detail="Lead not found")
+    lead = _get_action_lead_or_404(db, tenant_id, lead_id)
+    _require_contact_phone(lead, "Lead does not have a phone number for outbound call.")
 
     # Log action request activity
     lead_service.activity_service.create_activity(
@@ -413,9 +444,8 @@ def lead_action_schedule(
 ) -> Any:
     tenant_id = context.tenant.id
     lead_service = CrmLeadService(db)
-    lead = lead_service.get_lead_by_id(tenant_id, lead_id)
-    if not lead:
-        raise HTTPException(status_code=404, detail="Lead not found")
+    lead = _get_action_lead_or_404(db, tenant_id, lead_id)
+    _require_contact_name(lead)
 
     # Log action request activity
     lead_service.activity_service.create_activity(
@@ -430,6 +460,57 @@ def lead_action_schedule(
     raise HTTPException(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         detail="Cal.com/Google Calendar integration is not configured for this tenant. Please connect your calendar in settings.",
+    )
+
+
+@router.post("/leads/{lead_id}/actions/chatwoot", response_model=dict)
+def lead_action_chatwoot(
+    lead_id: str,
+    context: AuthContext = Depends(require_roles(["platform_admin", "tenant_admin", "tenant_analyst"])),
+    db: Session = Depends(get_db),
+) -> Any:
+    tenant_id = context.tenant.id
+    lead_service = CrmLeadService(db)
+    lead = _get_action_lead_or_404(db, tenant_id, lead_id)
+
+    lead_service.activity_service.create_activity(
+        tenant_id=tenant_id,
+        lead_id=lead.id,
+        contact_id=lead.contact_id,
+        activity_type="chatwoot_action_requested",
+        title="Apertura Chatwoot solicitada",
+        description="El usuario intento abrir o asociar una conversacion de Chatwoot desde el CRM.",
+    )
+
+    raise HTTPException(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        detail="Chatwoot integration is not configured or this lead has no associated Chatwoot conversation.",
+    )
+
+
+@router.post("/leads/{lead_id}/actions/email", response_model=dict)
+def lead_action_email(
+    lead_id: str,
+    context: AuthContext = Depends(require_roles(["platform_admin", "tenant_admin", "tenant_analyst"])),
+    db: Session = Depends(get_db),
+) -> Any:
+    tenant_id = context.tenant.id
+    lead_service = CrmLeadService(db)
+    lead = _get_action_lead_or_404(db, tenant_id, lead_id)
+    _require_contact_email(lead)
+
+    lead_service.activity_service.create_activity(
+        tenant_id=tenant_id,
+        lead_id=lead.id,
+        contact_id=lead.contact_id,
+        activity_type="email_action_requested",
+        title="Email solicitado",
+        description="El usuario intento enviar un resumen por email desde el CRM.",
+    )
+
+    raise HTTPException(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        detail="Email integration is not configured for this tenant.",
     )
 
 
@@ -749,4 +830,4 @@ def get_crm_dashboard(
     )
     return dashboard_data
 
-
+

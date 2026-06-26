@@ -144,6 +144,13 @@ class CrmIngestionService:
                             call_id=call_record.id,
                             description="El lead cambio a 'Calificado' por reglas deterministicas de la llamada.",
                         )
+                    elif classification.stage_key == "voicemail":
+                        self.transition_service.move_to_voicemail(
+                            tenant_id,
+                            lead,
+                            call_id=call_record.id,
+                            description="El lead cambio a 'Buzon de voz' por resultado deterministico de la llamada.",
+                        )
                     elif classification.stage_key == "follow_up":
                         self.transition_service.move_to_follow_up(
                             tenant_id,

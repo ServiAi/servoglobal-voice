@@ -19,6 +19,8 @@ import {
   leadActionCall,
   leadActionSchedule,
   changeCrmLeadStage,
+  leadActionChatwoot,
+  leadActionEmail,
 } from '@/lib/api/crm';
 import {
   Dialog,
@@ -29,12 +31,14 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { canUseOutboundActions, canChangeTerminalStage } from '@/lib/permissions/crm';
 
 type CrmLeadQuickActionsProps = {
   leadId: string;
   accessToken: string;
   currentStageKey: string;
   onActionComplete?: () => void;
+  userRole?: string;
 };
 
 export function CrmLeadQuickActions({
@@ -42,22 +46,22 @@ export function CrmLeadQuickActions({
   accessToken,
   currentStageKey,
   onActionComplete,
+  userRole,
 }: CrmLeadQuickActionsProps) {
   const router = useRouter();
-  const [isPending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
 
-  // Status Alerts
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  // Terminal Stage Modals State
   const [terminalStage, setTerminalStage] = useState<'won' | 'lost' | 'not_interested' | null>(null);
   const [reason, setReason] = useState('');
   const [notes, setNotes] = useState('');
   const [validationError, setValidationError] = useState<string | null>(null);
 
-  // Helper to show/hide status messages
+  const canAct = canUseOutboundActions(userRole);
+
   const triggerStatus = (type: 'error' | 'success', msg: string) => {
     if (type === 'error') {
       setErrorMsg(msg);
@@ -68,46 +72,34 @@ export function CrmLeadQuickActions({
     }
   };
 
-  // Trigger Backend Outbound Actions
   const handleOutboundAction = async (type: 'whatsapp' | 'call' | 'schedule' | 'chatwoot' | 'email') => {
+    if (!canAct) {
+      triggerStatus('error', 'No tienes permisos para realizar esta acción.');
+      return;
+    }
+
     setLoadingAction(type);
     setErrorMsg(null);
     setSuccessMsg(null);
 
     try {
+      let res;
       if (type === 'whatsapp') {
-        const res = await leadActionWhatsapp(accessToken, leadId);
-        if (res.ok) {
-          triggerStatus('success', 'Acción completada con éxito.');
-        } else {
-          triggerStatus('error', res.detail || 'Error al ejecutar la acción.');
-        }
+        res = await leadActionWhatsapp(accessToken, leadId);
       } else if (type === 'call') {
-        const res = await leadActionCall(accessToken, leadId);
-        if (res.ok) {
-          triggerStatus('success', 'Llamada saliente iniciada.');
-        } else {
-          triggerStatus('error', res.detail || 'Error al iniciar llamada.');
-        }
+        res = await leadActionCall(accessToken, leadId);
       } else if (type === 'schedule') {
-        const res = await leadActionSchedule(accessToken, leadId);
-        if (res.ok) {
-          triggerStatus('success', 'Cita agendada.');
-        } else {
-          triggerStatus('error', res.detail || 'Error al agendar cita.');
-        }
+        res = await leadActionSchedule(accessToken, leadId);
       } else if (type === 'chatwoot') {
-        // Controlled client-side fallback
-        triggerStatus(
-          'error',
-          'La integración con Chatwoot no está configurada para esta cuenta. Por favor asocie su token de API en la sección de Integraciones.'
-        );
-      } else if (type === 'email') {
-        // Controlled client-side fallback
-        triggerStatus(
-          'error',
-          'La integración con Email (SendGrid/Resend) no está configurada para esta cuenta. Por favor asocie su API Key.'
-        );
+        res = await leadActionChatwoot(accessToken, leadId);
+      } else {
+        res = await leadActionEmail(accessToken, leadId);
+      }
+
+      if (res.ok) {
+        triggerStatus('success', 'Acción completada con éxito.');
+      } else {
+        triggerStatus('error', res.detail || 'Error al ejecutar la acción.');
       }
 
       startTransition(() => {
@@ -122,8 +114,12 @@ export function CrmLeadQuickActions({
     }
   };
 
-  // Submit Stage Change (Terminal)
   const handleTerminalStageSubmit = async () => {
+    if (!canChangeTerminalStage(userRole)) {
+      triggerStatus('error', 'No tienes permisos para realizar esta acción.');
+      return;
+    }
+
     if (!reason.trim()) {
       setValidationError('La razón o motivo del cambio es obligatoria.');
       return;
@@ -176,16 +172,16 @@ export function CrmLeadQuickActions({
 
   const getTerminalStageLabel = () => {
     switch (terminalStage) {
-      case 'won':
-        return 'Ganado';
-      case 'lost':
-        return 'Perdido';
-      case 'not_interested':
-        return 'No Interesado';
-      default:
-        return '';
+      case 'won': return 'Ganado';
+      case 'lost': return 'Perdido';
+      case 'not_interested': return 'No Interesado';
+      default: return '';
     }
   };
+
+  if (!canAct && !canChangeTerminalStage(userRole)) {
+    return null;
+  }
 
   return (
     <div className="flex flex-col gap-4 rounded-xl border border-border bg-card/65 p-5 shadow-xs">
@@ -195,120 +191,111 @@ export function CrmLeadQuickActions({
         </h4>
       </div>
 
-      {/* Grid of actions */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-2">
-        {/* WhatsApp */}
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={loadingAction !== null}
-          onClick={() => handleOutboundAction('whatsapp')}
-          className="flex items-center justify-start gap-2 bg-zinc-950/20 text-foreground hover:bg-emerald-500/10 hover:text-emerald-500 hover:border-emerald-500/20 transition cursor-pointer"
-        >
-          {loadingAction === 'whatsapp' ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <MessageSquare className="h-4 w-4 text-emerald-500" />
-          )}
-          <span className="truncate">Enviar WhatsApp</span>
-        </Button>
+        {canAct && (
+          <>
+            <Button
+              variant="outline" size="sm"
+              disabled={loadingAction !== null}
+              onClick={() => handleOutboundAction('whatsapp')}
+              className="flex items-center justify-start gap-2 bg-zinc-950/20 text-foreground hover:bg-emerald-500/10 hover:text-emerald-500 hover:border-emerald-500/20 transition cursor-pointer"
+            >
+              {loadingAction === 'whatsapp' ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <MessageSquare className="h-4 w-4 text-emerald-500" />
+              )}
+              <span className="truncate">Enviar WhatsApp</span>
+            </Button>
 
-        {/* Chatwoot */}
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={loadingAction !== null}
-          onClick={() => handleOutboundAction('chatwoot')}
-          className="flex items-center justify-start gap-2 bg-zinc-950/20 text-foreground hover:bg-sky-500/10 hover:text-sky-500 hover:border-sky-500/20 transition cursor-pointer"
-        >
-          <MessageCircle className="h-4 w-4 text-sky-500" />
-          <span className="truncate">Chatwoot</span>
-        </Button>
+            <Button
+              variant="outline" size="sm"
+              disabled={loadingAction !== null}
+              onClick={() => handleOutboundAction('chatwoot')}
+              className="flex items-center justify-start gap-2 bg-zinc-950/20 text-foreground hover:bg-sky-500/10 hover:text-sky-500 hover:border-sky-500/20 transition cursor-pointer"
+            >
+              <MessageCircle className="h-4 w-4 text-sky-500" />
+              <span className="truncate">Chatwoot</span>
+            </Button>
 
-        {/* Call */}
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={loadingAction !== null}
-          onClick={() => handleOutboundAction('call')}
-          className="flex items-center justify-start gap-2 bg-zinc-950/20 text-foreground hover:bg-blue-500/10 hover:text-blue-500 hover:border-blue-500/20 transition cursor-pointer"
-        >
-          {loadingAction === 'call' ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Phone className="h-4 w-4 text-blue-500" />
-          )}
-          <span className="truncate">Llamar de nuevo</span>
-        </Button>
+            <Button
+              variant="outline" size="sm"
+              disabled={loadingAction !== null}
+              onClick={() => handleOutboundAction('call')}
+              className="flex items-center justify-start gap-2 bg-zinc-950/20 text-foreground hover:bg-blue-500/10 hover:text-blue-500 hover:border-blue-500/20 transition cursor-pointer"
+            >
+              {loadingAction === 'call' ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Phone className="h-4 w-4 text-blue-500" />
+              )}
+              <span className="truncate">Llamar de nuevo</span>
+            </Button>
 
-        {/* Schedule */}
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={loadingAction !== null}
-          onClick={() => handleOutboundAction('schedule')}
-          className="flex items-center justify-start gap-2 bg-zinc-950/20 text-foreground hover:bg-fuchsia-500/10 hover:text-fuchsia-500 hover:border-fuchsia-500/20 transition cursor-pointer"
-        >
-          {loadingAction === 'schedule' ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Calendar className="h-4 w-4 text-fuchsia-500" />
-          )}
-          <span className="truncate">Agendar reunión</span>
-        </Button>
+            <Button
+              variant="outline" size="sm"
+              disabled={loadingAction !== null}
+              onClick={() => handleOutboundAction('schedule')}
+              className="flex items-center justify-start gap-2 bg-zinc-950/20 text-foreground hover:bg-fuchsia-500/10 hover:text-fuchsia-500 hover:border-fuchsia-500/20 transition cursor-pointer"
+            >
+              {loadingAction === 'schedule' ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Calendar className="h-4 w-4 text-fuchsia-500" />
+              )}
+              <span className="truncate">Agendar reunión</span>
+            </Button>
 
-        {/* Email */}
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={loadingAction !== null}
-          onClick={() => handleOutboundAction('email')}
-          className="flex items-center justify-start gap-2 bg-zinc-950/20 text-foreground hover:bg-amber-500/10 hover:text-amber-500 hover:border-amber-500/20 transition cursor-pointer col-span-2 sm:col-span-4 lg:col-span-2"
-        >
-          <Mail className="h-4 w-4 text-amber-500" />
-          <span className="truncate">Enviar resumen Email</span>
-        </Button>
-
-        <div className="col-span-2 sm:col-span-4 lg:col-span-2 border-t border-border/40 my-1"></div>
-
-        {/* Won */}
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={loadingAction !== null || currentStageKey === 'won'}
-          onClick={() => setTerminalStage('won')}
-          className="flex items-center justify-start gap-2 bg-zinc-950/20 text-foreground hover:bg-emerald-500/10 hover:text-emerald-500 hover:border-emerald-500/20 transition cursor-pointer"
-        >
-          <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-          <span className="truncate">Marcar Ganado</span>
-        </Button>
-
-        {/* Lost */}
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={loadingAction !== null || currentStageKey === 'lost'}
-          onClick={() => setTerminalStage('lost')}
-          className="flex items-center justify-start gap-2 bg-zinc-950/20 text-foreground hover:bg-red-500/10 hover:text-red-500 hover:border-red-500/20 transition cursor-pointer"
-        >
-          <XCircle className="h-4 w-4 text-red-500" />
-          <span className="truncate">Marcar Perdido</span>
-        </Button>
-
-        {/* Not Interested */}
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={loadingAction !== null || currentStageKey === 'not_interested'}
-          onClick={() => setTerminalStage('not_interested')}
-          className="flex items-center justify-start gap-2 bg-zinc-950/20 text-foreground hover:bg-zinc-500/15 hover:text-zinc-400 hover:border-zinc-500/20 transition cursor-pointer col-span-2 sm:col-span-4 lg:col-span-2"
-        >
-          <AlertCircle className="h-4 w-4 text-zinc-400" />
-          <span className="truncate">No Interesado</span>
-        </Button>
+            <Button
+              variant="outline" size="sm"
+              disabled={loadingAction !== null}
+              onClick={() => handleOutboundAction('email')}
+              className="flex items-center justify-start gap-2 bg-zinc-950/20 text-foreground hover:bg-amber-500/10 hover:text-amber-500 hover:border-amber-500/20 transition cursor-pointer col-span-2 sm:col-span-4 lg:col-span-2"
+            >
+              <Mail className="h-4 w-4 text-amber-500" />
+              <span className="truncate">Enviar resumen Email</span>
+            </Button>
+          </>
+        )}
       </div>
 
-      {/* Floating status display */}
+      {canChangeTerminalStage(userRole) && (
+        <>
+          <div className="col-span-2 sm:col-span-4 lg:col-span-2 border-t border-border/40 my-1"></div>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-2">
+            <Button
+              variant="outline" size="sm"
+              disabled={loadingAction !== null || currentStageKey === 'won'}
+              onClick={() => setTerminalStage('won')}
+              className="flex items-center justify-start gap-2 bg-zinc-950/20 text-foreground hover:bg-emerald-500/10 hover:text-emerald-500 hover:border-emerald-500/20 transition cursor-pointer"
+            >
+              <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+              <span className="truncate">Marcar Ganado</span>
+            </Button>
+
+            <Button
+              variant="outline" size="sm"
+              disabled={loadingAction !== null || currentStageKey === 'lost'}
+              onClick={() => setTerminalStage('lost')}
+              className="flex items-center justify-start gap-2 bg-zinc-950/20 text-foreground hover:bg-red-500/10 hover:text-red-500 hover:border-red-500/20 transition cursor-pointer"
+            >
+              <XCircle className="h-4 w-4 text-red-500" />
+              <span className="truncate">Marcar Perdido</span>
+            </Button>
+
+            <Button
+              variant="outline" size="sm"
+              disabled={loadingAction !== null || currentStageKey === 'not_interested'}
+              onClick={() => setTerminalStage('not_interested')}
+              className="flex items-center justify-start gap-2 bg-zinc-950/20 text-foreground hover:bg-zinc-500/15 hover:text-zinc-400 hover:border-zinc-500/20 transition cursor-pointer col-span-2 sm:col-span-4 lg:col-span-2"
+            >
+              <AlertCircle className="h-4 w-4 text-zinc-400" />
+              <span className="truncate">No Interesado</span>
+            </Button>
+          </div>
+        </>
+      )}
+
       {errorMsg && (
         <div className="flex items-start gap-2 rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-xs text-red-500">
           <ShieldAlert className="h-4 w-4 shrink-0 mt-0.5" />
@@ -323,7 +310,6 @@ export function CrmLeadQuickActions({
         </div>
       )}
 
-      {/* Terminal Reason Modal */}
       <Dialog open={terminalStage !== null} onOpenChange={(open) => !open && setTerminalStage(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -348,14 +334,10 @@ export function CrmLeadQuickActions({
                 Motivo / Justificación *
               </label>
               <textarea
-                id="reason"
-                rows={3}
+                id="reason" rows={3}
                 placeholder="Indica el motivo (ej: Cliente firmó contrato, Presupuesto no califica, No atiende llamadas...)"
                 value={reason}
-                onChange={(e) => {
-                  setReason(e.target.value);
-                  if (validationError) setValidationError(null);
-                }}
+                onChange={(e) => { setReason(e.target.value); if (validationError) setValidationError(null); }}
                 className="w-full rounded-md border border-border bg-zinc-950/40 p-2.5 text-sm text-foreground focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 transition"
               />
               {validationError && (
@@ -368,8 +350,7 @@ export function CrmLeadQuickActions({
                 Notas adicionales (Opcional)
               </label>
               <textarea
-                id="notes"
-                rows={2}
+                id="notes" rows={2}
                 placeholder="Cualquier nota extra relevante para el historial comercial..."
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
@@ -379,28 +360,13 @@ export function CrmLeadQuickActions({
           </div>
 
           <DialogFooter className="gap-2 sm:justify-end">
-            <Button
-              type="button"
-              variant="outline"
-              disabled={loadingAction !== null}
-              onClick={() => {
-                setTerminalStage(null);
-                setReason('');
-                setNotes('');
-                setValidationError(null);
-              }}
-            >
+            <Button type="button" variant="outline" disabled={loadingAction !== null}
+              onClick={() => { setTerminalStage(null); setReason(''); setNotes(''); setValidationError(null); }}>
               Cancelar
             </Button>
-            <Button
-              type="button"
-              disabled={loadingAction !== null}
-              onClick={handleTerminalStageSubmit}
-              className="bg-violet-600 hover:bg-violet-500 text-white font-bold"
-            >
-              {loadingAction !== null ? (
-                <Loader2 className="h-4 w-4 animate-spin mr-2" />
-              ) : null}
+            <Button type="button" disabled={loadingAction !== null}
+              onClick={handleTerminalStageSubmit} className="bg-violet-600 hover:bg-violet-500 text-white font-bold">
+              {loadingAction !== null ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
               Guardar Cambios
             </Button>
           </DialogFooter>

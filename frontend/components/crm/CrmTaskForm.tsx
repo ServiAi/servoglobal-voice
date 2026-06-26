@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { Plus, CheckSquare } from 'lucide-react';
+import { canCreateTask } from '@/lib/permissions/crm';
 
 type CrmTaskFormProps = {
   onSubmit: (task: {
@@ -10,15 +11,19 @@ type CrmTaskFormProps = {
     due_at?: string;
     priority: string;
   }) => Promise<void>;
+  userRole?: string;
 };
 
-export function CrmTaskForm({ onSubmit }: CrmTaskFormProps) {
+export function CrmTaskForm({ onSubmit, userRole }: CrmTaskFormProps) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [dueAt, setDueAt] = useState('');
   const [priority, setPriority] = useState('medium');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const canCreate = canCreateTask(userRole);
+
+  if (!canCreate) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

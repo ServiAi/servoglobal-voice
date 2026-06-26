@@ -24,6 +24,7 @@ export type LeadListItem = {
   stage_key: string;
   stage_name: string;
   status: string;
+  lead_score?: number | null;
   interest?: string | null;
   use_case?: string | null;
   source?: string | null;

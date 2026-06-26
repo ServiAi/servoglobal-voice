@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/dialog';
 import { Trash2, Calendar, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { canUpdateTask, canDeleteTask } from '@/lib/permissions/crm';
 
 type CrmTaskListProps = {
   tasks: TaskResponse[];
@@ -21,6 +22,7 @@ type CrmTaskListProps = {
   onDelete?: (taskId: string) => Promise<void>;
   showLeadInfo?: boolean;
   locale?: string;
+  userRole?: string;
 };
 
 export function CrmTaskList({
@@ -29,6 +31,7 @@ export function CrmTaskList({
   onDelete,
   showLeadInfo = false,
   locale = 'es',
+  userRole,
 }: CrmTaskListProps) {
   const [loadingTasks, setLoadingTasks] = useState<Record<string, boolean>>({});
   const [deleteTaskId, setDeleteTaskId] = useState<string | null>(null);
@@ -119,14 +122,16 @@ export function CrmTaskList({
             >
               <div className="flex items-start gap-3 flex-1">
                 {/* Status Checkbox */}
-                <button
-                  type="button"
-                  onClick={() => handleStatusToggle(task.id, task.status)}
-                  disabled={isLoading}
-                  className="mt-1 flex items-center justify-center h-5 w-5 rounded border border-border bg-zinc-950/20 text-violet-500 hover:border-violet-500 transition shrink-0 cursor-pointer disabled:pointer-events-none"
-                >
-                  {isDone && <CheckCircle2 className="h-4 w-4 fill-violet-500 text-white" />}
-                </button>
+                {canUpdateTask(userRole) && (
+                  <button
+                    type="button"
+                    onClick={() => handleStatusToggle(task.id, task.status)}
+                    disabled={isLoading}
+                    className="mt-1 flex items-center justify-center h-5 w-5 rounded border border-border bg-zinc-950/20 text-violet-500 hover:border-violet-500 transition shrink-0 cursor-pointer disabled:pointer-events-none"
+                  >
+                    {isDone && <CheckCircle2 className="h-4 w-4 fill-violet-500 text-white" />}
+                  </button>
+                )}
 
                 <div className="flex flex-col gap-1.5 flex-1">
                   {/* Title */}
@@ -180,8 +185,8 @@ export function CrmTaskList({
                 </div>
               </div>
 
-              {/* Delete button */}
-              {onDelete && (
+{/* Delete button */}
+              {onDelete && canDeleteTask(userRole) && (
                 <button
                   type="button"
                   onClick={() => setDeleteTaskId(task.id)}

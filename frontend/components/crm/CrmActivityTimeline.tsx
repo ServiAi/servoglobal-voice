@@ -2,7 +2,7 @@
 
 import React from 'react';
 import type { ActivitySchema } from '@/types/crm';
-import { Phone, FileText, ArrowRightLeft, PenTool, CheckCircle, HelpCircle, MessageSquare, Calendar } from 'lucide-react';
+import { Phone, FileText, ArrowRightLeft, PenTool, CheckCircle, HelpCircle, MessageSquare, Calendar, MessageCircle, Mail } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 type CrmActivityTimelineProps = {
@@ -23,6 +23,8 @@ const ACTIVITY_ICONS: Record<string, React.ComponentType<{ className?: string }>
   task_updated: PenTool,
   booking_detected: Calendar,
   whatsapp_action_requested: MessageSquare,
+  chatwoot_action_requested: MessageCircle,
+  email_action_requested: Mail,
   call_requested: Phone,
   schedule_requested: Calendar,
 };
@@ -41,6 +43,8 @@ const ACTIVITY_COLORS: Record<string, string> = {
   task_updated: 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20',
   booking_detected: 'bg-fuchsia-500/10 text-fuchsia-500 border-fuchsia-500/20',
   whatsapp_action_requested: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20',
+  chatwoot_action_requested: 'bg-sky-500/10 text-sky-500 border-sky-500/20',
+  email_action_requested: 'bg-amber-500/10 text-amber-500 border-amber-500/20',
   call_requested: 'bg-sky-500/10 text-sky-500 border-sky-500/20',
   schedule_requested: 'bg-fuchsia-500/10 text-fuchsia-500 border-fuchsia-500/20',
 };

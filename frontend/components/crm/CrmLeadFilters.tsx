@@ -19,6 +19,18 @@ const STAGE_TRANSLATIONS: Record<string, string> = {
 
 const STAGES = Object.entries(STAGE_TRANSLATIONS).map(([key, name]) => ({ key, name }));
 
+function toDateInputValue(value: string) {
+  return /^\d{4}-\d{2}-\d{2}/.test(value) ? value.slice(0, 10) : '';
+}
+
+function toStartOfDayUtc(date: string) {
+  return date ? `${date}T00:00:00Z` : '';
+}
+
+function toEndOfDayUtc(date: string) {
+  return date ? `${date}T23:59:59Z` : '';
+}
+
 export function CrmLeadFilters() {
   const router = useRouter();
   const pathname = usePathname();
@@ -34,8 +46,8 @@ export function CrmLeadFilters() {
   const [hasEmail, setHasEmail] = useState(searchParams.get('has_email') || '');
   const [sortBy, setSortBy] = useState(searchParams.get('sort_by') || 'updated_at');
   const [sortOrder, setSortOrder] = useState(searchParams.get('sort_order') || 'desc');
-  const [dateFrom, setDateFrom] = useState(searchParams.get('date_from') || '');
-  const [dateTo, setDateTo] = useState(searchParams.get('date_to') || '');
+  const [dateFrom, setDateFrom] = useState(toDateInputValue(searchParams.get('date_from') || ''));
+  const [dateTo, setDateTo] = useState(toDateInputValue(searchParams.get('date_to') || ''));
 
   const createQueryString = useCallback(
     (params: Record<string, string>) => {
@@ -69,8 +81,8 @@ export function CrmLeadFilters() {
         has_email: hasEmail,
         sort_by: sortBy,
         sort_order: sortOrder,
-        date_from: dateFrom,
-        date_to: dateTo,
+        date_from: toStartOfDayUtc(dateFrom),
+        date_to: toEndOfDayUtc(dateTo),
       })}`
     );
   };

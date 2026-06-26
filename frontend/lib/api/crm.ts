@@ -247,3 +247,10 @@ export function leadActionSchedule(accessToken: string, leadId: string) {
   return requestCrmEndpoint<{ message: string }>('POST', `leads/${leadId}/actions/schedule`, accessToken);
 }
 
+export function leadActionChatwoot(accessToken: string, leadId: string) {
+  return requestCrmEndpoint<{ message: string }>('POST', `leads/${leadId}/actions/chatwoot`, accessToken);
+}
+
+export function leadActionEmail(accessToken: string, leadId: string) {
+  return requestCrmEndpoint<{ message: string }>('POST', `leads/${leadId}/actions/email`, accessToken);
+}

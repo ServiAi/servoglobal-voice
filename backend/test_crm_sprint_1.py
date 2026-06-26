@@ -219,7 +219,7 @@ class CrmSprint1Tests(unittest.TestCase):
         classifier = CrmClassifierService()
         
         # Voicemail check
-        self.assertEqual(classifier.classify_lead_stage("voicemail", None, None), "follow_up")
+        self.assertEqual(classifier.classify_lead_stage("voicemail", None, None), "voicemail")
         
         # Unanswered check
         self.assertEqual(classifier.classify_lead_stage("unanswered", None, None), "follow_up")
@@ -734,7 +734,7 @@ class CrmSprint1Tests(unittest.TestCase):
         self.assertEqual(len(data["activities"]), 1)
         self.assertEqual(data["activities"][0]["title"], "Nota de prueba")
 
-    def test_ingestion_voicemail_moves_lead_to_follow_up(self):
+    def test_ingestion_voicemail_moves_lead_to_voicemail(self):
         tenant, agent, _ = self.seed_tenant_agent_user()
         with SessionLocal() as db:
             call = Call(
@@ -764,7 +764,7 @@ class CrmSprint1Tests(unittest.TestCase):
 
             lead = db.scalar(select(CrmLead).where(CrmLead.tenant_id == tenant.id))
             stage = db.scalar(select(CrmPipelineStage).where(CrmPipelineStage.id == lead.current_stage_id))
-            self.assertEqual(stage.key, "follow_up")
+            self.assertEqual(stage.key, "voicemail")
 
     def test_ingestion_not_interested_moves_lead_to_not_interested(self):
         tenant, agent, _ = self.seed_tenant_agent_user()
