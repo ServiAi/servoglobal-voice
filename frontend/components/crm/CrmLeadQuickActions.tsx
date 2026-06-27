@@ -20,7 +20,6 @@ import {
   leadActionSchedule,
   changeCrmLeadStage,
   leadActionChatwoot,
-  leadActionEmail,
 } from '@/lib/api/crm';
 import {
   Dialog,
@@ -32,6 +31,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { canUseOutboundActions, canChangeTerminalStage } from '@/lib/permissions/crm';
+import { CrmSendEmailModal } from '@/components/crm/CrmSendEmailModal';
 
 type CrmLeadQuickActionsProps = {
   leadId: string;
@@ -56,6 +56,7 @@ export function CrmLeadQuickActions({
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   const [terminalStage, setTerminalStage] = useState<'won' | 'lost' | 'not_interested' | null>(null);
+  const [emailModalOpen, setEmailModalOpen] = useState(false);
   const [reason, setReason] = useState('');
   const [notes, setNotes] = useState('');
   const [validationError, setValidationError] = useState<string | null>(null);
@@ -72,7 +73,7 @@ export function CrmLeadQuickActions({
     }
   };
 
-  const handleOutboundAction = async (type: 'whatsapp' | 'call' | 'schedule' | 'chatwoot' | 'email') => {
+  const handleOutboundAction = async (type: 'whatsapp' | 'call' | 'schedule' | 'chatwoot') => {
     if (!canAct) {
       triggerStatus('error', 'No tienes permisos para realizar esta acción.');
       return;
@@ -92,9 +93,8 @@ export function CrmLeadQuickActions({
         res = await leadActionSchedule(accessToken, leadId);
       } else if (type === 'chatwoot') {
         res = await leadActionChatwoot(accessToken, leadId);
-      } else {
-        res = await leadActionEmail(accessToken, leadId);
       }
+      if (!res) return;
 
       if (res.ok) {
         triggerStatus('success', 'Acción completada con éxito.');
@@ -249,7 +249,7 @@ export function CrmLeadQuickActions({
             <Button
               variant="outline" size="sm"
               disabled={loadingAction !== null}
-              onClick={() => handleOutboundAction('email')}
+              onClick={() => setEmailModalOpen(true)}
               className="flex items-center justify-start gap-2 bg-zinc-950/20 text-foreground hover:bg-amber-500/10 hover:text-amber-500 hover:border-amber-500/20 transition cursor-pointer col-span-2 sm:col-span-4 lg:col-span-2"
             >
               <Mail className="h-4 w-4 text-amber-500" />
@@ -372,6 +372,21 @@ export function CrmLeadQuickActions({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <CrmSendEmailModal
+        open={emailModalOpen}
+        onOpenChange={setEmailModalOpen}
+        accessToken={accessToken}
+        leadId={leadId}
+        onError={(message) => triggerStatus('error', message)}
+        onSuccess={(message) => triggerStatus('success', message)}
+        onSent={() => {
+          startTransition(() => {
+            router.refresh();
+            if (onActionComplete) onActionComplete();
+          });
+        }}
+      />
     </div>
   );
 }

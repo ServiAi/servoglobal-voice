@@ -39,6 +39,7 @@ from app.api.endpoints import ultravox_webhook
 from app.api.endpoints.admin import tenants as admin_tenants
 from app.api.endpoints import auth0 as auth0_endpoint
 from app.api.endpoints import crm
+from app.api.endpoints import integrations
 
 app.include_router(notifications.router)
 app.include_router(chatwoot_webhook.router)
@@ -50,6 +51,7 @@ app.include_router(ultravox_webhook.router)
 app.include_router(admin_tenants.router)
 app.include_router(auth0_endpoint.router)
 app.include_router(crm.router)
+app.include_router(integrations.router)
 
 @app.get("/health")
 def health_check():

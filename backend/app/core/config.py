@@ -70,6 +70,12 @@ class Settings(BaseSettings):
     CHATWOOT_ACCOUNT_ID: int = 1
     CHATWOOT_INBOX_ID: int = 1    # ID del inbox WhatsApp en Chatwoot
 
+    # Tenant integrations
+    INTEGRATIONS_ENCRYPTION_KEY: str = ""
+    EMAIL_ASSETS_STORAGE_PATH: str = "storage/email-assets"
+    EMAIL_MAX_ATTACHMENT_BYTES: int = 10485760
+    EMAIL_MAX_TOTAL_ATTACHMENTS_BYTES: int = 15728640
+
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", extra="ignore"
     )

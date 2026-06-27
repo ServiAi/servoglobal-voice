@@ -11,6 +11,12 @@ import type {
   StageUpdateRequest,
   NoteCreateRequest,
   CrmDashboardResponse,
+  EmailActionRequest,
+  EmailActionResponse,
+  EmailTemplateItem,
+  ResendIntegrationConfigRequest,
+  ResendIntegrationConfigResponse,
+  ResendTestEmailRequest,
 } from '@/types/crm';
 
 export type FetchResult<T> =
@@ -36,13 +42,36 @@ async function requestCrmEndpoint<T>(
   queryParams?: Record<string, unknown>,
   body?: unknown
 ): Promise<FetchResult<T>> {
+  return requestBackendEndpoint<T>(method, 'crm', endpoint, accessToken, queryParams, body);
+}
+
+async function requestIntegrationEndpoint<T>(
+  method: 'GET' | 'POST' | 'PATCH' | 'DELETE',
+  endpoint: string,
+  accessToken: string,
+  queryParams?: Record<string, unknown>,
+  body?: unknown
+): Promise<FetchResult<T>> {
+  return requestBackendEndpoint<T>(method, 'integrations', endpoint, accessToken, queryParams, body);
+}
+
+async function requestBackendEndpoint<T>(
+  method: 'GET' | 'POST' | 'PATCH' | 'DELETE',
+  resource: 'crm' | 'integrations',
+  endpoint: string,
+  accessToken: string,
+  queryParams?: Record<string, unknown>,
+  body?: unknown
+): Promise<FetchResult<T>> {
   const apiUrl = process.env.NEXT_PUBLIC_API_URL;
   if (!apiUrl) {
     return { ok: false, status: 500, detail: 'Backend API URL is not configured' };
   }
 
   const queryStr = buildQueryString(queryParams);
-  const url = `${apiUrl.replace(/\/$/, '')}/api/v1/crm/${endpoint}${queryStr}`;
+  const cleanEndpoint = endpoint.replace(/^\//, '');
+  const suffix = cleanEndpoint ? `/${cleanEndpoint}` : '';
+  const url = `${apiUrl.replace(/\/$/, '')}/api/v1/${resource}${suffix}${queryStr}`;
 
   let response: Response;
   try {
@@ -251,6 +280,28 @@ export function leadActionChatwoot(accessToken: string, leadId: string) {
   return requestCrmEndpoint<{ message: string }>('POST', `leads/${leadId}/actions/chatwoot`, accessToken);
 }
 
-export function leadActionEmail(accessToken: string, leadId: string) {
-  return requestCrmEndpoint<{ message: string }>('POST', `leads/${leadId}/actions/email`, accessToken);
+export function leadActionEmail(accessToken: string, leadId: string, payload: EmailActionRequest) {
+  return requestCrmEndpoint<EmailActionResponse>('POST', `leads/${leadId}/actions/email`, accessToken, undefined, payload);
+}
+
+export function fetchTenantIntegrations(accessToken: string) {
+  return requestIntegrationEndpoint<ResendIntegrationConfigResponse[]>('GET', '', accessToken);
+}
+
+export function configureResendIntegration(accessToken: string, payload: ResendIntegrationConfigRequest) {
+  return requestIntegrationEndpoint<ResendIntegrationConfigResponse>('POST', 'resend/config', accessToken, undefined, payload);
+}
+
+export function testResendIntegration(accessToken: string, payload: ResendTestEmailRequest) {
+  return requestIntegrationEndpoint<{ status: string; provider_email_id?: string | null }>(
+    'POST',
+    'resend/test',
+    accessToken,
+    undefined,
+    payload
+  );
+}
+
+export function fetchResendTemplates(accessToken: string) {
+  return requestIntegrationEndpoint<EmailTemplateItem[]>('GET', 'resend/templates', accessToken);
 }

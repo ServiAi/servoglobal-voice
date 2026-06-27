@@ -292,3 +292,65 @@ export type CrmDashboardResponse = {
   pending_actions: CrmPendingActionItem[];
 };
 
+export type ResendIntegrationConfigRequest = {
+  sender_name?: string | null;
+  sender_email: string;
+  reply_to?: string | null;
+  default_domain?: string | null;
+  resend_api_key?: string | null;
+};
+
+export type ResendIntegrationConfigResponse = {
+  provider: 'resend';
+  status: 'active' | 'inactive' | 'error' | string;
+  sender_name?: string | null;
+  sender_email?: string | null;
+  reply_to?: string | null;
+  default_domain?: string | null;
+  has_secret: boolean;
+  last_health_check_at?: string | null;
+  last_error_message?: string | null;
+};
+
+export type ResendTestEmailRequest = {
+  to_email: string;
+};
+
+export type EmailActionRequest = {
+  template_key: string;
+  subject?: string | null;
+  message?: string | null;
+  asset_ids?: string[];
+  preview_only?: boolean;
+};
+
+export type EmailActionResponse = {
+  status: 'preview' | 'sent' | 'failed' | string;
+  email_send_id?: string | null;
+  provider_email_id?: string | null;
+  preview?: {
+    to_email: string;
+    subject: string;
+    html: string;
+    text: string;
+  } | null;
+};
+
+export type EmailTemplateItem = {
+  id: string;
+  template_key: string;
+  name: string;
+  subject: string;
+  category: string;
+  status: string;
+  is_marketing: boolean;
+};
+
+export type EmailAssetItem = {
+  id: string;
+  original_filename: string;
+  mime_type: string;
+  file_size_bytes: number;
+  status: string;
+};
+
