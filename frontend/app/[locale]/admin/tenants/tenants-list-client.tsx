@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   Building2,
   Plus,
@@ -12,6 +13,7 @@ import {
   Clock,
   LogOut,
   ArrowLeft,
+  Settings,
 } from 'lucide-react';
 
 import { type TenantListItem } from '@/lib/api/tenants';
@@ -142,6 +144,8 @@ function TenantCard({
   tenant: TenantListItem;
   locale: string;
 }) {
+  const router = useRouter();
+
   return (
     <Link
       href={`/${locale}/admin/tenants/${tenant.id}`}
@@ -182,9 +186,22 @@ function TenantCard({
         </div>
       )}
 
-      <div className="mt-4 flex items-center justify-end text-xs text-zinc-500 group-hover:text-cyan-600 dark:text-zinc-400 dark:group-hover:text-cyan-400">
-        Ver detalle
-        <ArrowRight className="ml-1 h-3 w-3 transition-transform group-hover:translate-x-1" />
+      <div className="mt-4 flex items-center justify-between text-xs pt-3 border-t border-zinc-100 dark:border-zinc-800">
+        <div className="text-zinc-500 group-hover:text-cyan-600 dark:text-zinc-400 dark:group-hover:text-cyan-400 flex items-center">
+          Ver detalle
+          <ArrowRight className="ml-1 h-3 w-3 transition-transform group-hover:translate-x-1" />
+        </div>
+        <button
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            router.push(`/${locale}/admin/tenants/${tenant.id}/integrations`);
+          }}
+          className="inline-flex items-center gap-1 rounded bg-cyan-500/10 px-2.5 py-1 text-xs font-semibold text-cyan-600 hover:bg-cyan-500/20 dark:bg-cyan-500/20 dark:text-cyan-400 dark:hover:bg-cyan-500/30 transition-colors"
+        >
+          <Settings className="h-3 w-3" />
+          Integraciones
+        </button>
       </div>
     </Link>
   );

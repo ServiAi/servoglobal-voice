@@ -4,17 +4,19 @@ import type { FormEvent } from 'react';
 import { useState } from 'react';
 import { Save, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { configureResendIntegration } from '@/lib/api/crm';
+import { configureResendIntegration, configureAdminTenantResendIntegration } from '@/lib/api/crm';
 import type { ResendIntegrationConfigResponse } from '@/types/crm';
 
 type Props = {
   accessToken: string;
   config?: ResendIntegrationConfigResponse;
+  mode?: 'tenant' | 'admin';
+  tenantId?: string;
   onSaved: (config: ResendIntegrationConfigResponse) => void;
   onError: (message: string) => void;
 };
 
-export function ResendConfigForm({ accessToken, config, onSaved, onError }: Props) {
+export function ResendConfigForm({ accessToken, config, mode = 'tenant', tenantId, onSaved, onError }: Props) {
   const [senderName, setSenderName] = useState(config?.sender_name ?? 'ServiGlobal IA');
   const [senderEmail, setSenderEmail] = useState(config?.sender_email ?? '');
   const [replyTo, setReplyTo] = useState(config?.reply_to ?? '');
@@ -25,13 +27,19 @@ export function ResendConfigForm({ accessToken, config, onSaved, onError }: Prop
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setSaving(true);
-    const result = await configureResendIntegration(accessToken, {
+
+    const payload = {
       sender_name: senderName,
       sender_email: senderEmail,
       reply_to: replyTo || null,
       default_domain: defaultDomain || null,
       resend_api_key: apiKey || null,
-    });
+    };
+
+    const result = mode === 'admin' && tenantId
+      ? await configureAdminTenantResendIntegration(accessToken, tenantId, payload)
+      : await configureResendIntegration(accessToken, payload);
+
     setSaving(false);
     if (!result.ok) {
       onError(result.detail);

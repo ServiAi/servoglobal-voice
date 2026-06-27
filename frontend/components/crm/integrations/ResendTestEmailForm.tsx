@@ -4,23 +4,29 @@ import type { FormEvent } from 'react';
 import { useState } from 'react';
 import { Loader2, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { testResendIntegration } from '@/lib/api/crm';
+import { testResendIntegration, testAdminTenantResendIntegration } from '@/lib/api/crm';
 
 type Props = {
   accessToken: string;
   disabled?: boolean;
+  mode?: 'tenant' | 'admin';
+  tenantId?: string;
   onSuccess: (message: string) => void;
   onError: (message: string) => void;
 };
 
-export function ResendTestEmailForm({ accessToken, disabled, onSuccess, onError }: Props) {
+export function ResendTestEmailForm({ accessToken, disabled, mode = 'tenant', tenantId, onSuccess, onError }: Props) {
   const [toEmail, setToEmail] = useState('');
   const [sending, setSending] = useState(false);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setSending(true);
-    const result = await testResendIntegration(accessToken, { to_email: toEmail });
+
+    const result = mode === 'admin' && tenantId
+      ? await testAdminTenantResendIntegration(accessToken, tenantId, { to_email: toEmail })
+      : await testResendIntegration(accessToken, { to_email: toEmail });
+
     setSending(false);
     if (!result.ok) {
       onError(result.detail);

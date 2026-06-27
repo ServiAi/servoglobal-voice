@@ -20,6 +20,7 @@ import {
   Trash2,
   X,
   ArrowLeft,
+  Settings,
 } from 'lucide-react';
 
 import {
@@ -332,6 +333,13 @@ export function TenantDetailClient({
         <div className="flex items-center gap-2">
           <ThemeToggle />
           <StatusBadge status={tenant.status} />
+          <Link
+            href={`/${locale}/admin/tenants/${tenantId}/integrations`}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+          >
+            <Settings className="h-3.5 w-3.5" />
+            Configurar integraciones
+          </Link>
           <button
             type="button"
             onClick={handleOpenDeleteModal}

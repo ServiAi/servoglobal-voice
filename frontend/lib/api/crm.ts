@@ -57,7 +57,7 @@ async function requestIntegrationEndpoint<T>(
 
 async function requestBackendEndpoint<T>(
   method: 'GET' | 'POST' | 'PATCH' | 'DELETE',
-  resource: 'crm' | 'integrations',
+  resource: 'crm' | 'integrations' | 'admin',
   endpoint: string,
   accessToken: string,
   queryParams?: Record<string, unknown>,
@@ -304,4 +304,43 @@ export function testResendIntegration(accessToken: string, payload: ResendTestEm
 
 export function fetchResendTemplates(accessToken: string) {
   return requestIntegrationEndpoint<EmailTemplateItem[]>('GET', 'resend/templates', accessToken);
+}
+
+export function fetchAdminTenantIntegrations(accessToken: string, tenantId: string) {
+  return requestBackendEndpoint<ResendIntegrationConfigResponse[]>(
+    'GET',
+    'admin',
+    `tenants/${tenantId}/integrations`,
+    accessToken
+  );
+}
+
+export function configureAdminTenantResendIntegration(
+  accessToken: string,
+  tenantId: string,
+  payload: ResendIntegrationConfigRequest
+) {
+  return requestBackendEndpoint<ResendIntegrationConfigResponse>(
+    'POST',
+    'admin',
+    `tenants/${tenantId}/integrations/resend/config`,
+    accessToken,
+    undefined,
+    payload
+  );
+}
+
+export function testAdminTenantResendIntegration(
+  accessToken: string,
+  tenantId: string,
+  payload: ResendTestEmailRequest
+) {
+  return requestBackendEndpoint<{ status: string; provider_email_id?: string | null }>(
+    'POST',
+    'admin',
+    `tenants/${tenantId}/integrations/resend/test`,
+    accessToken,
+    undefined,
+    payload
+  );
 }

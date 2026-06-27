@@ -9,9 +9,11 @@ import { ResendTestEmailForm } from './ResendTestEmailForm';
 type Props = {
   accessToken: string;
   initialConfig?: ResendIntegrationConfigResponse;
+  mode?: 'tenant' | 'admin';
+  tenantId?: string;
 };
 
-export function ResendIntegrationCard({ accessToken, initialConfig }: Props) {
+export function ResendIntegrationCard({ accessToken, initialConfig, mode = 'tenant', tenantId }: Props) {
   const [config, setConfig] = useState(initialConfig);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const isActive = config?.status === 'active';
@@ -43,6 +45,8 @@ export function ResendIntegrationCard({ accessToken, initialConfig }: Props) {
         <ResendConfigForm
           accessToken={accessToken}
           config={config}
+          mode={mode}
+          tenantId={tenantId}
           onSaved={(nextConfig) => {
             setConfig(nextConfig);
             notify('success', 'Configuracion Resend guardada.');
@@ -52,6 +56,8 @@ export function ResendIntegrationCard({ accessToken, initialConfig }: Props) {
         <div className="border-t border-border pt-4">
           <ResendTestEmailForm
             accessToken={accessToken}
+            mode={mode}
+            tenantId={tenantId}
             disabled={!isActive || !config?.has_secret}
             onSuccess={(text) => notify('success', text)}
             onError={(text) => notify('error', text)}
