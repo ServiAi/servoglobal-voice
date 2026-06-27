@@ -30,6 +30,8 @@ from app.schemas.crm import (
     TaskResponse,
     TaskUpdateRequest,
     CrmDashboardResponse,
+    EmailActionRequest,
+    EmailActionResponse,
 )
 from app.services.crm_pipeline_service import CrmPipelineService
 from app.services.crm_lead_service import CrmLeadService
@@ -38,6 +40,7 @@ from app.services.crm_task_service import CrmTaskService
 from app.services.crm_metrics_service import CrmMetricsService
 from app.services.crm_query_service import CrmQueryService
 from app.services.crm_dashboard_metrics_service import CrmDashboardMetricsService
+from app.services.email_send_service import EmailSendService
 
 router = APIRouter(prefix="/api/v1/crm", tags=["CRM"])
 
@@ -488,29 +491,45 @@ def lead_action_chatwoot(
     )
 
 
-@router.post("/leads/{lead_id}/actions/email", response_model=dict)
+@router.post("/leads/{lead_id}/actions/email", response_model=EmailActionResponse)
 def lead_action_email(
     lead_id: str,
+    body: EmailActionRequest | None = None,
     context: AuthContext = Depends(require_roles(["platform_admin", "tenant_admin", "tenant_analyst"])),
     db: Session = Depends(get_db),
 ) -> Any:
     tenant_id = context.tenant.id
-    lead_service = CrmLeadService(db)
-    lead = _get_action_lead_or_404(db, tenant_id, lead_id)
-    _require_contact_email(lead)
-
-    lead_service.activity_service.create_activity(
-        tenant_id=tenant_id,
-        lead_id=lead.id,
-        contact_id=lead.contact_id,
-        activity_type="email_action_requested",
-        title="Email solicitado",
-        description="El usuario intento enviar un resumen por email desde el CRM.",
-    )
-
-    raise HTTPException(
-        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-        detail="Email integration is not configured for this tenant.",
+    body = body or EmailActionRequest()
+    service = EmailSendService(db)
+    try:
+        if body.preview_only:
+            result = service.preview_lead_email(
+                tenant_id=tenant_id,
+                lead_id=lead_id,
+                template_key=body.template_key,
+                subject=body.subject,
+                message=body.message,
+                asset_ids=body.asset_ids,
+            )
+        else:
+            result = service.send_lead_email(
+                tenant_id=tenant_id,
+                lead_id=lead_id,
+                template_key=body.template_key,
+                subject=body.subject,
+                message=body.message,
+                asset_ids=body.asset_ids,
+            )
+    except ValueError as exc:
+        code = status.HTTP_404_NOT_FOUND if str(exc) == "Lead not found" else status.HTTP_422_UNPROCESSABLE_ENTITY
+        raise HTTPException(status_code=code, detail=str(exc)) from exc
+    if result.status == "failed":
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=result.error_message or "Email send failed.")
+    return EmailActionResponse(
+        status=result.status,
+        email_send_id=result.email_send_id,
+        provider_email_id=result.provider_email_id,
+        preview=result.preview,
     )
 
 

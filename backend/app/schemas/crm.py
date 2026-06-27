@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, List, Optional
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+from app.schemas.integrations import EmailActionRequest, EmailActionResponse
 
 
 # --- Pipeline ---
