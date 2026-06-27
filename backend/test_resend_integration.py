@@ -21,7 +21,7 @@ from app.db.session import SessionLocal, engine
 from app.main import app
 from app.models.identity import Tenant, TenantMembership, User
 from app.models.integrations import TenantIntegration
-from app.services.resend_service import ResendService
+from app.services.resend_service import ResendService, _sanitize_resend_error
 
 
 class _Response:
@@ -152,6 +152,27 @@ class ResendIntegrationTests(unittest.TestCase):
         self.assertNotIn("person@example.com", output)
         self.assertNotIn("full html payload", output)
         self.assertNotIn("full text payload", output)
+
+    def test_resend_error_sanitizer_redacts_email_phone_and_api_key(self):
+        raw_error = (
+            "Resend error for person@example.com phone +57 300 123 4567\n"
+            "api_key=re_secret_test Authorization: token.secret.value Bearer bearer.secret.value"
+        )
+
+        sanitized = _sanitize_resend_error(raw_error)
+
+        self.assertNotIn("person@example.com", sanitized)
+        self.assertNotIn("+57 300 123 4567", sanitized)
+        self.assertNotIn("re_secret_test", sanitized)
+        self.assertNotIn("token.secret.value", sanitized)
+        self.assertNotIn("bearer.secret.value", sanitized)
+        self.assertNotIn("\n", sanitized)
+        self.assertIn("[redacted-email]", sanitized)
+        self.assertIn("[redacted-phone]", sanitized)
+        self.assertIn("[redacted-api-key]", sanitized)
+        self.assertIn("Authorization [redacted-token]", sanitized)
+        self.assertIn("Bearer [redacted-token]", sanitized)
+        self.assertLessEqual(len(sanitized), 300)
 
 
 if __name__ == "__main__":

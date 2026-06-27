@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 import httpx
@@ -23,7 +24,13 @@ def _mask_email(email: str | None) -> str:
 def _sanitize_resend_error(value: str | None) -> str:
     if not value:
         return "Resend request failed."
-    return value.replace("\n", " ")[:300]
+    sanitized = re.sub(r"[\r\n]+", " ", value)
+    sanitized = re.sub(r"\bre_[A-Za-z0-9_-]+", "[redacted-api-key]", sanitized)
+    sanitized = re.sub(r"(?i)\bAuthorization\s*[:=]?\s*(?:Bearer\s+)?[A-Za-z0-9._~+/=-]+", "Authorization [redacted-token]", sanitized)
+    sanitized = re.sub(r"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]+", "Bearer [redacted-token]", sanitized)
+    sanitized = re.sub(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b", "[redacted-email]", sanitized)
+    sanitized = re.sub(r"(?<!\w)\+?\d[\d\s().-]{6,}\d(?!\w)", "[redacted-phone]", sanitized)
+    return sanitized[:300]
 
 
 class ResendService:
