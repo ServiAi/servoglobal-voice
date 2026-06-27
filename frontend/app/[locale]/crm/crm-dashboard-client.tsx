@@ -2,11 +2,12 @@
 
 import React, { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import type { CrmMetricsResponse, PipelineBoardResponse } from '@/types/crm';
 import { CrmMetricCard } from '@/components/crm/CrmMetricCard';
 import { CrmPipelineBoard } from '@/components/crm/CrmPipelineBoard';
 import { changeCrmLeadStage } from '@/lib/api/crm';
-import { Users, Target, TrendingUp, CheckSquare, ShieldAlert } from 'lucide-react';
+import { Users, Target, TrendingUp, CheckSquare, ShieldAlert, Settings } from 'lucide-react';
 
 type CrmDashboardClientProps = {
   initialMetrics: CrmMetricsResponse;
@@ -76,13 +77,24 @@ export function CrmDashboardClient({
       )}
 
       {/* Header Section */}
-      <section className="flex flex-col gap-2">
-        <h2 className="text-2xl font-bold tracking-tight text-foreground">
-          Panel de Control CRM
-        </h2>
-        <p className="text-sm text-muted-foreground">
-          Vista general del rendimiento comercial, pipeline y automatización.
-        </p>
+      <section className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between border-b border-border pb-4">
+        <div className="flex flex-col gap-2">
+          <h2 className="text-2xl font-bold tracking-tight text-foreground">
+            Panel de Control CRM
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Vista general del rendimiento comercial, pipeline y automatización.
+          </p>
+        </div>
+        <div>
+          <Link
+            href={`/${locale}/crm/settings/integrations`}
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-border bg-card px-4 text-sm font-medium text-foreground shadow-xs transition hover:bg-accent hover:text-accent-foreground"
+          >
+            <Settings className="h-4 w-4" />
+            Integraciones CRM
+          </Link>
+        </div>
       </section>
 
       {/* Metrics Row */}

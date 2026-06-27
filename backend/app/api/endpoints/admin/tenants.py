@@ -28,6 +28,18 @@ from app.services.onboarding_service import (
     TenantDeletionBlockedError,
 )
 from app.services.tenant_usage_service import TenantUsageService
+from app.schemas.integrations import (
+    ResendIntegrationConfigRequest,
+    ResendIntegrationConfigResponse,
+    ResendTestEmailRequest,
+    ResendTestEmailResponse,
+)
+from app.api.endpoints.integrations import _resend_response
+from app.services.email_config_service import EmailConfigService
+from app.services.email_send_service import EmailSendService
+from app.services.email_template_service import EmailTemplateService
+from app.services.integration_event_service import IntegrationEventService
+from app.services.integration_service import IntegrationService
 
 
 router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
@@ -441,3 +453,110 @@ def add_tenant_agent(
         "channel_type": agent.channel_type,
         "status": agent.status,
     }
+
+
+@router.get(
+    "/tenants/{tenant_id}/integrations",
+    response_model=list[ResendIntegrationConfigResponse],
+)
+def list_tenant_integrations_admin(
+    tenant_id: str,
+    db: Session = Depends(get_current_internal_db),
+) -> Any:
+    try:
+        OnboardingService(db).get_tenant(tenant_id)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+
+    integration_service = IntegrationService(db)
+    config_service = EmailConfigService(db)
+    return [_resend_response(integration_service, tenant_id, config_service)]
+
+
+@router.post(
+    "/tenants/{tenant_id}/integrations/resend/config",
+    response_model=ResendIntegrationConfigResponse,
+)
+def configure_tenant_resend_admin(
+    tenant_id: str,
+    body: ResendIntegrationConfigRequest,
+    db: Session = Depends(get_current_internal_db),
+) -> Any:
+    try:
+        OnboardingService(db).get_tenant(tenant_id)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+
+    integration_service = IntegrationService(db)
+    config_service = EmailConfigService(db)
+    existing = integration_service.get_integration(tenant_id, "resend")
+    if not body.resend_api_key and not integration_service.has_secret(existing):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Resend API key is required for the first configuration.",
+        )
+    try:
+        config = config_service.upsert_resend_config(
+            tenant_id=tenant_id,
+            sender_name=body.sender_name,
+            sender_email=body.sender_email,
+            reply_to=body.reply_to,
+            default_domain=body.default_domain,
+            status="active",
+        )
+        integration = integration_service.upsert_resend(
+            tenant_id=tenant_id,
+            display_name="Resend",
+            config={
+                "sender_name": config.sender_name,
+                "sender_email": config.sender_email,
+                "reply_to": config.reply_to,
+                "default_domain": config.default_domain,
+            },
+            api_key=body.resend_api_key,
+        )
+        EmailTemplateService(db).ensure_default_templates(tenant_id)
+        IntegrationEventService(db).record_event(
+            tenant_id=tenant_id,
+            provider="resend",
+            event_type="config_updated",
+            status="success",
+            resource_type="config",
+            resource_id=integration.id,
+            metadata={"has_secret": integration_service.has_secret(integration)},
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    return _resend_response(integration_service, tenant_id, config_service)
+
+
+@router.post(
+    "/tenants/{tenant_id}/integrations/resend/test",
+    response_model=ResendTestEmailResponse,
+)
+def test_tenant_resend_admin(
+    tenant_id: str,
+    body: ResendTestEmailRequest,
+    db: Session = Depends(get_current_internal_db),
+) -> Any:
+    try:
+        OnboardingService(db).get_tenant(tenant_id)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+
+    try:
+        result = EmailSendService(db).send_test_email(tenant_id=tenant_id, to_email=body.to_email)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    if result.status == "failed":
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=result.error_message or "Resend test failed.")
+    return ResendTestEmailResponse(status=result.status, provider_email_id=result.provider_email_id)

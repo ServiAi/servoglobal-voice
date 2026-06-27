@@ -4,7 +4,7 @@ import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { Globe, LayoutDashboard, Users, CheckSquare, LogOut, Phone, BarChart3 } from 'lucide-react';
+import { Globe, LayoutDashboard, Users, CheckSquare, LogOut, Phone, BarChart3, Settings } from 'lucide-react';
 import { ThemeToggle } from '../shared/ThemeToggle';
 
 type CrmHeaderProps = {
@@ -40,6 +40,12 @@ export function CrmHeader({ locale, tenantName, userName }: CrmHeaderProps) {
       href: `/${locale}/crm/tasks`,
       icon: CheckSquare,
       active: pathname === `/${locale}/crm/tasks`,
+    },
+    {
+      name: 'Integraciones CRM',
+      href: `/${locale}/crm/settings/integrations`,
+      icon: Settings,
+      active: pathname.startsWith(`/${locale}/crm/settings/integrations`),
     },
   ];
 
