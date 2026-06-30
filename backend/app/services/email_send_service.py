@@ -184,8 +184,8 @@ class EmailSendService:
             )
         except ResendServiceError as exc:
             error_message = _sanitize_resend_error(str(exc))
-            self.config_service.mark_health(config, status="error", error_message=error_message)
-            self.integration_service.mark_health(integration, status="error", error_message=error_message)
+            self.config_service.mark_health(config, status="active", error_message=error_message)
+            self.integration_service.mark_health(integration, status="active", error_message=error_message)
             self.event_service.record_event(
                 tenant_id=tenant_id,
                 provider="resend",

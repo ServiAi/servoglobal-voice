@@ -21,7 +21,7 @@ from app.db.session import SessionLocal, engine
 from app.main import app
 from app.models.identity import Tenant, TenantMembership, User
 from app.models.integrations import TenantIntegration
-from app.services.resend_service import ResendService, _sanitize_resend_error
+from app.services.resend_service import ResendService, ResendServiceError, _sanitize_resend_error
 
 
 class _Response:
@@ -131,6 +131,21 @@ class ResendIntegrationTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["provider_email_id"], "email_test_1")
+
+    def test_resend_test_failure_does_not_disable_retry(self):
+        self._configure()
+        with patch("app.services.email_send_service.ResendService") as service_cls:
+            service_cls.return_value.send_test_email.side_effect = ResendServiceError("resend down")
+            response = self.client.post("/api/v1/integrations/resend/test", json={"to_email": "dest@example.com"})
+
+        self.assertEqual(response.status_code, 502)
+
+        with patch("app.services.email_send_service.ResendService") as service_cls:
+            service_cls.return_value.send_test_email.return_value = "email_test_2"
+            response = self.client.post("/api/v1/integrations/resend/test", json={"to_email": "dest@example.com"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["provider_email_id"], "email_test_2")
 
     def test_logs_do_not_include_resend_api_key_or_full_email_or_payload(self):
         service = ResendService()
