@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 import uuid
 from pathlib import Path
 from typing import Any
@@ -21,6 +22,13 @@ from app.services.onboarding_service import OnboardingService
 router = APIRouter(tags=["Email Assets"])
 
 
+def _safe_filename(filename: str) -> str:
+    cleaned = re.sub(r"[^A-Za-z0-9._-]", "_", Path(filename or "").name)
+    if not cleaned or cleaned in {".", ".."}:
+        raise ValueError("Attachment filename is required.")
+    return cleaned
+
+
 def _asset_response(asset: TenantEmailAsset) -> EmailAssetItem:
     return EmailAssetItem(
         id=asset.id,
@@ -39,8 +47,7 @@ def _internal_user(context: AuthContext = Depends(get_current_auth_context)) -> 
 
 def _store_asset(db: Session, tenant_id: str, user_id: str | None, file: UploadFile) -> TenantEmailAsset:
     content = file.file.read()
-    filename = file.filename or "attachment"
-    safe_filename = Path(filename).name
+    safe_filename = _safe_filename(file.filename or "")
     mime_type = file.content_type or "application/octet-stream"
     EmailAssetService(db)._validate_file_metadata(safe_filename, mime_type, len(content))
     checksum = hashlib.sha256(content).hexdigest()

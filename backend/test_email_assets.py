@@ -106,6 +106,33 @@ class EmailAssetsTests(unittest.TestCase):
             asset = db.get(TenantEmailAsset, asset_id)
         self.assertTrue(asset.storage_key.startswith(f"tenants/{self.tenant_id}/email-assets/{asset_id}/"))
 
+    def test_upload_strips_path_from_filename(self):
+        response = self.client.post(
+            "/api/v1/integrations/resend/assets",
+            files={"file": ("../../evil.pdf", b"pdf", "application/pdf")},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["original_filename"], "evil.pdf")
+
+    def test_upload_replaces_spaces_in_filename(self):
+        response = self.client.post(
+            "/api/v1/integrations/resend/assets",
+            files={"file": ("Propuesta Comercial 2026.pdf", b"pdf", "application/pdf")},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["original_filename"], "Propuesta_Comercial_2026.pdf")
+
+    def test_upload_replaces_unsafe_filename_characters(self):
+        response = self.client.post(
+            "/api/v1/integrations/resend/assets",
+            files={"file": ("contrato@cliente!.pdf", b"pdf", "application/pdf")},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["original_filename"], "contrato_cliente_.pdf")
+
     def test_upload_email_asset_blocks_executable(self):
         response = self.client.post(
             "/api/v1/integrations/resend/assets",
@@ -166,6 +193,12 @@ class EmailAssetsTests(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             storage.upload_bytes("tenants/a/email-assets/b/file.pdf", b"pdf")
+
+    def test_local_storage_blocks_path_outside_base_path(self):
+        storage = StorageService(base_path="storage/test-email-assets", driver="local")
+
+        with self.assertRaises(ValueError):
+            storage.upload_bytes("../outside.pdf", b"pdf")
 
 
 if __name__ == "__main__":

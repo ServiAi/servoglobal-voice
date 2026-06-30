@@ -78,6 +78,8 @@ class StorageService:
     def _resolve(self, storage_key: str) -> Path:
         path = (self.base_path / self._clean_key(storage_key)).resolve()
         base = self.base_path.resolve()
-        if not str(path).startswith(str(base)):
-            raise ValueError("Invalid storage key.")
+        try:
+            path.relative_to(base)
+        except ValueError as exc:
+            raise ValueError("Invalid storage key.") from exc
         return path
