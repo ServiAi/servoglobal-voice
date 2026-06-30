@@ -209,6 +209,30 @@ class NoteCreateRequest(BaseModel):
     note: str = Field(..., min_length=1)
 
 
+class CallSummaryResponse(BaseModel):
+    status: str
+    summary: Optional[str] = None
+    short_summary: Optional[str] = None
+    call_date: Optional[datetime] = None
+    duration_seconds: Optional[int] = None
+    source: Optional[str] = None
+
+
+class CallSummaryAssetRequest(BaseModel):
+    format: str = Field(default="md", pattern="^(md|txt)$")
+
+
+class CallSummaryAssetResponse(BaseModel):
+    asset_id: str
+    filename: str
+    mime_type: str
+    file_size_bytes: int
+
+
+class CallSummaryInsertedRequest(BaseModel):
+    variant: str = "full"
+
+
 class LeadDetailResponse(BaseModel):
     id: str
     status: str

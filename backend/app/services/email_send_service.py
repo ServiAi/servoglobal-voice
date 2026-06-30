@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.models.crm import CrmLead
 from app.models.integrations import TenantEmailSend, TenantEmailSendAsset, TenantFormToken
 from app.services.crm_activity_service import CrmActivityService
+from app.services.call_summary_service import CallSummaryService
 from app.services.email_asset_service import EmailAssetService
 from app.services.email_config_service import EmailConfigService, validate_email
 from app.services.email_template_service import EmailTemplateService, RenderedEmailTemplate
@@ -268,7 +269,9 @@ class EmailSendService:
                 "source": lead.source,
                 "campaign": lead.campaign,
                 "lead_id": lead.id,
+                "form_link": "",
             }
+            variables.update(CallSummaryService(self.db).variables_for_lead(tenant_id, lead.id))
             rendered = self.render_service.render_email_content(
                 subject=subject or template.subject,
                 content_format=content_format,

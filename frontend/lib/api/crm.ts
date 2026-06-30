@@ -18,6 +18,10 @@ import type {
   ResendIntegrationConfigResponse,
   ResendTestEmailRequest,
   EmailAssetItem,
+  CallSummaryAssetRequest,
+  CallSummaryAssetResponse,
+  CallSummaryInsertedRequest,
+  CallSummaryResponse,
   TenantFormCreateRequest,
   TenantFormItem,
   FormTokenResponse,
@@ -322,6 +326,18 @@ export function previewLeadEmail(accessToken: string, leadId: string, payload: E
 
 export function sendLeadEmail(accessToken: string, leadId: string, payload: EmailActionRequest) {
   return leadActionEmail(accessToken, leadId, { ...payload, preview_only: false });
+}
+
+export function fetchCallSummary(accessToken: string, leadId: string) {
+  return requestCrmEndpoint<CallSummaryResponse>('GET', `leads/${leadId}/call-summary`, accessToken);
+}
+
+export function recordCallSummaryInserted(accessToken: string, leadId: string, payload: CallSummaryInsertedRequest) {
+  return requestCrmEndpoint<void>('POST', `leads/${leadId}/call-summary/inserted`, accessToken, undefined, payload);
+}
+
+export function createCallSummaryAsset(accessToken: string, leadId: string, payload: CallSummaryAssetRequest) {
+  return requestCrmEndpoint<CallSummaryAssetResponse>('POST', `leads/${leadId}/call-summary/asset`, accessToken, undefined, payload);
 }
 
 export function fetchTenantIntegrations(accessToken: string) {

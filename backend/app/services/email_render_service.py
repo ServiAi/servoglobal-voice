@@ -71,8 +71,23 @@ class EmailRenderService:
             if shortcode:
                 blocks.append(shortcode)
                 continue
-            escaped = html.escape(block)
-            escaped = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", escaped)
+            lines = block.splitlines()
+            if all(line.strip().startswith("- ") for line in lines):
+                items = "".join(f"<li>{self._inline_markdown(line.strip()[2:])}</li>" for line in lines)
+                blocks.append(f"<ul>{items}</ul>")
+                continue
+            if all(re.match(r"^\d+\.\s+", line.strip()) for line in lines):
+                items = ""
+                for line in lines:
+                    item = re.sub(r"^\d+\.\s+", "", line.strip())
+                    items += f"<li>{self._inline_markdown(item)}</li>"
+                blocks.append(f"<ol>{items}</ol>")
+                continue
+            if all(line.strip().startswith("> ") for line in lines):
+                body = "<br />".join(self._inline_markdown(line.strip()[2:]) for line in lines)
+                blocks.append(f'<blockquote style="border-left:4px solid #d1d5db;padding-left:12px;color:#4b5563">{body}</blockquote>')
+                continue
+            escaped = self._inline_markdown(block)
             if escaped.startswith("# "):
                 blocks.append(f"<h1>{escaped[2:]}</h1>")
             elif escaped.startswith("## "):
@@ -108,6 +123,18 @@ class EmailRenderService:
             return str(variables.get(match.group(1).strip()) or "")
 
         return re.sub(r"{{\s*([a-zA-Z0-9_]+)\s*}}", repl, content)
+
+    def _inline_markdown(self, value: str) -> str:
+        escaped = html.escape(value)
+        escaped = re.sub(
+            r"\[([^\]]+)\]\((https?://[^)\s]+)\)",
+            lambda m: '<a href="%s">%s</a>'
+            % (html.escape(self._safe_url(html.unescape(m.group(2))), quote=True), m.group(1)),
+            escaped,
+        )
+        escaped = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", escaped)
+        escaped = re.sub(r"(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)", r"<em>\1</em>", escaped)
+        return escaped
 
     def _render_shortcode(self, block: str) -> str | None:
         if block == "{{divider}}":

@@ -357,6 +357,30 @@ export type EmailAssetItem = {
   status: string;
 };
 
+export type CallSummaryResponse = {
+  status: 'available' | 'not_found' | string;
+  summary?: string | null;
+  short_summary?: string | null;
+  call_date?: string | null;
+  duration_seconds?: number | null;
+  source?: string | null;
+};
+
+export type CallSummaryAssetRequest = {
+  format: 'md' | 'txt';
+};
+
+export type CallSummaryAssetResponse = {
+  asset_id: string;
+  filename: string;
+  mime_type: string;
+  file_size_bytes: number;
+};
+
+export type CallSummaryInsertedRequest = {
+  variant: 'full' | 'short';
+};
+
 export type FormFieldItem = {
   id: string;
   key: string;

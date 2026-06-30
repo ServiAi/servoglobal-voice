@@ -32,6 +32,10 @@ from app.schemas.crm import (
     CrmDashboardResponse,
     EmailActionRequest,
     EmailActionResponse,
+    CallSummaryAssetRequest,
+    CallSummaryAssetResponse,
+    CallSummaryInsertedRequest,
+    CallSummaryResponse,
 )
 from app.services.crm_pipeline_service import CrmPipelineService
 from app.services.crm_lead_service import CrmLeadService
@@ -41,6 +45,7 @@ from app.services.crm_metrics_service import CrmMetricsService
 from app.services.crm_query_service import CrmQueryService
 from app.services.crm_dashboard_metrics_service import CrmDashboardMetricsService
 from app.services.email_send_service import EmailSendService
+from app.services.call_summary_service import CallSummaryService
 
 router = APIRouter(prefix="/api/v1/crm", tags=["CRM"])
 
@@ -536,6 +541,64 @@ def lead_action_email(
         email_send_id=result.email_send_id,
         provider_email_id=result.provider_email_id,
         preview=result.preview,
+    )
+
+
+@router.get("/leads/{lead_id}/call-summary", response_model=CallSummaryResponse)
+def get_lead_call_summary(
+    lead_id: str,
+    context: AuthContext = Depends(require_roles(["platform_admin", "tenant_admin", "tenant_analyst", "tenant_viewer"])),
+    db: Session = Depends(get_db),
+) -> Any:
+    try:
+        result = CallSummaryService(db).get_summary(context.tenant.id, lead_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return CallSummaryResponse(
+        status=result.status,
+        summary=result.summary,
+        short_summary=result.short_summary,
+        call_date=result.call_date,
+        duration_seconds=result.duration_seconds,
+        source=result.source,
+    )
+
+
+@router.post("/leads/{lead_id}/call-summary/inserted", status_code=status.HTTP_204_NO_CONTENT)
+def record_lead_call_summary_inserted(
+    lead_id: str,
+    body: CallSummaryInsertedRequest | None = None,
+    context: AuthContext = Depends(require_roles(["platform_admin", "tenant_admin", "tenant_analyst"])),
+    db: Session = Depends(get_db),
+) -> None:
+    try:
+        CallSummaryService(db).record_inserted(context.tenant.id, lead_id, (body or CallSummaryInsertedRequest()).variant)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.post("/leads/{lead_id}/call-summary/asset", response_model=CallSummaryAssetResponse)
+def create_lead_call_summary_asset(
+    lead_id: str,
+    body: CallSummaryAssetRequest,
+    context: AuthContext = Depends(require_roles(["platform_admin", "tenant_admin", "tenant_analyst"])),
+    db: Session = Depends(get_db),
+) -> Any:
+    try:
+        asset = CallSummaryService(db).create_summary_asset(
+            tenant_id=context.tenant.id,
+            lead_id=lead_id,
+            uploaded_by_user_id=context.user.id,
+            file_format=body.format,
+        )
+    except ValueError as exc:
+        code = status.HTTP_404_NOT_FOUND if str(exc) == "Lead not found" else status.HTTP_422_UNPROCESSABLE_ENTITY
+        raise HTTPException(status_code=code, detail=str(exc)) from exc
+    return CallSummaryAssetResponse(
+        asset_id=asset.id,
+        filename=asset.original_filename,
+        mime_type=asset.mime_type,
+        file_size_bytes=asset.file_size_bytes,
     )
 
 
