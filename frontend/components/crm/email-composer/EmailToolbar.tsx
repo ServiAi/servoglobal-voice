@@ -32,7 +32,7 @@ const TOOLS: Tool[] = [
   { label: 'Lista numerada', icon: ListOrdered, snippet: '1. Primer paso\n2. Segundo paso\n' },
   { label: 'Cita', icon: Quote, snippet: '> Nota relevante\n' },
   { label: 'Link', icon: Link, snippet: '[Texto del enlace](https://example.com)' },
-  { label: 'Boton CTA', icon: MousePointerClick, snippet: '<Button href="{{form_link}}">Completar formulario</Button>' },
+  { label: 'Boton CTA', icon: MousePointerClick, snippet: '<Button href="https://example.com">Completar formulario</Button>' },
   { label: 'Callout', icon: MessageSquareQuote, snippet: '<Callout type="info">\nTexto destacado\n</Callout>' },
   { label: 'Separador', icon: Minus, snippet: '<Divider />' },
   { label: 'Firma', icon: PenLine, snippet: '<Signature name="ServiGlobal IA" />' },

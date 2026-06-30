@@ -56,7 +56,7 @@ Hola {{contact_name}},
 
 Gracias por tu interes en **ServiGlobal IA**.
 
-{{signature:ServiGlobal IA}}`;
+<Signature name="ServiGlobal IA" />`;
 
 export function EmailComposerModal({
   open,
@@ -68,6 +68,7 @@ export function EmailComposerModal({
   onSuccess,
 }: Props) {
   const editorRef = useRef<HTMLTextAreaElement>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [templates, setTemplates] = useState<EmailTemplateItem[]>([]);
   const [assets, setAssets] = useState<EmailAssetItem[]>([]);
   const [forms, setForms] = useState<TenantFormItem[]>([]);
@@ -80,6 +81,8 @@ export function EmailComposerModal({
   const [selectedFormId, setSelectedFormId] = useState('');
   const [formTokenIds, setFormTokenIds] = useState<string[]>([]);
   const [preview, setPreview] = useState<PreviewState>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [previewDirty, setPreviewDirty] = useState(true);
   const [tab, setTab] = useState<'editor' | 'html' | 'text'>('editor');
   const [loading, setLoading] = useState<LoadingState>(null);
 
@@ -121,33 +124,81 @@ export function EmailComposerModal({
     if (selectedTemplate) setSubject(selectedTemplate.subject);
   }, [selectedTemplate]);
 
-  const insertAtCursor = useCallback((snippet: string) => {
-    const editor = editorRef.current;
-    setContent((current) => {
-      if (!editor) return `${current}\n\n${snippet}`;
-      const start = editor.selectionStart;
-      const end = editor.selectionEnd;
-      const next = `${current.slice(0, start)}${snippet}${current.slice(end)}`;
-      const cursor = start + snippet.length;
-      queueMicrotask(() => {
-        editor.focus();
-        editor.setSelectionRange(cursor, cursor);
-      });
-      return next;
-    });
-  }, []);
+  useEffect(() => {
+    setPreviewDirty(true);
+  }, [subject, content, templateKey, selectedAssets, formTokenIds]);
 
-  const payload = (previewOnly: boolean) => ({
-    template_key: templateKey,
-    subject,
-    content_format: 'mdx',
-    content,
-    asset_ids: selectedAssets,
-    form_token_ids: formTokenIds,
-    preview_only: previewOnly,
-  });
+  const payload = useCallback(
+    (previewOnly: boolean) => ({
+      template_key: templateKey,
+      subject,
+      content_format: 'mdx' as const,
+      content,
+      asset_ids: selectedAssets,
+      form_token_ids: formTokenIds,
+      preview_only: previewOnly,
+    }),
+    [templateKey, subject, content, selectedAssets, formTokenIds]
+  );
+
+  const doPreview = useCallback(async () => {
+    if (loading === 'boot') return;
+    if (!content.trim()) {
+      setPreview(null);
+      setPreviewError(null);
+      setPreviewDirty(false);
+      return;
+    }
+    setLoading('preview');
+    setPreviewError(null);
+    const result = await previewLeadEmail(accessToken, leadId, payload(true));
+    setLoading(null);
+    if (!result.ok) {
+      setPreviewError(result.detail);
+      setPreviewDirty(true);
+      return;
+    }
+    if (result.data.preview) {
+      setPreview(result.data.preview);
+      setPreviewError(null);
+      setPreviewDirty(false);
+    }
+  }, [accessToken, leadId, loading, content, payload]);
+
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (!previewDirty || loading === 'boot') return;
+    debounceRef.current = setTimeout(doPreview, 600);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [previewDirty, doPreview, loading]);
 
   const submit = async (previewOnly: boolean) => {
+    if (previewDirty) {
+      setLoading('preview');
+      setPreviewError(null);
+      const result = await previewLeadEmail(accessToken, leadId, payload(true));
+      if (!result.ok) {
+        setPreviewError(result.detail);
+        setLoading(null);
+        return;
+      }
+      if (result.data.preview) {
+        setPreview(result.data.preview);
+        setPreviewError(null);
+        setPreviewDirty(false);
+      }
+      setLoading(null);
+      if (previewOnly) {
+        setTab('html');
+        return;
+      }
+    }
+    if (previewOnly && !previewDirty) {
+      setTab('html');
+      return;
+    }
     setLoading(previewOnly ? 'preview' : 'send');
     const result = previewOnly
       ? await previewLeadEmail(accessToken, leadId, payload(true))
@@ -166,6 +217,22 @@ export function EmailComposerModal({
     onOpenChange(false);
     onSent?.();
   };
+
+  const insertAtCursor = useCallback((snippet: string) => {
+    const editor = editorRef.current;
+    setContent((current) => {
+      if (!editor) return `${current}\n\n${snippet}`;
+      const start = editor.selectionStart;
+      const end = editor.selectionEnd;
+      const next = `${current.slice(0, start)}${snippet}${current.slice(end)}`;
+      const cursor = start + snippet.length;
+      queueMicrotask(() => {
+        editor.focus();
+        editor.setSelectionRange(cursor, cursor);
+      });
+      return next;
+    });
+  }, []);
 
   const sendTest = async () => {
     if (!toEmail) return;
@@ -282,7 +349,14 @@ export function EmailComposerModal({
             {tab === 'editor' && (
               <EmailMdxEditor value={content} onChange={setContent} onInsert={insertAtCursor} textareaRef={editorRef} />
             )}
-            {tab !== 'editor' && <EmailPreviewPanel preview={preview} mode={tab} />}
+            {tab !== 'editor' && (
+              <EmailPreviewPanel
+                preview={preview}
+                mode={tab}
+                loading={loading === 'preview'}
+                error={previewError}
+              />
+            )}
           </div>
           <aside className="grid content-start gap-4">
             <CallSummaryInserter summary={callSummary} disabled={loading !== null || !callSummaryAvailable} onInsert={insertCallSummary} />
@@ -331,6 +405,9 @@ export function EmailComposerModal({
                   </option>
                 ))}
               </select>
+              <p className="text-2xs text-muted-foreground">
+                Para formularios, usa el boton &quot;Insertar boton&quot; de esta seccion. El boton CTA de la barra de herramientas es para enlaces genericos.
+              </p>
               <Button type="button" variant="outline" disabled={!selectedFormId || loading !== null} onClick={insertFormLink}>
                 Insertar boton
               </Button>
@@ -346,7 +423,12 @@ export function EmailComposerModal({
             {loading === 'test' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
             Enviar prueba
           </Button>
-          <Button type="button" disabled={loading !== null || loading === 'boot'} onClick={() => submit(false)} className="gap-2">
+          <Button
+            type="button"
+            disabled={loading !== null || loading === 'boot' || previewError !== null}
+            onClick={() => submit(false)}
+            className="gap-2"
+          >
             {loading === 'send' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
             Enviar al lead
           </Button>

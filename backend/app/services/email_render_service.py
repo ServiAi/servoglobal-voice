@@ -12,6 +12,18 @@ DISALLOWED_PATTERNS = [
     r"^\s*(import|export)\s+",
     r"javascript:",
 ]
+RESIDUAL_PATTERNS = [
+    r"{{\s*signature\s*:",
+    r"{{\s*button\s*:",
+    r"{{\s*callout\s*:",
+    r"{{\s*divider\s*}}",
+    r"<Button\b",
+    r"</Button>",
+    r"<Callout\b",
+    r"</Callout>",
+    r"<Signature\b",
+    r"<Divider\b",
+]
 
 
 @dataclass(frozen=True)
@@ -33,19 +45,44 @@ class EmailRenderService:
         variables = variables or {}
         self.validate_disallowed_content(content)
         interpolated = self._interpolate(content, variables)
-        body_html = self.render_mdx_controlled(interpolated) if content_format == "mdx" else self.render_markdown(interpolated)
+        if content_format == "mdx":
+            body_html = self.render_mdx_controlled(interpolated)
+        else:
+            body_html = self.render_markdown(interpolated)
         body_html = self.sanitize_html(body_html)
+        body_html = self._validate_no_residual_shortcodes(body_html)
         return RenderedEmailContent(
             subject=subject,
             html=body_html,
             text=self.generate_plain_text(body_html),
         )
 
-    def render_mdx_controlled(self, content: str) -> str:
-        self._validate_components(content)
+    def normalize_controlled_mdx(self, content: str) -> str:
+        content = content.replace("\r\n", "\n")
         content = re.sub(
-            r'<Button\s+href="([^"]+)">([\s\S]*?)</Button>',
-            lambda m: "{{button:%s|%s}}" % (m.group(2), m.group(1)),
+            r"(<Button[^>]*>[\s\S]*?</Button>|<Callout[^>]*>[\s\S]*?</Callout>|<Divider\s*/>|<Signature[^/]*/>|{{signature:[^}]*}}|{{button:[^}]*}}|{{callout:[^}]*}}|{{divider}})",
+            r"\n\n\1\n\n",
+            content,
+        )
+        content = re.sub(r"(}})(#)", r"\1\n\n\2", content)
+        content = re.sub(r"(/>)(#)", r"\1\n\n\2", content)
+        content = re.sub(r"(}})([A-Z])", r"\1\n\n\2", content)
+        content = re.sub(r"(\n{4,})", "\n\n", content)
+        content = re.sub(r"({{(?:signature|button|callout|divider)[^}]*}})(\S)", r"\1\n\n\2", content)
+        return content.strip()
+
+    def render_mdx_controlled(self, content: str) -> str:
+        content = self.normalize_controlled_mdx(content)
+        self._validate_components(content)
+
+        def _validate_button_href(m: re.Match) -> str:
+            href = m.group(1)
+            self._safe_url(href)
+            return "{{button:%s|%s}}" % (m.group(2), href)
+
+        content = re.sub(
+            r'<Button\s+href="([^"]*)">([\s\S]*?)</Button>',
+            _validate_button_href,
             content,
         )
         content = re.sub(r"<Divider\s*/>", "{{divider}}", content)
@@ -164,6 +201,14 @@ class EmailRenderService:
 
     def _safe_url(self, href: str) -> str:
         cleaned = href.strip()
+        if not cleaned:
+            raise ValueError("Email button URL must be absolute HTTP(S).")
         if not cleaned.startswith(("https://", "http://")):
             raise ValueError("Email button URL must be absolute HTTP(S).")
         return cleaned
+
+    def _validate_no_residual_shortcodes(self, html_content: str) -> str:
+        for pattern in RESIDUAL_PATTERNS:
+            if re.search(pattern, html_content, flags=re.IGNORECASE):
+                raise ValueError("Email content contains unrendered MDX or shortcode.")
+        return html_content
