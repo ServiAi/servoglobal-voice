@@ -320,7 +320,10 @@ export type EmailActionRequest = {
   template_key: string;
   subject?: string | null;
   message?: string | null;
+  content_format?: 'mdx' | 'markdown' | string;
+  content?: string | null;
   asset_ids?: string[];
+  form_token_ids?: string[];
   preview_only?: boolean;
 };
 
@@ -352,5 +355,50 @@ export type EmailAssetItem = {
   mime_type: string;
   file_size_bytes: number;
   status: string;
+};
+
+export type FormFieldItem = {
+  id: string;
+  key: string;
+  label: string;
+  field_type: 'text' | 'email' | 'phone' | 'textarea' | 'select' | 'checkbox' | string;
+  required: boolean;
+  options: string[];
+  position: number;
+};
+
+export type TenantFormItem = {
+  id: string;
+  name: string;
+  description?: string | null;
+  status: string;
+  fields: FormFieldItem[];
+};
+
+export type TenantFormCreateRequest = {
+  name: string;
+  description?: string | null;
+  status?: string;
+  fields?: Array<{
+    key: string;
+    label: string;
+    field_type: string;
+    required?: boolean;
+    options?: string[];
+    position?: number;
+  }>;
+};
+
+export type FormTokenResponse = {
+  id: string;
+  form_link: string;
+  expires_at: string;
+};
+
+export type PublicFormResponse = {
+  form: TenantFormItem;
+  lead_preview: {
+    contact_name?: string | null;
+  };
 };
 

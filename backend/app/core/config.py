@@ -75,6 +75,7 @@ class Settings(BaseSettings):
     EMAIL_ASSETS_STORAGE_PATH: str = "storage/email-assets"
     EMAIL_MAX_ATTACHMENT_BYTES: int = 10485760
     EMAIL_MAX_TOTAL_ATTACHMENTS_BYTES: int = 15728640
+    PUBLIC_FORM_BASE_URL: str = "https://staging.serviglobal-ia.com"
 
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", extra="ignore"

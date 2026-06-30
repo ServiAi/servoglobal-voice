@@ -56,11 +56,22 @@ class EmailTemplateUpsertRequest(BaseModel):
     status: str = "active"
 
 
+class EmailAssetItem(BaseModel):
+    id: str
+    original_filename: str
+    mime_type: str
+    file_size_bytes: int
+    status: str
+
+
 class EmailActionRequest(BaseModel):
     template_key: str = Field(default="lead_proposal", min_length=1, max_length=80)
     subject: Optional[str] = Field(None, max_length=255)
     message: Optional[str] = None
+    content_format: str = "mdx"
+    content: Optional[str] = None
     asset_ids: list[str] = Field(default_factory=list)
+    form_token_ids: list[str] = Field(default_factory=list)
     preview_only: bool = False
 
 

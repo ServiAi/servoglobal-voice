@@ -145,3 +145,134 @@ class TenantEmailSend(Base, TimestampMixin):
     lead = relationship("CrmLead")
     contact = relationship("CrmContact")
     template = relationship("TenantEmailTemplate")
+
+
+class TenantEmailSendAsset(Base):
+    __tablename__ = "tenant_email_send_assets"
+    __table_args__ = (
+        Index("ix_tenant_email_send_assets_tenant_send", "tenant_id", "email_send_id"),
+        UniqueConstraint("email_send_id", "asset_id", name="uq_tenant_email_send_assets_send_asset"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False)
+    email_send_id: Mapped[str] = mapped_column(ForeignKey("tenant_email_sends.id"), nullable=False)
+    asset_id: Mapped[str] = mapped_column(ForeignKey("tenant_email_assets.id"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, nullable=False)
+
+    tenant = relationship("Tenant")
+    email_send = relationship("TenantEmailSend")
+    asset = relationship("TenantEmailAsset")
+
+
+class TenantForm(Base, TimestampMixin):
+    __tablename__ = "tenant_forms"
+    __table_args__ = (
+        Index("ix_tenant_forms_tenant_status", "tenant_id", "status"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False)
+    name: Mapped[str] = mapped_column(String(160), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="active")
+
+    tenant = relationship("Tenant")
+    fields: Mapped[list[TenantFormField]] = relationship(
+        back_populates="form",
+        cascade="all, delete-orphan",
+        order_by="TenantFormField.position",
+    )
+
+
+class TenantFormField(Base, TimestampMixin):
+    __tablename__ = "tenant_form_fields"
+    __table_args__ = (
+        Index("ix_tenant_form_fields_tenant_form", "tenant_id", "form_id"),
+        UniqueConstraint("form_id", "key", name="uq_tenant_form_fields_form_key"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False)
+    form_id: Mapped[str] = mapped_column(ForeignKey("tenant_forms.id"), nullable=False)
+    key: Mapped[str] = mapped_column(String(80), nullable=False)
+    label: Mapped[str] = mapped_column(String(160), nullable=False)
+    field_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    required: Mapped[bool] = mapped_column(sa.Boolean, nullable=False, default=False)
+    options_json: Mapped[list] = mapped_column(sa.JSON, nullable=False, default=list)
+    position: Mapped[int] = mapped_column(sa.Integer, nullable=False, default=0)
+
+    tenant = relationship("Tenant")
+    form = relationship("TenantForm", back_populates="fields")
+
+
+class TenantFormToken(Base):
+    __tablename__ = "tenant_form_tokens"
+    __table_args__ = (
+        Index("ix_tenant_form_tokens_token_hash", "token_hash"),
+        Index("ix_tenant_form_tokens_tenant_lead", "tenant_id", "lead_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False)
+    form_id: Mapped[str] = mapped_column(ForeignKey("tenant_forms.id"), nullable=False)
+    lead_id: Mapped[str] = mapped_column(ForeignKey("crm_leads.id"), nullable=False)
+    contact_id: Mapped[str] = mapped_column(ForeignKey("crm_contacts.id"), nullable=False)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="active")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, nullable=False)
+
+    tenant = relationship("Tenant")
+    form = relationship("TenantForm")
+    lead = relationship("CrmLead")
+    contact = relationship("CrmContact")
+
+
+class TenantFormSubmission(Base):
+    __tablename__ = "tenant_form_submissions"
+    __table_args__ = (
+        Index("ix_tenant_form_submissions_tenant_lead", "tenant_id", "lead_id"),
+        Index("ix_tenant_form_submissions_token", "token_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False)
+    form_id: Mapped[str] = mapped_column(ForeignKey("tenant_forms.id"), nullable=False)
+    lead_id: Mapped[str] = mapped_column(ForeignKey("crm_leads.id"), nullable=False)
+    contact_id: Mapped[str] = mapped_column(ForeignKey("crm_contacts.id"), nullable=False)
+    token_id: Mapped[str] = mapped_column(ForeignKey("tenant_form_tokens.id"), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="submitted")
+    submitted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, nullable=False)
+    metadata_json: Mapped[dict] = mapped_column(sa.JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, nullable=False)
+
+    tenant = relationship("Tenant")
+    form = relationship("TenantForm")
+    lead = relationship("CrmLead")
+    contact = relationship("CrmContact")
+    token = relationship("TenantFormToken")
+    answers: Mapped[list[TenantFormSubmissionAnswer]] = relationship(
+        back_populates="submission",
+        cascade="all, delete-orphan",
+    )
+
+
+class TenantFormSubmissionAnswer(Base):
+    __tablename__ = "tenant_form_submission_answers"
+    __table_args__ = (
+        Index("ix_tenant_form_submission_answers_tenant_submission", "tenant_id", "submission_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False)
+    submission_id: Mapped[str] = mapped_column(ForeignKey("tenant_form_submissions.id"), nullable=False)
+    field_id: Mapped[str | None] = mapped_column(ForeignKey("tenant_form_fields.id"), nullable=True)
+    field_key: Mapped[str] = mapped_column(String(80), nullable=False)
+    value_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, nullable=False)
+
+    tenant = relationship("Tenant")
+    submission = relationship("TenantFormSubmission", back_populates="answers")
+    field = relationship("TenantFormField")

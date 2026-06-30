@@ -8,11 +8,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.crm import CrmLead
-from app.models.integrations import TenantEmailSend
+from app.models.integrations import TenantEmailSend, TenantEmailSendAsset, TenantFormToken
 from app.services.crm_activity_service import CrmActivityService
 from app.services.email_asset_service import EmailAssetService
 from app.services.email_config_service import EmailConfigService, validate_email
 from app.services.email_template_service import EmailTemplateService, RenderedEmailTemplate
+from app.services.email_render_service import EmailRenderService
 from app.services.integration_event_service import IntegrationEventService
 from app.services.integration_service import IntegrationService
 from app.services.resend_service import ResendService, ResendServiceError, _sanitize_resend_error
@@ -38,6 +39,7 @@ class EmailSendService:
         self.integration_service = IntegrationService(db)
         self.config_service = EmailConfigService(db)
         self.template_service = EmailTemplateService(db)
+        self.render_service = EmailRenderService()
         self.asset_service = EmailAssetService(db)
         self.event_service = IntegrationEventService(db)
         self.activity_service = CrmActivityService(db)
@@ -50,13 +52,18 @@ class EmailSendService:
         template_key: str,
         subject: str | None,
         message: str | None,
+        content_format: str = "mdx",
+        content: str | None = None,
         asset_ids: list[str] | None,
+        form_token_ids: list[str] | None = None,
     ) -> EmailActionResult:
         lead = self._get_lead(tenant_id, lead_id)
         self._require_contact_email(lead)
         self.config_service.get_active_config(tenant_id, "resend")
         self.asset_service.validate_assets(tenant_id, asset_ids)
-        rendered = self._render(tenant_id, lead, template_key, subject, message)
+        rendered = self._render(tenant_id, lead, template_key, subject, message, content_format, content)
+        self._validate_form_tokens(tenant_id, lead_id, form_token_ids)
+        self._record_activity(lead, "email_preview_generated", "Preview email generado", "", None)
         return EmailActionResult(
             status="preview",
             preview={
@@ -75,7 +82,10 @@ class EmailSendService:
         template_key: str,
         subject: str | None,
         message: str | None,
+        content_format: str = "mdx",
+        content: str | None = None,
         asset_ids: list[str] | None,
+        form_token_ids: list[str] | None = None,
     ) -> EmailActionResult:
         lead = self._get_lead(tenant_id, lead_id)
         self._require_contact_email(lead)
@@ -93,8 +103,9 @@ class EmailSendService:
             raise ValueError("Email integration is not configured for this tenant.")
         api_key = self.integration_service.get_secret_value(integration, "api_key")
         assets = self.asset_service.validate_assets(tenant_id, asset_ids)
+        form_tokens = self._validate_form_tokens(tenant_id, lead_id, form_token_ids)
         attachments = self.asset_service.build_resend_attachments(assets)
-        rendered = self._render(tenant_id, lead, template_key, subject, message)
+        rendered = self._render(tenant_id, lead, template_key, subject, message, content_format, content)
         idempotency_key = f"lead-email:{tenant_id}:{lead_id}:{uuid.uuid4().hex}"
         email_send = TenantEmailSend(
             tenant_id=tenant_id,
@@ -112,6 +123,9 @@ class EmailSendService:
         self.db.add(email_send)
         self.db.commit()
         self.db.refresh(email_send)
+        for asset in assets:
+            self.db.add(TenantEmailSendAsset(tenant_id=tenant_id, email_send_id=email_send.id, asset_id=asset.id))
+        self.db.commit()
         self._record_activity(lead, "email_send_requested", "Email solicitado", email_send.id)
 
         try:
@@ -152,6 +166,8 @@ class EmailSendService:
         email_send.sent_at = datetime.now(UTC)
         self.db.commit()
         self._record_activity(lead, "email_sent", "Email enviado", email_send.id)
+        for form_token in form_tokens:
+            self._record_activity(lead, "form_link_sent", "Link de formulario enviado", email_send.id, None, form_token.id)
         self.event_service.record_event(
             tenant_id=tenant_id,
             provider="resend",
@@ -229,7 +245,37 @@ class EmailSendService:
         template_key: str,
         subject: str | None,
         message: str | None,
+        content_format: str = "mdx",
+        content: str | None = None,
     ) -> RenderedEmailTemplate:
+        if content:
+            template = self.template_service.render_template(
+                tenant_id=tenant_id,
+                template_key=template_key,
+                lead=lead,
+                subject_override=subject,
+                message_override=message,
+            ).template
+            variables = {
+                "contact_name": lead.contact.name if lead.contact else "",
+                "contact_email": lead.contact.email if lead.contact else "",
+                "company": lead.contact.company if lead.contact else "",
+                "interest": lead.interest,
+                "industry": lead.industry,
+                "use_case": lead.use_case,
+                "volume": lead.volume,
+                "pain_point": lead.pain_point or lead.summary or lead.short_summary,
+                "source": lead.source,
+                "campaign": lead.campaign,
+                "lead_id": lead.id,
+            }
+            rendered = self.render_service.render_email_content(
+                subject=subject or template.subject,
+                content_format=content_format,
+                content=content,
+                variables=variables,
+            )
+            return RenderedEmailTemplate(template=template, subject=rendered.subject, html=rendered.html, text=rendered.text)
         return self.template_service.render_template(
             tenant_id=tenant_id,
             template_key=template_key,
@@ -245,6 +291,7 @@ class EmailSendService:
         title: str,
         email_send_id: str,
         description: str | None = None,
+        form_token_id: str | None = None,
     ) -> None:
         self.activity_service.create_activity(
             tenant_id=lead.tenant_id,
@@ -253,10 +300,27 @@ class EmailSendService:
             activity_type=activity_type,
             title=title,
             description=description,
-            payload_json={"email_send_id": email_send_id, "provider": "resend"},
+            payload_json={"email_send_id": email_send_id, "provider": "resend", "form_token_id": form_token_id},
         )
 
     def _format_sender(self, sender_name: str | None, sender_email: str) -> str:
         if sender_name:
             return f"{sender_name} <{sender_email}>"
         return sender_email
+
+    def _validate_form_tokens(self, tenant_id: str, lead_id: str, form_token_ids: list[str] | None) -> list[TenantFormToken]:
+        if not form_token_ids:
+            return []
+        tokens = list(
+            self.db.scalars(
+                select(TenantFormToken).where(
+                    TenantFormToken.tenant_id == tenant_id,
+                    TenantFormToken.lead_id == lead_id,
+                    TenantFormToken.id.in_(form_token_ids),
+                    TenantFormToken.status == "active",
+                )
+            ).all()
+        )
+        if len(tokens) != len(set(form_token_ids)):
+            raise ValueError("One or more form links are not available for this lead.")
+        return tokens
