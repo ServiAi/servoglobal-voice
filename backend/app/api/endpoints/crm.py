@@ -509,7 +509,10 @@ def lead_action_email(
                 template_key=body.template_key,
                 subject=body.subject,
                 message=body.message,
+                content_format=body.content_format,
+                content=body.content,
                 asset_ids=body.asset_ids,
+                form_token_ids=body.form_token_ids,
             )
         else:
             result = service.send_lead_email(
@@ -518,7 +521,10 @@ def lead_action_email(
                 template_key=body.template_key,
                 subject=body.subject,
                 message=body.message,
+                content_format=body.content_format,
+                content=body.content,
                 asset_ids=body.asset_ids,
+                form_token_ids=body.form_token_ids,
             )
     except ValueError as exc:
         code = status.HTTP_404_NOT_FOUND if str(exc) == "Lead not found" else status.HTTP_422_UNPROCESSABLE_ENTITY

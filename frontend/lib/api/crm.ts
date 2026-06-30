@@ -17,6 +17,11 @@ import type {
   ResendIntegrationConfigRequest,
   ResendIntegrationConfigResponse,
   ResendTestEmailRequest,
+  EmailAssetItem,
+  TenantFormCreateRequest,
+  TenantFormItem,
+  FormTokenResponse,
+  PublicFormResponse,
 } from '@/types/crm';
 
 export type FetchResult<T> =
@@ -57,7 +62,7 @@ async function requestIntegrationEndpoint<T>(
 
 async function requestBackendEndpoint<T>(
   method: 'GET' | 'POST' | 'PATCH' | 'DELETE',
-  resource: 'crm' | 'integrations' | 'admin',
+  resource: 'crm' | 'integrations' | 'admin' | 'forms',
   endpoint: string,
   accessToken: string,
   queryParams?: Record<string, unknown>,
@@ -79,12 +84,12 @@ async function requestBackendEndpoint<T>(
       method,
       headers: {
         Authorization: `Bearer ${accessToken}`,
-        ...(body ? { 'Content-Type': 'application/json' } : {}),
+        ...(body && !(body instanceof FormData) ? { 'Content-Type': 'application/json' } : {}),
       },
       cache: 'no-store',
     };
     if (body) {
-      config.body = JSON.stringify(body);
+      config.body = body instanceof FormData ? body : JSON.stringify(body);
     }
     response = await fetch(url, config);
   } catch (error) {
@@ -124,6 +129,33 @@ async function requestBackendEndpoint<T>(
   }
 
   return { ok: true, data };
+}
+
+async function requestPublicBackendEndpoint<T>(
+  method: 'GET' | 'POST',
+  endpoint: string,
+  body?: unknown
+): Promise<FetchResult<T>> {
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+  if (!apiUrl) {
+    return { ok: false, status: 500, detail: 'Backend API URL is not configured' };
+  }
+  const url = `${apiUrl.replace(/\/$/, '')}/api/v1/public/${endpoint.replace(/^\//, '')}`;
+  try {
+    const response = await fetch(url, {
+      method,
+      headers: body ? { 'Content-Type': 'application/json' } : undefined,
+      body: body ? JSON.stringify(body) : undefined,
+      cache: 'no-store',
+    });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => null);
+      return { ok: false, status: response.status, detail: payload?.detail ?? `Failed to request ${endpoint}` };
+    }
+    return { ok: true, data: (await response.json()) as T };
+  } catch {
+    return { ok: false, status: 502, detail: 'CRM API is temporarily unavailable' };
+  }
 }
 
 // --- Metrics ---
@@ -284,6 +316,14 @@ export function leadActionEmail(accessToken: string, leadId: string, payload: Em
   return requestCrmEndpoint<EmailActionResponse>('POST', `leads/${leadId}/actions/email`, accessToken, undefined, payload);
 }
 
+export function previewLeadEmail(accessToken: string, leadId: string, payload: EmailActionRequest) {
+  return leadActionEmail(accessToken, leadId, { ...payload, preview_only: true });
+}
+
+export function sendLeadEmail(accessToken: string, leadId: string, payload: EmailActionRequest) {
+  return leadActionEmail(accessToken, leadId, { ...payload, preview_only: false });
+}
+
 export function fetchTenantIntegrations(accessToken: string) {
   return requestIntegrationEndpoint<ResendIntegrationConfigResponse[]>('GET', '', accessToken);
 }
@@ -304,6 +344,39 @@ export function testResendIntegration(accessToken: string, payload: ResendTestEm
 
 export function fetchResendTemplates(accessToken: string) {
   return requestIntegrationEndpoint<EmailTemplateItem[]>('GET', 'resend/templates', accessToken);
+}
+
+export function fetchEmailAssets(accessToken: string) {
+  return requestIntegrationEndpoint<EmailAssetItem[]>('GET', 'resend/assets', accessToken);
+}
+
+export function uploadEmailAsset(accessToken: string, file: File) {
+  const body = new FormData();
+  body.set('file', file);
+  return requestIntegrationEndpoint<EmailAssetItem>('POST', 'resend/assets', accessToken, undefined, body);
+}
+
+export function deleteEmailAsset(accessToken: string, assetId: string) {
+  return requestIntegrationEndpoint<void>('DELETE', `resend/assets/${assetId}`, accessToken);
+}
+
+export function fetchTenantForms(accessToken: string) {
+  return requestBackendEndpoint<TenantFormItem[]>('GET', 'forms', '', accessToken);
+}
+
+export function createTenantForm(accessToken: string, payload: TenantFormCreateRequest) {
+  return requestBackendEndpoint<TenantFormItem>('POST', 'forms', '', accessToken, undefined, payload);
+}
+
+export function createLeadFormToken(accessToken: string, formId: string, leadId: string, expiresInDays = 7) {
+  return requestBackendEndpoint<FormTokenResponse>(
+    'POST',
+    'forms',
+    `${formId}/tokens`,
+    accessToken,
+    undefined,
+    { lead_id: leadId, expires_in_days: expiresInDays }
+  );
 }
 
 export function fetchAdminTenantIntegrations(accessToken: string, tenantId: string) {
@@ -343,4 +416,48 @@ export function testAdminTenantResendIntegration(
     undefined,
     payload
   );
+}
+
+export function fetchAdminTenantForms(accessToken: string, tenantId: string) {
+  return requestBackendEndpoint<TenantFormItem[]>('GET', 'admin', `tenants/${tenantId}/forms`, accessToken);
+}
+
+export function createAdminTenantForm(accessToken: string, tenantId: string, payload: TenantFormCreateRequest) {
+  return requestBackendEndpoint<TenantFormItem>('POST', 'admin', `tenants/${tenantId}/forms`, accessToken, undefined, payload);
+}
+
+export function createAdminLeadFormToken(accessToken: string, tenantId: string, formId: string, leadId: string, expiresInDays = 7) {
+  return requestBackendEndpoint<FormTokenResponse>(
+    'POST',
+    'admin',
+    `tenants/${tenantId}/forms/${formId}/tokens`,
+    accessToken,
+    undefined,
+    { lead_id: leadId, expires_in_days: expiresInDays }
+  );
+}
+
+export function fetchAdminTenantEmailAssets(accessToken: string, tenantId: string) {
+  return requestBackendEndpoint<EmailAssetItem[]>('GET', 'admin', `tenants/${tenantId}/integrations/resend/assets`, accessToken);
+}
+
+export function uploadAdminTenantEmailAsset(accessToken: string, tenantId: string, file: File) {
+  const body = new FormData();
+  body.set('file', file);
+  return requestBackendEndpoint<EmailAssetItem>('POST', 'admin', `tenants/${tenantId}/integrations/resend/assets`, accessToken, undefined, body);
+}
+
+export function deleteAdminTenantEmailAsset(accessToken: string, tenantId: string, assetId: string) {
+  return requestBackendEndpoint<void>('DELETE', 'admin', `tenants/${tenantId}/integrations/resend/assets/${assetId}`, accessToken);
+}
+
+export function fetchPublicForm(token: string) {
+  return requestPublicBackendEndpoint<PublicFormResponse>('GET', `forms/${token}`);
+}
+
+export function submitPublicForm(token: string, answers: Record<string, string | boolean | null>, hp?: string) {
+  return requestPublicBackendEndpoint<{ status: string; submission_id: string }>('POST', `forms/${token}/submit`, {
+    answers,
+    hp,
+  });
 }
