@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import uuid
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
@@ -39,16 +40,19 @@ def _internal_user(context: AuthContext = Depends(get_current_auth_context)) -> 
 def _store_asset(db: Session, tenant_id: str, user_id: str | None, file: UploadFile) -> TenantEmailAsset:
     content = file.file.read()
     filename = file.filename or "attachment"
+    safe_filename = Path(filename).name
     mime_type = file.content_type or "application/octet-stream"
-    EmailAssetService(db)._validate_file_metadata(filename, mime_type, len(content))
+    EmailAssetService(db)._validate_file_metadata(safe_filename, mime_type, len(content))
     checksum = hashlib.sha256(content).hexdigest()
-    storage_key = f"{tenant_id}/{uuid.uuid4().hex}-{filename}"
+    asset_id = str(uuid.uuid4())
+    storage_key = f"tenants/{tenant_id}/email-assets/{asset_id}/{safe_filename}"
     service = EmailAssetService(db)
     service.storage.upload_bytes(storage_key, content)
     asset = TenantEmailAsset(
+        id=asset_id,
         tenant_id=tenant_id,
         uploaded_by_user_id=user_id,
-        original_filename=filename,
+        original_filename=safe_filename,
         storage_key=storage_key,
         mime_type=mime_type,
         file_size_bytes=len(content),

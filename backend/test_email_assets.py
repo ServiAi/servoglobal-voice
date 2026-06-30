@@ -24,6 +24,30 @@ from app.main import app
 from app.models.identity import Tenant, TenantMembership, User
 from app.models.integrations import TenantEmailAsset
 from app.services.email_asset_service import EmailAssetService
+from app.services.storage_service import StorageService
+
+
+class _FakeBody:
+    def __init__(self, content: bytes) -> None:
+        self.content = content
+
+    def read(self) -> bytes:
+        return self.content
+
+
+class _FakeS3Client:
+    def __init__(self) -> None:
+        self.objects: dict[tuple[str, str], bytes] = {}
+        self.deleted: list[tuple[str, str]] = []
+
+    def put_object(self, *, Bucket: str, Key: str, Body: bytes) -> None:
+        self.objects[(Bucket, Key)] = Body
+
+    def get_object(self, *, Bucket: str, Key: str) -> dict:
+        return {"Body": _FakeBody(self.objects[(Bucket, Key)])}
+
+    def delete_object(self, *, Bucket: str, Key: str) -> None:
+        self.deleted.append((Bucket, Key))
 
 
 class EmailAssetsTests(unittest.TestCase):
@@ -44,7 +68,9 @@ class EmailAssetsTests(unittest.TestCase):
             db.commit()
             db.refresh(self.tenant)
             db.refresh(self.user)
-            db.add(TenantMembership(tenant_id=self.tenant.id, user_id=self.user.id, role="tenant_admin", status="active"))
+            self.tenant_id = self.tenant.id
+            self.user_id = self.user.id
+            db.add(TenantMembership(tenant_id=self.tenant_id, user_id=self.user_id, role="tenant_admin", status="active"))
             db.commit()
         app.dependency_overrides[get_current_auth_context] = self._auth_context_override
 
@@ -54,8 +80,8 @@ class EmailAssetsTests(unittest.TestCase):
 
     async def _auth_context_override(self):
         with SessionLocal() as db:
-            tenant = db.get(Tenant, self.tenant.id)
-            user = db.get(User, self.user.id)
+            tenant = db.get(Tenant, self.tenant_id)
+            user = db.get(User, self.user_id)
             membership = db.scalar(select(TenantMembership).where(TenantMembership.tenant_id == tenant.id))
             return AuthContext(user=user, tenant=tenant, membership=membership)
 
@@ -67,6 +93,18 @@ class EmailAssetsTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["original_filename"], "proposal.pdf")
+
+    def test_upload_uses_required_storage_key_prefix(self):
+        response = self.client.post(
+            "/api/v1/integrations/resend/assets",
+            files={"file": ("proposal.pdf", b"pdf", "application/pdf")},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        asset_id = response.json()["id"]
+        with SessionLocal() as db:
+            asset = db.get(TenantEmailAsset, asset_id)
+        self.assertTrue(asset.storage_key.startswith(f"tenants/{self.tenant_id}/email-assets/{asset_id}/"))
 
     def test_upload_email_asset_blocks_executable(self):
         response = self.client.post(
@@ -107,7 +145,27 @@ class EmailAssetsTests(unittest.TestCase):
 
         with SessionLocal() as db:
             with self.assertRaises(ValueError):
-                EmailAssetService(db).validate_assets(self.tenant.id, [asset.id])
+                EmailAssetService(db).validate_assets(self.tenant_id, [asset.id])
+
+    def test_s3_storage_upload_read_delete_uses_client(self):
+        fake = _FakeS3Client()
+        storage = StorageService(driver="s3", bucket="bucket-a", s3_client=fake)
+        key = "tenants/tenant-a/email-assets/asset-1/proposal.pdf"
+
+        stored_key = storage.upload_bytes(key, b"pdf")
+        content = storage.read_bytes(key)
+        storage.delete(key)
+
+        self.assertEqual(stored_key, key)
+        self.assertEqual(content, b"pdf")
+        self.assertEqual(fake.objects[("bucket-a", key)], b"pdf")
+        self.assertEqual(fake.deleted, [("bucket-a", key)])
+
+    def test_s3_storage_requires_bucket(self):
+        storage = StorageService(driver="s3", bucket="", s3_client=_FakeS3Client())
+
+        with self.assertRaises(ValueError):
+            storage.upload_bytes("tenants/a/email-assets/b/file.pdf", b"pdf")
 
 
 if __name__ == "__main__":

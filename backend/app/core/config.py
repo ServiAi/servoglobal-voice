@@ -72,7 +72,14 @@ class Settings(BaseSettings):
 
     # Tenant integrations
     INTEGRATIONS_ENCRYPTION_KEY: str = ""
+    EMAIL_ASSETS_STORAGE_DRIVER: str = "local"
     EMAIL_ASSETS_STORAGE_PATH: str = "storage/email-assets"
+    EMAIL_ASSETS_BUCKET: str = ""
+    EMAIL_ASSETS_S3_ENDPOINT: str = ""
+    EMAIL_ASSETS_S3_REGION: str = "us-east-1"
+    EMAIL_ASSETS_S3_ACCESS_KEY: str = ""
+    EMAIL_ASSETS_S3_SECRET_KEY: str = ""
+    EMAIL_ASSETS_S3_FORCE_PATH_STYLE: bool = True
     EMAIL_MAX_ATTACHMENT_BYTES: int = 10485760
     EMAIL_MAX_TOTAL_ATTACHMENTS_BYTES: int = 15728640
     PUBLIC_FORM_BASE_URL: str = "https://staging.serviglobal-ia.com"

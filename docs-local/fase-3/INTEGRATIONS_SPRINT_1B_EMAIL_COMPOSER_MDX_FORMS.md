@@ -52,6 +52,34 @@ Se rechazan scripts, iframes, forms, inputs, selects, textareas, style tags, han
 5. El composer selecciona asset IDs.
 6. `EmailSendService` valida tenant, arma adjuntos para Resend y guarda `tenant_email_send_assets`.
 
+### Storage Local / MinIO S3-Compatible
+
+`StorageService` soporta dos drivers:
+
+- `EMAIL_ASSETS_STORAGE_DRIVER=local`: usa `EMAIL_ASSETS_STORAGE_PATH`.
+- `EMAIL_ASSETS_STORAGE_DRIVER=s3`: usa un cliente S3 compatible con `endpoint_url` para MinIO.
+
+Variables esperadas para S3/MinIO:
+
+```env
+EMAIL_ASSETS_STORAGE_DRIVER=s3
+EMAIL_ASSETS_BUCKET=serviglobal-email-assets-staging
+EMAIL_ASSETS_S3_ENDPOINT=https://s3.serviglobal-ia.com
+EMAIL_ASSETS_S3_REGION=us-east-1
+EMAIL_ASSETS_S3_ACCESS_KEY=
+EMAIL_ASSETS_S3_SECRET_KEY=
+EMAIL_ASSETS_S3_FORCE_PATH_STYLE=true
+```
+
+Reglas de seguridad:
+
+- El bucket no necesita ser publico.
+- No se generan URLs publicas.
+- Las credenciales solo viven en variables de entorno backend.
+- El frontend nunca recibe access key ni secret key.
+- No se loguea contenido de archivos ni base64.
+- Las keys se guardan con prefijo `tenants/{tenant_id}/email-assets/{asset_id}/{filename}`.
+
 ## Flujo De Formularios Publicos
 
 1. Tenant/admin crea o usa el formulario por defecto.
