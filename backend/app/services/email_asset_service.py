@@ -10,9 +10,17 @@ from app.core.config import settings
 from app.models.integrations import TenantEmailAsset
 from app.services.storage_service import StorageService
 
-ALLOWED_EXTENSIONS = {".pdf", ".docx", ".xlsx", ".csv", ".png", ".jpg", ".jpeg"}
+ALLOWED_EXTENSIONS = {".pdf", ".docx", ".xlsx", ".csv", ".png", ".jpg", ".jpeg", ".md", ".txt"}
 BLOCKED_EXTENSIONS = {".exe", ".js", ".html", ".php", ".bat", ".cmd", ".ps1", ".zip"}
-ALLOWED_MIME_PREFIXES = ("application/pdf", "application/vnd.", "text/csv", "image/png", "image/jpeg")
+ALLOWED_MIME_PREFIXES = (
+    "application/pdf",
+    "application/vnd.",
+    "text/csv",
+    "text/markdown",
+    "text/plain",
+    "image/png",
+    "image/jpeg",
+)
 
 
 class EmailAssetService:
