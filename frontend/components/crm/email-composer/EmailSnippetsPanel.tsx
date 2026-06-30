@@ -2,14 +2,20 @@
 
 import { Button } from '@/components/ui/button';
 
-const SNIPPETS = [
+type Snippet = {
+  label: string;
+  value?: string;
+  formCta?: boolean;
+};
+
+const SNIPPETS: Snippet[] = [
   {
     label: 'Propuesta breve',
     value: 'Hola {{contact_name}},\n\nTe comparto una propuesta basada en tu interes: **{{interest}}**.\n\n<Signature name="ServiGlobal IA" />',
   },
   {
     label: 'CTA formulario',
-    value: '<Button href="{{form_link}}">Completar formulario</Button>',
+    formCta: true,
   },
   {
     label: 'Nota comercial',
@@ -17,23 +23,41 @@ const SNIPPETS = [
   },
 ];
 
-export function EmailSnippetsPanel({ onInsert }: { onInsert: (snippet: string) => void }) {
+export function EmailSnippetsPanel({
+  onInsert,
+  onInsertForm,
+  formDisabled = false,
+}: {
+  onInsert: (snippet: string) => void;
+  onInsertForm: () => void | Promise<void>;
+  formDisabled?: boolean;
+}) {
   return (
     <section className="grid gap-2">
       <div className="text-sm font-semibold text-foreground">Snippets</div>
       <div className="grid gap-2">
-        {SNIPPETS.map((snippet) => (
-          <Button
-            key={snippet.label}
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={() => onInsert(snippet.value)}
-            className="justify-start"
-          >
-            {snippet.label}
-          </Button>
-        ))}
+        {SNIPPETS.map((snippet) => {
+          const isFormCta = Boolean(snippet.formCta);
+          return (
+            <Button
+              key={snippet.label}
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={isFormCta && formDisabled}
+              onClick={() => {
+                if (isFormCta) {
+                  void onInsertForm();
+                  return;
+                }
+                onInsert(snippet.value ?? '');
+              }}
+              className="justify-start"
+            >
+              {snippet.label}
+            </Button>
+          );
+        })}
       </div>
     </section>
   );

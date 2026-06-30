@@ -17,7 +17,6 @@ const VARIABLES = [
   'call_summary',
   'call_summary_short',
   'last_call_date',
-  'form_link',
 ];
 
 export function EmailVariablesPanel({ onInsert }: { onInsert: (snippet: string) => void }) {

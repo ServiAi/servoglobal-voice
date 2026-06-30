@@ -367,7 +367,11 @@ export function EmailComposerModal({
               onAttach={attachCallSummary}
             />
             <EmailVariablesPanel onInsert={insertAtCursor} />
-            <EmailSnippetsPanel onInsert={insertAtCursor} />
+            <EmailSnippetsPanel
+              onInsert={insertAtCursor}
+              onInsertForm={insertFormLink}
+              formDisabled={!selectedFormId || loading !== null}
+            />
             <section className="grid gap-2">
               <div className="text-sm font-semibold text-foreground">Adjuntos</div>
               <label className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-md border border-border px-3 py-2 text-sm">
