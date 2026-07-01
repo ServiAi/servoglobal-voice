@@ -52,10 +52,20 @@ class Settings(BaseSettings):
     UVX_SIP_PASSWORD: str | None = None
 
     # Cal.com Configuration
+    CALCOM_API_BASE_URL: str = "https://api.cal.com/v2"
+    CALCOM_API_VERSION: str = "2024-08-13"
+    LEGACY_CALCOM_TENANT_SLUG: str = "serviglobal-ia"
     CAL_API_KEY: str = ""
     CAL_EVENT_TYPE_ID: str = ""
     CAL_USERNAME: str = ""
     CAL_TIMEZONE: str = "America/Bogota"
+    CALCOM_WEBHOOK_SECRET: str = ""
+
+    # Google Calendar foundation
+    GOOGLE_CALENDAR_OAUTH_CLIENT_ID: str = ""
+    GOOGLE_CALENDAR_OAUTH_CLIENT_SECRET: str = ""
+    GOOGLE_CALENDAR_REDIRECT_URI: str = ""
+    GOOGLE_CALENDAR_DEFAULT_TIMEZONE: str = "America/Bogota"
 
     # Turnstile
     TURNSTILE_SECRET_KEY: str | None = None

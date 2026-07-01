@@ -10,16 +10,24 @@ from app.api.auth.deps import AuthContext, require_roles
 from app.db.session import get_db
 from app.models.integrations import TenantEmailTemplate
 from app.schemas.integrations import (
+    BookingConfigRequest,
+    BookingConfigResponse,
+    CalComTestResponse,
     EmailTemplateItem,
     EmailTemplateUpsertRequest,
+    GoogleCalendarConnectionResponse,
+    GoogleCalendarConnectUrlResponse,
     ResendIntegrationConfigRequest,
     ResendIntegrationConfigResponse,
     ResendTestEmailRequest,
     ResendTestEmailResponse,
 )
+from app.services.booking_config_service import BookingConfigService
+from app.services.booking_service import BookingService
 from app.services.email_config_service import EmailConfigService
 from app.services.email_send_service import EmailSendService
 from app.services.email_template_service import EmailTemplateService
+from app.services.google_calendar_oauth_service import GoogleCalendarOAuthService
 from app.services.integration_event_service import IntegrationEventService
 from app.services.integration_service import IntegrationService
 
@@ -53,6 +61,106 @@ def list_integrations(
 ) -> Any:
     integration_service = IntegrationService(db)
     return [_resend_response(integration_service, context.tenant.id, EmailConfigService(db))]
+
+
+@router.get("/booking/config", response_model=BookingConfigResponse)
+def get_booking_config(
+    context: AuthContext = Depends(require_roles(["platform_admin", "tenant_admin", "tenant_analyst", "tenant_viewer"])),
+    db: Session = Depends(get_db),
+) -> Any:
+    return BookingConfigService(db).get_config_response(context.tenant.id)
+
+
+@router.post("/calcom/config", response_model=BookingConfigResponse)
+def configure_calcom(
+    body: BookingConfigRequest,
+    context: AuthContext = Depends(require_roles(["platform_admin", "tenant_admin"])),
+    db: Session = Depends(get_db),
+) -> Any:
+    try:
+        config = BookingConfigService(db).upsert_calcom_config(context.tenant.id, body)
+        IntegrationEventService(db).record_event(
+            tenant_id=context.tenant.id,
+            provider="calcom",
+            event_type="config_updated",
+            status="success",
+            resource_type="config",
+            resource_id=config.id,
+            metadata={"has_secret": bool(config.cal_api_key_encrypted), "calendar_mode": config.calendar_mode},
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    return BookingConfigService(db).get_config_response(context.tenant.id)
+
+
+@router.post("/calcom/test", response_model=CalComTestResponse)
+def test_calcom(
+    context: AuthContext = Depends(require_roles(["platform_admin", "tenant_admin"])),
+    db: Session = Depends(get_db),
+) -> Any:
+    result, error = BookingConfigService(db).test_connection(context.tenant.id)
+    if result != "active":
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=error or "Cal.com test failed.")
+    return CalComTestResponse(status=result)
+
+
+@router.get("/calcom/slots")
+def get_calcom_slots(
+    date: str,
+    jornada: str | None = None,
+    reference_datetime: str | None = None,
+    context: AuthContext = Depends(require_roles(["platform_admin", "tenant_admin", "tenant_analyst", "tenant_viewer"])),
+    db: Session = Depends(get_db),
+) -> Any:
+    try:
+        return BookingService(db).get_available_slots_for_tenant(
+            tenant_id=context.tenant.id,
+            date_input=date,
+            jornada=jornada,
+            reference_datetime=reference_datetime,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+
+
+@router.get("/google-calendar/connect-url", response_model=GoogleCalendarConnectUrlResponse)
+def google_calendar_connect_url(
+    context: AuthContext = Depends(require_roles(["platform_admin", "tenant_admin"])),
+    db: Session = Depends(get_db),
+) -> Any:
+    try:
+        url = GoogleCalendarOAuthService(db).build_auth_url(state=f"{context.tenant.id}:{context.user.id}")
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    return GoogleCalendarConnectUrlResponse(url=url)
+
+
+@router.get("/google-calendar/callback")
+def google_calendar_callback() -> Any:
+    raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Google Calendar OAuth callback is prepared but not enabled yet.")
+
+
+@router.get("/google-calendar/connections", response_model=list[GoogleCalendarConnectionResponse])
+def list_google_calendar_connections(
+    context: AuthContext = Depends(require_roles(["platform_admin", "tenant_admin", "tenant_analyst", "tenant_viewer"])),
+    db: Session = Depends(get_db),
+) -> Any:
+    service = GoogleCalendarOAuthService(db)
+    return [service.response(connection) for connection in service.list_connections(context.tenant.id)]
+
+
+@router.post("/google-calendar/disconnect", response_model=GoogleCalendarConnectionResponse)
+def disconnect_google_calendar(
+    connection_id: str,
+    context: AuthContext = Depends(require_roles(["platform_admin", "tenant_admin"])),
+    db: Session = Depends(get_db),
+) -> Any:
+    service = GoogleCalendarOAuthService(db)
+    try:
+        connection = service.disconnect_connection(context.tenant.id, connection_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return service.response(connection)
 
 
 @router.post("/resend/config", response_model=ResendIntegrationConfigResponse)

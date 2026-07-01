@@ -1,6 +1,8 @@
 import { redirect } from 'next/navigation';
 import { getAccessToken } from '@/lib/auth/server';
-import { fetchTenantIntegrations } from '@/lib/api/crm';
+import { fetchBookingConfig, fetchGoogleCalendarConnections, fetchTenantIntegrations } from '@/lib/api/crm';
+import { CalComIntegrationCard } from '@/components/crm/integrations/CalComIntegrationCard';
+import { GoogleCalendarIntegrationCard } from '@/components/crm/integrations/GoogleCalendarIntegrationCard';
 import { ResendIntegrationCard } from '@/components/crm/integrations/ResendIntegrationCard';
 
 type Props = {
@@ -16,6 +18,8 @@ export default async function CrmIntegrationsPage({ params }: Props) {
     redirect(`/api/auth/login?returnTo=/${locale}/crm/settings/integrations`);
   }
   const integrationsResult = await fetchTenantIntegrations(accessToken);
+  const bookingConfigResult = await fetchBookingConfig(accessToken);
+  const googleConnectionsResult = await fetchGoogleCalendarConnections(accessToken);
   const resendConfig = integrationsResult.ok
     ? integrationsResult.data.find((item) => item.provider === 'resend')
     : undefined;
@@ -32,6 +36,11 @@ export default async function CrmIntegrationsPage({ params }: Props) {
         </div>
       )}
       <ResendIntegrationCard accessToken={accessToken} initialConfig={resendConfig} />
+      <CalComIntegrationCard accessToken={accessToken} initialConfig={bookingConfigResult.ok ? bookingConfigResult.data : undefined} />
+      <GoogleCalendarIntegrationCard
+        accessToken={accessToken}
+        connections={googleConnectionsResult.ok ? googleConnectionsResult.data : []}
+      />
     </div>
   );
 }

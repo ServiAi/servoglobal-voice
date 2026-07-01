@@ -6,6 +6,7 @@ Handles all communication with the Cal.com v2 API to fetch available slots.
 import httpx
 import logging
 import pytz
+import re
 from datetime import date, timedelta, datetime
 from app.core.config import settings
 from app.services.date_resolution_service import (
@@ -17,9 +18,16 @@ from app.services.notification_service import notification_service
 
 logger = logging.getLogger(__name__)
 
-CAL_API_BASE = "https://api.cal.com/v2"
-CAL_API_VERSION_HEADER = "2024-09-04"
+CAL_API_BASE = settings.CALCOM_API_BASE_URL
+CAL_API_VERSION_HEADER = settings.CALCOM_API_VERSION
 CAL_HTTP_TIMEOUT_SECONDS = 8.0
+
+
+def _sanitize_calcom_error(value: str) -> str:
+    cleaned = re.sub(r"Bearer\s+[A-Za-z0-9._\-]+", "Bearer [redacted]", value or "", flags=re.IGNORECASE)
+    cleaned = re.sub(r"cal_[A-Za-z0-9._\-]+", "cal_[redacted]", cleaned)
+    cleaned = re.sub(r"[\w.+-]+@[\w.-]+", "[email-redacted]", cleaned)
+    return cleaned[:300]
 
 
 class CalComInputError(ValueError):
@@ -163,7 +171,13 @@ async def get_available_slots(
         "Content-Type": "application/json",
     }
 
-    logger.info(f"[Cal.com] GET {CAL_API_BASE}/slots | params={params} | jornada={jornada}")
+    logger.info(
+        "[Cal.com] GET slots provider=calcom event_type_id=%s start=%s end=%s jornada=%s",
+        settings.CAL_EVENT_TYPE_ID,
+        start_date,
+        end_date,
+        jornada,
+    )
 
     async with httpx.AsyncClient(timeout=CAL_HTTP_TIMEOUT_SECONDS) as client:
         response = await client.get(
@@ -172,11 +186,11 @@ async def get_available_slots(
             headers=headers,
         )
 
-    logger.info(f"[Cal.com] Response {response.status_code}: {response.text[:300]}")
+    logger.info("[Cal.com] slots response status_code=%s", response.status_code)
 
     if response.status_code != 200:
         raise CalComUpstreamError(
-            f"Cal.com API error {response.status_code}: {response.text}"
+            f"Cal.com API error {response.status_code}: {_sanitize_calcom_error(response.text)}"
         )
 
     data = response.json()
@@ -279,7 +293,7 @@ async def create_booking(date_str: str, time_str: str, name: str, email: str, ph
         "Content-Type": "application/json"
     }
     
-    logger.info(f"[Cal.com] POST {CAL_API_BASE}/bookings | start={start_datetime} | email={email}")
+    logger.info("[Cal.com] POST bookings provider=calcom start=%s", start_datetime)
     
     async with httpx.AsyncClient(timeout=CAL_HTTP_TIMEOUT_SECONDS) as client:
         response = await client.post(
@@ -288,7 +302,7 @@ async def create_booking(date_str: str, time_str: str, name: str, email: str, ph
             headers=headers
         )
         
-    logger.info(f"[Cal.com] POST Response {response.status_code}: {response.text[:300]}")
+    logger.info("[Cal.com] booking response status_code=%s", response.status_code)
     
     if response.status_code not in (200, 201):
         if response.status_code == 400 and _is_booking_unavailable_response(response.text):
@@ -297,7 +311,7 @@ async def create_booking(date_str: str, time_str: str, name: str, email: str, ph
                 "Verifica disponibilidad nuevamente antes de crear el evento."
             )
         raise CalComUpstreamError(
-            f"Cal.com API error {response.status_code} al crear reserva: {response.text}"
+            f"Cal.com API error {response.status_code} al crear reserva: {_sanitize_calcom_error(response.text)}"
         )
     result_data = response.json()
 

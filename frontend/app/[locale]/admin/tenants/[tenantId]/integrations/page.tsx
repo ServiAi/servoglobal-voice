@@ -1,10 +1,16 @@
 import { locales, type Locale } from '@/i18n';
-import { fetchAdminTenantIntegrations } from '@/lib/api/crm';
+import {
+  fetchAdminTenantBookingConfig,
+  fetchAdminTenantGoogleCalendarConnections,
+  fetchAdminTenantIntegrations,
+} from '@/lib/api/crm';
 import {
   redirectAdminAccessFailure,
   requireInternalAdminAccess,
 } from '@/lib/auth/server';
 import { ResendIntegrationCard } from '@/components/crm/integrations/ResendIntegrationCard';
+import { CalComIntegrationCard } from '@/components/crm/integrations/CalComIntegrationCard';
+import { GoogleCalendarIntegrationCard } from '@/components/crm/integrations/GoogleCalendarIntegrationCard';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 
@@ -28,6 +34,8 @@ export default async function AdminTenantIntegrationsPage({ params }: Props) {
 
   // Fetch the configurations using our admin API client method
   const integrationsResult = await fetchAdminTenantIntegrations(accessToken, tenantId);
+  const bookingConfigResult = await fetchAdminTenantBookingConfig(accessToken, tenantId);
+  const googleConnectionsResult = await fetchAdminTenantGoogleCalendarConnections(accessToken, tenantId);
 
   if (!integrationsResult.ok) {
     redirectAdminAccessFailure(integrationsResult.status, locale, returnTo);
@@ -61,6 +69,13 @@ export default async function AdminTenantIntegrationsPage({ params }: Props) {
         mode="admin"
         tenantId={tenantId}
       />
+      <CalComIntegrationCard
+        accessToken={accessToken}
+        initialConfig={bookingConfigResult.ok ? bookingConfigResult.data : undefined}
+        mode="admin"
+        tenantId={tenantId}
+      />
+      <GoogleCalendarIntegrationCard connections={googleConnectionsResult.ok ? googleConnectionsResult.data : []} />
     </div>
   );
 }

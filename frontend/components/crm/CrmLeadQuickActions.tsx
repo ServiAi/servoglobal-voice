@@ -17,7 +17,6 @@ import {
 import {
   leadActionWhatsapp,
   leadActionCall,
-  leadActionSchedule,
   changeCrmLeadStage,
   leadActionChatwoot,
 } from '@/lib/api/crm';
@@ -32,6 +31,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { canUseOutboundActions, canChangeTerminalStage } from '@/lib/permissions/crm';
 import { CrmSendEmailModal } from '@/components/crm/CrmSendEmailModal';
+import { LeadBookingModal } from '@/components/crm/bookings/LeadBookingModal';
 
 type CrmLeadQuickActionsProps = {
   leadId: string;
@@ -57,6 +57,7 @@ export function CrmLeadQuickActions({
 
   const [terminalStage, setTerminalStage] = useState<'won' | 'lost' | 'not_interested' | null>(null);
   const [emailModalOpen, setEmailModalOpen] = useState(false);
+  const [bookingModalOpen, setBookingModalOpen] = useState(false);
   const [reason, setReason] = useState('');
   const [notes, setNotes] = useState('');
   const [validationError, setValidationError] = useState<string | null>(null);
@@ -73,7 +74,7 @@ export function CrmLeadQuickActions({
     }
   };
 
-  const handleOutboundAction = async (type: 'whatsapp' | 'call' | 'schedule' | 'chatwoot') => {
+  const handleOutboundAction = async (type: 'whatsapp' | 'call' | 'chatwoot') => {
     if (!canAct) {
       triggerStatus('error', 'No tienes permisos para realizar esta acción.');
       return;
@@ -89,8 +90,6 @@ export function CrmLeadQuickActions({
         res = await leadActionWhatsapp(accessToken, leadId);
       } else if (type === 'call') {
         res = await leadActionCall(accessToken, leadId);
-      } else if (type === 'schedule') {
-        res = await leadActionSchedule(accessToken, leadId);
       } else if (type === 'chatwoot') {
         res = await leadActionChatwoot(accessToken, leadId);
       }
@@ -235,14 +234,10 @@ export function CrmLeadQuickActions({
             <Button
               variant="outline" size="sm"
               disabled={loadingAction !== null}
-              onClick={() => handleOutboundAction('schedule')}
+              onClick={() => setBookingModalOpen(true)}
               className="flex items-center justify-start gap-2 bg-zinc-950/20 text-foreground hover:bg-fuchsia-500/10 hover:text-fuchsia-500 hover:border-fuchsia-500/20 transition cursor-pointer"
             >
-              {loadingAction === 'schedule' ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Calendar className="h-4 w-4 text-fuchsia-500" />
-              )}
+              <Calendar className="h-4 w-4 text-fuchsia-500" />
               <span className="truncate">Agendar reunión</span>
             </Button>
 
@@ -381,6 +376,21 @@ export function CrmLeadQuickActions({
         onError={(message) => triggerStatus('error', message)}
         onSuccess={(message) => triggerStatus('success', message)}
         onSent={() => {
+          startTransition(() => {
+            router.refresh();
+            if (onActionComplete) onActionComplete();
+          });
+        }}
+      />
+
+      <LeadBookingModal
+        open={bookingModalOpen}
+        onOpenChange={setBookingModalOpen}
+        accessToken={accessToken}
+        leadId={leadId}
+        onError={(message) => triggerStatus('error', message)}
+        onSuccess={(message) => triggerStatus('success', message)}
+        onBooked={() => {
           startTransition(() => {
             router.refresh();
             if (onActionComplete) onActionComplete();

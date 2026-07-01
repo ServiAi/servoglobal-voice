@@ -80,3 +80,58 @@ class EmailActionResponse(BaseModel):
     email_send_id: Optional[str] = None
     provider_email_id: Optional[str] = None
     preview: Optional[dict] = None
+
+
+class BookingConfigRequest(BaseModel):
+    cal_api_key: Optional[str] = Field(None, max_length=500)
+    status: str = "active"
+    calendar_mode: str = "cal_managed"
+    cal_api_version: str = "2024-08-13"
+    organization_slug: Optional[str] = Field(None, max_length=120)
+    default_event_type_id: Optional[int] = None
+    default_event_type_slug: Optional[str] = Field(None, max_length=160)
+    default_username: Optional[str] = Field(None, max_length=160)
+    default_team_slug: Optional[str] = Field(None, max_length=160)
+    default_timezone: str = "America/Bogota"
+    default_language: str = "es"
+    default_location_type: Optional[str] = Field(None, max_length=80)
+    default_length_minutes: int = Field(30, ge=5, le=480)
+
+
+class BookingConfigResponse(BaseModel):
+    provider: str = "calcom"
+    status: str
+    calendar_mode: str
+    has_secret: bool
+    default_event_type_id: Optional[int] = None
+    default_event_type_slug: Optional[str] = None
+    default_username: Optional[str] = None
+    default_team_slug: Optional[str] = None
+    organization_slug: Optional[str] = None
+    default_timezone: str
+    default_language: str
+    default_location_type: Optional[str] = None
+    default_length_minutes: int
+    last_health_check_at: Optional[datetime] = None
+    last_error_message: Optional[str] = None
+
+
+class CalComTestResponse(BaseModel):
+    status: str
+    error_message: Optional[str] = None
+
+
+class GoogleCalendarConnectUrlResponse(BaseModel):
+    url: str
+
+
+class GoogleCalendarConnectionResponse(BaseModel):
+    id: str
+    status: str
+    google_account_email: Optional[str] = None
+    calendar_id: str
+    calendar_summary: Optional[str] = None
+    scopes: list[str] = Field(default_factory=list)
+    last_sync_at: Optional[datetime] = None
+    last_error_message: Optional[str] = None
+    has_tokens: bool

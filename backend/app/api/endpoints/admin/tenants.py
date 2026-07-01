@@ -29,15 +29,23 @@ from app.services.onboarding_service import (
 )
 from app.services.tenant_usage_service import TenantUsageService
 from app.schemas.integrations import (
+    BookingConfigRequest,
+    BookingConfigResponse,
+    CalComTestResponse,
+    GoogleCalendarConnectionResponse,
     ResendIntegrationConfigRequest,
     ResendIntegrationConfigResponse,
     ResendTestEmailRequest,
     ResendTestEmailResponse,
 )
+from app.schemas.crm import BookingCreateRequest, BookingResponse
 from app.api.endpoints.integrations import _resend_response
+from app.services.booking_config_service import BookingConfigService
+from app.services.booking_service import BookingService
 from app.services.email_config_service import EmailConfigService
 from app.services.email_send_service import EmailSendService
 from app.services.email_template_service import EmailTemplateService
+from app.services.google_calendar_oauth_service import GoogleCalendarOAuthService
 from app.services.integration_event_service import IntegrationEventService
 from app.services.integration_service import IntegrationService
 
@@ -474,6 +482,112 @@ def list_tenant_integrations_admin(
     integration_service = IntegrationService(db)
     config_service = EmailConfigService(db)
     return [_resend_response(integration_service, tenant_id, config_service)]
+
+
+@router.get("/tenants/{tenant_id}/integrations/booking/config", response_model=BookingConfigResponse)
+def get_tenant_booking_config_admin(
+    tenant_id: str,
+    db: Session = Depends(get_current_internal_db),
+) -> Any:
+    try:
+        OnboardingService(db).get_tenant(tenant_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return BookingConfigService(db).get_config_response(tenant_id)
+
+
+@router.post("/tenants/{tenant_id}/integrations/calcom/config", response_model=BookingConfigResponse)
+def configure_tenant_calcom_admin(
+    tenant_id: str,
+    body: BookingConfigRequest,
+    db: Session = Depends(get_current_internal_db),
+) -> Any:
+    try:
+        OnboardingService(db).get_tenant(tenant_id)
+        config = BookingConfigService(db).upsert_calcom_config(tenant_id, body)
+        IntegrationEventService(db).record_event(
+            tenant_id=tenant_id,
+            provider="calcom",
+            event_type="config_updated",
+            status="success",
+            resource_type="config",
+            resource_id=config.id,
+            metadata={"has_secret": bool(config.cal_api_key_encrypted), "calendar_mode": config.calendar_mode},
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    return BookingConfigService(db).get_config_response(tenant_id)
+
+
+@router.post("/tenants/{tenant_id}/integrations/calcom/test", response_model=CalComTestResponse)
+def test_tenant_calcom_admin(
+    tenant_id: str,
+    db: Session = Depends(get_current_internal_db),
+) -> Any:
+    result, error = BookingConfigService(db).test_connection(tenant_id)
+    if result != "active":
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=error or "Cal.com test failed.")
+    return CalComTestResponse(status=result)
+
+
+@router.get("/tenants/{tenant_id}/integrations/calcom/slots")
+def get_tenant_calcom_slots_admin(
+    tenant_id: str,
+    date: str,
+    jornada: str | None = None,
+    reference_datetime: str | None = None,
+    db: Session = Depends(get_current_internal_db),
+) -> Any:
+    try:
+        OnboardingService(db).get_tenant(tenant_id)
+        return BookingService(db).get_available_slots_for_tenant(
+            tenant_id=tenant_id,
+            date_input=date,
+            jornada=jornada,
+            reference_datetime=reference_datetime,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+
+
+@router.get("/tenants/{tenant_id}/integrations/google-calendar/connections", response_model=list[GoogleCalendarConnectionResponse])
+def list_tenant_google_calendar_connections_admin(
+    tenant_id: str,
+    db: Session = Depends(get_current_internal_db),
+) -> Any:
+    try:
+        OnboardingService(db).get_tenant(tenant_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    service = GoogleCalendarOAuthService(db)
+    return [service.response(connection) for connection in service.list_connections(tenant_id)]
+
+
+@router.post("/tenants/{tenant_id}/crm/leads/{lead_id}/bookings", response_model=BookingResponse)
+def create_tenant_lead_booking_admin(
+    tenant_id: str,
+    lead_id: str,
+    body: BookingCreateRequest,
+    db: Session = Depends(get_current_internal_db),
+) -> Any:
+    try:
+        OnboardingService(db).get_tenant(tenant_id)
+        return BookingService(db).create_lead_booking(tenant_id=tenant_id, lead_id=lead_id, body=body)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+
+
+@router.get("/tenants/{tenant_id}/crm/leads/{lead_id}/bookings", response_model=list[BookingResponse])
+def list_tenant_lead_bookings_admin(
+    tenant_id: str,
+    lead_id: str,
+    db: Session = Depends(get_current_internal_db),
+) -> Any:
+    try:
+        OnboardingService(db).get_tenant(tenant_id)
+        return BookingService(db).list_lead_bookings(tenant_id=tenant_id, lead_id=lead_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
 
 @router.post(

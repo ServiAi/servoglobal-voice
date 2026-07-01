@@ -226,3 +226,69 @@ class CrmTask(Base, TimestampMixin):
     contact: Mapped[CrmContact | None] = relationship(back_populates="tasks")
     lead: Mapped[CrmLead | None] = relationship(back_populates="tasks")
     assigned_to = relationship("User")
+
+
+class CrmBooking(Base, TimestampMixin):
+    __tablename__ = "crm_bookings"
+    __table_args__ = (
+        Index("ix_crm_bookings_tenant_lead", "tenant_id", "lead_id"),
+        Index("ix_crm_bookings_tenant_contact", "tenant_id", "contact_id"),
+        Index("ix_crm_bookings_tenant_provider_uid", "tenant_id", "provider_booking_uid"),
+        Index("ix_crm_bookings_tenant_status", "tenant_id", "status"),
+        Index("ix_crm_bookings_tenant_start", "tenant_id", "start_at"),
+        Index("ix_crm_bookings_tenant_google_event", "tenant_id", "google_calendar_event_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False)
+    lead_id: Mapped[str | None] = mapped_column(ForeignKey("crm_leads.id"), nullable=True)
+    contact_id: Mapped[str | None] = mapped_column(ForeignKey("crm_contacts.id"), nullable=True)
+    provider: Mapped[str] = mapped_column(String(40), nullable=False, default="calcom")
+    provider_booking_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    provider_booking_uid: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    provider_event_type_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    provider_event_type_slug: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    title: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending")
+    start_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    end_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    timezone: Mapped[str] = mapped_column(String(80), nullable=False, default="America/Bogota")
+    duration_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    meeting_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    location_type: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    attendee_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    attendee_email: Mapped[str] = mapped_column(String(255), nullable=False)
+    attendee_phone: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    host_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    host_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    google_calendar_event_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    calendar_mode: Mapped[str] = mapped_column(String(40), nullable=False, default="cal_managed")
+    metadata_json: Mapped[dict] = mapped_column(sa.JSON, nullable=False, default=dict)
+    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    rescheduled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    tenant = relationship("Tenant")
+    lead = relationship("CrmLead")
+    contact = relationship("CrmContact")
+
+
+class CrmBookingEvent(Base):
+    __tablename__ = "crm_booking_events"
+    __table_args__ = (
+        Index("ix_crm_booking_events_tenant_booking", "tenant_id", "booking_id"),
+        Index("ix_crm_booking_events_tenant_provider", "tenant_id", "provider"),
+        Index("ix_crm_booking_events_created_at", "created_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False)
+    booking_id: Mapped[str] = mapped_column(ForeignKey("crm_bookings.id"), nullable=False)
+    provider: Mapped[str] = mapped_column(String(40), nullable=False, default="calcom")
+    event_type: Mapped[str] = mapped_column(String(80), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    payload_summary_json: Mapped[dict] = mapped_column(sa.JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, nullable=False)
+
+    tenant = relationship("Tenant")
+    booking = relationship("CrmBooking")

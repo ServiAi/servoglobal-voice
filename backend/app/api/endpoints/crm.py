@@ -36,6 +36,8 @@ from app.schemas.crm import (
     CallSummaryAssetResponse,
     CallSummaryInsertedRequest,
     CallSummaryResponse,
+    BookingCreateRequest,
+    BookingResponse,
 )
 from app.services.crm_pipeline_service import CrmPipelineService
 from app.services.crm_lead_service import CrmLeadService
@@ -46,6 +48,7 @@ from app.services.crm_query_service import CrmQueryService
 from app.services.crm_dashboard_metrics_service import CrmDashboardMetricsService
 from app.services.email_send_service import EmailSendService
 from app.services.call_summary_service import CallSummaryService
+from app.services.booking_service import BookingService
 
 router = APIRouter(prefix="/api/v1/crm", tags=["CRM"])
 
@@ -209,6 +212,31 @@ def get_crm_lead_detail(
         activities=[ActivitySchema.model_validate(a) for a in lead.activities],
         tasks=[TaskResponse.model_validate(t) for t in lead.tasks],
     )
+
+
+@router.post("/leads/{lead_id}/bookings", response_model=BookingResponse)
+def create_lead_booking(
+    lead_id: str,
+    body: BookingCreateRequest,
+    context: AuthContext = Depends(require_roles(["platform_admin", "tenant_admin"])),
+    db: Session = Depends(get_db),
+) -> Any:
+    try:
+        return BookingService(db).create_lead_booking(tenant_id=context.tenant.id, lead_id=lead_id, body=body)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+
+
+@router.get("/leads/{lead_id}/bookings", response_model=list[BookingResponse])
+def list_lead_bookings(
+    lead_id: str,
+    context: AuthContext = Depends(require_roles(["platform_admin", "tenant_admin", "tenant_analyst", "tenant_viewer"])),
+    db: Session = Depends(get_db),
+) -> Any:
+    try:
+        return BookingService(db).list_lead_bookings(tenant_id=context.tenant.id, lead_id=lead_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
 
 # --- Lead Update ---

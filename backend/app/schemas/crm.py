@@ -233,6 +233,60 @@ class CallSummaryInsertedRequest(BaseModel):
     variant: str = "full"
 
 
+class BookingCreateRequest(BaseModel):
+    start: str
+    timezone: str = "America/Bogota"
+    event_type_id: Optional[int] = None
+    event_type_slug: Optional[str] = None
+    username: Optional[str] = None
+    team_slug: Optional[str] = None
+    organization_slug: Optional[str] = None
+    attendee_name: str = Field(..., min_length=1, max_length=255)
+    attendee_email: str = Field(..., min_length=3, max_length=255)
+    attendee_phone: Optional[str] = Field(None, max_length=80)
+    booking_fields_responses: dict[str, Any] = Field(default_factory=dict)
+    notes: Optional[str] = None
+
+
+class BookingResponse(BaseModel):
+    id: str
+    provider: str
+    provider_booking_id: Optional[str] = None
+    provider_booking_uid: Optional[str] = None
+    status: str
+    start_at: datetime
+    end_at: Optional[datetime] = None
+    timezone: str
+    duration_minutes: Optional[int] = None
+    meeting_url: Optional[str] = None
+    attendee_name: str
+    attendee_email: str
+    attendee_phone: Optional[str] = None
+    calendar_mode: str
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class VoiceAvailabilityRequest(BaseModel):
+    call_context_id: Optional[str] = None
+    agent_id: Optional[str] = None
+    did: Optional[str] = None
+    date: str
+    jornada: Optional[str] = None
+    reference_datetime: Optional[str] = None
+
+
+class VoiceBookingRequest(BaseModel):
+    call_context_id: Optional[str] = None
+    agent_id: Optional[str] = None
+    did: Optional[str] = None
+    start: str
+    attendee_name: str
+    attendee_email: str
+    attendee_phone: Optional[str] = None
+
+
 class LeadDetailResponse(BaseModel):
     id: str
     status: str

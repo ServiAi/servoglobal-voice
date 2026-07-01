@@ -17,6 +17,12 @@ import type {
   ResendIntegrationConfigRequest,
   ResendIntegrationConfigResponse,
   ResendTestEmailRequest,
+  BookingConfigRequest,
+  BookingConfigResponse,
+  BookingCreateRequest,
+  BookingResponse,
+  GoogleCalendarConnectionResponse,
+  GoogleCalendarConnectUrlResponse,
   EmailAssetItem,
   CallSummaryAssetRequest,
   CallSummaryAssetResponse,
@@ -340,8 +346,54 @@ export function createCallSummaryAsset(accessToken: string, leadId: string, payl
   return requestCrmEndpoint<CallSummaryAssetResponse>('POST', `leads/${leadId}/call-summary/asset`, accessToken, undefined, payload);
 }
 
+export function fetchLeadBookings(accessToken: string, leadId: string) {
+  return requestCrmEndpoint<BookingResponse[]>('GET', `leads/${leadId}/bookings`, accessToken);
+}
+
+export function createLeadBooking(accessToken: string, leadId: string, payload: BookingCreateRequest) {
+  return requestCrmEndpoint<BookingResponse>('POST', `leads/${leadId}/bookings`, accessToken, undefined, payload);
+}
+
 export function fetchTenantIntegrations(accessToken: string) {
   return requestIntegrationEndpoint<ResendIntegrationConfigResponse[]>('GET', '', accessToken);
+}
+
+export function fetchBookingConfig(accessToken: string) {
+  return requestIntegrationEndpoint<BookingConfigResponse>('GET', 'booking/config', accessToken);
+}
+
+export function configureCalComIntegration(accessToken: string, payload: BookingConfigRequest) {
+  return requestIntegrationEndpoint<BookingConfigResponse>('POST', 'calcom/config', accessToken, undefined, payload);
+}
+
+export function testCalComIntegration(accessToken: string) {
+  return requestIntegrationEndpoint<{ status: string; error_message?: string | null }>('POST', 'calcom/test', accessToken);
+}
+
+export function fetchCalComSlots(accessToken: string, params: { date: string; jornada?: string; reference_datetime?: string }) {
+  return requestIntegrationEndpoint<{
+    date: string;
+    jornada: string;
+    available_slots: Array<{ start: string }>;
+    summary: string;
+  }>('GET', 'calcom/slots', accessToken, params);
+}
+
+export function fetchGoogleCalendarConnections(accessToken: string) {
+  return requestIntegrationEndpoint<GoogleCalendarConnectionResponse[]>('GET', 'google-calendar/connections', accessToken);
+}
+
+export function fetchGoogleCalendarConnectUrl(accessToken: string) {
+  return requestIntegrationEndpoint<GoogleCalendarConnectUrlResponse>('GET', 'google-calendar/connect-url', accessToken);
+}
+
+export function disconnectGoogleCalendar(accessToken: string, connectionId: string) {
+  return requestIntegrationEndpoint<GoogleCalendarConnectionResponse>(
+    'POST',
+    'google-calendar/disconnect',
+    accessToken,
+    { connection_id: connectionId }
+  );
 }
 
 export function configureResendIntegration(accessToken: string, payload: ResendIntegrationConfigRequest) {
@@ -400,6 +452,39 @@ export function fetchAdminTenantIntegrations(accessToken: string, tenantId: stri
     'GET',
     'admin',
     `tenants/${tenantId}/integrations`,
+    accessToken
+  );
+}
+
+export function fetchAdminTenantBookingConfig(accessToken: string, tenantId: string) {
+  return requestBackendEndpoint<BookingConfigResponse>('GET', 'admin', `tenants/${tenantId}/integrations/booking/config`, accessToken);
+}
+
+export function configureAdminTenantCalComIntegration(accessToken: string, tenantId: string, payload: BookingConfigRequest) {
+  return requestBackendEndpoint<BookingConfigResponse>(
+    'POST',
+    'admin',
+    `tenants/${tenantId}/integrations/calcom/config`,
+    accessToken,
+    undefined,
+    payload
+  );
+}
+
+export function testAdminTenantCalComIntegration(accessToken: string, tenantId: string) {
+  return requestBackendEndpoint<{ status: string; error_message?: string | null }>(
+    'POST',
+    'admin',
+    `tenants/${tenantId}/integrations/calcom/test`,
+    accessToken
+  );
+}
+
+export function fetchAdminTenantGoogleCalendarConnections(accessToken: string, tenantId: string) {
+  return requestBackendEndpoint<GoogleCalendarConnectionResponse[]>(
+    'GET',
+    'admin',
+    `tenants/${tenantId}/integrations/google-calendar/connections`,
     accessToken
   );
 }

@@ -51,6 +51,84 @@ class TenantIntegrationEvent(Base):
     tenant = relationship("Tenant")
 
 
+class TenantBookingConfig(Base, TimestampMixin):
+    __tablename__ = "tenant_booking_configs"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "provider", name="uq_tenant_booking_configs_tenant_provider"),
+        Index("ix_tenant_booking_configs_tenant_provider", "tenant_id", "provider"),
+        Index("ix_tenant_booking_configs_tenant_status", "tenant_id", "status"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False)
+    provider: Mapped[str] = mapped_column(String(40), nullable=False, default="calcom")
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="inactive")
+    calendar_mode: Mapped[str] = mapped_column(String(40), nullable=False, default="cal_managed")
+    cal_api_key_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
+    cal_api_version: Mapped[str] = mapped_column(String(40), nullable=False, default="2024-08-13")
+    organization_slug: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    default_event_type_id: Mapped[int | None] = mapped_column(sa.Integer, nullable=True)
+    default_event_type_slug: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    default_username: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    default_team_slug: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    default_timezone: Mapped[str] = mapped_column(String(80), nullable=False, default="America/Bogota")
+    default_language: Mapped[str] = mapped_column(String(16), nullable=False, default="es")
+    default_location_type: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    default_length_minutes: Mapped[int] = mapped_column(sa.Integer, nullable=False, default=30)
+    last_health_check_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    tenant = relationship("Tenant")
+
+
+class TenantGoogleCalendarConnection(Base, TimestampMixin):
+    __tablename__ = "tenant_google_calendar_connections"
+    __table_args__ = (
+        Index("ix_tenant_google_calendar_connections_tenant_status", "tenant_id", "status"),
+        Index("ix_tenant_google_calendar_connections_tenant_user", "tenant_id", "user_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False)
+    user_id: Mapped[str | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="connected")
+    google_account_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    calendar_id: Mapped[str] = mapped_column(String(255), nullable=False, default="primary")
+    calendar_summary: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    access_token_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
+    refresh_token_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
+    token_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    scopes_json: Mapped[list] = mapped_column(sa.JSON, nullable=False, default=list)
+    last_sync_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    tenant = relationship("Tenant")
+    user = relationship("User")
+
+
+class TenantVoiceBookingConfig(Base, TimestampMixin):
+    __tablename__ = "tenant_voice_booking_configs"
+    __table_args__ = (
+        Index("ix_tenant_voice_booking_configs_tenant_agent", "tenant_id", "provider_agent_id"),
+        Index("ix_tenant_voice_booking_configs_tenant_status", "tenant_id", "status"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False)
+    provider_agent_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    agent_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    default_booking_config_id: Mapped[str | None] = mapped_column(ForeignKey("tenant_booking_configs.id"), nullable=True)
+    default_event_type_id: Mapped[int | None] = mapped_column(sa.Integer, nullable=True)
+    default_event_type_slug: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    default_timezone: Mapped[str] = mapped_column(String(80), nullable=False, default="America/Bogota")
+    default_jornada_rules_json: Mapped[dict] = mapped_column(sa.JSON, nullable=False, default=dict)
+    enabled_tools_json: Mapped[list] = mapped_column(sa.JSON, nullable=False, default=list)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="active")
+
+    tenant = relationship("Tenant")
+    default_booking_config = relationship("TenantBookingConfig")
+
+
 class TenantEmailConfig(Base, TimestampMixin):
     __tablename__ = "tenant_email_configs"
     __table_args__ = (

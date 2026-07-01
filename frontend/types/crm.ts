@@ -316,6 +316,89 @@ export type ResendTestEmailRequest = {
   to_email: string;
 };
 
+export type BookingConfigRequest = {
+  cal_api_key?: string | null;
+  status?: string;
+  calendar_mode?: 'cal_managed' | 'crm_google_insert';
+  cal_api_version?: string;
+  organization_slug?: string | null;
+  default_event_type_id?: number | null;
+  default_event_type_slug?: string | null;
+  default_username?: string | null;
+  default_team_slug?: string | null;
+  default_timezone?: string;
+  default_language?: string;
+  default_location_type?: string | null;
+  default_length_minutes?: number;
+};
+
+export type BookingConfigResponse = {
+  provider: 'calcom';
+  status: string;
+  calendar_mode: 'cal_managed' | 'crm_google_insert' | string;
+  has_secret: boolean;
+  default_event_type_id?: number | null;
+  default_event_type_slug?: string | null;
+  default_username?: string | null;
+  default_team_slug?: string | null;
+  organization_slug?: string | null;
+  default_timezone: string;
+  default_language: string;
+  default_location_type?: string | null;
+  default_length_minutes: number;
+  last_health_check_at?: string | null;
+  last_error_message?: string | null;
+};
+
+export type GoogleCalendarConnectionResponse = {
+  id: string;
+  status: string;
+  google_account_email?: string | null;
+  calendar_id: string;
+  calendar_summary?: string | null;
+  scopes: string[];
+  last_sync_at?: string | null;
+  last_error_message?: string | null;
+  has_tokens: boolean;
+};
+
+export type GoogleCalendarConnectUrlResponse = {
+  url: string;
+};
+
+export type BookingCreateRequest = {
+  start: string;
+  timezone?: string;
+  event_type_id?: number | null;
+  event_type_slug?: string | null;
+  username?: string | null;
+  team_slug?: string | null;
+  organization_slug?: string | null;
+  attendee_name: string;
+  attendee_email: string;
+  attendee_phone?: string | null;
+  booking_fields_responses?: Record<string, unknown>;
+  notes?: string | null;
+};
+
+export type BookingResponse = {
+  id: string;
+  provider: string;
+  provider_booking_id?: string | null;
+  provider_booking_uid?: string | null;
+  status: string;
+  start_at: string;
+  end_at?: string | null;
+  timezone: string;
+  duration_minutes?: number | null;
+  meeting_url?: string | null;
+  attendee_name: string;
+  attendee_email: string;
+  attendee_phone?: string | null;
+  calendar_mode: string;
+  created_at: string;
+};
+
 export type EmailActionRequest = {
   template_key: string;
   subject?: string | null;
