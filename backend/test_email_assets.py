@@ -69,6 +69,7 @@ class EmailAssetsTests(unittest.TestCase):
             db.refresh(self.tenant)
             db.refresh(self.user)
             self.tenant_id = self.tenant.id
+            self.tenant_slug = self.tenant.slug
             self.user_id = self.user.id
             db.add(TenantMembership(tenant_id=self.tenant_id, user_id=self.user_id, role="tenant_admin", status="active"))
             db.commit()
@@ -104,7 +105,28 @@ class EmailAssetsTests(unittest.TestCase):
         asset_id = response.json()["id"]
         with SessionLocal() as db:
             asset = db.get(TenantEmailAsset, asset_id)
-        self.assertTrue(asset.storage_key.startswith(f"tenants/{self.tenant_id}/email-assets/{asset_id}/"))
+        self.assertTrue(asset.storage_key.startswith(f"tenants/{self.tenant_slug}/assets/{asset_id}/"))
+
+    def test_delete_email_asset_removes_storage_object(self):
+        response = self.client.post(
+            "/api/v1/integrations/resend/assets",
+            files={"file": ("proposal.pdf", b"pdf", "application/pdf")},
+        )
+        self.assertEqual(response.status_code, 200)
+        asset_id = response.json()["id"]
+        with SessionLocal() as db:
+            asset = db.get(TenantEmailAsset, asset_id)
+            storage_key = asset.storage_key
+        self.assertEqual(StorageService().read_bytes(storage_key), b"pdf")
+
+        delete_response = self.client.delete(f"/api/v1/integrations/resend/assets/{asset_id}")
+
+        self.assertEqual(delete_response.status_code, 204)
+        with SessionLocal() as db:
+            asset = db.get(TenantEmailAsset, asset_id)
+            self.assertEqual(asset.status, "deleted")
+        with self.assertRaises(FileNotFoundError):
+            StorageService().read_bytes(storage_key)
 
     def test_upload_strips_path_from_filename(self):
         response = self.client.post(
@@ -177,7 +199,7 @@ class EmailAssetsTests(unittest.TestCase):
     def test_s3_storage_upload_read_delete_uses_client(self):
         fake = _FakeS3Client()
         storage = StorageService(driver="s3", bucket="bucket-a", s3_client=fake)
-        key = "tenants/tenant-a/email-assets/asset-1/proposal.pdf"
+        key = "tenants/tenant-a/assets/asset-1/proposal.pdf"
 
         stored_key = storage.upload_bytes(key, b"pdf")
         content = storage.read_bytes(key)

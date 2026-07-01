@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.models.analytics import Call
 from app.models.crm import CrmActivity, CrmCallContext, CrmLead
+from app.models.identity import Tenant
 from app.models.integrations import TenantEmailAsset
 from app.services.crm_activity_service import CrmActivityService
 from app.services.storage_service import StorageService
@@ -83,6 +84,9 @@ class CallSummaryService:
         result = self.get_summary(tenant_id, lead_id)
         if not result.available or not result.summary:
             raise ValueError("Call summary is not available for this lead.")
+        tenant = self.db.get(Tenant, tenant_id)
+        if tenant is None:
+            raise ValueError("Tenant not found")
         fmt = file_format.lower().strip()
         if fmt not in {"md", "txt"}:
             raise ValueError("Unsupported call summary asset format.")
@@ -102,7 +106,7 @@ class CallSummaryService:
         )
         self.db.add(asset)
         self.db.flush()
-        storage_key = f"tenants/{tenant_id}/email-assets/{asset.id}/{filename}"
+        storage_key = self.storage.tenant_object_key(tenant.slug, "resumenes-llamada", asset.id, filename)
         self.storage.upload_bytes(storage_key, content)
         asset.storage_key = storage_key
         self.db.commit()

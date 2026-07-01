@@ -162,7 +162,18 @@ class EmailRenderService:
         return re.sub(r"{{\s*([a-zA-Z0-9_]+)\s*}}", repl, content)
 
     def _inline_markdown(self, value: str) -> str:
+        for match in re.finditer(r"!\[[^\]]*\]\(([^)\s]+)\)", value):
+            self._safe_image_url(match.group(1))
         escaped = html.escape(value)
+        escaped = re.sub(
+            r"!\[([^\]]*)\]\(((?:https?://|data:image/(?:png|jpe?g|gif|webp);base64,)[^)\s]+)\)",
+            lambda m: '<img src="%s" alt="%s" style="max-width:100%%;height:auto;border-radius:6px" />'
+            % (
+                html.escape(self._safe_image_url(html.unescape(m.group(2))), quote=True),
+                html.escape(html.unescape(m.group(1)), quote=True),
+            ),
+            escaped,
+        )
         escaped = re.sub(
             r"\[([^\]]+)\]\((https?://[^)\s]+)\)",
             lambda m: '<a href="%s">%s</a>'
@@ -206,6 +217,14 @@ class EmailRenderService:
         if not cleaned.startswith(("https://", "http://")):
             raise ValueError("Email button URL must be absolute HTTP(S).")
         return cleaned
+
+    def _safe_image_url(self, href: str) -> str:
+        cleaned = href.strip()
+        if cleaned.startswith(("https://", "http://")):
+            return self._safe_url(cleaned)
+        if re.fullmatch(r"data:image/(?:png|jpe?g|gif|webp);base64,[A-Za-z0-9+/=]+", cleaned):
+            return cleaned
+        raise ValueError("Email image URL must be HTTP(S) or a safe image data URL.")
 
     def _validate_no_residual_shortcodes(self, html_content: str) -> str:
         for pattern in RESIDUAL_PATTERNS:

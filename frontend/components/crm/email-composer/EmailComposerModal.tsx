@@ -1,11 +1,12 @@
 'use client';
 
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Eye, FileUp, Loader2, Send } from 'lucide-react';
+import { Eye, FileUp, Loader2, Send, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   createCallSummaryAsset,
   createLeadFormToken,
+  deleteEmailAsset,
   fetchCallSummary,
   fetchCrmLeadDetail,
   fetchEmailAssets,
@@ -48,7 +49,17 @@ type PreviewState = {
   text: string;
 } | null;
 
-type LoadingState = 'boot' | 'preview' | 'send' | 'test' | 'upload' | 'form' | 'summary-md' | 'summary-txt' | null;
+type LoadingState =
+  | 'boot'
+  | 'preview'
+  | 'send'
+  | 'test'
+  | 'upload'
+  | 'delete'
+  | 'form'
+  | 'summary-md'
+  | 'summary-txt'
+  | null;
 
 const DEFAULT_CONTENT = `# Propuesta ServiGlobal IA
 
@@ -57,6 +68,15 @@ Hola {{contact_name}},
 Gracias por tu interes en **ServiGlobal IA**.
 
 <Signature name="ServiGlobal IA" />`;
+
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
 
 export function EmailComposerModal({
   open,
@@ -265,6 +285,7 @@ export function EmailComposerModal({
     if (files.length === 0) return;
     setLoading('upload');
     const uploaded: EmailAssetItem[] = [];
+    const snippets: string[] = [];
     for (const file of files) {
       const result = await uploadEmailAsset(accessToken, file);
       if (!result.ok) {
@@ -273,6 +294,11 @@ export function EmailComposerModal({
         return;
       }
       uploaded.push(result.data);
+      try {
+        snippets.push(`![${result.data.original_filename}](${await readFileAsDataUrl(file)})`);
+      } catch {
+        snippets.push(result.data.original_filename);
+      }
     }
     setLoading(null);
     setAssets((current) => [...uploaded, ...current.filter((asset) => !uploaded.some((item) => item.id === asset.id))]);
@@ -280,8 +306,22 @@ export function EmailComposerModal({
       const currentIds = new Set(current);
       return [...current, ...uploaded.map((asset) => asset.id).filter((id) => !currentIds.has(id))];
     });
-    insertAtCursor(uploaded.map((asset) => `[Imagen adjunta: ${asset.original_filename}]`).join('\n\n'));
+    insertAtCursor(snippets.join('\n\n'));
     onSuccess(files.length === 1 ? 'Imagen pegada como adjunto.' : `${files.length} imagenes pegadas como adjuntos.`);
+  };
+
+  const deleteAsset = async (asset: EmailAssetItem) => {
+    if (!window.confirm(`Eliminar ${asset.original_filename}?`)) return;
+    setLoading('delete');
+    const result = await deleteEmailAsset(accessToken, asset.id);
+    setLoading(null);
+    if (!result.ok) {
+      onError(result.detail);
+      return;
+    }
+    setAssets((current) => current.filter((item) => item.id !== asset.id));
+    setSelectedAssets((current) => current.filter((id) => id !== asset.id));
+    onSuccess('Archivo eliminado.');
   };
 
   const insertFormLink = async () => {
@@ -430,12 +470,27 @@ export function EmailComposerModal({
                         aria-label={`Desadjuntar ${asset.original_filename}`}
                         onClick={(event) => {
                           event.preventDefault();
+                          event.stopPropagation();
                           setSelectedAssets((current) => current.filter((id) => id !== asset.id));
                         }}
                       >
                         x
                       </button>
                     )}
+                    <button
+                      type="button"
+                      className="rounded-md p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                      title="Eliminar archivo"
+                      aria-label={`Eliminar ${asset.original_filename}`}
+                      disabled={loading !== null}
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        void deleteAsset(asset);
+                      }}
+                    >
+                      {loading === 'delete' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                    </button>
                   </label>
                 ))}
               </div>

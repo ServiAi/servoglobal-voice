@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from app.api.auth.deps import AuthContext, get_current_auth_context, require_roles
 from app.db.session import get_db
 from app.models.integrations import TenantEmailAsset
-from app.models.identity import User
+from app.models.identity import Tenant, User
 from app.schemas.integrations import EmailAssetItem
 from app.services.email_asset_service import EmailAssetService
 from app.services.onboarding_service import OnboardingService
@@ -46,14 +46,17 @@ def _internal_user(context: AuthContext = Depends(get_current_auth_context)) -> 
 
 
 def _store_asset(db: Session, tenant_id: str, user_id: str | None, file: UploadFile) -> TenantEmailAsset:
+    tenant = db.get(Tenant, tenant_id)
+    if tenant is None:
+        raise ValueError("Tenant not found")
     content = file.file.read()
     safe_filename = _safe_filename(file.filename or "")
     mime_type = file.content_type or "application/octet-stream"
-    EmailAssetService(db)._validate_file_metadata(safe_filename, mime_type, len(content))
+    service = EmailAssetService(db)
+    service._validate_file_metadata(safe_filename, mime_type, len(content))
     checksum = hashlib.sha256(content).hexdigest()
     asset_id = str(uuid.uuid4())
-    storage_key = f"tenants/{tenant_id}/email-assets/{asset_id}/{safe_filename}"
-    service = EmailAssetService(db)
+    storage_key = service.storage.tenant_object_key(tenant.slug, "assets", asset_id, safe_filename)
     service.storage.upload_bytes(storage_key, content)
     asset = TenantEmailAsset(
         id=asset_id,

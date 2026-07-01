@@ -17,6 +17,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 
 from app.api.auth.deps import AuthContext, get_current_auth_context
+from app.core.config import settings
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.main import app
@@ -36,6 +37,10 @@ class CallSummaryAssetTests(unittest.TestCase):
         TEST_DB_PATH.unlink(missing_ok=True)
 
     def setUp(self):
+        self._old_max_attachment_bytes = settings.EMAIL_MAX_ATTACHMENT_BYTES
+        self._old_max_total_attachments_bytes = settings.EMAIL_MAX_TOTAL_ATTACHMENTS_BYTES
+        settings.EMAIL_MAX_ATTACHMENT_BYTES = 1024 * 1024
+        settings.EMAIL_MAX_TOTAL_ATTACHMENTS_BYTES = 2 * 1024 * 1024
         Base.metadata.drop_all(bind=engine)
         Base.metadata.create_all(bind=engine)
         app.dependency_overrides.clear()
@@ -48,6 +53,7 @@ class CallSummaryAssetTests(unittest.TestCase):
             db.refresh(self.tenant)
             db.refresh(self.user)
             self.tenant_id = self.tenant.id
+            self.tenant_slug = self.tenant.slug
             self.user_id = self.user.id
             db.add(TenantMembership(tenant_id=self.tenant_id, user_id=self.user_id, role="tenant_admin", status="active"))
             stage = CrmPipelineService(db).ensure_default_pipeline(self.tenant_id)[0]
@@ -75,6 +81,8 @@ class CallSummaryAssetTests(unittest.TestCase):
     def tearDown(self):
         app.dependency_overrides.clear()
         Base.metadata.drop_all(bind=engine)
+        settings.EMAIL_MAX_ATTACHMENT_BYTES = self._old_max_attachment_bytes
+        settings.EMAIL_MAX_TOTAL_ATTACHMENTS_BYTES = self._old_max_total_attachments_bytes
 
     async def _auth_context_override(self):
         with SessionLocal() as db:
@@ -129,7 +137,7 @@ class CallSummaryAssetTests(unittest.TestCase):
 
         with SessionLocal() as db:
             asset = db.get(TenantEmailAsset, payload["asset_id"])
-        self.assertTrue(asset.storage_key.startswith(f"tenants/{self.tenant_id}/email-assets/{asset.id}/"))
+        self.assertTrue(asset.storage_key.startswith(f"tenants/{self.tenant_slug}/resumenes-llamada/{asset.id}/"))
         self.assertGreater(len(StorageService().read_bytes(asset.storage_key)), 0)
 
     def test_call_summary_asset_rejects_cross_tenant_lead(self):

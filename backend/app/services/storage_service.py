@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -49,6 +50,18 @@ class StorageService:
         if path.exists():
             path.unlink()
 
+    @staticmethod
+    def tenant_object_key(tenant_name: str, folder: str, asset_id: str, filename: str) -> str:
+        return "/".join(
+            [
+                "tenants",
+                StorageService._safe_segment(tenant_name),
+                StorageService._safe_segment(folder),
+                StorageService._safe_segment(asset_id),
+                StorageService._safe_segment(filename),
+            ]
+        )
+
     def _client(self):
         if self._s3_client is None:
             import boto3
@@ -74,6 +87,13 @@ class StorageService:
         if not clean_key or ".." in clean_key.split("/"):
             raise ValueError("Invalid storage key.")
         return clean_key
+
+    @staticmethod
+    def _safe_segment(value: str) -> str:
+        cleaned = re.sub(r"[^A-Za-z0-9._-]+", "_", (value or "").strip()).strip("._-")
+        if not cleaned:
+            raise ValueError("Invalid storage key segment.")
+        return cleaned
 
     def _resolve(self, storage_key: str) -> Path:
         path = (self.base_path / self._clean_key(storage_key)).resolve()

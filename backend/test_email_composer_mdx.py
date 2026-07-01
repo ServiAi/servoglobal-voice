@@ -118,6 +118,26 @@ class EmailComposerMdxTests(unittest.TestCase):
                 variables={"form_link": ""},
             )
 
+    def test_markdown_image_data_url_renders_to_html(self):
+        rendered = self.service.render_email_content(
+            subject="Test",
+            content_format="mdx",
+            content="![image.png](data:image/png;base64,aW1hZ2U=)",
+            variables={},
+        )
+
+        self.assertIn('<img src="data:image/png;base64,aW1hZ2U="', rendered.html)
+        self.assertIn('alt="image.png"', rendered.html)
+
+    def test_markdown_image_rejects_non_image_data_url(self):
+        with self.assertRaises(ValueError):
+            self.service.render_email_content(
+                subject="Test",
+                content_format="mdx",
+                content="![x](data:text/html;base64,PHNjcmlwdD4=)",
+                variables={},
+            )
+
     def test_callout_component_renders_to_html(self):
         rendered = self.service.render_email_content(
             subject="Test",
