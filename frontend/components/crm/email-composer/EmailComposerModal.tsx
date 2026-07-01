@@ -256,8 +256,32 @@ export function EmailComposerModal({
       onError(result.detail);
       return;
     }
-    setAssets((current) => [result.data, ...current]);
-    setSelectedAssets((current) => [...current, result.data.id]);
+    setAssets((current) => [result.data, ...current.filter((asset) => asset.id !== result.data.id)]);
+    setSelectedAssets((current) => (current.includes(result.data.id) ? current : [...current, result.data.id]));
+    event.currentTarget.value = '';
+  };
+
+  const uploadPastedImages = async (files: File[]) => {
+    if (files.length === 0) return;
+    setLoading('upload');
+    const uploaded: EmailAssetItem[] = [];
+    for (const file of files) {
+      const result = await uploadEmailAsset(accessToken, file);
+      if (!result.ok) {
+        setLoading(null);
+        onError(result.detail);
+        return;
+      }
+      uploaded.push(result.data);
+    }
+    setLoading(null);
+    setAssets((current) => [...uploaded, ...current.filter((asset) => !uploaded.some((item) => item.id === asset.id))]);
+    setSelectedAssets((current) => {
+      const currentIds = new Set(current);
+      return [...current, ...uploaded.map((asset) => asset.id).filter((id) => !currentIds.has(id))];
+    });
+    insertAtCursor(uploaded.map((asset) => `[Imagen adjunta: ${asset.original_filename}]`).join('\n\n'));
+    onSuccess(files.length === 1 ? 'Imagen pegada como adjunto.' : `${files.length} imagenes pegadas como adjuntos.`);
   };
 
   const insertFormLink = async () => {
@@ -347,7 +371,13 @@ export function EmailComposerModal({
               ))}
             </div>
             {tab === 'editor' && (
-              <EmailMdxEditor value={content} onChange={setContent} onInsert={insertAtCursor} textareaRef={editorRef} />
+              <EmailMdxEditor
+                value={content}
+                onChange={setContent}
+                onInsert={insertAtCursor}
+                onPasteImages={uploadPastedImages}
+                textareaRef={editorRef}
+              />
             )}
             {tab !== 'editor' && (
               <EmailPreviewPanel
@@ -392,6 +422,20 @@ export function EmailComposerModal({
                       }
                     />
                     <span className="min-w-0 truncate">{asset.original_filename}</span>
+                    {selectedAssets.includes(asset.id) && (
+                      <button
+                        type="button"
+                        className="ml-auto rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+                        title="Desadjuntar"
+                        aria-label={`Desadjuntar ${asset.original_filename}`}
+                        onClick={(event) => {
+                          event.preventDefault();
+                          setSelectedAssets((current) => current.filter((id) => id !== asset.id));
+                        }}
+                      >
+                        x
+                      </button>
+                    )}
                   </label>
                 ))}
               </div>
