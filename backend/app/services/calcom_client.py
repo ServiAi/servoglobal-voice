@@ -23,6 +23,7 @@ from app.services.calcom_service import (
 from app.services.date_resolution_service import parse_reference_datetime
 
 logger = logging.getLogger(__name__)
+CAL_SLOTS_API_VERSION = "2024-09-04"
 
 
 @dataclass(frozen=True)
@@ -94,7 +95,12 @@ class CalComClient:
             start_date,
             jornada,
         )
-        response = httpx.get(f"{self.base_url}/slots", params=params, headers=self._headers(config), timeout=CAL_HTTP_TIMEOUT_SECONDS)
+        response = httpx.get(
+            f"{self.base_url}/slots",
+            params=params,
+            headers=self._headers(config, api_version=CAL_SLOTS_API_VERSION),
+            timeout=CAL_HTTP_TIMEOUT_SECONDS,
+        )
         if response.status_code != 200:
             raise CalComUpstreamError(f"Cal.com API error {response.status_code}: {sanitize_calcom_error(response.text)}")
         data = response.json()
@@ -154,12 +160,12 @@ class CalComClient:
     def reschedule_booking(self, config: CalComClientConfig, booking_uid: str, start: datetime) -> dict:
         raise NotImplementedError("Cal.com reschedule booking is prepared for Sprint 2B.")
 
-    def _headers(self, config: CalComClientConfig) -> dict[str, str]:
+    def _headers(self, config: CalComClientConfig, *, api_version: str | None = None) -> dict[str, str]:
         if not config.api_key:
             raise CalComConfigurationError("Cal.com API key is not configured.")
         return {
             "Authorization": f"Bearer {config.api_key}",
-            "cal-api-version": config.api_version,
+            "cal-api-version": api_version or config.api_version,
             "Content-Type": "application/json",
         }
 

@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import httpx
 from unittest.mock import patch
 
 from sqlalchemy import select
 
 from _integrations_2a_test_base import Integration2ATestCase, SessionLocal
 from app.models.integrations import TenantBookingConfig, TenantIntegrationEvent
+from app.services.calcom_client import CalComClient, CalComClientConfig
 
 
 class CalComIntegrationTests(Integration2ATestCase):
@@ -51,6 +53,31 @@ class CalComIntegrationTests(Integration2ATestCase):
         self.assertEqual(response.json()["available_slots"][0]["start"], "2026-07-02T15:00:00Z")
         config_arg = get_slots.call_args.args[0]
         self.assertEqual(config_arg.api_key, "cal_secret_test")
+
+    def test_calcom_slots_use_current_slots_api_version_header(self):
+        with patch("app.services.calcom_client.httpx.get") as get:
+            get.return_value = httpx.Response(
+                200,
+                json={
+                    "status": "success",
+                    "data": {
+                        "2026-07-03": [
+                            {"start": "2026-07-03T10:00:00.000-05:00"},
+                        ],
+                    },
+                },
+            )
+
+            CalComClient(base_url="https://api.cal.com/v2").get_available_slots(
+                CalComClientConfig(
+                    api_key="cal_secret_test",
+                    event_type_id=4797166,
+                    api_version="2024-08-13",
+                ),
+                date_input="2026-07-03",
+            )
+
+        self.assertEqual(get.call_args.kwargs["headers"]["cal-api-version"], "2024-09-04")
 
     def test_calcom_test_connection_marks_health_without_leaking_secret(self):
         self.configure_calcom()
