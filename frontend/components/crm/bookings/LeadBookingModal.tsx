@@ -75,6 +75,14 @@ export function LeadBookingModal({
 
   const timezone = config?.default_timezone ?? 'America/Bogota';
   const canCreate = Boolean(selectedStart && attendeeName.trim() && attendeeEmail.trim());
+  const selectedStartLabel = selectedStart ? formatDateTime(selectedStart, timezone) : '';
+  const disabledReason = !selectedStart
+    ? 'Selecciona un horario disponible para crear el booking.'
+    : !attendeeName.trim()
+      ? 'Confirma el nombre del asistente.'
+      : !attendeeEmail.trim()
+        ? 'Confirma el email del asistente.'
+        : '';
   const sortedBookings = useMemo(
     () => [...bookings].sort((a, b) => Date.parse(b.start_at) - Date.parse(a.start_at)),
     [bookings]
@@ -230,9 +238,16 @@ export function LeadBookingModal({
                 ))}
                 {!loadingSlots && slots.length === 0 && (
                   <div className="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground sm:col-span-2">
-                    Sin horarios cargados.
+                    Busca horarios y selecciona una hora para activar Crear booking.
                   </div>
                 )}
+              </div>
+
+              <div className="rounded-md border border-border bg-muted/30 p-3 text-sm" aria-live="polite">
+                <div className="font-medium text-muted-foreground">Hora de agendamiento</div>
+                <div className={selectedStartLabel ? 'mt-1 font-semibold text-foreground' : 'mt-1 text-muted-foreground'}>
+                  {selectedStartLabel || 'Sin horario seleccionado.'}
+                </div>
               </div>
 
               <div className="grid gap-3 sm:grid-cols-2">
@@ -288,6 +303,11 @@ export function LeadBookingModal({
         )}
 
         <DialogFooter>
+          {!canCreate && !loading && (
+            <p className="mr-auto text-left text-xs text-muted-foreground">
+              {disabledReason}
+            </p>
+          )}
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={creating}>
             Cerrar
           </Button>
