@@ -36,7 +36,7 @@ export function CalComConfigForm({ accessToken, config, mode = 'tenant', tenantI
 
   const submit = async () => {
     setSaving(true);
-    const payload = { ...form, cal_api_key: form.cal_api_key?.trim() || null };
+    const payload = { ...form, status: 'active', cal_api_key: form.cal_api_key?.trim() || null };
     const result =
       mode === 'admin' && tenantId
         ? await configureAdminTenantCalComIntegration(accessToken, tenantId, payload)

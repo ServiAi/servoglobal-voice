@@ -195,6 +195,7 @@ export function EmailComposerModal({
   }, [previewDirty, doPreview, loading]);
 
   const submit = async (previewOnly: boolean) => {
+    if (previewOnly) setTab('html');
     if (previewDirty) {
       setLoading('preview');
       setPreviewError(null);
@@ -211,7 +212,6 @@ export function EmailComposerModal({
       }
       setLoading(null);
       if (previewOnly) {
-        setTab('html');
         return;
       }
     }
