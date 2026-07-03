@@ -122,6 +122,13 @@ class AdminTenantIntegrationTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["provider_email_id"], "email_test_admin")
 
+    def test_platform_admin_calcom_test_without_config_returns_422(self):
+        self.is_internal = True
+        response = self.client.post(f"/api/v1/admin/tenants/{self.tenant.id}/integrations/calcom/test")
+
+        self.assertEqual(response.status_code, 422)
+        self.assertIn("Cal.com booking config is not active", response.json()["detail"])
+
     def test_tenant_admin_cannot_use_admin_tenant_integration_endpoint(self):
         self.is_internal = False
         response = self.client.get(f"/api/v1/admin/tenants/{self.tenant.id}/integrations")

@@ -63,3 +63,9 @@ class CalComIntegrationTests(Integration2ATestCase):
             config = db.scalar(select(TenantBookingConfig).where(TenantBookingConfig.tenant_id == self.tenant.id))
         self.assertEqual(config.status, "active")
         self.assertIsNotNone(config.last_health_check_at)
+
+    def test_calcom_test_without_config_returns_422(self):
+        response = self.client.post("/api/v1/integrations/calcom/test")
+
+        self.assertEqual(response.status_code, 422)
+        self.assertIn("Cal.com booking config is not active", response.json()["detail"])

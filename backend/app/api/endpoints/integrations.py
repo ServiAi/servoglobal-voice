@@ -98,7 +98,10 @@ def test_calcom(
     context: AuthContext = Depends(require_roles(["platform_admin", "tenant_admin"])),
     db: Session = Depends(get_db),
 ) -> Any:
-    result, error = BookingConfigService(db).test_connection(context.tenant.id)
+    try:
+        result, error = BookingConfigService(db).test_connection(context.tenant.id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
     if result != "active":
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=error or "Cal.com test failed.")
     return CalComTestResponse(status=result)

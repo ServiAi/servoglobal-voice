@@ -524,7 +524,14 @@ def test_tenant_calcom_admin(
     tenant_id: str,
     db: Session = Depends(get_current_internal_db),
 ) -> Any:
-    result, error = BookingConfigService(db).test_connection(tenant_id)
+    try:
+        OnboardingService(db).get_tenant(tenant_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    try:
+        result, error = BookingConfigService(db).test_connection(tenant_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
     if result != "active":
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=error or "Cal.com test failed.")
     return CalComTestResponse(status=result)
