@@ -175,6 +175,6 @@ def parse_utc_start(value: str) -> datetime:
         parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
     except ValueError as exc:
         raise CalComInputError("start must be a valid UTC ISO 8601 datetime.") from exc
-    if parsed.tzinfo is None or parsed.utcoffset() != timedelta(0):
-        raise CalComInputError("start must be UTC ISO 8601.")
+    if parsed.tzinfo is None:
+        raise CalComInputError("start must include timezone information.")
     return parsed.astimezone(UTC)

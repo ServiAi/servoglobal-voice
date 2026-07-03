@@ -218,8 +218,9 @@ class BookingService:
         team_slug: str | None,
         organization_slug: str | None,
     ) -> dict[str, Any]:
+        start_at = booking.start_at if booking.start_at.tzinfo else booking.start_at.replace(tzinfo=UTC)
         payload: dict[str, Any] = {
-            "start": booking.start_at.isoformat().replace("+00:00", "Z"),
+            "start": start_at.astimezone(UTC).isoformat().replace("+00:00", "Z"),
             "attendee": {
                 "name": body.attendee_name,
                 "email": body.attendee_email,

@@ -50,6 +50,25 @@ class CrmBookingTests(Integration2ATestCase):
         self.assertEqual(booking.provider_booking_uid, "booking_uid_1")
         self.assertGreaterEqual(len(events), 2)
 
+    def test_lead_booking_accepts_calcom_slot_timezone_offset(self):
+        self.configure_calcom()
+        lead_id, _ = self.seed_lead()
+
+        with patch("app.services.booking_service.CalComClient.create_booking") as create_booking:
+            create_booking.return_value = {"data": {"id": 456, "uid": "booking_uid_1", "status": "accepted"}}
+            response = self.client.post(
+                f"/api/v1/crm/leads/{lead_id}/bookings",
+                json={
+                    "start": "2026-07-05T09:00:00.000-05:00",
+                    "attendee_name": "Pedro Gomez",
+                    "attendee_email": "lead@example.com",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        provider_payload = create_booking.call_args.args[1]
+        self.assertEqual(provider_payload["start"], "2026-07-05T14:00:00Z")
+
     def test_booking_requires_contact_email(self):
         self.configure_calcom()
         lead_id, _ = self.seed_lead(email=None)
