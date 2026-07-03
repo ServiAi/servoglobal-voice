@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, timedelta
 from typing import Any
 
@@ -7,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.crm import CrmBooking, CrmBookingEvent, CrmLead
+from app.models.integrations import TenantBookingConfig, TenantVoiceBookingConfig
 from app.schemas.crm import BookingCreateRequest
 from app.services.booking_config_service import BookingConfigService
 from app.services.calcom_client import CalComClient, CalComClientConfig, parse_utc_start, sanitize_calcom_error
@@ -33,10 +35,16 @@ class BookingService:
         date_input: str,
         jornada: str | None = None,
         reference_datetime: str | None = None,
+        booking_config_id: str | None = None,
+        voice_config: TenantVoiceBookingConfig | None = None,
     ) -> dict:
-        config = self.config_service.get_active_config(tenant_id)
+        config, client_config, _ = self._effective_config(
+            tenant_id,
+            booking_config_id=booking_config_id,
+            voice_config=voice_config,
+        )
         result = self.calcom_client.get_available_slots(
-            self.config_service.to_client_config(config),
+            client_config,
             date_input=date_input,
             jornada=jornada,
             reference_datetime=reference_datetime,
@@ -50,17 +58,29 @@ class BookingService:
         )
         return result
 
-    def create_lead_booking(self, *, tenant_id: str, lead_id: str, body: BookingCreateRequest) -> CrmBooking:
+    def create_lead_booking(
+        self,
+        *,
+        tenant_id: str,
+        lead_id: str,
+        body: BookingCreateRequest,
+        booking_config_id: str | None = None,
+        voice_config: TenantVoiceBookingConfig | None = None,
+    ) -> CrmBooking:
         lead = self._get_lead(tenant_id, lead_id)
         if not lead.contact.email:
             raise ValueError("Lead contact email is required to create a booking.")
         start_at = parse_utc_start(body.start)
-        config = self.config_service.get_active_config(tenant_id)
+        config, client_config, resolved_voice_config = self._effective_config(
+            tenant_id,
+            booking_config_id=booking_config_id,
+            voice_config=voice_config,
+        )
         if config.calendar_mode == "crm_google_insert":
             raise ValueError("Google Calendar insert mode is not enabled yet.")
 
-        event_type_id = body.event_type_id or config.default_event_type_id
-        event_type_slug = body.event_type_slug or config.default_event_type_slug
+        event_type_id = body.event_type_id or client_config.event_type_id
+        event_type_slug = body.event_type_slug or client_config.event_type_slug
         username = body.username or config.default_username
         team_slug = body.team_slug or config.default_team_slug
         organization_slug = body.organization_slug or config.organization_slug
@@ -79,13 +99,16 @@ class BookingService:
             status="pending",
             start_at=start_at,
             end_at=start_at + timedelta(minutes=config.default_length_minutes),
-            timezone=body.timezone or config.default_timezone,
+            timezone=client_config.timezone if resolved_voice_config else body.timezone or client_config.timezone,
             duration_minutes=config.default_length_minutes,
             attendee_name=body.attendee_name,
             attendee_email=body.attendee_email,
             attendee_phone=body.attendee_phone,
             calendar_mode=config.calendar_mode,
-            metadata_json={"source": "serviglobal_crm"},
+            metadata_json={
+                "source": "serviglobal_crm",
+                "voice_booking_config_id": resolved_voice_config.id if resolved_voice_config else None,
+            },
         )
         self.db.add(booking)
         self.db.commit()
@@ -94,7 +117,7 @@ class BookingService:
         self.record_crm_booking_event(booking, "booking_requested", "pending", {"start_at": body.start})
 
         payload = self._calcom_payload(
-            config=self.config_service.to_client_config(config),
+            config=client_config,
             booking=booking,
             body=body,
             event_type_id=event_type_id,
@@ -102,9 +125,10 @@ class BookingService:
             username=username,
             team_slug=team_slug,
             organization_slug=organization_slug,
+            attendee_timezone=client_config.timezone if resolved_voice_config else None,
         )
         try:
-            result = self.calcom_client.create_booking(self.config_service.to_client_config(config), payload)
+            result = self.calcom_client.create_booking(client_config, payload)
         except Exception as exc:
             booking.status = "failed"
             self.db.commit()
@@ -145,6 +169,48 @@ class BookingService:
                 .order_by(CrmBooking.start_at.desc())
             ).all()
         )
+
+    def _effective_config(
+        self,
+        tenant_id: str,
+        *,
+        booking_config_id: str | None = None,
+        voice_config: TenantVoiceBookingConfig | None = None,
+    ) -> tuple[TenantBookingConfig, CalComClientConfig, TenantVoiceBookingConfig | None]:
+        resolved_voice_config = voice_config
+        if resolved_voice_config is None and booking_config_id:
+            resolved_voice_config = self.db.scalar(
+                select(TenantVoiceBookingConfig).where(
+                    TenantVoiceBookingConfig.id == booking_config_id,
+                    TenantVoiceBookingConfig.tenant_id == tenant_id,
+                    TenantVoiceBookingConfig.status == "active",
+                )
+            )
+
+        config = None
+        if resolved_voice_config and resolved_voice_config.default_booking_config_id:
+            config = self.db.scalar(
+                select(TenantBookingConfig).where(
+                    TenantBookingConfig.id == resolved_voice_config.default_booking_config_id,
+                    TenantBookingConfig.tenant_id == tenant_id,
+                    TenantBookingConfig.status.in_(("active", "error")),
+                )
+            )
+            if config is None:
+                raise ValueError("Voice booking config points to an inactive Cal.com booking config.")
+            if not config.cal_api_key_encrypted:
+                raise ValueError("Cal.com API key is not configured for this tenant.")
+
+        config = config or self.config_service.get_active_config(tenant_id)
+        client_config = self.config_service.to_client_config(config)
+        if resolved_voice_config:
+            client_config = replace(
+                client_config,
+                event_type_id=resolved_voice_config.default_event_type_id or client_config.event_type_id,
+                event_type_slug=resolved_voice_config.default_event_type_slug or client_config.event_type_slug,
+                timezone=resolved_voice_config.default_timezone or client_config.timezone,
+            )
+        return config, client_config, resolved_voice_config
 
     def record_crm_booking_event(self, booking: CrmBooking, event_type: str, status: str, payload_summary: dict[str, Any]) -> None:
         self.db.add(
@@ -217,6 +283,7 @@ class BookingService:
         username: str | None,
         team_slug: str | None,
         organization_slug: str | None,
+        attendee_timezone: str | None = None,
     ) -> dict[str, Any]:
         start_at = booking.start_at if booking.start_at.tzinfo else booking.start_at.replace(tzinfo=UTC)
         payload: dict[str, Any] = {
@@ -225,7 +292,7 @@ class BookingService:
                 "name": body.attendee_name,
                 "email": body.attendee_email,
                 "phoneNumber": body.attendee_phone,
-                "timeZone": body.timezone or config.timezone,
+                "timeZone": attendee_timezone or body.timezone or config.timezone,
                 "language": config.language,
             },
             "bookingFieldsResponses": {

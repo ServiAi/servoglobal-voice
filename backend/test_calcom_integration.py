@@ -1,11 +1,16 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
+import hmac
 import httpx
+import json
+import os
 from unittest.mock import patch
 
 from sqlalchemy import select
 
 from _integrations_2a_test_base import Integration2ATestCase, SessionLocal
+from app.models.crm import CrmActivity, CrmBooking, CrmBookingEvent
 from app.models.integrations import TenantBookingConfig, TenantIntegrationEvent
 from app.services.calcom_client import CalComClient, CalComClientConfig
 
@@ -96,3 +101,107 @@ class CalComIntegrationTests(Integration2ATestCase):
 
         self.assertEqual(response.status_code, 422)
         self.assertIn("Cal.com booking config is not active", response.json()["detail"])
+
+    def test_calcom_webhook_updates_crm_booking_when_metadata_matches(self):
+        lead_id, contact_id = self.seed_lead()
+        with SessionLocal() as db:
+            booking = CrmBooking(
+                tenant_id=self.tenant.id,
+                lead_id=lead_id,
+                contact_id=contact_id,
+                provider="calcom",
+                status="pending",
+                start_at=datetime(2026, 7, 2, 15, 0, tzinfo=UTC),
+                end_at=datetime(2026, 7, 2, 15, 30, tzinfo=UTC),
+                timezone="America/Bogota",
+                attendee_name="Pedro Gomez",
+                attendee_email="lead@example.com",
+                calendar_mode="cal_managed",
+            )
+            db.add(booking)
+            db.commit()
+            db.refresh(booking)
+            booking_id = booking.id
+
+        payload = {
+            "triggerEvent": "BOOKING_CREATED",
+            "payload": {
+                "id": 123,
+                "uid": "cal_uid_1",
+                "status": "accepted",
+                "startTime": "2026-07-02T15:00:00Z",
+                "meetingUrl": "https://meet.example/cal_uid_1",
+                "metadata": {
+                    "crm_booking_id": booking_id,
+                    "crm_lead_id": lead_id,
+                    "source": "serviglobal_crm",
+                },
+                "attendees": [{"name": "Pedro Gomez", "email": "lead@example.com"}],
+                "responses": {"phone": {"value": "+573001112233"}},
+            },
+        }
+
+        with patch.dict(os.environ, {"CALCOM_WEBHOOK_SECRET": ""}), patch(
+            "app.services.notification_service.notification_service.notify_new_booking"
+        ):
+            response = self.client.post("/api/v1/calcom/webhook", json=payload)
+
+        self.assertEqual(response.status_code, 200)
+        with SessionLocal() as db:
+            booking = db.get(CrmBooking, booking_id)
+            event = db.scalar(select(CrmBookingEvent).where(CrmBookingEvent.booking_id == booking_id))
+            activity = db.scalar(select(CrmActivity).where(CrmActivity.lead_id == lead_id, CrmActivity.activity_type == "booking_webhook"))
+        self.assertEqual(booking.status, "accepted")
+        self.assertEqual(booking.provider_booking_uid, "cal_uid_1")
+        self.assertEqual(booking.meeting_url, "https://meet.example/cal_uid_1")
+        self.assertIsNotNone(event)
+        self.assertEqual(event.status, "accepted")
+        self.assertNotIn("attendees", event.payload_summary_json)
+        self.assertIsNotNone(activity)
+        self.assertNotIn("lead@example.com", json.dumps(activity.payload_json))
+        self.assertNotIn("+573001112233", json.dumps(activity.payload_json))
+
+    def test_calcom_webhook_does_not_log_full_payload(self):
+        payload = {
+            "triggerEvent": "BOOKING_CREATED",
+            "payload": {
+                "startTime": "2026-07-02T15:00:00Z",
+                "attendees": [{"name": "Pedro Gomez", "email": "lead@example.com"}],
+                "responses": {"phone": {"value": "+573001112233"}},
+            },
+        }
+
+        with patch.dict(os.environ, {"CALCOM_WEBHOOK_SECRET": ""}), patch(
+            "app.services.notification_service.notification_service.notify_new_booking"
+        ), patch("app.api.endpoints.calcom.logger.debug") as debug_log, patch(
+            "app.api.endpoints.calcom.logger.info"
+        ) as info_log, patch("app.api.endpoints.calcom.logger.warning") as warning_log:
+            response = self.client.post("/api/v1/calcom/webhook", json=payload)
+
+        self.assertEqual(response.status_code, 200)
+        logged = " ".join(
+            str(call)
+            for logger_mock in (debug_log, info_log, warning_log)
+            for call in logger_mock.call_args_list
+        )
+        self.assertNotIn("Pedro Gomez", logged)
+        self.assertNotIn("lead@example.com", logged)
+        self.assertNotIn("+573001112233", logged)
+        self.assertNotIn(json.dumps(payload), logged)
+
+    def test_calcom_webhook_rejects_invalid_signature_when_secret_configured(self):
+        body = json.dumps({"triggerEvent": "BOOKING_CREATED", "payload": {}}).encode("utf-8")
+        valid_signature = hmac.new(b"hook-secret", body, digestmod="sha256").hexdigest()
+
+        with patch.dict(os.environ, {"CALCOM_WEBHOOK_SECRET": "hook-secret"}):
+            invalid_signature = valid_signature[:-1] + ("0" if valid_signature[-1] != "0" else "1")
+            response = self.client.post(
+                "/api/v1/calcom/webhook",
+                content=body,
+                headers={
+                    "Content-Type": "application/json",
+                    "X-Cal-Signature-256": invalid_signature,
+                },
+            )
+
+        self.assertEqual(response.status_code, 403)

@@ -1,8 +1,14 @@
-from fastapi import APIRouter, HTTPException, Request, BackgroundTasks, Header, status
+from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks, Header, status
 from pydantic import BaseModel
 import hmac
 import hashlib
 import os
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.db.session import get_db
+from app.models.crm import CrmBooking, CrmBookingEvent
+from app.services.crm_activity_service import CrmActivityService
 from app.services.calcom_service import (
     CalComConfigurationError,
     CalComInputError,
@@ -127,11 +133,81 @@ def format_calcom_datetime(iso_string: str) -> tuple[str, str]:
     return date_str, time_str
 
 
+def _calcom_webhook_status(trigger_event: str | None, payload: dict) -> str:
+    status_value = payload.get("status")
+    if status_value:
+        return str(status_value).lower()
+    return {
+        "BOOKING_CREATED": "accepted",
+        "BOOKING_CANCELLED": "cancelled",
+        "BOOKING_RESCHEDULED": "rescheduled",
+    }.get(trigger_event or "", "updated")
+
+
+def _safe_webhook_metadata(payload: dict) -> dict:
+    metadata = payload.get("metadata")
+    if not isinstance(metadata, dict):
+        return {}
+    return {
+        "crm_booking_id": str(metadata.get("crm_booking_id") or ""),
+        "crm_lead_id": str(metadata.get("crm_lead_id") or ""),
+        "source": str(metadata.get("source") or ""),
+    }
+
+
+def _sync_crm_booking_from_calcom_webhook(db: Session, trigger_event: str | None, payload: dict) -> bool:
+    metadata = _safe_webhook_metadata(payload)
+    crm_booking_id = metadata.get("crm_booking_id")
+    if not crm_booking_id:
+        return False
+
+    booking = db.scalar(select(CrmBooking).where(CrmBooking.id == crm_booking_id))
+    if booking is None:
+        return False
+    crm_lead_id = metadata.get("crm_lead_id")
+    if crm_lead_id and booking.lead_id and crm_lead_id != booking.lead_id:
+        return False
+
+    booking.status = _calcom_webhook_status(trigger_event, payload)
+    booking.provider_booking_id = str(payload.get("id") or "") or booking.provider_booking_id
+    booking.provider_booking_uid = str(payload.get("uid") or payload.get("bookingUid") or "") or booking.provider_booking_uid
+    booking.meeting_url = payload.get("meetingUrl") or payload.get("meeting_url") or payload.get("videoCallUrl") or booking.meeting_url
+    safe_summary = {
+        "trigger_event": trigger_event,
+        "provider_booking_id": booking.provider_booking_id,
+        "provider_booking_uid": booking.provider_booking_uid,
+        "source": metadata.get("source"),
+    }
+    db.add(
+        CrmBookingEvent(
+            tenant_id=booking.tenant_id,
+            booking_id=booking.id,
+            provider="calcom",
+            event_type=(trigger_event or "calcom_webhook").lower(),
+            status=booking.status,
+            payload_summary_json=safe_summary,
+        )
+    )
+    db.commit()
+    if booking.contact_id:
+        CrmActivityService(db).create_activity(
+            tenant_id=booking.tenant_id,
+            lead_id=booking.lead_id,
+            contact_id=booking.contact_id,
+            activity_type="booking_webhook",
+            title="Webhook Cal.com",
+            description=f"Cal.com {trigger_event or 'webhook'}",
+            payload_json=safe_summary,
+        )
+    return True
+
+
 @router.post("/calcom/webhook")
 async def receive_calcom_webhook(
     request: Request,
     background_tasks: BackgroundTasks,
-    x_cal_signature_256: str | None = Header(None)
+    x_cal_signature_256: str | None = Header(None),
+    db: Session = Depends(get_db),
 ):
     """
     Recibe el Webhook nativo desde Cal.com.
@@ -168,10 +244,14 @@ async def receive_calcom_webhook(
 
     try:
         payload_data = await request.json()
-        logger.debug(f"[Cal.com] Webhook recibido: {payload_data.get('triggerEvent')}")
+        trigger_event = payload_data.get("triggerEvent")
+        logger.debug("[Cal.com] Webhook recibido trigger=%s", trigger_event)
+        payload = payload_data.get("payload", {})
+        if not isinstance(payload, dict):
+            payload = {}
+        crm_synced = _sync_crm_booking_from_calcom_webhook(db, trigger_event, payload)
 
-        if payload_data.get("triggerEvent") == "BOOKING_CREATED":
-            payload = payload_data.get("payload", {})
+        if trigger_event == "BOOKING_CREATED":
 
             # Extraer datos de los asistentes / respuestas
             attendees = payload.get("attendees", [])
@@ -210,9 +290,7 @@ async def receive_calcom_webhook(
 
             start_time_iso = payload.get("startTime")
             if not start_time_iso or not client_phone:
-                logger.warning(
-                    f"[Cal.com] Faltan datos críticos (startTime o phone). Respuestas extraídas: {responses}"
-                )
+                logger.warning("[Cal.com] Faltan datos críticos para notificación de booking.")
                 return {"status": "ignored", "reason": "missing_data_or_no_phone"}
 
             try:
@@ -221,9 +299,7 @@ async def receive_calcom_webhook(
                 logger.error(f"[Cal.com] Error parseando fecha {start_time_iso}: {e}")
                 date_str, time_str = "Fecha", "Hora"
 
-            logger.info(
-                f"[Cal.com] Agendamiento recibido. Cliente: {client_name}, {date_str} {time_str}. Tel: {client_phone}"
-            )
+            logger.info("[Cal.com] Agendamiento recibido trigger=%s crm_synced=%s", trigger_event, crm_synced)
 
             # Lanzamos la notificación en background para que Cal.com reciba el OK rápidamente (200)
             background_tasks.add_task(

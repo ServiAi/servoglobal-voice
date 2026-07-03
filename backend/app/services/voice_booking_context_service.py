@@ -74,4 +74,4 @@ class VoiceBookingContextService:
                 TenantVoiceBookingConfig.status == "active",
             )
         )
-        return config.default_booking_config_id if config else None
+        return config.id if config else None

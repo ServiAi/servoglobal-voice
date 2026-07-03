@@ -2,9 +2,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
+import hmac
+
+from fastapi import APIRouter, Depends, Header, HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.db.session import get_db
 from app.schemas.crm import BookingCreateRequest, VoiceAvailabilityRequest, VoiceBookingRequest
 from app.services.booking_service import BookingService
@@ -13,8 +16,21 @@ from app.services.voice_booking_context_service import VoiceBookingContextServic
 router = APIRouter(prefix="/api/v1/voice/tools", tags=["Voice Booking Tools"])
 
 
+def require_voice_tool_secret(x_voice_tool_secret: str | None = Header(None)) -> None:
+    if (
+        not settings.VOICE_TOOL_SHARED_SECRET
+        or not x_voice_tool_secret
+        or not hmac.compare_digest(x_voice_tool_secret, settings.VOICE_TOOL_SHARED_SECRET)
+    ):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid voice tool secret.")
+
+
 @router.post("/availability")
-def voice_availability(body: VoiceAvailabilityRequest, db: Session = Depends(get_db)) -> Any:
+def voice_availability(
+    body: VoiceAvailabilityRequest,
+    _: None = Depends(require_voice_tool_secret),
+    db: Session = Depends(get_db),
+) -> Any:
     try:
         context = VoiceBookingContextService(db).resolve(
             call_context_id=body.call_context_id,
@@ -26,13 +42,18 @@ def voice_availability(body: VoiceAvailabilityRequest, db: Session = Depends(get
             date_input=body.date,
             jornada=body.jornada,
             reference_datetime=body.reference_datetime,
+            booking_config_id=context.booking_config_id,
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
 
 
 @router.post("/bookings")
-def voice_booking(body: VoiceBookingRequest, db: Session = Depends(get_db)) -> Any:
+def voice_booking(
+    body: VoiceBookingRequest,
+    _: None = Depends(require_voice_tool_secret),
+    db: Session = Depends(get_db),
+) -> Any:
     try:
         context = VoiceBookingContextService(db).resolve(
             call_context_id=body.call_context_id,
@@ -52,6 +73,7 @@ def voice_booking(body: VoiceBookingRequest, db: Session = Depends(get_db)) -> A
                 booking_fields_responses={"source": "voice"},
                 notes="Reserva creada desde agente de voz",
             ),
+            booking_config_id=context.booking_config_id,
         )
         return {
             "status": booking.status,

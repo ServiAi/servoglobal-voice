@@ -85,21 +85,21 @@ class CrmBookingTests(Integration2ATestCase):
         self.assertEqual(response.status_code, 422)
         self.assertIn("Lead contact email is required", response.text)
 
-    def test_booking_rejects_non_utc_start(self):
+    def test_booking_rejects_start_without_timezone(self):
         self.configure_calcom()
         lead_id, _ = self.seed_lead()
 
         response = self.client.post(
             f"/api/v1/crm/leads/{lead_id}/bookings",
             json={
-                "start": "2026-07-02T10:00:00-05:00",
+                "start": "2026-07-02T10:00:00",
                 "attendee_name": "Pedro Gomez",
                 "attendee_email": "lead@example.com",
             },
         )
 
         self.assertEqual(response.status_code, 422)
-        self.assertIn("UTC", response.text)
+        self.assertIn("timezone", response.text)
 
     def test_google_insert_mode_is_not_enabled_for_booking_creation(self):
         self.configure_calcom(calendar_mode="crm_google_insert")
