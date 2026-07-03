@@ -129,6 +129,33 @@ class AdminTenantIntegrationTests(unittest.TestCase):
         self.assertEqual(response.status_code, 422)
         self.assertIn("Cal.com booking config is not active", response.json()["detail"])
 
+    def test_platform_admin_calcom_test_failure_returns_controlled_response(self):
+        self.is_internal = True
+        self.client.post(
+            f"/api/v1/admin/tenants/{self.tenant.id}/integrations/calcom/config",
+            json={
+                "status": "active",
+                "calendar_mode": "cal_managed",
+                "cal_api_key": "cal_secret_test",
+                "default_event_type_id": 123,
+                "default_timezone": "America/Bogota",
+                "default_language": "es",
+                "default_length_minutes": 30,
+            },
+        )
+
+        with patch(
+            "app.services.booking_config_service.CalComClient.get_available_slots",
+            side_effect=Exception("Cal.com API error 401: invalid token cal_secret_test"),
+        ):
+            response = self.client.post(f"/api/v1/admin/tenants/{self.tenant.id}/integrations/calcom/test")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["status"], "error")
+        self.assertIn("Cal.com API error 401", payload["error_message"])
+        self.assertNotIn("cal_secret_test", response.text)
+
     def test_tenant_admin_cannot_use_admin_tenant_integration_endpoint(self):
         self.is_internal = False
         response = self.client.get(f"/api/v1/admin/tenants/{self.tenant.id}/integrations")

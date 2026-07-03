@@ -27,6 +27,10 @@ export function CalComTestForm({ accessToken, mode = 'tenant', tenantId, disable
       onError(result.detail);
       return;
     }
+    if (result.data.status !== 'active') {
+      onError(result.data.error_message ?? 'No se pudo verificar Cal.com.');
+      return;
+    }
     onSuccess('Conexion Cal.com verificada.');
   };
 
