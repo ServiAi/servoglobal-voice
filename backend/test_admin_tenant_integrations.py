@@ -20,7 +20,7 @@ from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.main import app
 from app.models.identity import Tenant, TenantMembership, User
-from app.models.integrations import TenantIntegration
+from app.models.integrations import TenantBookingConfig, TenantIntegration
 from app.services.resend_service import ResendService
 
 
@@ -155,6 +155,26 @@ class AdminTenantIntegrationTests(unittest.TestCase):
         self.assertEqual(payload["status"], "error")
         self.assertIn("Cal.com API error 401", payload["error_message"])
         self.assertNotIn("cal_secret_test", response.text)
+        with SessionLocal() as db:
+            config = db.scalar(select(TenantBookingConfig).where(TenantBookingConfig.tenant_id == self.tenant.id))
+        self.assertEqual(config.status, "active")
+
+        with patch("app.services.booking_config_service.CalComClient.get_available_slots", return_value={"available_slots": []}):
+            retry = self.client.post(f"/api/v1/admin/tenants/{self.tenant.id}/integrations/calcom/test")
+
+        self.assertEqual(retry.status_code, 200)
+        self.assertEqual(retry.json()["status"], "active")
+
+        with SessionLocal() as db:
+            config = db.scalar(select(TenantBookingConfig).where(TenantBookingConfig.tenant_id == self.tenant.id))
+            config.status = "error"
+            db.commit()
+
+        with patch("app.services.booking_config_service.CalComClient.get_available_slots", return_value={"available_slots": []}):
+            retry_from_error = self.client.post(f"/api/v1/admin/tenants/{self.tenant.id}/integrations/calcom/test")
+
+        self.assertEqual(retry_from_error.status_code, 200)
+        self.assertEqual(retry_from_error.json()["status"], "active")
 
     def test_tenant_admin_cannot_use_admin_tenant_integration_endpoint(self):
         self.is_internal = False

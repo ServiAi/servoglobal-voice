@@ -27,7 +27,7 @@ class BookingConfigService:
 
     def get_active_config(self, tenant_id: str) -> TenantBookingConfig:
         config = self.get_config(tenant_id)
-        if not config or config.status != "active":
+        if not config or config.status not in {"active", "error"}:
             raise ValueError("Cal.com booking config is not active for this tenant.")
         if not config.cal_api_key_encrypted:
             raise ValueError("Cal.com API key is not configured for this tenant.")
@@ -91,7 +91,6 @@ class BookingConfigService:
         return "active", None
 
     def mark_health(self, config: TenantBookingConfig, *, status: str, error_message: str | None = None) -> None:
-        config.status = status
         config.last_health_check_at = datetime.now(UTC)
         config.last_error_message = error_message
         self.db.commit()
