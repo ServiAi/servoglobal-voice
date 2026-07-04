@@ -8,13 +8,24 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.api.auth.deps import AuthContext, get_current_auth_context, require_roles
 from app.db.session import get_db
-from app.models.crm import CrmContact, CrmPipelineStage, CrmLead, CrmActivity, CrmTask
+from app.models.crm import CrmContact, CrmPipelineStage, CrmLead, CrmActivity, CrmTask, CrmBooking, CrmBookingEvent
 
 from app.schemas.crm import (
     ActivitySchema,
+    BookingCancelRequest,
+    BookingCreateRequest,
+    BookingRescheduleRequest,
+    BookingResponse,
+    CallSummaryAssetRequest,
+    CallSummaryAssetResponse,
+    CallSummaryInsertedRequest,
+    CallSummaryResponse,
     ContactBriefSchema,
+    CrmDashboardResponse,
     CrmMetricsResponse,
     CrmSummaryResponse,
+    EmailActionRequest,
+    EmailActionResponse,
     LeadDetailResponse,
     LeadListItem,
     LeadStageCount,
@@ -29,15 +40,6 @@ from app.schemas.crm import (
     TaskCreateRequest,
     TaskResponse,
     TaskUpdateRequest,
-    CrmDashboardResponse,
-    EmailActionRequest,
-    EmailActionResponse,
-    CallSummaryAssetRequest,
-    CallSummaryAssetResponse,
-    CallSummaryInsertedRequest,
-    CallSummaryResponse,
-    BookingCreateRequest,
-    BookingResponse,
 )
 from app.services.crm_pipeline_service import CrmPipelineService
 from app.services.crm_lead_service import CrmLeadService
@@ -227,16 +229,42 @@ def create_lead_booking(
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
 
 
-@router.get("/leads/{lead_id}/bookings", response_model=list[BookingResponse])
-def list_lead_bookings(
+@router.post("/leads/{lead_id}/bookings/{booking_id}/cancel", response_model=dict)
+def cancel_lead_booking(
     lead_id: str,
-    context: AuthContext = Depends(require_roles(["platform_admin", "tenant_admin", "tenant_analyst", "tenant_viewer"])),
+    booking_id: str,
+    context: AuthContext = Depends(require_roles(["platform_admin", "tenant_admin"])),
     db: Session = Depends(get_db),
 ) -> Any:
     try:
-        return BookingService(db).list_lead_bookings(tenant_id=context.tenant.id, lead_id=lead_id)
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+        return BookingService(db).cancel_lead_booking(
+            tenant_id=context.tenant.id, 
+            booking_id=booking_id
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.post("/leads/{lead_id}/bookings/{booking_id}/reschedule", response_model=dict)
+def reschedule_lead_booking(
+    lead_id: str,
+    booking_id: str,
+    body: BookingRescheduleRequest,
+    context: AuthContext = Depends(require_roles(["platform_admin", "tenant_admin"])),
+    db: Session = Depends(get_db),
+) -> Any:
+    try:
+        return BookingService(db).reschedule_lead_booking(
+            tenant_id=context.tenant.id,
+            booking_id=booking_id,
+            new_start_time=body.new_start_time,
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 # --- Lead Update ---

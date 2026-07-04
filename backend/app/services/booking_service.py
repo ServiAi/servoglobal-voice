@@ -321,6 +321,48 @@ class BookingService:
             payload["metadata"]["tenant_slug"] = organization_slug
         return payload
 
+    def cancel_lead_booking(self, *, tenant_id: str, booking_id: str) -> dict[str, Any]:
+        booking = self.db.scalar(
+            select(CrmBooking).where(CrmBooking.id == booking_id, CrmBooking.tenant_id == tenant_id)
+        )
+        if not booking:
+            raise ValueError("Booking not found")
+
+        config, client_config, _ = self._effective_config(tenant_id)
+        result = self.calcom_client.cancel_booking(client_config, booking.provider_booking_uid)
+        self.map_calcom_response_to_crm_booking(booking, result)
+        booking.status = "cancelled"
+        self.record_crm_activity(booking, "booking_created", "Reserva cancelada manualmente desde el CRM")
+        self.record_crm_booking_event(booking, "booking_cancelled", booking.status, self._safe_provider_summary(result))
+        return {"status": "success", "booking_id": booking.id}
+
+    def reschedule_lead_booking(
+        self, *, tenant_id: str, booking_id: str, new_start_time: str
+    ) -> dict[str, Any]:
+        booking = self.db.scalar(
+            select(CrmBooking).where(CrmBooking.id == booking_id, CrmBooking.tenant_id == tenant_id)
+        )
+        if not booking:
+            raise ValueError("Booking not found")
+
+        config, client_config, _ = self._effective_config(tenant_id)
+        result = self.calcom_client.reschedule_booking(client_config, booking.provider_booking_uid, new_start_time)
+        self.map_calcom_response_to_crm_booking(booking, result)
+        booking.status = "scheduled"
+        self.record_crm_activity(booking, "booking_created", "Reserva reprogramada desde el CRM")
+        self.record_crm_booking_event(
+            booking, "booking_rescheduled", booking.status, self._safe_provider_summary(result)
+        )
+        return {"status": "success", "booking_id": booking.id}
+
+    def get_booking(self, *, tenant_id: str, booking_id: str) -> CrmBooking:
+        booking = self.db.scalar(
+            select(CrmBooking).where(CrmBooking.id == booking_id, CrmBooking.tenant_id == tenant_id)
+        )
+        if not booking:
+            raise ValueError("Booking not found")
+        return booking
+
     def _safe_provider_summary(self, result: dict[str, Any]) -> dict[str, Any]:
         data = result.get("data") if isinstance(result.get("data"), dict) else result
         return {

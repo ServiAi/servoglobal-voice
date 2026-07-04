@@ -4,10 +4,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { CalendarCheck, Loader2, RefreshCw } from 'lucide-react';
 import {
   createLeadBooking,
+  cancelLeadBooking,
   fetchBookingConfig,
   fetchCalComSlots,
   fetchCrmLeadDetail,
   fetchLeadBookings,
+  rescheduleLeadBooking,
 } from '@/lib/api/crm';
 import { Button } from '@/components/ui/button';
 import {
@@ -19,6 +21,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import type { BookingConfigResponse, BookingResponse, LeadDetailResponse } from '@/types/crm';
+
 
 type Props = {
   open: boolean;
@@ -68,10 +71,49 @@ export function LeadBookingModal({
   const [attendeeEmail, setAttendeeEmail] = useState('');
   const [attendeePhone, setAttendeePhone] = useState('');
   const [notes, setNotes] = useState('');
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [creating, setCreating] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
+
+  const handleCancel = async (bookingId: string) => {
+    if (!confirm('¿Estás seguro de que deseas cancelar esta reunión?')) return;
+    setActionLoading(bookingId);
+    const result = await cancelLeadBooking(accessToken, leadId, bookingId);
+    setActionLoading(null);
+    if (result.ok) {
+      setBookings((prev) => prev.filter((b) => b.id !== bookingId));
+      onSuccess('Reunión cancelada correctamente.');
+    } else {
+      onError(result.detail);
+    }
+  };
+
+  const handleReschedule = async (booking: BookingResponse) => {
+    // Simplification: for now just reschedule to tomorrow at same time as placeholder
+    // In a real app, this would open a date picker
+    const tomorrowDate = new Date();
+    tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+    const newStart = tomorrowDate.toISOString();
+    const newEnd = new Date(tomorrowDate.getTime() + 3600000).toISOString();
+
+    setActionLoading(booking.id);
+    const result = await rescheduleLeadBooking(accessToken, leadId, booking.id, {
+      new_start_time: newStart,
+      new_end_time: newEnd,
+    });
+    setActionLoading(null);
+
+    if (result.ok) {
+      // Refresh bookings
+      const refresh = await fetchLeadBookings(accessToken, leadId);
+      if (refresh.ok) setBookings(refresh.data);
+      onSuccess('Reunión reprogramada.');
+    } else {
+      onError(result.detail);
+    }
+  };
 
   const timezone = config?.default_timezone ?? 'America/Bogota';
   const canCreate = Boolean(selectedStart && attendeeName.trim() && attendeeEmail.trim());
@@ -290,13 +332,42 @@ export function LeadBookingModal({
             <aside className="rounded-md border border-border p-3">
               <h3 className="mb-2 text-sm font-semibold text-foreground">Bookings</h3>
               <div className="space-y-2">
-                {sortedBookings.slice(0, 5).map((booking) => (
-                  <div key={booking.id} className="rounded-md bg-muted/40 p-2 text-xs">
-                    <div className="font-medium text-foreground">{formatDateTime(booking.start_at, booking.timezone)}</div>
-                    <div className="text-muted-foreground">{booking.status}</div>
-                  </div>
-                ))}
-                {sortedBookings.length === 0 && <p className="text-xs text-muted-foreground">Sin bookings previos.</p>}
+                <div className="space-y-2">
+                  {sortedBookings.slice(0, 5).map((booking) => (
+                    <div key={booking.id} className="group relative rounded-md bg-muted/40 p-2 text-xs">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="space-y-1">
+                          <div className="font-medium text-foreground">{formatDateTime(booking.start_at, booking.timezone)}</div>
+                          <div className="text-muted-foreground capitalize">{booking.status}</div>
+                        </div>
+                        <div className="flex gap-1">
+                          <button
+                            type="button"
+                            onClick={() => handleReschedule(booking)}
+                            disabled={actionLoading === booking.id}
+                            className="rounded px-1.5 py-0.5 text-[10px] font-medium text-fuchsia-500 hover:bg-fuchsia-500/10 disabled:opacity-50"
+                          >
+                            Reprogramar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleCancel(booking.id)}
+                            disabled={actionLoading === booking.id}
+                            className="rounded px-1.5 py-0.5 text-[10px] font-medium text-red-500 hover:bg-red-500/10 disabled:opacity-50"
+                          >
+                            Cancelar
+                          </button>
+                        </div>
+                      </div>
+                      {actionLoading === booking.id && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-background/50 rounded-md">
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                  {sortedBookings.length === 0 && <p className="text-xs text-muted-foreground">Sin bookings previos.</p>}
+                </div>
               </div>
             </aside>
           </div>

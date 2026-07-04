@@ -168,10 +168,23 @@ def _sync_crm_booking_from_calcom_webhook(db: Session, trigger_event: str | None
     if crm_lead_id and booking.lead_id and crm_lead_id != booking.lead_id:
         return False
 
-    booking.status = _calcom_webhook_status(trigger_event, payload)
+    if trigger_event == "BOOKING_CANCELLED":
+        booking.status = "cancelled"
+    elif trigger_event == "BOOKING_RESCHEDULED":
+        start_iso = payload.get("startTime")
+        end_iso = payload.get("endTime")
+        if start_iso:
+            booking.start_at = datetime.fromisoformat(start_iso.replace("Z", "+00:00"))
+        if end_iso:
+            booking.end_at = datetime.fromisoformat(end_iso.replace("Z", "+00:00"))
+        booking.status = _calcom_webhook_status(trigger_event, payload)
+    elif trigger_event == "BOOKING_CREATED":
+        booking.status = _calcom_webhook_status(trigger_event, payload)
+
     booking.provider_booking_id = str(payload.get("id") or "") or booking.provider_booking_id
     booking.provider_booking_uid = str(payload.get("uid") or payload.get("bookingUid") or "") or booking.provider_booking_uid
     booking.meeting_url = payload.get("meetingUrl") or payload.get("meeting_url") or payload.get("videoCallUrl") or booking.meeting_url
+    
     safe_summary = {
         "trigger_event": trigger_event,
         "provider_booking_id": booking.provider_booking_id,
@@ -200,6 +213,7 @@ def _sync_crm_booking_from_calcom_webhook(db: Session, trigger_event: str | None
             payload_json=safe_summary,
         )
     return True
+
 
 
 @router.post("/calcom/webhook")

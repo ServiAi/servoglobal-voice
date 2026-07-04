@@ -248,6 +248,15 @@ class BookingCreateRequest(BaseModel):
     notes: Optional[str] = None
 
 
+class BookingCancelRequest(BaseModel):
+    reason: Optional[str] = None
+
+
+class BookingRescheduleRequest(BaseModel):
+    new_start_time: str
+    new_end_time: str
+
+
 class BookingResponse(BaseModel):
     id: str
     provider: str
