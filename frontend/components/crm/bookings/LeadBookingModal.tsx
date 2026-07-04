@@ -4,10 +4,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { CalendarCheck, Loader2, RefreshCw } from 'lucide-react';
 import {
   createLeadBooking,
+  cancelLeadBooking,
   fetchBookingConfig,
   fetchCalComSlots,
   fetchCrmLeadDetail,
   fetchLeadBookings,
+  rescheduleLeadBooking,
 } from '@/lib/api/crm';
 import { Button } from '@/components/ui/button';
 import {
@@ -18,7 +20,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { MoreVertical, Trash2, CalendarDays } from 'lucide-react';
 import type { BookingConfigResponse, BookingResponse, LeadDetailResponse } from '@/types/crm';
+
 
 type Props = {
   open: boolean;
@@ -68,10 +78,45 @@ export function LeadBookingModal({
   const [attendeeEmail, setAttendeeEmail] = useState('');
   const [attendeePhone, setAttendeePhone] = useState('');
   const [notes, setNotes] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [loadingSlots, setLoadingSlots] = useState(false);
-  const [creating, setCreating] = useState(false);
-  const [localError, setLocalError] = useState<string | null>(null);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+
+  const handleCancel = async (bookingId: string) => {
+    if (!confirm('¿Estás seguro de que deseas cancelar esta reunión?')) return;
+    setActionLoading(bookingId);
+    const result = await cancelLeadBooking(accessToken, leadId, bookingId);
+    setActionLoading(null);
+    if (result.ok) {
+      setBookings((prev) => prev.filter((b) => b.id !== bookingId));
+      onSuccess('Reunión cancelada correctamente.');
+    } else {
+      onError(result.detail);
+    }
+  };
+
+  const handleReschedule = async (booking: BookingResponse) => {
+    // Simplification: for now just reschedule to tomorrow at same time as placeholder
+    // In a real app, this would open a date picker
+    const tomorrowDate = new Date();
+    tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+    const newStart = tomorrowDate.toISOString();
+    const newEnd = new Date(tomorrowDate.getTime() + 3600000).toISOString();
+
+    setActionLoading(booking.id);
+    const result = await rescheduleLeadBooking(accessToken, leadId, booking.id, {
+      new_start_time: newStart,
+      new_end_time: newEnd,
+    });
+    setActionLoading(null);
+
+    if (result.ok) {
+      // Refresh bookings
+      const refresh = await fetchLeadBookings(accessToken, leadId);
+      if (refresh.ok) setBookings(refresh.data);
+      onSuccess('Reunión reprogramada.');
+    } else {
+      onError(result.detail);
+    }
+  };
 
   const timezone = config?.default_timezone ?? 'America/Bogota';
   const canCreate = Boolean(selectedStart && attendeeName.trim() && attendeeEmail.trim());
@@ -291,12 +336,48 @@ export function LeadBookingModal({
               <h3 className="mb-2 text-sm font-semibold text-foreground">Bookings</h3>
               <div className="space-y-2">
                 {sortedBookings.slice(0, 5).map((booking) => (
-                  <div key={booking.id} className="rounded-md bg-muted/40 p-2 text-xs">
-                    <div className="font-medium text-foreground">{formatDateTime(booking.start_at, booking.timezone)}</div>
-                    <div className="text-muted-foreground">{booking.status}</div>
-                  </div>
-                ))}
-                {sortedBookings.length === 0 && <p className="text-xs text-muted-foreground">Sin bookings previos.</p>}
+                <div className="space-y-2">
+                  {sortedBookings.slice(0, 5).map((booking) => (
+                    <div key={booking.id} className="group relative rounded-md bg-muted/40 p-2 text-xs">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="space-y-1">
+                          <div className="font-medium text-foreground">{formatDateTime(booking.start_at, booking.timezone)}</div>
+                          <div className="text-muted-foreground capitalize">{booking.status}</div>
+                        </div>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100">
+                              <MoreVertical className="h-3 w-3" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem 
+                              onClick={() => handleReschedule(booking)}
+                              disabled={actionLoading === booking.id}
+                            >
+                              <CalendarDays className="mr-2 h-3 w-3" />
+                              Reprogramar
+                            </DropdownMenuItem>
+                            <DropdownMenuItem 
+                              onClick={() => handleCancel(booking.id)}
+                              className="text-red-500"
+                              disabled={actionLoading === booking.id}
+                            >
+                              <Trash2 className="mr-2 h-3 w-3" />
+                              Cancelar
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                      {actionLoading === booking.id && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-background/50 rounded-md">
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                  {sortedBookings.length === 0 && <p className="text-xs text-muted-foreground">Sin bookings previos.</p>}
+                </div>
               </div>
             </aside>
           </div>

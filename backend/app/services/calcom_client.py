@@ -154,11 +154,42 @@ class CalComClient:
             raise CalComUpstreamError(f"Cal.com API error {response.status_code}: {sanitize_calcom_error(response.text)}")
         return response.json()
 
-    def cancel_booking(self, config: CalComClientConfig, booking_uid: str) -> dict:
-        raise NotImplementedError("Cal.com cancel booking is prepared for Sprint 2B.")
+    def cancel_booking(self, config: CalComClientConfig, booking_uid: str, payload: dict | None = None) -> dict:
+        if not booking_uid:
+            raise CalComInputError("booking_uid is required.")
+        cancel_payload = {
+            "cancellationReason": "Cancelado desde CRM",
+            "cancelSubsequentBookings": False,
+            **(payload or {}),
+        }
+        response = httpx.post(
+            f"{self.base_url}/bookings/{booking_uid}/cancel",
+            json=cancel_payload,
+            headers=self._headers(config),
+            timeout=CAL_HTTP_TIMEOUT_SECONDS,
+        )
+        if response.status_code not in (200, 201):
+            raise CalComUpstreamError(f"Cal.com API error {response.status_code}: {sanitize_calcom_error(response.text)}")
+        return response.json()
 
-    def reschedule_booking(self, config: CalComClientConfig, booking_uid: str, start: datetime) -> dict:
-        raise NotImplementedError("Cal.com reschedule booking is prepared for Sprint 2B.")
+    def reschedule_booking(self, config: CalComClientConfig, booking_uid: str, start: str, payload: dict | None = None) -> dict:
+        if not booking_uid:
+            raise CalComInputError("booking_uid is required.")
+        if not start:
+            raise CalComInputError("start is required for reschedule.")
+        reschedule_payload = {
+            "start": start,
+            **(payload or {}),
+        }
+        response = httpx.post(
+            f"{self.base_url}/bookings/{booking_uid}/reschedule",
+            json=reschedule_payload,
+            headers=self._headers(config),
+            timeout=CAL_HTTP_TIMEOUT_SECONDS,
+        )
+        if response.status_code not in (200, 201):
+            raise CalComUpstreamError(f"Cal.com API error {response.status_code}: {sanitize_calcom_error(response.text)}")
+        return response.json()
 
     def _headers(self, config: CalComClientConfig, *, api_version: str | None = None) -> dict[str, str]:
         if not config.api_key:

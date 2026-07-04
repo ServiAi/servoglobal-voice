@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.models.crm import CrmBooking, CrmBookingEvent, CrmLead
 from app.models.integrations import TenantBookingConfig, TenantVoiceBookingConfig
-from app.schemas.crm import BookingCreateRequest
+from app.schemas.crm import BookingCancelRequest, BookingCreateRequest, BookingRescheduleRequest
 from app.services.booking_config_service import BookingConfigService
 from app.services.calcom_client import CalComClient, CalComClientConfig, parse_utc_start, sanitize_calcom_error
 from app.services.crm_activity_service import CrmActivityService
@@ -321,10 +321,119 @@ class BookingService:
             payload["metadata"]["tenant_slug"] = organization_slug
         return payload
 
+    async def cancel_lead_booking(self, tenant_id: str, booking_id: str) -> dict[str, Any]:
+        """Cancels a booking via Cal.com and updates the CRM."""
+        booking = await self.db.execute(
+            select(CRMBooking).where(CRMBooking.id == booking_id, CRMBooking.tenant_id == tenant_id)
+        )
+        booking = booking.scalar_one_or_none()
+        if not booking:
+            raise HTTPException(status_code=404, detail="Booking not found")
+
+        client_config = await self.config_service.get_calcom_config(tenant_id)
+        client = CalComClient(client_config)
+
+        try:
+            await client.cancel_booking(booking.provider_booking_id)
+            booking.status = "cancelled"
+            
+            event = CRMBookingEvent(
+                tenant_id=tenant_id,
+                booking_id=booking.id,
+                event_type="BOOKING_CANCELLED",
+                metadata={"reason": "Manual cancellation via CRM"}
+            )
+            self.db.add(event)
+            await self.db.commit()
+            return {"status": "success", "booking_id": booking.id}
+        except Exception as e:
+            await self.db.rollback()
+            raise HTTPException(status_code=500, detail=f"Failed to cancel booking: {str(e)}")
+
+    async def reschedule_lead_booking(
+        self, tenant_id: str, booking_id: str, new_start_time: datetime, new_end_time: datetime
+    ) -> dict[str, Any]:
+        """Reschedules a booking via Cal.com and updates the CRM."""
+        booking = await self.db.execute(
+            select(CRMBooking).where(CRMBooking.id == booking_id, CRMBooking.tenant_id == tenant_id)
+        )
+        booking = booking.scalar_one_or_none()
+        if not booking:
+            raise HTTPException(status_code=404, detail="Booking not found")
+
+        client_config = await self.config_service.get_calcom_config(tenant_id)
+        client = CalComClient(client_config)
+
+        try:
+            await client.reschedule_booking(
+                booking.provider_booking_id, 
+                new_start_time, 
+                new_end_time
+            )
+            booking.start_time = new_start_time
+            booking.end_time = new_end_time
+            
+            event = CRMBookingEvent(
+                tenant_id=tenant_id,
+                booking_id=booking.id,
+                event_type="BOOKING_RESCHEDULED",
+                metadata={
+                    "old_start": booking.start_time.isoformat(),
+                    "new_start": new_start_time.isoformat()
+                }
+            )
+            self.db.add(event)
+            await self.db.commit()
+            return {"status": "success", "booking_id": booking.id}
+        except Exception as e:
+            await self.db.rollback()
+            raise HTTPException(status_code=500, detail=f"Failed to reschedule booking: {str(e)}")
+
+    async def reconcile_calcom_webhook(self, tenant_id: str, payload: dict[str, Any]) -> None:
+        """Reconciles incoming Cal.com webhooks with CRM state."""
+        event_type = payload.get("type")
+        data = payload.get("data")
+        if not event_type or not data:
+            return
+
+        provider_booking_id = data.get("id")
+        
+        # Find the booking in our CRM
+        result = await self.db.execute(
+            select(CRMBooking).where(
+                CRMBooking.provider_booking_id == provider_booking_id,
+                CRMBooking.tenant_id == tenant_id
+            )
+        )
+        booking = result.scalar_one_or_none()
+
+        if not booking:
+            return
+
+        if event_type == "BOOKING_CANCELLED":
+            booking.status = "cancelled"
+        elif event_type == "BOOKING_RESCHEDULED":
+            booking.start_time = parse_utc_start(data.get("start"))
+            booking.end_time = parse_utc_start(data.get("end"))
+            booking.status = "scheduled"
+
+        event = CRMBookingEvent(
+            tenant_id=tenant_id,
+            booking_id=booking.id,
+            event_type=f"CALCOM_{event_type}",
+            metadata={"payload": payload}
+        )
+        self.db.add(event)
+        await self.db.commit()
+
+    async def get_booking(self, tenant_id: str, booking_id: str) -> CRMBooking:
+        """Retrieves a booking for a specific tenant."""
+        result = await self.db.execute(
+            select(CRMBooking).where(CRMBooking.id == booking_id, CRMBooking.tenant_id == tenant_id)
+        )
+        booking = result.scalar_one_or_none()
+        if not booking:
+            raise HTTPException(status_code=404, detail="Booking not found")
+        return booking
+
     def _safe_provider_summary(self, result: dict[str, Any]) -> dict[str, Any]:
-        data = result.get("data") if isinstance(result.get("data"), dict) else result
-        return {
-            "provider_booking_id": data.get("id"),
-            "provider_booking_uid": data.get("uid") or data.get("bookingUid"),
-            "status": data.get("status"),
-        }

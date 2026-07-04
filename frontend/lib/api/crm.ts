@@ -350,8 +350,17 @@ export function fetchLeadBookings(accessToken: string, leadId: string) {
   return requestCrmEndpoint<BookingResponse[]>('GET', `leads/${leadId}/bookings`, accessToken);
 }
 
-export function createLeadBooking(accessToken: string, leadId: string, payload: BookingCreateRequest) {
-  return requestCrmEndpoint<BookingResponse>('POST', `leads/${leadId}/bookings`, accessToken, undefined, payload);
+export function cancelLeadBooking(accessToken: string, leadId: string, bookingId: string) {
+  return requestCrmEndpoint<void>('POST', `leads/${leadId}/bookings/${bookingId}/cancel`, accessToken);
+}
+
+export function rescheduleLeadBooking(
+  accessToken: string,
+  leadId: string,
+  bookingId: string,
+  payload: { new_start_time: string; new_end_time: string }
+) {
+  return requestCrmEndpoint<void>('POST', `leads/${leadId}/bookings/${bookingId}/reschedule`, accessToken, undefined, payload);
 }
 
 export function fetchTenantIntegrations(accessToken: string) {
