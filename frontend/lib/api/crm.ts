@@ -32,6 +32,13 @@ import type {
   TenantFormItem,
   FormTokenResponse,
   PublicFormResponse,
+  VoiceProviderConfigRequest,
+  VoiceProviderConfigResponse,
+  VoiceAgentConfigRequest,
+  VoiceAgentConfigResponse,
+  VoiceCallActionRequest,
+  VoiceCallActionResponse,
+  VoiceCallResponse,
 } from '@/types/crm';
 
 export type FetchResult<T> =
@@ -574,4 +581,72 @@ export function submitPublicForm(token: string, answers: Record<string, string |
     answers,
     hp,
   });
+}
+
+
+// --- CRM Voice ---
+
+export function startCrmLeadVoiceCall(accessToken: string, leadId: string, payload: VoiceCallActionRequest) {
+  return requestCrmEndpoint<VoiceCallActionResponse>('POST', `leads/${leadId}/actions/call`, accessToken, undefined, payload);
+}
+
+export function fetchCrmLeadVoiceCalls(accessToken: string, leadId: string) {
+  return requestCrmEndpoint<VoiceCallResponse[]>('GET', `leads/${leadId}/calls`, accessToken);
+}
+
+
+// --- Voice Integration Config ---
+
+export function fetchVoiceConfig(accessToken: string) {
+  return requestIntegrationEndpoint<VoiceProviderConfigResponse>('GET', 'voice/config', accessToken);
+}
+
+export function configureVoice(accessToken: string, payload: VoiceProviderConfigRequest) {
+  return requestIntegrationEndpoint<VoiceProviderConfigResponse>('POST', 'voice/config', accessToken, undefined, payload);
+}
+
+export function testVoiceConnection(accessToken: string) {
+  return requestIntegrationEndpoint<{ status: string }>('POST', 'voice/test', accessToken);
+}
+
+
+// --- Voice Agent Config ---
+
+export function fetchVoiceAgents(accessToken: string) {
+  return requestIntegrationEndpoint<VoiceAgentConfigResponse[]>('GET', 'voice/agents', accessToken);
+}
+
+export function createVoiceAgent(accessToken: string, payload: VoiceAgentConfigRequest) {
+  return requestIntegrationEndpoint<VoiceAgentConfigResponse>('POST', 'voice/agents', accessToken, undefined, payload);
+}
+
+export function updateVoiceAgent(accessToken: string, agentConfigId: string, payload: VoiceAgentConfigRequest) {
+  return requestIntegrationEndpoint<VoiceAgentConfigResponse>('PATCH', `voice/agents/${agentConfigId}`, accessToken, undefined, payload);
+}
+
+
+// --- Admin Voice Integrations ---
+
+export function fetchAdminTenantVoiceConfig(accessToken: string, tenantId: string) {
+  return requestBackendEndpoint<VoiceProviderConfigResponse>('GET', 'admin', `tenants/${tenantId}/integrations/voice/config`, accessToken);
+}
+
+export function configureAdminTenantVoice(accessToken: string, tenantId: string, payload: VoiceProviderConfigRequest) {
+  return requestBackendEndpoint<VoiceProviderConfigResponse>('POST', 'admin', `tenants/${tenantId}/integrations/voice/config`, accessToken, undefined, payload);
+}
+
+export function testAdminTenantVoice(accessToken: string, tenantId: string) {
+  return requestBackendEndpoint<{ status: string }>('POST', 'admin', `tenants/${tenantId}/integrations/voice/test`, accessToken);
+}
+
+export function fetchAdminTenantVoiceAgents(accessToken: string, tenantId: string) {
+  return requestBackendEndpoint<VoiceAgentConfigResponse[]>('GET', 'admin', `tenants/${tenantId}/integrations/voice/agents`, accessToken);
+}
+
+export function createAdminTenantVoiceAgent(accessToken: string, tenantId: string, payload: VoiceAgentConfigRequest) {
+  return requestBackendEndpoint<VoiceAgentConfigResponse>('POST', 'admin', `tenants/${tenantId}/integrations/voice/agents`, accessToken, undefined, payload);
+}
+
+export function updateAdminTenantVoiceAgent(accessToken: string, tenantId: string, agentConfigId: string, payload: VoiceAgentConfigRequest) {
+  return requestBackendEndpoint<VoiceAgentConfigResponse>('PATCH', 'admin', `tenants/${tenantId}/integrations/voice/agents/${agentConfigId}`, accessToken, undefined, payload);
 }

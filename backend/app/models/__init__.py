@@ -8,8 +8,10 @@ from app.models.integrations import (
     TenantEmailTemplate,
     TenantIntegration,
     TenantIntegrationEvent,
+    TenantVoiceProviderConfig,
+    TenantVoiceAgentConfig,
 )
-from app.models.crm import CrmActivity, CrmCallContext, CrmContact, CrmLead, CrmPipelineStage, CrmTask
+from app.models.crm import CrmActivity, CrmCallContext, CrmContact, CrmLead, CrmPipelineStage, CrmTask, CrmVoiceCall, CrmVoiceCallEvent
 
 __all__ = [
     "AccessAuditLog",
@@ -26,6 +28,8 @@ __all__ = [
     "TenantEmailTemplate",
     "TenantIntegration",
     "TenantIntegrationEvent",
+    "TenantVoiceProviderConfig",
+    "TenantVoiceAgentConfig",
     "TenantMembership",
     "TenantUsageAlert",
     "User",
@@ -35,4 +39,6 @@ __all__ = [
     "CrmActivity",
     "CrmCallContext",
     "CrmTask",
+    "CrmVoiceCall",
+    "CrmVoiceCallEvent",
 ]

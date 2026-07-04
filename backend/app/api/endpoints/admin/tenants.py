@@ -37,6 +37,10 @@ from app.schemas.integrations import (
     ResendIntegrationConfigResponse,
     ResendTestEmailRequest,
     ResendTestEmailResponse,
+    VoiceProviderConfigRequest,
+    VoiceProviderConfigResponse,
+    VoiceAgentConfigRequest,
+    VoiceAgentConfigResponse,
 )
 from app.schemas.crm import BookingCreateRequest, BookingResponse
 from app.api.endpoints.integrations import _resend_response
@@ -45,9 +49,13 @@ from app.services.booking_service import BookingService
 from app.services.email_config_service import EmailConfigService
 from app.services.email_send_service import EmailSendService
 from app.services.email_template_service import EmailTemplateService
+from app.services.voice_config_service import VoiceConfigService
+from app.services.voice_agent_service import VoiceAgentService
 from app.services.google_calendar_oauth_service import GoogleCalendarOAuthService
 from app.services.integration_event_service import IntegrationEventService
 from app.services.integration_service import IntegrationService
+from app.services.voice_config_service import VoiceConfigService
+from app.services.voice_agent_service import VoiceAgentService
 
 
 router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
@@ -681,3 +689,113 @@ def test_tenant_resend_admin(
     if result.status == "failed":
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=result.error_message or "Resend test failed.")
     return ResendTestEmailResponse(status=result.status, provider_email_id=result.provider_email_id)
+
+
+# --- Admin Voice Config ---
+
+@router.get(
+    "/tenants/{tenant_id}/integrations/voice/config",
+    response_model=VoiceProviderConfigResponse,
+)
+def get_tenant_voice_config_admin(
+    tenant_id: str,
+    db: Session = Depends(get_current_internal_db),
+) -> Any:
+    try:
+        OnboardingService(db).get_tenant(tenant_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return VoiceConfigService(db).get_config_response(tenant_id)
+
+
+@router.post(
+    "/tenants/{tenant_id}/integrations/voice/config",
+    response_model=VoiceProviderConfigResponse,
+)
+def configure_tenant_voice_admin(
+    tenant_id: str,
+    body: VoiceProviderConfigRequest,
+    db: Session = Depends(get_current_internal_db),
+) -> Any:
+    try:
+        OnboardingService(db).get_tenant(tenant_id)
+        config = VoiceConfigService(db).upsert_provider_config(tenant_id, body)
+        return VoiceConfigService(db).get_config_response(tenant_id, config.provider)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+
+
+@router.post(
+    "/tenants/{tenant_id}/integrations/voice/test",
+)
+def test_tenant_voice_admin(
+    tenant_id: str,
+    db: Session = Depends(get_current_internal_db),
+) -> Any:
+    try:
+        OnboardingService(db).get_tenant(tenant_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    try:
+        result, error = VoiceConfigService(db).test_connection(tenant_id)
+        if result != "active":
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=error or "Voice test failed.")
+        return {"status": result}
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+
+
+# --- Admin Voice Agent ---
+
+@router.get(
+    "/tenants/{tenant_id}/integrations/voice/agents",
+    response_model=list[VoiceAgentConfigResponse],
+)
+def list_tenant_voice_agents_admin(
+    tenant_id: str,
+    db: Session = Depends(get_current_internal_db),
+) -> Any:
+    try:
+        OnboardingService(db).get_tenant(tenant_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    service = VoiceAgentService(db)
+    agents = service.list_agent_configs(tenant_id)
+    return [service.response(agent) for agent in agents]
+
+
+@router.post(
+    "/tenants/{tenant_id}/integrations/voice/agents",
+    response_model=VoiceAgentConfigResponse,
+)
+def create_tenant_voice_agent_admin(
+    tenant_id: str,
+    body: VoiceAgentConfigRequest,
+    db: Session = Depends(get_current_internal_db),
+) -> Any:
+    try:
+        OnboardingService(db).get_tenant(tenant_id)
+        service = VoiceAgentService(db)
+        agent = service.create_or_update_agent_config(tenant_id, body)
+        return service.response(agent)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+
+
+@router.put(
+    "/tenants/{tenant_id}/integrations/voice/agents/{agent_config_id}",
+    response_model=VoiceAgentConfigResponse,
+)
+def update_tenant_voice_agent_admin(
+    tenant_id: str,
+    agent_config_id: str,
+    body: VoiceAgentConfigRequest,
+    db: Session = Depends(get_current_internal_db),
+) -> Any:
+    try:
+        OnboardingService(db).get_tenant(tenant_id)
+        service = VoiceAgentService(db)
+        agent = service.create_or_update_agent_config(tenant_id, body, agent_config_id)
+        return service.response(agent)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc

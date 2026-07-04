@@ -1,9 +1,16 @@
 import { redirect } from 'next/navigation';
 import { getAccessToken } from '@/lib/auth/server';
-import { fetchBookingConfig, fetchGoogleCalendarConnections, fetchTenantIntegrations } from '@/lib/api/crm';
+import {
+  fetchBookingConfig,
+  fetchGoogleCalendarConnections,
+  fetchTenantIntegrations,
+  fetchVoiceConfig,
+  fetchVoiceAgents,
+} from '@/lib/api/crm';
 import { CalComIntegrationCard } from '@/components/crm/integrations/CalComIntegrationCard';
 import { GoogleCalendarIntegrationCard } from '@/components/crm/integrations/GoogleCalendarIntegrationCard';
 import { ResendIntegrationCard } from '@/components/crm/integrations/ResendIntegrationCard';
+import { VoiceIntegrationCard } from '@/components/crm/integrations/VoiceIntegrationCard';
 
 type Props = {
   params: Promise<{ locale: string }>;
@@ -20,6 +27,9 @@ export default async function CrmIntegrationsPage({ params }: Props) {
   const integrationsResult = await fetchTenantIntegrations(accessToken);
   const bookingConfigResult = await fetchBookingConfig(accessToken);
   const googleConnectionsResult = await fetchGoogleCalendarConnections(accessToken);
+  const voiceConfigResult = await fetchVoiceConfig(accessToken);
+  const voiceAgentsResult = await fetchVoiceAgents(accessToken);
+
   const resendConfig = integrationsResult.ok
     ? integrationsResult.data.find((item) => item.provider === 'resend')
     : undefined;
@@ -36,6 +46,11 @@ export default async function CrmIntegrationsPage({ params }: Props) {
         </div>
       )}
       <ResendIntegrationCard accessToken={accessToken} initialConfig={resendConfig} />
+      <VoiceIntegrationCard
+        accessToken={accessToken}
+        initialConfig={voiceConfigResult.ok ? voiceConfigResult.data : undefined}
+        initialAgents={voiceAgentsResult.ok ? voiceAgentsResult.data : []}
+      />
       <CalComIntegrationCard accessToken={accessToken} initialConfig={bookingConfigResult.ok ? bookingConfigResult.data : undefined} />
       <GoogleCalendarIntegrationCard
         accessToken={accessToken}
