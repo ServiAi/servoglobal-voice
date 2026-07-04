@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.api.auth.deps import AuthContext, get_current_auth_context, require_roles
 from app.db.session import get_db
-from app.models.crm import CrmContact, CrmPipelineStage, CrmLead, CrmActivity, CrmTask, CRMBooking, CRMBookingEvent
+from app.models.crm import CrmContact, CrmPipelineStage, CrmLead, CrmActivity, CrmTask, CrmBooking, CrmBookingEvent
 
 from app.schemas.crm import (
     ActivitySchema,
@@ -260,7 +260,6 @@ def reschedule_lead_booking(
             tenant_id=context.tenant.id,
             booking_id=booking_id,
             new_start_time=body.new_start_time,
-            new_end_time=body.new_end_time
         )
     except HTTPException:
         raise

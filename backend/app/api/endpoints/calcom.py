@@ -171,16 +171,15 @@ def _sync_crm_booking_from_calcom_webhook(db: Session, trigger_event: str | None
     if trigger_event == "BOOKING_CANCELLED":
         booking.status = "cancelled"
     elif trigger_event == "BOOKING_RESCHEDULED":
-        # Extraer fechas para actualizar la reserva
         start_iso = payload.get("startTime")
         end_iso = payload.get("endTime")
         if start_iso:
-            booking.start_time = datetime.fromisoformat(start_iso.replace("Z", "+00:00"))
+            booking.start_at = datetime.fromisoformat(start_iso.replace("Z", "+00:00"))
         if end_iso:
-            booking.end_time = datetime.fromisoformat(end_iso.replace("Z", "+00:00"))
-        booking.status = "scheduled"
+            booking.end_at = datetime.fromisoformat(end_iso.replace("Z", "+00:00"))
+        booking.status = _calcom_webhook_status(trigger_event, payload)
     elif trigger_event == "BOOKING_CREATED":
-        booking.status = "scheduled"
+        booking.status = _calcom_webhook_status(trigger_event, payload)
 
     booking.provider_booking_id = str(payload.get("id") or "") or booking.provider_booking_id
     booking.provider_booking_uid = str(payload.get("uid") or payload.get("bookingUid") or "") or booking.provider_booking_uid

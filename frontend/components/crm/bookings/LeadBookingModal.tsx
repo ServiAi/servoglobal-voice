@@ -20,13 +20,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { MoreVertical, Trash2, CalendarDays } from 'lucide-react';
 import type { BookingConfigResponse, BookingResponse, LeadDetailResponse } from '@/types/crm';
 
 
@@ -79,6 +72,10 @@ export function LeadBookingModal({
   const [attendeePhone, setAttendeePhone] = useState('');
   const [notes, setNotes] = useState('');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [loadingSlots, setLoadingSlots] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [localError, setLocalError] = useState<string | null>(null);
 
   const handleCancel = async (bookingId: string) => {
     if (!confirm('¿Estás seguro de que deseas cancelar esta reunión?')) return;
@@ -335,7 +332,6 @@ export function LeadBookingModal({
             <aside className="rounded-md border border-border p-3">
               <h3 className="mb-2 text-sm font-semibold text-foreground">Bookings</h3>
               <div className="space-y-2">
-                {sortedBookings.slice(0, 5).map((booking) => (
                 <div className="space-y-2">
                   {sortedBookings.slice(0, 5).map((booking) => (
                     <div key={booking.id} className="group relative rounded-md bg-muted/40 p-2 text-xs">
@@ -344,30 +340,24 @@ export function LeadBookingModal({
                           <div className="font-medium text-foreground">{formatDateTime(booking.start_at, booking.timezone)}</div>
                           <div className="text-muted-foreground capitalize">{booking.status}</div>
                         </div>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100">
-                              <MoreVertical className="h-3 w-3" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem 
-                              onClick={() => handleReschedule(booking)}
-                              disabled={actionLoading === booking.id}
-                            >
-                              <CalendarDays className="mr-2 h-3 w-3" />
-                              Reprogramar
-                            </DropdownMenuItem>
-                            <DropdownMenuItem 
-                              onClick={() => handleCancel(booking.id)}
-                              className="text-red-500"
-                              disabled={actionLoading === booking.id}
-                            >
-                              <Trash2 className="mr-2 h-3 w-3" />
-                              Cancelar
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                        <div className="flex gap-1">
+                          <button
+                            type="button"
+                            onClick={() => handleReschedule(booking)}
+                            disabled={actionLoading === booking.id}
+                            className="rounded px-1.5 py-0.5 text-[10px] font-medium text-fuchsia-500 hover:bg-fuchsia-500/10 disabled:opacity-50"
+                          >
+                            Reprogramar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleCancel(booking.id)}
+                            disabled={actionLoading === booking.id}
+                            className="rounded px-1.5 py-0.5 text-[10px] font-medium text-red-500 hover:bg-red-500/10 disabled:opacity-50"
+                          >
+                            Cancelar
+                          </button>
+                        </div>
                       </div>
                       {actionLoading === booking.id && (
                         <div className="absolute inset-0 flex items-center justify-center bg-background/50 rounded-md">
