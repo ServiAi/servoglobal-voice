@@ -238,7 +238,7 @@ def cancel_lead_booking(
 ) -> Any:
     try:
         return BookingService(db).cancel_lead_booking(
-            tenant_id=context.tenant.id, 
+            tenant_id=context.tenant.id,
             booking_id=booking_id
         )
     except HTTPException:

@@ -184,7 +184,7 @@ def _sync_crm_booking_from_calcom_webhook(db: Session, trigger_event: str | None
     booking.provider_booking_id = str(payload.get("id") or "") or booking.provider_booking_id
     booking.provider_booking_uid = str(payload.get("uid") or payload.get("bookingUid") or "") or booking.provider_booking_uid
     booking.meeting_url = payload.get("meetingUrl") or payload.get("meeting_url") or payload.get("videoCallUrl") or booking.meeting_url
-    
+
     safe_summary = {
         "trigger_event": trigger_event,
         "provider_booking_id": booking.provider_booking_id,
