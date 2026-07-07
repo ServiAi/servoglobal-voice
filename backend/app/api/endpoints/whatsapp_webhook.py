@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import hashlib
+import hmac
+import json
 import logging
 from typing import Any
 
@@ -13,6 +16,15 @@ from app.services.whatsapp_message_service import WhatsAppMessageService
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/webhook/whatsapp", tags=["WhatsApp"])
+
+
+def _signature_is_valid(body: bytes, signature: str | None) -> bool:
+    if not settings.META_APP_SECRET:
+        return True
+    if not signature or not signature.startswith("sha256="):
+        return False
+    expected = hmac.new(settings.META_APP_SECRET.encode("utf-8"), body, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(signature.removeprefix("sha256="), expected)
 
 
 @router.get("")
@@ -32,9 +44,12 @@ async def verify_whatsapp_webhook(
 
 @router.post("")
 async def receive_whatsapp_webhook(request: Request, db: Session = Depends(get_db)) -> dict[str, Any]:
+    body = await request.body()
+    if not _signature_is_valid(body, request.headers.get("X-Hub-Signature-256")):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid webhook signature")
     try:
-        payload = await request.json()
-    except ValueError as exc:
+        payload = json.loads(body)
+    except json.JSONDecodeError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid JSON payload") from exc
     if not isinstance(payload, dict):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid webhook payload")

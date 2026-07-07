@@ -20,6 +20,7 @@
 - `GET /api/v1/crm/leads/{lead_id}/messages`
 - `GET /api/v1/webhook/whatsapp`
 - `POST /api/v1/webhook/whatsapp`
+- `GET /api/v1/notifications/webhook` legacy Meta verification only
 - `GET/POST /api/v1/admin/tenants/{tenant_id}/integrations/whatsapp/config`
 - `POST /api/v1/admin/tenants/{tenant_id}/integrations/whatsapp/test`
 - `GET /api/v1/admin/tenants/{tenant_id}/integrations/whatsapp/templates`
@@ -31,6 +32,7 @@
 - Los logs de webhooks registran solo contadores.
 - No se persisten payloads completos de Meta.
 - Inbound solo se asocia si existe contacto y lead abierto del tenant; no crea leads inseguros.
+- `POST /api/v1/notifications/webhook` no procesa eventos Meta; evita doble procesamiento y apunta al webhook canonico.
 
 ## Archivos principales
 

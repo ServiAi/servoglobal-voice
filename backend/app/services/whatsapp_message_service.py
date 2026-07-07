@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
@@ -16,6 +17,9 @@ from app.services.integration_event_service import IntegrationEventService
 from app.services.whatsapp_client import WhatsAppCloudClient, WhatsAppCloudClientError, sanitize_whatsapp_error
 from app.services.whatsapp_config_service import WhatsAppConfigService
 from app.services.whatsapp_template_service import WhatsAppTemplateService
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -230,6 +234,13 @@ class WhatsAppMessageService:
         return {"statuses": statuses, "inbound": inbound}
 
     def _handle_statuses(self, value: dict[str, Any]) -> int:
+        config = self._config_from_value(value)
+        if config is None:
+            statuses = value.get("statuses") or []
+            if statuses:
+                logger.info("WhatsApp status webhook ignored tenant_unresolved count=%s", len(statuses))
+            return 0
+
         count = 0
         for item in value.get("statuses") or []:
             provider_message_id = item.get("id")
@@ -237,7 +248,10 @@ class WhatsAppMessageService:
             if not provider_message_id or not status:
                 continue
             message = self.db.scalar(
-                select(CrmWhatsAppMessage).where(CrmWhatsAppMessage.provider_message_id == provider_message_id)
+                select(CrmWhatsAppMessage).where(
+                    CrmWhatsAppMessage.tenant_id == config.tenant_id,
+                    CrmWhatsAppMessage.provider_message_id == provider_message_id,
+                )
             )
             if message is None:
                 continue
@@ -275,14 +289,11 @@ class WhatsAppMessageService:
         return count
 
     def _handle_inbound(self, value: dict[str, Any]) -> int:
-        metadata = value.get("metadata") or {}
-        phone_number_id = metadata.get("phone_number_id")
-        if not phone_number_id:
-            return 0
-        config = self.db.scalar(
-            select(TenantWhatsAppConfig).where(TenantWhatsAppConfig.phone_number_id == str(phone_number_id))
-        )
+        config = self._config_from_value(value)
         if config is None:
+            messages = value.get("messages") or []
+            if messages:
+                logger.info("WhatsApp inbound webhook ignored tenant_unresolved count=%s", len(messages))
             return 0
 
         count = 0
@@ -348,6 +359,15 @@ class WhatsAppMessageService:
             if normalize_phone(contact.phone_normalized) == normalized or normalize_phone(contact.phone) == normalized:
                 return contact
         return None
+
+    def _config_from_value(self, value: dict[str, Any]) -> TenantWhatsAppConfig | None:
+        metadata = value.get("metadata") or {}
+        phone_number_id = metadata.get("phone_number_id")
+        if not phone_number_id:
+            return None
+        return self.db.scalar(
+            select(TenantWhatsAppConfig).where(TenantWhatsAppConfig.phone_number_id == str(phone_number_id))
+        )
 
     def _find_open_lead(self, tenant_id: str, contact_id: str) -> CrmLead | None:
         return self.db.scalar(
