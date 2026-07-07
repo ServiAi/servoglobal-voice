@@ -42,8 +42,6 @@ type CrmLeadQuickActionsProps = {
   contactPhone?: string | null;
   onActionComplete?: () => void;
   userRole?: string;
-  contactName?: string | null;
-  contactPhone?: string | null;
 };
 
 export function CrmLeadQuickActions({
@@ -54,8 +52,6 @@ export function CrmLeadQuickActions({
   contactPhone,
   onActionComplete,
   userRole,
-  contactName,
-  contactPhone,
 }: CrmLeadQuickActionsProps) {
   const router = useRouter();
   const [, startTransition] = useTransition();

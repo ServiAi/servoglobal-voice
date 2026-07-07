@@ -3,13 +3,10 @@ import {
   fetchAdminTenantBookingConfig,
   fetchAdminTenantGoogleCalendarConnections,
   fetchAdminTenantIntegrations,
-<<<<<<< HEAD
   fetchAdminTenantVoiceConfig,
   fetchAdminTenantVoiceAgents,
-=======
   fetchAdminTenantWhatsAppConfig,
   fetchAdminTenantWhatsAppTemplates,
->>>>>>> origin/develop
 } from '@/lib/api/crm';
 import {
   redirectAdminAccessFailure,
@@ -18,11 +15,8 @@ import {
 import { ResendIntegrationCard } from '@/components/crm/integrations/ResendIntegrationCard';
 import { CalComIntegrationCard } from '@/components/crm/integrations/CalComIntegrationCard';
 import { GoogleCalendarIntegrationCard } from '@/components/crm/integrations/GoogleCalendarIntegrationCard';
-<<<<<<< HEAD
 import { VoiceIntegrationCard } from '@/components/crm/integrations/VoiceIntegrationCard';
-=======
 import { WhatsAppIntegrationCard } from '@/components/crm/integrations/WhatsAppIntegrationCard';
->>>>>>> origin/develop
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 
@@ -48,13 +42,10 @@ export default async function AdminTenantIntegrationsPage({ params }: Props) {
   const integrationsResult = await fetchAdminTenantIntegrations(accessToken, tenantId);
   const bookingConfigResult = await fetchAdminTenantBookingConfig(accessToken, tenantId);
   const googleConnectionsResult = await fetchAdminTenantGoogleCalendarConnections(accessToken, tenantId);
-<<<<<<< HEAD
   const voiceConfigResult = await fetchAdminTenantVoiceConfig(accessToken, tenantId);
   const voiceAgentsResult = await fetchAdminTenantVoiceAgents(accessToken, tenantId);
-=======
   const whatsappConfigResult = await fetchAdminTenantWhatsAppConfig(accessToken, tenantId);
   const whatsappTemplatesResult = await fetchAdminTenantWhatsAppTemplates(accessToken, tenantId);
->>>>>>> origin/develop
 
   if (!integrationsResult.ok) {
     redirectAdminAccessFailure(integrationsResult.status, locale, returnTo);
@@ -88,17 +79,15 @@ export default async function AdminTenantIntegrationsPage({ params }: Props) {
         mode="admin"
         tenantId={tenantId}
       />
-<<<<<<< HEAD
       <VoiceIntegrationCard
         accessToken={accessToken}
         initialConfig={voiceConfigResult.ok ? voiceConfigResult.data : undefined}
         initialAgents={voiceAgentsResult.ok ? voiceAgentsResult.data : []}
-=======
+      />
       <WhatsAppIntegrationCard
         accessToken={accessToken}
         initialConfig={whatsappConfigResult.ok ? whatsappConfigResult.data : undefined}
         templates={whatsappTemplatesResult.ok ? whatsappTemplatesResult.data : []}
->>>>>>> origin/develop
         mode="admin"
         tenantId={tenantId}
       />
