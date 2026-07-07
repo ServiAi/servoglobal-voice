@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 
 from pydantic import BaseModel, Field
 
@@ -135,3 +135,135 @@ class GoogleCalendarConnectionResponse(BaseModel):
     last_sync_at: Optional[datetime] = None
     last_error_message: Optional[str] = None
     has_tokens: bool
+
+
+class WhatsAppConfigRequest(BaseModel):
+    phone_number_id: str = Field(..., min_length=1, max_length=120)
+    business_account_id: Optional[str] = Field(None, max_length=120)
+    display_phone_number: Optional[str] = Field(None, max_length=80)
+    default_language: str = Field(default="es", max_length=16)
+    status: str = "active"
+    access_token: Optional[str] = Field(None, max_length=2000)
+    webhook_verify_token: Optional[str] = Field(None, max_length=500)
+
+
+class WhatsAppConfigResponse(BaseModel):
+    provider: str = "whatsapp_cloud"
+    status: str
+    phone_number_id: Optional[str] = None
+    business_account_id: Optional[str] = None
+    display_phone_number: Optional[str] = None
+    default_language: str = "es"
+    has_secret: bool
+    has_webhook_secret: bool = False
+    last_health_check_at: Optional[datetime] = None
+    last_error_message: Optional[str] = None
+
+
+class WhatsAppTestRequest(BaseModel):
+    to_phone: Optional[str] = Field(None, max_length=80)
+    template_key: str = Field(default="lead_follow_up", max_length=80)
+
+
+class WhatsAppTestResponse(BaseModel):
+    status: str
+    provider_message_id: Optional[str] = None
+    error_message: Optional[str] = None
+
+
+class WhatsAppTemplateResponse(BaseModel):
+    id: str
+    template_key: str
+    provider_template_name: str
+    name: str
+    category: str
+    language: str
+    body: str
+    variables: dict[str, Any] = Field(default_factory=dict)
+    status: str
+
+
+class VoiceProviderConfigRequest(BaseModel):
+    provider: str = Field(default="ultravox", max_length=40)
+    status: str = Field(default="active", max_length=32)
+    display_name: Optional[str] = Field(None, max_length=120)
+    base_url: Optional[str] = Field(None, max_length=255)
+    default_voice_agent_id: Optional[str] = Field(None, max_length=120)
+    default_from_number: Optional[str] = Field(None, max_length=80)
+    default_language: str = Field(default="es", max_length=16)
+    default_timezone: str = Field(default="America/Bogota", max_length=80)
+    api_key: Optional[str] = Field(None, max_length=1000)
+    webhook_secret: Optional[str] = Field(None, max_length=1000)
+
+
+class VoiceProviderConfigResponse(BaseModel):
+    id: str
+    provider: str = "ultravox"
+    status: str
+    display_name: Optional[str] = None
+    base_url: Optional[str] = None
+    default_voice_agent_id: Optional[str] = None
+    default_from_number: Optional[str] = None
+    default_language: str = "es"
+    default_timezone: str = "America/Bogota"
+    has_secret: bool
+    has_webhook_secret: bool = False
+    last_health_check_at: Optional[datetime] = None
+    last_error_message: Optional[str] = None
+
+
+class VoiceAgentConfigRequest(BaseModel):
+    provider_config_id: Optional[str] = None
+    provider: str = Field(default="ultravox", max_length=40)
+    provider_agent_id: str = Field(..., min_length=1, max_length=120)
+    display_name: str = Field(..., min_length=1, max_length=120)
+    description: Optional[str] = None
+    purpose: str = Field(default="Atención al Cliente", max_length=80)
+    default_language: str = Field(default="es", max_length=16)
+    default_timezone: str = Field(default="America/Bogota", max_length=80)
+    default_voice: Optional[str] = Field(None, max_length=80)
+    default_system_prompt: Optional[str] = None
+    default_tools_json: dict[str, Any] = Field(default_factory=dict)
+    status: str = Field(default="active", max_length=32)
+
+
+class VoiceAgentConfigResponse(BaseModel):
+    id: str
+    provider: str = "ultravox"
+    provider_agent_id: str
+    display_name: str
+    description: Optional[str] = None
+    purpose: str
+    default_language: str
+    default_timezone: str
+    default_voice: Optional[str] = None
+    status: str
+
+
+class VoiceCallActionRequest(BaseModel):
+    agent_config_id: Optional[str] = None
+    to_phone: Optional[str] = Field(None, max_length=80)
+    context: dict[str, Any] = Field(default_factory=dict)
+
+
+class VoiceCallActionResponse(BaseModel):
+    status: str
+    voice_call_id: str
+    provider_call_id: Optional[str] = None
+    provider_session_id: Optional[str] = None
+
+
+class VoiceCallResponse(BaseModel):
+    id: str
+    provider: str
+    provider_call_id: Optional[str] = None
+    provider_session_id: Optional[str] = None
+    provider_agent_id: Optional[str] = None
+    direction: str
+    status: str
+    started_at: Optional[datetime] = None
+    answered_at: Optional[datetime] = None
+    ended_at: Optional[datetime] = None
+    duration_seconds: Optional[int] = None
+    summary: Optional[str] = None
+    created_at: datetime

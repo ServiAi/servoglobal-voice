@@ -3,6 +3,8 @@ import {
   fetchAdminTenantBookingConfig,
   fetchAdminTenantGoogleCalendarConnections,
   fetchAdminTenantIntegrations,
+  fetchAdminTenantWhatsAppConfig,
+  fetchAdminTenantWhatsAppTemplates,
 } from '@/lib/api/crm';
 import {
   redirectAdminAccessFailure,
@@ -11,6 +13,7 @@ import {
 import { ResendIntegrationCard } from '@/components/crm/integrations/ResendIntegrationCard';
 import { CalComIntegrationCard } from '@/components/crm/integrations/CalComIntegrationCard';
 import { GoogleCalendarIntegrationCard } from '@/components/crm/integrations/GoogleCalendarIntegrationCard';
+import { WhatsAppIntegrationCard } from '@/components/crm/integrations/WhatsAppIntegrationCard';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 
@@ -36,6 +39,8 @@ export default async function AdminTenantIntegrationsPage({ params }: Props) {
   const integrationsResult = await fetchAdminTenantIntegrations(accessToken, tenantId);
   const bookingConfigResult = await fetchAdminTenantBookingConfig(accessToken, tenantId);
   const googleConnectionsResult = await fetchAdminTenantGoogleCalendarConnections(accessToken, tenantId);
+  const whatsappConfigResult = await fetchAdminTenantWhatsAppConfig(accessToken, tenantId);
+  const whatsappTemplatesResult = await fetchAdminTenantWhatsAppTemplates(accessToken, tenantId);
 
   if (!integrationsResult.ok) {
     redirectAdminAccessFailure(integrationsResult.status, locale, returnTo);
@@ -66,6 +71,13 @@ export default async function AdminTenantIntegrationsPage({ params }: Props) {
       <ResendIntegrationCard
         accessToken={accessToken}
         initialConfig={resendConfig}
+        mode="admin"
+        tenantId={tenantId}
+      />
+      <WhatsAppIntegrationCard
+        accessToken={accessToken}
+        initialConfig={whatsappConfigResult.ok ? whatsappConfigResult.data : undefined}
+        templates={whatsappTemplatesResult.ok ? whatsappTemplatesResult.data : []}
         mode="admin"
         tenantId={tenantId}
       />

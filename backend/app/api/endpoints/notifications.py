@@ -1,6 +1,9 @@
-from fastapi import APIRouter, Request, HTTPException, Query
+from fastapi import APIRouter, Depends, Request, HTTPException, Query
 from pydantic import BaseModel
 from app.core.config import settings
+from app.db.session import get_db
+from app.services.whatsapp_message_service import WhatsAppMessageService
+from sqlalchemy.orm import Session
 import logging
 
 logger = logging.getLogger(__name__)
@@ -26,14 +29,17 @@ async def verify_webhook(
 
 
 @router.post("/webhook")
-async def receive_webhook(request: Request):
+async def receive_webhook(request: Request, db: Session = Depends(get_db)):
     """
     Recibe eventos de estado de Meta (delivery, read, etc.).
     Los mensajes entrantes ahora son procesados por Chatwoot → /api/v1/chatwoot/webhook.
     """
     payload = await request.json()
-    logger.debug(f"Evento Meta recibido: {payload}")
-    return {"status": "ok"}
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=400, detail="Invalid webhook payload")
+    result = WhatsAppMessageService(db).handle_webhook_payload(payload)
+    logger.info("Webhook Meta procesado statuses=%s inbound=%s", result["statuses"], result["inbound"])
+    return {"status": "ok", **result}
 
 
 # ── Endpoint de notificaciones de reserva ────────────────────────────────────

@@ -159,6 +159,8 @@ export function LeadDetailClient({
             leadId={lead.id}
             accessToken={accessToken}
             currentStageKey={lead.stage.key}
+            contactName={lead.contact.name}
+            contactPhone={lead.contact.phone}
             userRole={userRole}
           />
 

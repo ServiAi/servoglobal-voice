@@ -129,6 +129,53 @@ class TenantVoiceBookingConfig(Base, TimestampMixin):
     default_booking_config = relationship("TenantBookingConfig")
 
 
+class TenantWhatsAppConfig(Base, TimestampMixin):
+    __tablename__ = "tenant_whatsapp_configs"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "provider", name="uq_tenant_whatsapp_configs_tenant_provider"),
+        Index("ix_tenant_whatsapp_configs_tenant_provider", "tenant_id", "provider"),
+        Index("ix_tenant_whatsapp_configs_tenant_status", "tenant_id", "status"),
+        Index("ix_tenant_whatsapp_configs_phone_number", "phone_number_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False)
+    provider: Mapped[str] = mapped_column(String(40), nullable=False, default="whatsapp_cloud")
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="inactive")
+    phone_number_id: Mapped[str] = mapped_column(String(120), nullable=False)
+    business_account_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    display_phone_number: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    default_language: Mapped[str] = mapped_column(String(16), nullable=False, default="es")
+    access_token_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
+    webhook_verify_token_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
+    last_health_check_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    tenant = relationship("Tenant")
+
+
+class TenantWhatsAppTemplate(Base, TimestampMixin):
+    __tablename__ = "tenant_whatsapp_templates"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "template_key", name="uq_tenant_whatsapp_templates_tenant_key"),
+        Index("ix_tenant_whatsapp_templates_tenant_key", "tenant_id", "template_key"),
+        Index("ix_tenant_whatsapp_templates_tenant_status", "tenant_id", "status"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False)
+    template_key: Mapped[str] = mapped_column(String(80), nullable=False)
+    provider_template_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    category: Mapped[str] = mapped_column(String(40), nullable=False, default="transactional")
+    language: Mapped[str] = mapped_column(String(16), nullable=False, default="es")
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    variables_json: Mapped[dict] = mapped_column(sa.JSON, nullable=False, default=dict)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="active")
+
+    tenant = relationship("Tenant")
+
+
 class TenantEmailConfig(Base, TimestampMixin):
     __tablename__ = "tenant_email_configs"
     __table_args__ = (
@@ -354,3 +401,56 @@ class TenantFormSubmissionAnswer(Base):
     tenant = relationship("Tenant")
     submission = relationship("TenantFormSubmission", back_populates="answers")
     field = relationship("TenantFormField")
+
+
+class TenantVoiceProviderConfig(Base, TimestampMixin):
+    __tablename__ = "tenant_voice_provider_configs"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "provider", name="uq_tenant_voice_provider_configs_tenant_provider"),
+        Index("ix_tenant_voice_provider_configs_tenant_provider", "tenant_id", "provider"),
+        Index("ix_tenant_voice_provider_configs_tenant_status", "tenant_id", "status"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False)
+    provider: Mapped[str] = mapped_column(String(40), nullable=False, default="ultravox")
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="inactive")
+    display_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    base_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    default_voice_agent_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    default_from_number: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    default_language: Mapped[str] = mapped_column(String(16), nullable=False, default="es")
+    default_timezone: Mapped[str] = mapped_column(String(80), nullable=False, default="America/Bogota")
+    api_key_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
+    webhook_secret_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
+    last_health_check_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    tenant = relationship("Tenant")
+
+
+class TenantVoiceAgentConfig(Base, TimestampMixin):
+    __tablename__ = "tenant_voice_agent_configs"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "provider_agent_id", name="uq_tenant_voice_agent_configs_tenant_agent"),
+        Index("ix_tenant_voice_agent_configs_tenant_agent", "tenant_id", "provider_agent_id"),
+        Index("ix_tenant_voice_agent_configs_tenant_status", "tenant_id", "status"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False)
+    provider_config_id: Mapped[str | None] = mapped_column(ForeignKey("tenant_voice_provider_configs.id"), nullable=True)
+    provider: Mapped[str] = mapped_column(String(40), nullable=False, default="ultravox")
+    provider_agent_id: Mapped[str] = mapped_column(String(120), nullable=False)
+    display_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    purpose: Mapped[str] = mapped_column(String(80), nullable=False, default="Atención al Cliente")
+    default_language: Mapped[str] = mapped_column(String(16), nullable=False, default="es")
+    default_timezone: Mapped[str] = mapped_column(String(80), nullable=False, default="America/Bogota")
+    default_voice: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    default_system_prompt: Mapped[str | None] = mapped_column(Text, nullable=True)
+    default_tools_json: Mapped[dict] = mapped_column(sa.JSON, nullable=False, default=dict)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="active")
+
+    tenant = relationship("Tenant")
+    provider_config = relationship("TenantVoiceProviderConfig")

@@ -473,31 +473,7 @@ def lead_action_whatsapp(
     )
 
 
-@router.post("/leads/{lead_id}/actions/call", response_model=dict)
-def lead_action_call(
-    lead_id: str,
-    context: AuthContext = Depends(require_roles(["platform_admin", "tenant_admin", "tenant_analyst"])),
-    db: Session = Depends(get_db),
-) -> Any:
-    tenant_id = context.tenant.id
-    lead_service = CrmLeadService(db)
-    lead = _get_action_lead_or_404(db, tenant_id, lead_id)
-    _require_contact_phone(lead, "Lead does not have a phone number for outbound call.")
 
-    # Log action request activity
-    lead_service.activity_service.create_activity(
-        tenant_id=tenant_id,
-        lead_id=lead.id,
-        contact_id=lead.contact_id,
-        activity_type="call_requested",
-        title="Llamada saliente iniciada (Intento)",
-        description="El usuario intentó iniciar una llamada saliente al contacto desde el CRM.",
-    )
-
-    raise HTTPException(
-        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-        detail="VoIP/SIP Trunk integration is not configured for this tenant. Please contact support.",
-    )
 
 
 @router.post("/leads/{lead_id}/actions/schedule", response_model=dict)
