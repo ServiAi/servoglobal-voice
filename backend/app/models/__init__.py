@@ -8,6 +8,8 @@ from app.models.integrations import (
     TenantEmailTemplate,
     TenantIntegration,
     TenantIntegrationEvent,
+    TenantVoiceProviderConfig,
+    TenantVoiceAgentConfig,
     TenantWhatsAppConfig,
     TenantWhatsAppTemplate,
 )
@@ -19,6 +21,8 @@ from app.models.crm import (
     CrmPipelineStage,
     CrmTask,
     CrmWhatsAppMessage,
+    CrmVoiceCall,
+    CrmVoiceCallEvent,
 )
 
 __all__ = [
@@ -36,6 +40,8 @@ __all__ = [
     "TenantEmailTemplate",
     "TenantIntegration",
     "TenantIntegrationEvent",
+    "TenantVoiceProviderConfig",
+    "TenantVoiceAgentConfig",
     "TenantWhatsAppConfig",
     "TenantWhatsAppTemplate",
     "TenantMembership",
@@ -47,5 +53,7 @@ __all__ = [
     "CrmActivity",
     "CrmCallContext",
     "CrmTask",
+    "CrmVoiceCall",
+    "CrmVoiceCallEvent",
     "CrmWhatsAppMessage",
 ]

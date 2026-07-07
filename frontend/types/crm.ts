@@ -589,3 +589,90 @@ export type PublicFormResponse = {
   };
 };
 
+export type VoiceProviderConfigRequest = {
+  provider?: string;
+  display_name?: string | null;
+  api_key?: string | null;
+  webhook_secret?: string | null;
+  base_url?: string | null;
+  default_voice_agent_id?: string | null;
+  default_from_number?: string | null;
+  default_language?: string;
+  default_timezone?: string;
+  status?: string;
+};
+
+export type VoiceProviderConfigResponse = {
+  id: string;
+  provider: string;
+  status: string;
+  display_name?: string | null;
+  base_url?: string | null;
+  default_voice_agent_id?: string | null;
+  default_from_number?: string | null;
+  default_language: string;
+  default_timezone: string;
+  has_secret: boolean;
+  has_webhook_secret: boolean;
+  last_health_check_at?: string | null;
+  last_error_message?: string | null;
+};
+
+export type VoiceAgentConfigRequest = {
+  provider_config_id?: string | null;
+  provider?: string;
+  provider_agent_id: string;
+  display_name: string;
+  description?: string | null;
+  purpose?: string;
+  default_language?: string;
+  default_timezone?: string;
+  default_voice?: string | null;
+  default_system_prompt?: string | null;
+  default_tools_json?: Record<string, unknown>;
+  status?: string;
+};
+
+export type VoiceAgentConfigResponse = {
+  id: string;
+  provider: string;
+  provider_agent_id: string;
+  display_name: string;
+  description?: string | null;
+  purpose: string;
+  default_language: string;
+  default_timezone: string;
+  default_voice?: string | null;
+  status: string;
+};
+
+export type VoiceCallActionRequest = {
+  agent_config_id?: string | null;
+  provider_agent_id?: string | null;
+  to_phone?: string | null;
+  context?: Record<string, unknown>;
+};
+
+export type VoiceCallActionResponse = {
+  status: string;
+  voice_call_id?: string | null;
+  provider_call_id?: string | null;
+  provider_session_id?: string | null;
+  summary?: string | null;
+};
+
+export type VoiceCallResponse = {
+  id: string;
+  provider: string;
+  provider_call_id?: string | null;
+  provider_session_id?: string | null;
+  provider_agent_id?: string | null;
+  direction: string;
+  status: string;
+  started_at?: string | null;
+  answered_at?: string | null;
+  ended_at?: string | null;
+  duration_seconds?: number | null;
+  summary?: string | null;
+  created_at: string;
+};

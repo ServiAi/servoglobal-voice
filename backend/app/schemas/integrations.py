@@ -251,6 +251,9 @@ class VoiceCallActionResponse(BaseModel):
     voice_call_id: str
     provider_call_id: Optional[str] = None
     provider_session_id: Optional[str] = None
+    provider_call_id: Optional[str] = None
+    provider_session_id: Optional[str] = None
+    summary: Optional[str] = None
 
 
 class VoiceCallResponse(BaseModel):

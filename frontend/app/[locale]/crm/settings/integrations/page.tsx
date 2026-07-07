@@ -4,12 +4,15 @@ import {
   fetchBookingConfig,
   fetchGoogleCalendarConnections,
   fetchTenantIntegrations,
+  fetchVoiceConfig,
+  fetchVoiceAgents,
   fetchWhatsAppConfig,
   fetchWhatsAppTemplates,
 } from '@/lib/api/crm';
 import { CalComIntegrationCard } from '@/components/crm/integrations/CalComIntegrationCard';
 import { GoogleCalendarIntegrationCard } from '@/components/crm/integrations/GoogleCalendarIntegrationCard';
 import { ResendIntegrationCard } from '@/components/crm/integrations/ResendIntegrationCard';
+import { VoiceIntegrationCard } from '@/components/crm/integrations/VoiceIntegrationCard';
 import { WhatsAppIntegrationCard } from '@/components/crm/integrations/WhatsAppIntegrationCard';
 
 type Props = {
@@ -27,6 +30,8 @@ export default async function CrmIntegrationsPage({ params }: Props) {
   const integrationsResult = await fetchTenantIntegrations(accessToken);
   const bookingConfigResult = await fetchBookingConfig(accessToken);
   const googleConnectionsResult = await fetchGoogleCalendarConnections(accessToken);
+  const voiceConfigResult = await fetchVoiceConfig(accessToken);
+  const voiceAgentsResult = await fetchVoiceAgents(accessToken);
   const whatsappConfigResult = await fetchWhatsAppConfig(accessToken);
   const whatsappTemplatesResult = await fetchWhatsAppTemplates(accessToken);
 
@@ -46,6 +51,11 @@ export default async function CrmIntegrationsPage({ params }: Props) {
         </div>
       )}
       <ResendIntegrationCard accessToken={accessToken} initialConfig={resendConfig} />
+      <VoiceIntegrationCard
+        accessToken={accessToken}
+        initialConfig={voiceConfigResult.ok ? voiceConfigResult.data : undefined}
+        initialAgents={voiceAgentsResult.ok ? voiceAgentsResult.data : []}
+      />
       <WhatsAppIntegrationCard
         accessToken={accessToken}
         initialConfig={whatsappConfigResult.ok ? whatsappConfigResult.data : undefined}

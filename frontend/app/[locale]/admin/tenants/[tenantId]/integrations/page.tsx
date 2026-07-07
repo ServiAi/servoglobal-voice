@@ -3,6 +3,8 @@ import {
   fetchAdminTenantBookingConfig,
   fetchAdminTenantGoogleCalendarConnections,
   fetchAdminTenantIntegrations,
+  fetchAdminTenantVoiceConfig,
+  fetchAdminTenantVoiceAgents,
   fetchAdminTenantWhatsAppConfig,
   fetchAdminTenantWhatsAppTemplates,
 } from '@/lib/api/crm';
@@ -13,6 +15,7 @@ import {
 import { ResendIntegrationCard } from '@/components/crm/integrations/ResendIntegrationCard';
 import { CalComIntegrationCard } from '@/components/crm/integrations/CalComIntegrationCard';
 import { GoogleCalendarIntegrationCard } from '@/components/crm/integrations/GoogleCalendarIntegrationCard';
+import { VoiceIntegrationCard } from '@/components/crm/integrations/VoiceIntegrationCard';
 import { WhatsAppIntegrationCard } from '@/components/crm/integrations/WhatsAppIntegrationCard';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
@@ -39,6 +42,8 @@ export default async function AdminTenantIntegrationsPage({ params }: Props) {
   const integrationsResult = await fetchAdminTenantIntegrations(accessToken, tenantId);
   const bookingConfigResult = await fetchAdminTenantBookingConfig(accessToken, tenantId);
   const googleConnectionsResult = await fetchAdminTenantGoogleCalendarConnections(accessToken, tenantId);
+  const voiceConfigResult = await fetchAdminTenantVoiceConfig(accessToken, tenantId);
+  const voiceAgentsResult = await fetchAdminTenantVoiceAgents(accessToken, tenantId);
   const whatsappConfigResult = await fetchAdminTenantWhatsAppConfig(accessToken, tenantId);
   const whatsappTemplatesResult = await fetchAdminTenantWhatsAppTemplates(accessToken, tenantId);
 
@@ -73,6 +78,11 @@ export default async function AdminTenantIntegrationsPage({ params }: Props) {
         initialConfig={resendConfig}
         mode="admin"
         tenantId={tenantId}
+      />
+      <VoiceIntegrationCard
+        accessToken={accessToken}
+        initialConfig={voiceConfigResult.ok ? voiceConfigResult.data : undefined}
+        initialAgents={voiceAgentsResult.ok ? voiceAgentsResult.data : []}
       />
       <WhatsAppIntegrationCard
         accessToken={accessToken}

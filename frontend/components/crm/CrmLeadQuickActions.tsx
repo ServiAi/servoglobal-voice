@@ -32,6 +32,7 @@ import { canUseOutboundActions, canChangeTerminalStage } from '@/lib/permissions
 import { CrmSendEmailModal } from '@/components/crm/CrmSendEmailModal';
 import { CrmSendWhatsAppModal } from '@/components/crm/CrmSendWhatsAppModal';
 import { LeadBookingModal } from '@/components/crm/bookings/LeadBookingModal';
+import { CrmSendVoiceCallModal } from '@/components/crm/CrmSendVoiceCallModal';
 
 type CrmLeadQuickActionsProps = {
   leadId: string;
@@ -63,6 +64,7 @@ export function CrmLeadQuickActions({
   const [whatsappModalOpen, setWhatsappModalOpen] = useState(false);
   const [emailModalOpen, setEmailModalOpen] = useState(false);
   const [bookingModalOpen, setBookingModalOpen] = useState(false);
+  const [voiceCallModalOpen, setVoiceCallModalOpen] = useState(false);
   const [reason, setReason] = useState('');
   const [notes, setNotes] = useState('');
   const [validationError, setValidationError] = useState<string | null>(null);
@@ -219,15 +221,11 @@ export function CrmLeadQuickActions({
             <Button
               variant="outline" size="sm"
               disabled={loadingAction !== null}
-              onClick={() => handleOutboundAction('call')}
-              className="flex items-center justify-start gap-2 bg-zinc-950/20 text-foreground hover:bg-blue-500/10 hover:text-blue-500 hover:border-blue-500/20 transition cursor-pointer"
+              onClick={() => setVoiceCallModalOpen(true)}
+              className="flex items-center justify-start gap-2 bg-zinc-950/20 text-foreground hover:bg-indigo-500/10 hover:text-indigo-500 hover:border-indigo-500/20 transition cursor-pointer"
             >
-              {loadingAction === 'call' ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Phone className="h-4 w-4 text-blue-500" />
-              )}
-              <span className="truncate">Llamar de nuevo</span>
+              <Phone className="h-4 w-4 text-indigo-500" />
+              <span className="truncate">Llamar (Agente AI)</span>
             </Button>
 
             <Button
@@ -414,6 +412,22 @@ export function CrmLeadQuickActions({
         }}
       />
 
+      <CrmSendVoiceCallModal
+        open={voiceCallModalOpen}
+        onOpenChange={setVoiceCallModalOpen}
+        accessToken={accessToken}
+        leadId={leadId}
+        contactName={contactName}
+        contactPhone={contactPhone}
+        onError={(message) => triggerStatus('error', message)}
+        onSuccess={(message) => triggerStatus('success', message)}
+        onSent={() => {
+          startTransition(() => {
+            router.refresh();
+            if (onActionComplete) onActionComplete();
+          });
+        }}
+      />
     </div>
   );
 }
