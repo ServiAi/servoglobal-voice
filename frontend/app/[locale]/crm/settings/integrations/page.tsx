@@ -1,9 +1,16 @@
 import { redirect } from 'next/navigation';
 import { getAccessToken } from '@/lib/auth/server';
-import { fetchBookingConfig, fetchGoogleCalendarConnections, fetchTenantIntegrations } from '@/lib/api/crm';
+import {
+  fetchBookingConfig,
+  fetchGoogleCalendarConnections,
+  fetchTenantIntegrations,
+  fetchWhatsAppConfig,
+  fetchWhatsAppTemplates,
+} from '@/lib/api/crm';
 import { CalComIntegrationCard } from '@/components/crm/integrations/CalComIntegrationCard';
 import { GoogleCalendarIntegrationCard } from '@/components/crm/integrations/GoogleCalendarIntegrationCard';
 import { ResendIntegrationCard } from '@/components/crm/integrations/ResendIntegrationCard';
+import { WhatsAppIntegrationCard } from '@/components/crm/integrations/WhatsAppIntegrationCard';
 
 type Props = {
   params: Promise<{ locale: string }>;
@@ -20,6 +27,9 @@ export default async function CrmIntegrationsPage({ params }: Props) {
   const integrationsResult = await fetchTenantIntegrations(accessToken);
   const bookingConfigResult = await fetchBookingConfig(accessToken);
   const googleConnectionsResult = await fetchGoogleCalendarConnections(accessToken);
+  const whatsappConfigResult = await fetchWhatsAppConfig(accessToken);
+  const whatsappTemplatesResult = await fetchWhatsAppTemplates(accessToken);
+
   const resendConfig = integrationsResult.ok
     ? integrationsResult.data.find((item) => item.provider === 'resend')
     : undefined;
@@ -36,6 +46,11 @@ export default async function CrmIntegrationsPage({ params }: Props) {
         </div>
       )}
       <ResendIntegrationCard accessToken={accessToken} initialConfig={resendConfig} />
+      <WhatsAppIntegrationCard
+        accessToken={accessToken}
+        initialConfig={whatsappConfigResult.ok ? whatsappConfigResult.data : undefined}
+        templates={whatsappTemplatesResult.ok ? whatsappTemplatesResult.data : []}
+      />
       <CalComIntegrationCard accessToken={accessToken} initialConfig={bookingConfigResult.ok ? bookingConfigResult.data : undefined} />
       <GoogleCalendarIntegrationCard
         accessToken={accessToken}

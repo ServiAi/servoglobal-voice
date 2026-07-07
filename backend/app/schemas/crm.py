@@ -229,6 +229,42 @@ class CallSummaryAssetResponse(BaseModel):
     file_size_bytes: int
 
 
+class WhatsAppActionRequest(BaseModel):
+    template_key: str = Field(default="lead_follow_up", min_length=1, max_length=80)
+    message: Optional[str] = None
+    variables: dict[str, Any] = Field(default_factory=dict)
+    preview_only: bool = False
+
+
+class WhatsAppActionResponse(BaseModel):
+    status: str
+    whatsapp_message_id: Optional[str] = None
+    provider_message_id: Optional[str] = None
+    preview: Optional[dict[str, Any]] = None
+    error_message: Optional[str] = None
+
+
+class WhatsAppMessageResponse(BaseModel):
+    id: str
+    lead_id: Optional[str] = None
+    contact_id: Optional[str] = None
+    template_key: Optional[str] = None
+    provider_message_id: Optional[str] = None
+    direction: str
+    to_phone: Optional[str] = None
+    from_phone: Optional[str] = None
+    message_preview: Optional[str] = None
+    status: str
+    error_message: Optional[str] = None
+    sent_at: Optional[datetime] = None
+    delivered_at: Optional[datetime] = None
+    read_at: Optional[datetime] = None
+    failed_at: Optional[datetime] = None
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class CallSummaryInsertedRequest(BaseModel):
     variant: str = "full"
 
