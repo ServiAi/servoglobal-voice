@@ -316,6 +316,46 @@ export type ResendTestEmailRequest = {
   to_email: string;
 };
 
+export type WhatsAppConfigRequest = {
+  phone_number_id: string;
+  business_account_id?: string | null;
+  display_phone_number?: string | null;
+  default_language?: string;
+  status?: string;
+  access_token?: string | null;
+  webhook_verify_token?: string | null;
+};
+
+export type WhatsAppConfigResponse = {
+  provider: 'whatsapp_cloud';
+  status: 'active' | 'inactive' | 'error' | string;
+  phone_number_id?: string | null;
+  business_account_id?: string | null;
+  display_phone_number?: string | null;
+  default_language: string;
+  has_secret: boolean;
+  has_webhook_secret: boolean;
+  last_health_check_at?: string | null;
+  last_error_message?: string | null;
+};
+
+export type WhatsAppTestRequest = {
+  to_phone?: string | null;
+  template_key?: string;
+};
+
+export type WhatsAppTemplateResponse = {
+  id: string;
+  template_key: string;
+  provider_template_name: string;
+  name: string;
+  category: string;
+  language: string;
+  body: string;
+  variables: Record<string, unknown>;
+  status: string;
+};
+
 export type BookingConfigRequest = {
   cal_api_key?: string | null;
   status?: string;
@@ -420,6 +460,46 @@ export type EmailActionResponse = {
     html: string;
     text: string;
   } | null;
+};
+
+export type WhatsAppActionRequest = {
+  template_key: string;
+  message?: string | null;
+  variables?: Record<string, unknown>;
+  preview_only?: boolean;
+};
+
+export type WhatsAppActionResponse = {
+  status: 'preview' | 'sent' | 'failed' | string;
+  whatsapp_message_id?: string | null;
+  provider_message_id?: string | null;
+  preview?: {
+    to_phone: string;
+    template_key: string;
+    provider_template_name: string;
+    message: string;
+    variables: Record<string, unknown>;
+  } | null;
+  error_message?: string | null;
+};
+
+export type WhatsAppMessageResponse = {
+  id: string;
+  lead_id?: string | null;
+  contact_id?: string | null;
+  template_key?: string | null;
+  provider_message_id?: string | null;
+  direction: 'inbound' | 'outbound' | string;
+  to_phone?: string | null;
+  from_phone?: string | null;
+  message_preview?: string | null;
+  status: string;
+  error_message?: string | null;
+  sent_at?: string | null;
+  delivered_at?: string | null;
+  read_at?: string | null;
+  failed_at?: string | null;
+  created_at: string;
 };
 
 export type EmailTemplateItem = {

@@ -1,13 +1,14 @@
-from fastapi import APIRouter, Request, HTTPException, Query
-from pydantic import BaseModel
-from app.core.config import settings
 import logging
+
+from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel
+
+from app.core.config import settings
+
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/notifications", tags=["Notifications"])
 
-
-# ── Verificación del webhook Meta (handshake) ─────────────────────────────────
 
 @router.get("/webhook")
 async def verify_webhook(
@@ -15,44 +16,27 @@ async def verify_webhook(
     hub_verify_token: str = Query(None, alias="hub.verify_token"),
     hub_challenge: str = Query(None, alias="hub.challenge"),
 ):
-    """
-    Verificación inicial requerida por Meta/WhatsApp Cloud API.
-    Meta hace un GET con hub.challenge y esperamos devolverlo.
-    """
+    """Legacy Meta verification endpoint kept for backward compatibility."""
     if hub_mode == "subscribe" and hub_verify_token == settings.WHATSAPP_VERIFY_TOKEN:
-        logger.info("Webhook Meta verificado correctamente.")
+        logger.info("Legacy Meta webhook verified")
         return int(hub_challenge)
-    raise HTTPException(status_code=403, detail="Token de verificación inválido")
+    raise HTTPException(status_code=403, detail="Invalid verification token")
 
 
 @router.post("/webhook")
-async def receive_webhook(request: Request):
-    """
-    Recibe eventos de estado de Meta (delivery, read, etc.).
-    Los mensajes entrantes ahora son procesados por Chatwoot → /api/v1/chatwoot/webhook.
-    """
-    payload = await request.json()
-    logger.debug(f"Evento Meta recibido: {payload}")
-    return {"status": "ok"}
+async def receive_webhook():
+    """Legacy Meta webhook; canonical processing lives at /api/v1/webhook/whatsapp."""
+    logger.info("Legacy Meta webhook ignored; use /api/v1/webhook/whatsapp")
+    return {"status": "ignored", "canonical_webhook": "/api/v1/webhook/whatsapp"}
 
-
-# ── Endpoint de notificaciones de reserva ────────────────────────────────────
 
 class BookingNotificationRequest(BaseModel):
     """
     Payload para disparar ambas notificaciones de cita:
-      - alerta_lead_owner    → equipo Serviglobal (3 números fijos)
-      - cita_confirmada_cliente → número del cliente
-
-    Ejemplo:
-    {
-        "client_phone": "+573201234567",
-        "client_name": "Juan García",
-        "date_str": "Miércoles 2 de abril de 2026",
-        "time_str": "10:00 AM",
-        "client_email": "juan@empresa.com"    (opcional)
-    }
+      - alerta_lead_owner -> equipo Serviglobal (3 numeros fijos)
+      - cita_confirmada_cliente -> numero del cliente
     """
+
     client_phone: str
     client_name: str
     date_str: str
@@ -63,25 +47,7 @@ class BookingNotificationRequest(BaseModel):
 @router.post("/booking")
 async def send_booking_notifications(request: BookingNotificationRequest):
     """
-    Dispara las dos plantillas de notificación de cita:
-
-    1. **alerta_lead_owner** → enviada a los 3 números del equipo Serviglobal:
-       +573106666709, +573014023104, +573178193641
-
-    2. **cita_confirmada_cliente** → enviada al número del cliente
-
-    Ambas se registran como notas internas en Chatwoot CRM (visibles solo para agentes).
-
-    Usar cuando:
-    - El agente de voz agendó una cita
-    - El frontend creó una reserva en Cal.com
-    - Cualquier flujo que confirme una cita
-
-    Returns:
-        {
-            "alerta_owners": [{"phone": "+57...", "ok": true}, ...],
-            "confirmacion_cliente": {"phone": "+57...", "ok": true}
-        }
+    Dispara las dos plantillas de notificacion de cita.
     """
     from app.services.notification_service import notification_service
 
@@ -96,5 +62,5 @@ async def send_booking_notifications(request: BookingNotificationRequest):
         return {"status": "ok", "results": results}
 
     except Exception as e:
-        logger.error(f"Error en send_booking_notifications: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error en send_booking_notifications: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e

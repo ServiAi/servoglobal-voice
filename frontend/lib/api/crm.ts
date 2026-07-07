@@ -17,6 +17,13 @@ import type {
   ResendIntegrationConfigRequest,
   ResendIntegrationConfigResponse,
   ResendTestEmailRequest,
+  WhatsAppActionRequest,
+  WhatsAppActionResponse,
+  WhatsAppConfigRequest,
+  WhatsAppConfigResponse,
+  WhatsAppMessageResponse,
+  WhatsAppTemplateResponse,
+  WhatsAppTestRequest,
   BookingConfigRequest,
   BookingConfigResponse,
   BookingCreateRequest,
@@ -314,7 +321,7 @@ export function deleteAllCrmLeads(accessToken: string) {
 
 // --- Lead Outbound Actions ---
 export function leadActionWhatsapp(accessToken: string, leadId: string) {
-  return requestCrmEndpoint<{ message: string }>('POST', `leads/${leadId}/actions/whatsapp`, accessToken);
+  return sendLeadWhatsApp(accessToken, leadId, { template_key: 'lead_follow_up' });
 }
 
 export function leadActionCall(accessToken: string, leadId: string) {
@@ -339,6 +346,22 @@ export function previewLeadEmail(accessToken: string, leadId: string, payload: E
 
 export function sendLeadEmail(accessToken: string, leadId: string, payload: EmailActionRequest) {
   return leadActionEmail(accessToken, leadId, { ...payload, preview_only: false });
+}
+
+export function leadActionWhatsApp(accessToken: string, leadId: string, payload: WhatsAppActionRequest) {
+  return requestCrmEndpoint<WhatsAppActionResponse>('POST', `leads/${leadId}/actions/whatsapp`, accessToken, undefined, payload);
+}
+
+export function previewLeadWhatsApp(accessToken: string, leadId: string, payload: WhatsAppActionRequest) {
+  return leadActionWhatsApp(accessToken, leadId, { ...payload, preview_only: true });
+}
+
+export function sendLeadWhatsApp(accessToken: string, leadId: string, payload: WhatsAppActionRequest) {
+  return leadActionWhatsApp(accessToken, leadId, { ...payload, preview_only: false });
+}
+
+export function fetchLeadMessages(accessToken: string, leadId: string) {
+  return requestCrmEndpoint<WhatsAppMessageResponse[]>('GET', `leads/${leadId}/messages`, accessToken);
 }
 
 export function fetchCallSummary(accessToken: string, leadId: string) {
@@ -380,6 +403,28 @@ export function fetchTenantIntegrations(accessToken: string) {
 
 export function fetchBookingConfig(accessToken: string) {
   return requestIntegrationEndpoint<BookingConfigResponse>('GET', 'booking/config', accessToken);
+}
+
+export function fetchWhatsAppConfig(accessToken: string) {
+  return requestIntegrationEndpoint<WhatsAppConfigResponse>('GET', 'whatsapp/config', accessToken);
+}
+
+export function configureWhatsAppIntegration(accessToken: string, payload: WhatsAppConfigRequest) {
+  return requestIntegrationEndpoint<WhatsAppConfigResponse>('POST', 'whatsapp/config', accessToken, undefined, payload);
+}
+
+export function testWhatsAppIntegration(accessToken: string, payload: WhatsAppTestRequest) {
+  return requestIntegrationEndpoint<{ status: string; provider_message_id?: string | null; error_message?: string | null }>(
+    'POST',
+    'whatsapp/test',
+    accessToken,
+    undefined,
+    payload
+  );
+}
+
+export function fetchWhatsAppTemplates(accessToken: string) {
+  return requestIntegrationEndpoint<WhatsAppTemplateResponse[]>('GET', 'whatsapp/templates', accessToken);
 }
 
 export function configureCalComIntegration(accessToken: string, payload: BookingConfigRequest) {
@@ -480,6 +525,10 @@ export function fetchAdminTenantBookingConfig(accessToken: string, tenantId: str
   return requestBackendEndpoint<BookingConfigResponse>('GET', 'admin', `tenants/${tenantId}/integrations/booking/config`, accessToken);
 }
 
+export function fetchAdminTenantWhatsAppConfig(accessToken: string, tenantId: string) {
+  return requestBackendEndpoint<WhatsAppConfigResponse>('GET', 'admin', `tenants/${tenantId}/integrations/whatsapp/config`, accessToken);
+}
+
 export function configureAdminTenantCalComIntegration(accessToken: string, tenantId: string, payload: BookingConfigRequest) {
   return requestBackendEndpoint<BookingConfigResponse>(
     'POST',
@@ -536,6 +585,45 @@ export function testAdminTenantResendIntegration(
     accessToken,
     undefined,
     payload
+  );
+}
+
+export function configureAdminTenantWhatsAppIntegration(
+  accessToken: string,
+  tenantId: string,
+  payload: WhatsAppConfigRequest
+) {
+  return requestBackendEndpoint<WhatsAppConfigResponse>(
+    'POST',
+    'admin',
+    `tenants/${tenantId}/integrations/whatsapp/config`,
+    accessToken,
+    undefined,
+    payload
+  );
+}
+
+export function testAdminTenantWhatsAppIntegration(
+  accessToken: string,
+  tenantId: string,
+  payload: WhatsAppTestRequest
+) {
+  return requestBackendEndpoint<{ status: string; provider_message_id?: string | null; error_message?: string | null }>(
+    'POST',
+    'admin',
+    `tenants/${tenantId}/integrations/whatsapp/test`,
+    accessToken,
+    undefined,
+    payload
+  );
+}
+
+export function fetchAdminTenantWhatsAppTemplates(accessToken: string, tenantId: string) {
+  return requestBackendEndpoint<WhatsAppTemplateResponse[]>(
+    'GET',
+    'admin',
+    `tenants/${tenantId}/integrations/whatsapp/templates`,
+    accessToken
   );
 }
 

@@ -37,6 +37,11 @@ from app.schemas.integrations import (
     ResendIntegrationConfigResponse,
     ResendTestEmailRequest,
     ResendTestEmailResponse,
+    WhatsAppConfigRequest,
+    WhatsAppConfigResponse,
+    WhatsAppTemplateResponse,
+    WhatsAppTestRequest,
+    WhatsAppTestResponse,
     VoiceProviderConfigRequest,
     VoiceProviderConfigResponse,
     VoiceAgentConfigRequest,
@@ -54,6 +59,8 @@ from app.services.voice_agent_service import VoiceAgentService
 from app.services.google_calendar_oauth_service import GoogleCalendarOAuthService
 from app.services.integration_event_service import IntegrationEventService
 from app.services.integration_service import IntegrationService
+from app.services.whatsapp_config_service import WhatsAppConfigService
+from app.services.whatsapp_template_service import WhatsAppTemplateService
 from app.services.voice_config_service import VoiceConfigService
 from app.services.voice_agent_service import VoiceAgentService
 
@@ -156,7 +163,6 @@ def list_tenants(
         }
         for t in tenants
     ]
-
 
 @router.get("/tenants/usage-summary", response_model=list[dict[str, Any]])
 def list_tenants_usage_summary(
@@ -689,6 +695,87 @@ def test_tenant_resend_admin(
     if result.status == "failed":
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=result.error_message or "Resend test failed.")
     return ResendTestEmailResponse(status=result.status, provider_email_id=result.provider_email_id)
+
+
+# --- Admin WhatsApp Config ---
+
+@router.get(
+    "/tenants/{tenant_id}/integrations/whatsapp/config",
+    response_model=WhatsAppConfigResponse,
+)
+def get_tenant_whatsapp_config_admin(
+    tenant_id: str,
+    db: Session = Depends(get_current_internal_db),
+) -> Any:
+    try:
+        OnboardingService(db).get_tenant(tenant_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return WhatsAppConfigService(db).get_response(tenant_id)
+
+
+@router.post(
+    "/tenants/{tenant_id}/integrations/whatsapp/config",
+    response_model=WhatsAppConfigResponse,
+)
+def configure_tenant_whatsapp_admin(
+    tenant_id: str,
+    body: WhatsAppConfigRequest,
+    db: Session = Depends(get_current_internal_db),
+) -> Any:
+    try:
+        OnboardingService(db).get_tenant(tenant_id)
+        return WhatsAppConfigService(db).upsert_config(tenant_id, body)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+
+
+@router.post(
+    "/tenants/{tenant_id}/integrations/whatsapp/test",
+    response_model=WhatsAppTestResponse,
+)
+def test_tenant_whatsapp_admin(
+    tenant_id: str,
+    body: WhatsAppTestRequest,
+    db: Session = Depends(get_current_internal_db),
+) -> Any:
+    try:
+        OnboardingService(db).get_tenant(tenant_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    result = WhatsAppConfigService(db).test_connection(tenant_id)
+    if result.status == "failed":
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=result.error_message or "WhatsApp test failed.")
+    return result
+
+
+@router.get(
+    "/tenants/{tenant_id}/integrations/whatsapp/templates",
+    response_model=list[WhatsAppTemplateResponse],
+)
+def list_tenant_whatsapp_templates_admin(
+    tenant_id: str,
+    db: Session = Depends(get_current_internal_db),
+) -> Any:
+    try:
+        OnboardingService(db).get_tenant(tenant_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    templates = WhatsAppTemplateService(db).list_templates(tenant_id)
+    return [
+        WhatsAppTemplateResponse(
+            id=template.id,
+            template_key=template.template_key,
+            provider_template_name=template.provider_template_name,
+            name=template.name,
+            category=template.category,
+            language=template.language,
+            body=template.body,
+            variables=template.variables_json or {},
+            status=template.status,
+        )
+        for template in templates
+    ]
 
 
 # --- Admin Voice Config ---

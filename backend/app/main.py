@@ -43,6 +43,8 @@ from app.api.endpoints import crm
 from app.api.endpoints import integrations
 from app.api.endpoints import forms
 from app.api.endpoints import email_assets
+from app.api.endpoints import crm_whatsapp
+from app.api.endpoints import whatsapp_webhook
 from app.api.endpoints import crm_voice
 from app.api.endpoints import voice_webhook
 
@@ -60,6 +62,8 @@ app.include_router(crm.router)
 app.include_router(integrations.router)
 app.include_router(forms.router)
 app.include_router(email_assets.router)
+app.include_router(crm_whatsapp.router)
+app.include_router(whatsapp_webhook.router)
 app.include_router(crm_voice.router)
 app.include_router(voice_webhook.router)
 

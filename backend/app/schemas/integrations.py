@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 
 from pydantic import BaseModel, Field
 
@@ -137,6 +137,52 @@ class GoogleCalendarConnectionResponse(BaseModel):
     has_tokens: bool
 
 
+class WhatsAppConfigRequest(BaseModel):
+    phone_number_id: str = Field(..., min_length=1, max_length=120)
+    business_account_id: Optional[str] = Field(None, max_length=120)
+    display_phone_number: Optional[str] = Field(None, max_length=80)
+    default_language: str = Field(default="es", max_length=16)
+    status: str = "active"
+    access_token: Optional[str] = Field(None, max_length=2000)
+    webhook_verify_token: Optional[str] = Field(None, max_length=500)
+
+
+class WhatsAppConfigResponse(BaseModel):
+    provider: str = "whatsapp_cloud"
+    status: str
+    phone_number_id: Optional[str] = None
+    business_account_id: Optional[str] = None
+    display_phone_number: Optional[str] = None
+    default_language: str = "es"
+    has_secret: bool
+    has_webhook_secret: bool = False
+    last_health_check_at: Optional[datetime] = None
+    last_error_message: Optional[str] = None
+
+
+class WhatsAppTestRequest(BaseModel):
+    to_phone: Optional[str] = Field(None, max_length=80)
+    template_key: str = Field(default="lead_follow_up", max_length=80)
+
+
+class WhatsAppTestResponse(BaseModel):
+    status: str
+    provider_message_id: Optional[str] = None
+    error_message: Optional[str] = None
+
+
+class WhatsAppTemplateResponse(BaseModel):
+    id: str
+    template_key: str
+    provider_template_name: str
+    name: str
+    category: str
+    language: str
+    body: str
+    variables: dict[str, Any] = Field(default_factory=dict)
+    status: str
+
+
 class VoiceProviderConfigRequest(BaseModel):
     provider: str = Field(default="ultravox", max_length=40)
     status: str = Field(default="active", max_length=32)
@@ -177,7 +223,7 @@ class VoiceAgentConfigRequest(BaseModel):
     default_timezone: str = Field(default="America/Bogota", max_length=80)
     default_voice: Optional[str] = Field(None, max_length=80)
     default_system_prompt: Optional[str] = None
-    default_tools_json: dict = Field(default_factory=dict)
+    default_tools_json: dict[str, Any] = Field(default_factory=dict)
     status: str = Field(default="active", max_length=32)
 
 
@@ -196,14 +242,15 @@ class VoiceAgentConfigResponse(BaseModel):
 
 class VoiceCallActionRequest(BaseModel):
     agent_config_id: Optional[str] = None
-    provider_agent_id: Optional[str] = None
     to_phone: Optional[str] = Field(None, max_length=80)
-    context: dict = Field(default_factory=dict)
+    context: dict[str, Any] = Field(default_factory=dict)
 
 
 class VoiceCallActionResponse(BaseModel):
     status: str
     voice_call_id: str
+    provider_call_id: Optional[str] = None
+    provider_session_id: Optional[str] = None
     provider_call_id: Optional[str] = None
     provider_session_id: Optional[str] = None
     summary: Optional[str] = None

@@ -15,7 +15,6 @@ import {
   Loader2,
 } from 'lucide-react';
 import {
-  leadActionWhatsapp,
   leadActionCall,
   changeCrmLeadStage,
   leadActionChatwoot,
@@ -31,6 +30,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { canUseOutboundActions, canChangeTerminalStage } from '@/lib/permissions/crm';
 import { CrmSendEmailModal } from '@/components/crm/CrmSendEmailModal';
+import { CrmSendWhatsAppModal } from '@/components/crm/CrmSendWhatsAppModal';
 import { LeadBookingModal } from '@/components/crm/bookings/LeadBookingModal';
 import { CrmSendVoiceCallModal } from '@/components/crm/CrmSendVoiceCallModal';
 
@@ -38,6 +38,8 @@ type CrmLeadQuickActionsProps = {
   leadId: string;
   accessToken: string;
   currentStageKey: string;
+  contactName?: string | null;
+  contactPhone?: string | null;
   onActionComplete?: () => void;
   userRole?: string;
   contactName?: string | null;
@@ -48,6 +50,8 @@ export function CrmLeadQuickActions({
   leadId,
   accessToken,
   currentStageKey,
+  contactName,
+  contactPhone,
   onActionComplete,
   userRole,
   contactName,
@@ -61,6 +65,7 @@ export function CrmLeadQuickActions({
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   const [terminalStage, setTerminalStage] = useState<'won' | 'lost' | 'not_interested' | null>(null);
+  const [whatsappModalOpen, setWhatsappModalOpen] = useState(false);
   const [emailModalOpen, setEmailModalOpen] = useState(false);
   const [bookingModalOpen, setBookingModalOpen] = useState(false);
   const [voiceCallModalOpen, setVoiceCallModalOpen] = useState(false);
@@ -80,7 +85,7 @@ export function CrmLeadQuickActions({
     }
   };
 
-  const handleOutboundAction = async (type: 'whatsapp' | 'call' | 'chatwoot') => {
+  const handleOutboundAction = async (type: 'call' | 'chatwoot') => {
     if (!canAct) {
       triggerStatus('error', 'No tienes permisos para realizar esta acción.');
       return;
@@ -92,9 +97,7 @@ export function CrmLeadQuickActions({
 
     try {
       let res;
-      if (type === 'whatsapp') {
-        res = await leadActionWhatsapp(accessToken, leadId);
-      } else if (type === 'call') {
+      if (type === 'call') {
         res = await leadActionCall(accessToken, leadId);
       } else if (type === 'chatwoot') {
         res = await leadActionChatwoot(accessToken, leadId);
@@ -202,14 +205,10 @@ export function CrmLeadQuickActions({
             <Button
               variant="outline" size="sm"
               disabled={loadingAction !== null}
-              onClick={() => handleOutboundAction('whatsapp')}
+              onClick={() => setWhatsappModalOpen(true)}
               className="flex items-center justify-start gap-2 bg-zinc-950/20 text-foreground hover:bg-emerald-500/10 hover:text-emerald-500 hover:border-emerald-500/20 transition cursor-pointer"
             >
-              {loadingAction === 'whatsapp' ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <MessageSquare className="h-4 w-4 text-emerald-500" />
-              )}
+              <MessageSquare className="h-4 w-4 text-emerald-500" />
               <span className="truncate">Enviar WhatsApp</span>
             </Button>
 
@@ -375,6 +374,23 @@ export function CrmLeadQuickActions({
         onOpenChange={setEmailModalOpen}
         accessToken={accessToken}
         leadId={leadId}
+        onError={(message) => triggerStatus('error', message)}
+        onSuccess={(message) => triggerStatus('success', message)}
+        onSent={() => {
+          startTransition(() => {
+            router.refresh();
+            if (onActionComplete) onActionComplete();
+          });
+        }}
+      />
+
+      <CrmSendWhatsAppModal
+        open={whatsappModalOpen}
+        onOpenChange={setWhatsappModalOpen}
+        accessToken={accessToken}
+        leadId={leadId}
+        contactName={contactName}
+        contactPhone={contactPhone}
         onError={(message) => triggerStatus('error', message)}
         onSuccess={(message) => triggerStatus('success', message)}
         onSent={() => {

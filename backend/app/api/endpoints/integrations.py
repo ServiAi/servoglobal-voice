@@ -21,6 +21,11 @@ from app.schemas.integrations import (
     ResendIntegrationConfigResponse,
     ResendTestEmailRequest,
     ResendTestEmailResponse,
+    WhatsAppConfigRequest,
+    WhatsAppConfigResponse,
+    WhatsAppTemplateResponse,
+    WhatsAppTestRequest,
+    WhatsAppTestResponse,
     VoiceProviderConfigRequest,
     VoiceProviderConfigResponse,
     VoiceAgentConfigRequest,
@@ -39,6 +44,8 @@ from app.services.voice_config_service import VoiceConfigService
 from app.services.voice_agent_service import VoiceAgentService
 from app.services.integration_event_service import IntegrationEventService
 from app.services.integration_service import IntegrationService
+from app.services.whatsapp_config_service import WhatsAppConfigService
+from app.services.whatsapp_template_service import WhatsAppTemplateService
 
 router = APIRouter(prefix="/api/v1/integrations", tags=["Integrations"])
 
@@ -238,6 +245,60 @@ def test_resend(
     if result.status == "failed":
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=result.error_message or "Resend test failed.")
     return ResendTestEmailResponse(status=result.status, provider_email_id=result.provider_email_id)
+
+
+@router.get("/whatsapp/config", response_model=WhatsAppConfigResponse)
+def get_whatsapp_config(
+    context: AuthContext = Depends(require_roles(["platform_admin", "tenant_admin", "tenant_analyst", "tenant_viewer"])),
+    db: Session = Depends(get_db),
+) -> Any:
+    return WhatsAppConfigService(db).get_response(context.tenant.id)
+
+
+@router.post("/whatsapp/config", response_model=WhatsAppConfigResponse)
+def configure_whatsapp(
+    body: WhatsAppConfigRequest,
+    context: AuthContext = Depends(require_roles(["platform_admin", "tenant_admin"])),
+    db: Session = Depends(get_db),
+) -> Any:
+    try:
+        return WhatsAppConfigService(db).upsert_config(context.tenant.id, body)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+
+
+@router.post("/whatsapp/test", response_model=WhatsAppTestResponse)
+def test_whatsapp(
+    body: WhatsAppTestRequest,
+    context: AuthContext = Depends(require_roles(["platform_admin", "tenant_admin"])),
+    db: Session = Depends(get_db),
+) -> Any:
+    result = WhatsAppConfigService(db).test_connection(context.tenant.id)
+    if result.status == "failed":
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=result.error_message or "WhatsApp test failed.")
+    return result
+
+
+@router.get("/whatsapp/templates", response_model=list[WhatsAppTemplateResponse])
+def list_whatsapp_templates(
+    context: AuthContext = Depends(require_roles(["platform_admin", "tenant_admin", "tenant_analyst", "tenant_viewer"])),
+    db: Session = Depends(get_db),
+) -> Any:
+    templates = WhatsAppTemplateService(db).list_templates(context.tenant.id)
+    return [
+        WhatsAppTemplateResponse(
+            id=template.id,
+            template_key=template.template_key,
+            provider_template_name=template.provider_template_name,
+            name=template.name,
+            category=template.category,
+            language=template.language,
+            body=template.body,
+            variables=template.variables_json or {},
+            status=template.status,
+        )
+        for template in templates
+    ]
 
 
 @router.get("/resend/templates", response_model=list[EmailTemplateItem])
