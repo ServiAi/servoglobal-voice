@@ -47,18 +47,42 @@ def get_voice_config(
     return service.get_config_response(context.tenant.id, provider)
 
 
-@router.post("/integrations/voice/config/test", response_model=dict[str, Any])
+def _test_voice_config_for_tenant(
+    tenant_id: str,
+    provider: str,
+    db: Session,
+) -> dict[str, Any]:
+    service = VoiceConfigService(db)
+    health_status, error_message = service.test_connection(tenant_id, provider)
+    return {"status": health_status, "error": error_message}
+
+
+@router.post("/integrations/voice/test", response_model=dict[str, Any])
 def test_voice_config(
     provider: str = "ultravox",
     context: AuthContext = Depends(require_roles(["platform_admin", "tenant_admin"])),
     db: Session = Depends(get_db),
 ) -> Any:
-    service = VoiceConfigService(db)
     try:
-        health_status, error_message = service.test_connection(context.tenant.id, provider)
-        return {"status": health_status, "error": error_message}
+        return _test_voice_config_for_tenant(
+            tenant_id=context.tenant.id,
+            provider=provider,
+            db=db,
+        )
     except Exception as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Voice test failed",
+        ) from exc
+
+
+@router.post("/integrations/voice/config/test", response_model=dict[str, Any])
+def test_voice_config_legacy(
+    provider: str = "ultravox",
+    context: AuthContext = Depends(require_roles(["platform_admin", "tenant_admin"])),
+    db: Session = Depends(get_db),
+) -> Any:
+    return test_voice_config(provider=provider, context=context, db=db)
 
 
 # Voice Agents

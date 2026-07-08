@@ -364,11 +364,12 @@ def configure_voice(
 
 @router.post("/voice/test")
 def test_voice(
+    provider: str = "ultravox",
     context: AuthContext = Depends(require_roles(["platform_admin", "tenant_admin"])),
     db: Session = Depends(get_db),
 ) -> Any:
     try:
-        result, error = VoiceConfigService(db).test_connection(context.tenant.id)
+        result, error = VoiceConfigService(db).test_connection(context.tenant.id, provider)
         if result != "active":
             raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=error or "Voice test failed.")
         return {"status": result}
