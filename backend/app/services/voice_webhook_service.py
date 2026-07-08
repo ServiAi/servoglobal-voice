@@ -16,6 +16,8 @@ from app.services.voice_config_service import VoiceConfigService
 from app.services.crm_activity_service import CrmActivityService
 from app.services.integration_event_service import IntegrationEventService
 
+_PLATFORM_TENANT_ID = "platform"
+
 logger = logging.getLogger(__name__)
 
 
@@ -76,15 +78,16 @@ class VoiceWebhookService:
     def handle_provider_event(self, provider: str, payload: dict[str, Any]) -> dict[str, Any]:
         call = self.resolve_call_by_metadata_or_provider_id(payload)
         if not call:
-            self.integration_event_service.record_event(
-                tenant_id="platform",
-                provider=provider,
-                event_type="webhook_unreconciled",
-                status="warning",
-                message="Received voice webhook event for unrecognized call.",
-                metadata={"provider": provider},
+            event_type = payload.get("event") or payload.get("event_type") or payload.get("type") or "unknown"
+            logger.warning(
+                "Voice webhook unreconciled provider=%s event_type=%s",
+                provider,
+                event_type,
             )
-            return {"status": "unreconciled"}
+            return {
+                "status": "unreconciled",
+                "processed": False,
+            }
 
         tenant_id = call.tenant_id
         event_type = payload.get("event") or payload.get("event_type") or payload.get("type") or "call.updated"

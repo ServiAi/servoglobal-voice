@@ -56,8 +56,8 @@ async def voice_webhook(
         result = service.handle_provider_event(provider, payload)
         return result
     except Exception as exc:
-        logger.error("Error processing voice webhook: %s", str(exc))
+        logger.error("Error processing voice webhook: %s", type(exc).__name__)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Webhook processing error: {str(exc)}",
+            detail="Webhook processing error",
         ) from exc

@@ -129,15 +129,13 @@ class VoiceClient:
                 response.raise_for_status()
                 return response.json()
         except httpx.HTTPStatusError as e:
-            response_text = e.response.text[:500]
             logger.error(
-                "Ultravox API error on call start | status_code=%s | response=%s",
+                "Ultravox API error on call start | status_code=%s",
                 e.response.status_code,
-                response_text,
             )
             raise e
         except Exception as e:
-            logger.error("Unexpected error on Ultravox call start: %s", str(e))
+            logger.error("Unexpected error on Ultravox call start: %s", type(e).__name__)
             raise e
 
     def _get_ultravox_call(
@@ -160,13 +158,11 @@ class VoiceClient:
                 response.raise_for_status()
                 return response.json()
         except httpx.HTTPStatusError as e:
-            response_text = e.response.text[:500]
             logger.error(
-                "Ultravox API error on get call | status_code=%s | response=%s",
+                "Ultravox API error on get call | status_code=%s",
                 e.response.status_code,
-                response_text,
             )
             raise e
         except Exception as e:
-            logger.error("Unexpected error on Ultravox get call: %s", str(e))
+            logger.error("Unexpected error on Ultravox get call: %s", type(e).__name__)
             raise e
