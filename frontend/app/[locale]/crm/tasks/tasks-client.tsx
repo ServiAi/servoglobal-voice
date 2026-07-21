@@ -12,12 +12,14 @@ type TasksClientProps = {
   tasks: TaskResponse[];
   accessToken: string;
   locale: string;
+  userRole?: string;
 };
 
 export function TasksClient({
   tasks,
   accessToken,
   locale,
+  userRole,
 }: TasksClientProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -102,6 +104,13 @@ export function TasksClient({
 
   const pendingCount = tasks.filter((t) => t.status === 'pending').length;
   const completedCount = tasks.filter((t) => t.status === 'done').length;
+  const today = new Date();
+  const todayKey = today.toDateString();
+  const openTasks = tasks.filter((task) => task.status !== 'done');
+  const overdueCount = openTasks.filter((task) => task.due_at && new Date(task.due_at) < today && new Date(task.due_at).toDateString() !== todayKey).length;
+  const todayCount = openTasks.filter((task) => task.due_at && new Date(task.due_at).toDateString() === todayKey).length;
+  const upcomingCount = openTasks.filter((task) => task.due_at && new Date(task.due_at) > today && new Date(task.due_at).toDateString() !== todayKey).length;
+  const undatedCount = openTasks.filter((task) => !task.due_at).length;
 
   return (
     <div className="flex flex-col gap-6">
@@ -139,27 +148,41 @@ export function TasksClient({
         </p>
       </section>
 
+      <section aria-label="Resumen temporal" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {[
+          ['Vencidas', overdueCount, 'text-destructive'],
+          ['Para hoy', todayCount, 'text-amber-600 dark:text-amber-400'],
+          ['Próximas', upcomingCount, 'text-primary'],
+          ['Sin fecha', undatedCount, 'text-muted-foreground'],
+        ].map(([label, value, tone]) => (
+          <div key={label} className="rounded-xl border border-border bg-card p-4 shadow-xs">
+            <p className="text-sm font-medium text-muted-foreground">{label}</p>
+            <p className={`mt-1 text-2xl font-bold ${tone}`}>{value}</p>
+          </div>
+        ))}
+      </section>
+
       {/* Grid: Filters & Creation vs Tasks List */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Left Side: Filters & Creation (1 col) */}
         <div className="lg:col-span-1 flex flex-col gap-6">
           {/* Filters Form */}
-          <div className="rounded-xl border border-border bg-card/65 p-5 shadow-xs flex flex-col gap-4">
-            <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider pb-2 border-b border-border/60">
-              <Filter className="h-4 w-4 text-violet-500" />
+          <div className="rounded-xl border border-border bg-card p-4 shadow-xs sm:p-5 flex flex-col gap-4">
+            <div className="flex items-center gap-2 text-sm font-semibold text-foreground pb-3 border-b border-border">
+              <Filter className="h-4 w-4 text-primary" />
               <span>Filtrar Tareas</span>
             </div>
 
             <form onSubmit={handleApplyFilters} className="flex flex-col gap-4">
               <div className="flex flex-col gap-1">
-                <label htmlFor="filter-status" className="text-2xs font-bold text-muted-foreground uppercase">
+                <label htmlFor="filter-status" className="text-sm font-medium text-foreground">
                   Estado
                 </label>
                 <select
                   id="filter-status"
                   value={status}
                   onChange={(e) => setStatus(e.target.value)}
-                  className="w-full rounded-md border border-border bg-zinc-950/40 px-3 py-2 text-sm text-foreground focus:border-violet-500 focus:outline-none"
+                  className="min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <option value="">Todos</option>
                   <option value="pending">Pendiente</option>
@@ -168,14 +191,14 @@ export function TasksClient({
               </div>
 
               <div className="flex flex-col gap-1">
-                <label htmlFor="filter-priority" className="text-2xs font-bold text-muted-foreground uppercase">
+                <label htmlFor="filter-priority" className="text-sm font-medium text-foreground">
                   Prioridad
                 </label>
                 <select
                   id="filter-priority"
                   value={priority}
                   onChange={(e) => setPriority(e.target.value)}
-                  className="w-full rounded-md border border-border bg-zinc-950/40 px-3 py-2 text-sm text-foreground focus:border-violet-500 focus:outline-none"
+                  className="min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <option value="">Todas</option>
                   <option value="high">Alta</option>
@@ -188,13 +211,13 @@ export function TasksClient({
                 <button
                   type="button"
                   onClick={handleResetFilters}
-                  className="rounded-md border border-border px-3 py-1.5 text-xs font-semibold text-muted-foreground hover:bg-muted"
+                  className="min-h-11 rounded-md border border-border px-3 py-2 text-sm font-semibold text-muted-foreground hover:bg-muted"
                 >
                   Limpiar
                 </button>
                 <button
                   type="submit"
-                  className="rounded-md bg-violet-600 px-4 py-1.5 text-xs font-bold text-white hover:bg-violet-500"
+                  className="min-h-11 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
                 >
                   Filtrar
                 </button>
@@ -203,20 +226,20 @@ export function TasksClient({
           </div>
 
           {/* Creation Form */}
-          <CrmTaskForm onSubmit={handleCreateTask} />
+          <CrmTaskForm onSubmit={handleCreateTask} userRole={userRole} />
         </div>
 
         {/* Right Side: Tasks List (2 cols) */}
         <div className="lg:col-span-2 flex flex-col gap-4">
-          <div className="rounded-xl border border-border bg-card/65 p-6 shadow-xs flex flex-col gap-4">
+          <div className="rounded-xl border border-border bg-card p-4 shadow-xs sm:p-6 flex flex-col gap-4">
             <div className="border-b border-border/60 pb-3 flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <CheckSquare className="h-5 w-5 text-violet-500" />
+                <CheckSquare className="h-5 w-5 text-primary" />
                 <h3 className="text-base font-bold text-foreground">Lista de Tareas</h3>
               </div>
-              <div className="flex gap-3 text-2xs text-muted-foreground font-semibold uppercase">
+              <div className="flex flex-wrap gap-2 text-xs text-muted-foreground font-semibold">
                 <span className="text-amber-500">{pendingCount} Pendientes</span>
-                <span className="text-zinc-500/40">•</span>
+                <span aria-hidden="true">•</span>
                 <span className="text-emerald-500">{completedCount} Completadas</span>
               </div>
             </div>
@@ -226,6 +249,7 @@ export function TasksClient({
               onToggleStatus={handleToggleTaskStatus}
               onDelete={handleDeleteTask}
               showLeadInfo={true}
+              userRole={userRole}
               locale={locale}
             />
           </div>
