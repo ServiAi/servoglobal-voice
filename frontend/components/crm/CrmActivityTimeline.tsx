@@ -1,5 +1,7 @@
 'use client';
 
+import { formatCrmDate } from './lead-workspace/crm-format';
+
 import React from 'react';
 import type { ActivitySchema } from '@/types/crm';
 import { Phone, FileText, ArrowRightLeft, PenTool, CheckCircle, HelpCircle, MessageSquare, Calendar, MessageCircle, Mail } from 'lucide-react';
@@ -68,18 +70,6 @@ const ACTIVITY_COLORS: Record<string, string> = {
 };
 
 export function CrmActivityTimeline({ activities }: CrmActivityTimelineProps) {
-  const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
-    if (isNaN(date.getTime())) return dateStr;
-    return date.toLocaleDateString('es-ES', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
-
   const sortedActivities = [...activities].sort(
     (a, b) => new Date(b.occurred_at).getTime() - new Date(a.occurred_at).getTime()
   );
@@ -121,8 +111,8 @@ export function CrmActivityTimeline({ activities }: CrmActivityTimelineProps) {
                     <span className="text-xs font-bold text-foreground leading-tight">
                       {act.title}
                     </span>
-                    <span className="text-[10px] text-muted-foreground shrink-0 font-mono">
-                      {formatDate(act.occurred_at)}
+                    <span className="text-xs text-muted-foreground shrink-0">
+                      {formatCrmDate(act.occurred_at)}
                     </span>
                   </div>
 
@@ -134,8 +124,8 @@ export function CrmActivityTimeline({ activities }: CrmActivityTimelineProps) {
 
                   {/* Summary / Transcript data */}
                   {act.short_summary && (
-                    <div className="bg-zinc-950/20 p-2.5 rounded border border-border/30 text-xs">
-                      <span className="font-bold text-[10px] uppercase text-violet-500 tracking-wider block mb-1">
+                    <div className="rounded border border-border/30 bg-muted/30 p-2.5 text-xs">
+                      <span className="mb-1 block text-xs font-bold uppercase tracking-wider text-primary">
                         Resumen Corto:
                       </span>
                       <p className="text-muted-foreground">{act.short_summary}</p>
@@ -143,8 +133,8 @@ export function CrmActivityTimeline({ activities }: CrmActivityTimelineProps) {
                   )}
 
                   {act.summary && (
-                    <div className="bg-zinc-950/20 p-2.5 rounded border border-border/30 text-xs">
-                      <span className="font-bold text-[10px] uppercase text-violet-500 tracking-wider block mb-1">
+                    <div className="rounded border border-border/30 bg-muted/30 p-2.5 text-xs">
+                      <span className="mb-1 block text-xs font-bold uppercase tracking-wider text-primary">
                         Resumen Completo:
                       </span>
                       <p className="text-muted-foreground whitespace-pre-wrap leading-relaxed">{act.summary}</p>
@@ -160,7 +150,7 @@ export function CrmActivityTimeline({ activities }: CrmActivityTimelineProps) {
 
                   {/* Call stats details */}
                   {(act.normalized_status || act.duration_seconds !== undefined || act.billed_minutes !== undefined) && (
-                    <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 bg-zinc-950/15 p-2 rounded border border-border/20 text-2xs text-muted-foreground">
+                    <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 rounded border border-border/20 bg-muted/20 p-2 text-xs text-muted-foreground">
                       {act.normalized_status && (
                         <div>
                           <span className="font-semibold text-foreground">Estado:</span>{' '}
@@ -185,7 +175,7 @@ export function CrmActivityTimeline({ activities }: CrmActivityTimelineProps) {
                   {/* Call Recording Audio Player */}
                   {act.recording_url && (
                     <div className="mt-2 flex flex-col gap-1 bg-muted/40 p-2 rounded border border-border/50">
-                      <span className="text-[10px] font-bold text-foreground">
+                      <span className="text-xs font-bold text-foreground">
                         Grabación de la Llamada:
                       </span>
                       <audio
