@@ -1,575 +1,74 @@
 'use client';
 
-import React, { useState, useTransition } from 'react';
+import { useState, useTransition, type FormEvent } from 'react';
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { CalendarDays, CheckSquare2, Filter, Layers3, PhoneCall, RefreshCw, ShieldAlert, Target } from 'lucide-react';
 import type { CrmDashboardResponse } from '@/types/crm';
 import { CrmMetricCard } from '@/components/crm/CrmMetricCard';
-import {
-  Target,
-  TrendingUp,
-  CheckSquare,
-  ShieldAlert,
-  Calendar,
-  Layers,
-  PhoneCall,
-  AlertCircle,
-  ArrowRight,
-  Filter,
-  RefreshCw,
-} from 'lucide-react';
-import Link from 'next/link';
+import { CrmStageBadge } from '@/components/crm/shared/CrmStageBadge';
+import { formatCrmDate, formatDuration } from '@/components/crm/lead-workspace/crm-format';
+import { Button } from '@/components/ui/button';
 
-type CrmDashboardViewClientProps = {
-  initialData: CrmDashboardResponse;
-  locale: string;
-};
+type Props = { initialData: CrmDashboardResponse; locale: string };
+type BreakdownItem = { name: string; total: number; qualified: number; scheduled: number; won: number; conversion: number };
+const CONTROL = 'h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring';
 
-const STAGE_TRANSLATIONS: Record<string, string> = {
-  new: 'Nuevo',
-  contacted: 'Contactado',
-  connected: 'Conectado',
-  qualified: 'Calificado',
-  scheduled: 'Agendado',
-  voicemail: 'Buzón de voz',
-  follow_up: 'En seguimiento',
-  not_interested: 'No Interesado',
-  won: 'Ganado',
-  lost: 'Perdido',
-};
-
-export function CrmDashboardViewClient({
-  initialData,
-  locale,
-}: CrmDashboardViewClientProps) {
+export function CrmDashboardViewClient({ initialData: data, locale }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-
-  // Filters State
   const [range, setRange] = useState(searchParams.get('range') || '30d');
   const [source, setSource] = useState(searchParams.get('source') || '');
   const [campaign, setCampaign] = useState(searchParams.get('campaign') || '');
   const [dateFrom, setDateFrom] = useState(searchParams.get('date_from') || '');
   const [dateTo, setDateTo] = useState(searchParams.get('date_to') || '');
+  const activeFilters = Number(range !== '30d') + Number(Boolean(source)) + Number(Boolean(campaign));
 
-  const data = initialData;
-
-  const handleApplyFilters = (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    startTransition(() => {
-      const params = new URLSearchParams();
-      if (range) params.set('range', range);
-      if (source) params.set('source', source);
-      if (campaign) params.set('campaign', campaign);
-      if (range === 'custom') {
-        if (!dateFrom || !dateTo) {
-          setError('El rango personalizado requiere fecha de inicio y fin.');
-          return;
-        }
-        params.set('date_from', dateFrom);
-        params.set('date_to', dateTo);
-      }
-      router.push(`/${locale}/crm/dashboard?${params.toString()}`);
-    });
+  const applyFilters = (event: FormEvent) => {
+    event.preventDefault(); setError(null);
+    if (range === 'custom' && (!dateFrom || !dateTo)) { setError('El rango personalizado requiere fecha de inicio y fin.'); return; }
+    if (range === 'custom' && dateFrom > dateTo) { setError('La fecha inicial no puede ser posterior a la fecha final.'); return; }
+    const params = new URLSearchParams();
+    params.set('range', range);
+    if (source.trim()) params.set('source', source.trim());
+    if (campaign.trim()) params.set('campaign', campaign.trim());
+    if (range === 'custom') { params.set('date_from', dateFrom); params.set('date_to', dateTo); }
+    startTransition(() => router.push(`/${locale}/crm/dashboard?${params}`));
   };
+  const reset = () => { setRange('30d'); setSource(''); setCampaign(''); setDateFrom(''); setDateTo(''); setError(null); startTransition(() => router.push(`/${locale}/crm/dashboard`)); };
 
-  const handleResetFilters = () => {
-    setRange('30d');
-    setSource('');
-    setCampaign('');
-    setDateFrom('');
-    setDateTo('');
-    setError(null);
-    startTransition(() => {
-      router.push(`/${locale}/crm/dashboard`);
-    });
-  };
+  const sources = data.sources.map((item) => ({ name: item.source, total: item.total_leads, qualified: item.qualified_leads, scheduled: item.scheduled_leads, won: item.won_leads, conversion: item.conversion_rate }));
+  const campaigns = data.campaigns.map((item) => ({ name: item.campaign, total: item.total_leads, qualified: item.qualified_leads, scheduled: item.scheduled_leads, won: item.won_leads, conversion: item.conversion_rate }));
+  const conversion = [['Contacto', data.conversion.contact_rate, 'Contactados / Leads'], ['Conexión', data.conversion.connection_rate, 'Conectados / Contactados'], ['Calificación', data.conversion.qualification_rate, 'Calificados / Conectados'], ['Agendamiento', data.conversion.schedule_rate, 'Agendados / Calificados'], ['Cierre', data.conversion.win_rate, 'Ganados / Leads']] as const;
+  const maxFunnel = Math.max(...data.funnel.map((item) => item.count), 1);
 
-  return (
-    <div className="flex flex-col gap-8">
-      {/* Toast Alert Feedback */}
-      {(isPending || error) && (
-        <div className="fixed bottom-5 right-5 z-50 max-w-sm rounded-lg border bg-card p-4 shadow-lg transition-all duration-300">
-          {isPending && (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <div className="h-4 w-4 animate-spin rounded-full border-2 border-violet-500 border-t-transparent" />
-              <span>Actualizando métricas...</span>
-            </div>
-          )}
-          {error && (
-            <div className="flex items-center gap-2 text-sm text-destructive">
-              <ShieldAlert className="h-4 w-4" />
-              <span>{error}</span>
-            </div>
-          )}
-        </div>
-      )}
+  return <div className="space-y-6">
+    {(isPending || error) ? <div className="fixed bottom-4 left-4 right-4 z-50 max-w-sm rounded-lg border border-border bg-card p-4 shadow-lg sm:left-auto" role="status" aria-live="polite">{isPending ? <p className="text-sm text-muted-foreground">Actualizando rendimiento…</p> : null}{error ? <p className="flex gap-2 text-sm text-destructive"><ShieldAlert className="size-4 shrink-0" />{error}</p> : null}</div> : null}
+    <header className="flex flex-col gap-3 border-b border-border pb-5 sm:flex-row sm:items-end sm:justify-between"><div><h1 className="text-2xl font-semibold tracking-tight">Rendimiento</h1><p className="mt-1 text-sm text-muted-foreground">Análisis detallado de conversiones, llamadas, fuentes y campañas.</p></div><div className="flex items-center gap-2 text-xs text-muted-foreground"><CalendarDays className="size-4" /><span>{data.period.from} — {data.period.to}</span></div></header>
 
-      {/* Header Section */}
-      <section className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div className="flex flex-col gap-1">
-          <h2 className="text-2xl font-bold tracking-tight text-foreground">
-            Dashboard Comercial CRM
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            Rendimiento del embudo de ventas, conversión de campañas y leads pendientes.
-          </p>
-        </div>
-        <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground bg-muted/40 border border-border/50 rounded-lg px-3 py-1.5 self-start sm:self-center">
-          <Calendar className="h-3.5 w-3.5 text-violet-500" />
-          <span>
-            Período: {data.period.from} a {data.period.to} ({data.period.range})
-          </span>
-        </div>
-      </section>
+    <section className="rounded-xl border border-border bg-card p-4" aria-labelledby="filters-title"><div className="mb-3 flex items-center justify-between gap-3"><h2 id="filters-title" className="flex items-center gap-2 text-sm font-semibold"><Filter className="size-4 text-primary" />Filtros</h2><span className="text-xs text-muted-foreground">{activeFilters} activos</span></div><form onSubmit={applyFilters} className="grid gap-3 md:grid-cols-2 xl:grid-cols-[180px_1fr_1fr_auto]"><label><span className="mb-1 block text-xs text-muted-foreground">Período</span><select value={range} onChange={(event) => setRange(event.target.value)} className={CONTROL}><option value="today">Hoy</option><option value="7d">Últimos 7 días</option><option value="30d">Últimos 30 días</option><option value="month">Este mes</option><option value="custom">Personalizado</option></select></label><label><span className="mb-1 block text-xs text-muted-foreground">Fuente</span><input value={source} onChange={(event) => setSource(event.target.value)} placeholder="Ej. landing" className={CONTROL} /></label><label><span className="mb-1 block text-xs text-muted-foreground">Campaña</span><input value={campaign} onChange={(event) => setCampaign(event.target.value)} placeholder="Ej. demo-crm" className={CONTROL} /></label><div className="flex items-end gap-2"><Button type="submit" disabled={isPending} className="flex-1">Aplicar</Button><Button type="button" variant="outline" size="icon" onClick={reset} disabled={isPending} aria-label="Restablecer filtros"><RefreshCw className="size-4" /></Button></div>{range === 'custom' ? <div className="grid gap-3 md:col-span-2 md:grid-cols-2 xl:col-span-4"><label><span className="mb-1 block text-xs text-muted-foreground">Desde</span><input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} className={CONTROL} /></label><label><span className="mb-1 block text-xs text-muted-foreground">Hasta</span><input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} className={CONTROL} /></label></div> : null}</form></section>
 
-      {/* Filters Form */}
-      <section className="rounded-xl border border-border bg-card/65 p-5 shadow-xs">
-        <form onSubmit={handleApplyFilters} className="flex flex-col gap-4">
-          <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider pb-2 border-b border-border/60">
-            <Filter className="h-4 w-4 text-violet-500" />
-            <span>Filtrar Dashboard</span>
-          </div>
+    <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Indicadores de rendimiento"><CrmMetricCard title="Leads del período" value={data.kpis.total_leads} icon={Layers3} subtext={`${data.kpis.new_leads} nuevos`} /><CrmMetricCard title="Leads abiertos" value={data.kpis.open_leads} icon={Target} subtext={`${data.kpis.follow_up_leads} en seguimiento`} /><CrmMetricCard title="Próxima acción" value={data.kpis.leads_with_next_action} icon={CalendarDays} tone="positive" subtext="Leads con acción definida" /><CrmMetricCard title="Tareas pendientes" value={data.kpis.pending_tasks} icon={CheckSquare2} tone={data.kpis.overdue_tasks ? 'critical' : 'warning'} subtext={`${data.kpis.overdue_tasks} vencidas`} /></section>
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-            {/* Range */}
-            <div className="flex flex-col gap-1.5">
-              <label htmlFor="range" className="text-xs font-medium text-muted-foreground">
-                Rango de Fecha
-              </label>
-              <select
-                id="range"
-                value={range}
-                onChange={(e) => setRange(e.target.value)}
-                className="w-full h-9 rounded-md border border-input bg-card px-3 py-1.5 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-hidden focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <option value="today">Hoy</option>
-                <option value="7d">Últimos 7 días</option>
-                <option value="30d">Últimos 30 días</option>
-                <option value="month">Este Mes</option>
-                <option value="custom">Rango Personalizado</option>
-              </select>
-            </div>
+    {data.kpis.overdue_tasks || data.pending_actions.length ? <PendingActions data={data} locale={locale} /> : null}
 
-            {/* Custom From */}
-            {range === 'custom' && (
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="dateFrom" className="text-xs font-medium text-muted-foreground">
-                  Desde
-                </label>
-                <input
-                  type="date"
-                  id="dateFrom"
-                  value={dateFrom}
-                  onChange={(e) => setDateFrom(e.target.value)}
-                  className="w-full h-9 rounded-md border border-input bg-card px-3 py-1.5 text-sm"
-                />
-              </div>
-            )}
+    <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]"><section className="rounded-xl border border-border bg-card p-4 sm:p-6"><h2 className="text-base font-semibold">Embudo comercial</h2>{data.funnel.length ? <div className="mt-5 space-y-4">{data.funnel.map((item) => <div key={item.stage}><div className="mb-1 flex items-center justify-between gap-3"><CrmStageBadge stageKey={item.stage} stageName={item.label} /><span className="text-sm font-semibold">{item.count}</span></div><div className="h-7 overflow-hidden rounded-md border border-border bg-muted" aria-label={`${item.label}: ${item.count} Leads`}><div className="flex h-full items-center justify-end bg-primary px-2 text-xs font-semibold text-primary-foreground" style={{ width: item.count ? `${Math.max((item.count / maxFunnel) * 100, 5)}%` : 0 }}>{item.count ? item.count : null}</div></div></div>)}</div> : <Empty text="No hay datos de embudo para este período." />}</section><CallsPanel data={data} /></div>
 
-            {/* Custom To */}
-            {range === 'custom' && (
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="dateTo" className="text-xs font-medium text-muted-foreground">
-                  Hasta
-                </label>
-                <input
-                  type="date"
-                  id="dateTo"
-                  value={dateTo}
-                  onChange={(e) => setDateTo(e.target.value)}
-                  className="w-full h-9 rounded-md border border-input bg-card px-3 py-1.5 text-sm"
-                />
-              </div>
-            )}
+    <section className="rounded-xl border border-border bg-card p-4 sm:p-6"><h2 className="text-base font-semibold">Tasas de conversión</h2><div className="mt-4 divide-y divide-border">{conversion.map(([label, value, context]) => <div key={label} className="grid gap-1 py-3 sm:grid-cols-[160px_100px_1fr] sm:items-center"><span className="text-sm font-medium">{label}</span><strong className="text-sm">{value.toFixed(1)}%</strong><span className="text-xs text-muted-foreground">{context}</span></div>)}</div></section>
 
-            {/* Source */}
-            <div className="flex flex-col gap-1.5">
-              <label htmlFor="source" className="text-xs font-medium text-muted-foreground">
-                Fuente (source)
-              </label>
-              <input
-                type="text"
-                id="source"
-                value={source}
-                onChange={(e) => setSource(e.target.value)}
-                placeholder="Ej. landing, facebook"
-                className="w-full h-9 rounded-md border border-input bg-card px-3 py-1.5 text-sm"
-              />
-            </div>
+    <div className="grid gap-6 xl:grid-cols-2"><Breakdown title="Rendimiento por fuente" empty="No hay fuentes para este período." items={sources} /><Breakdown title="Rendimiento por campaña" empty="No hay campañas para este período." items={campaigns} /></div>
 
-            {/* Campaign */}
-            <div className="flex flex-col gap-1.5">
-              <label htmlFor="campaign" className="text-xs font-medium text-muted-foreground">
-                Campaña (campaign)
-              </label>
-              <input
-                type="text"
-                id="campaign"
-                value={campaign}
-                onChange={(e) => setCampaign(e.target.value)}
-                placeholder="Ej. demo-crm"
-                className="w-full h-9 rounded-md border border-input bg-card px-3 py-1.5 text-sm"
-              />
-            </div>
-
-            {/* Action buttons */}
-            <div className="flex items-end gap-2 sm:col-span-3 lg:col-span-1">
-              <button
-                type="submit"
-                disabled={isPending}
-                className="flex-1 inline-flex h-9 items-center justify-center rounded-md bg-violet-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-violet-500 disabled:opacity-50 transition"
-              >
-                Aplicar
-              </button>
-              <button
-                type="button"
-                onClick={handleResetFilters}
-                disabled={isPending}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border bg-card text-muted-foreground hover:bg-accent hover:text-accent-foreground disabled:opacity-50 transition"
-                title="Restablecer filtros"
-              >
-                <RefreshCw className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
-        </form>
-      </section>
-
-      {/* KPIs Grid */}
-      <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <CrmMetricCard
-          title="Leads Ingresados"
-          value={data.kpis.total_leads}
-          icon={Layers}
-          subtext="Total de leads en el período"
-          iconClassName="bg-blue-500/10 text-blue-500"
-        />
-        <CrmMetricCard
-          title="Leads Abiertos"
-          value={data.kpis.open_leads}
-          icon={Target}
-          subtext={`${data.kpis.new_leads} nuevos • ${data.kpis.voicemail_leads} buzón • ${data.kpis.follow_up_leads} seguimiento`}
-          iconClassName="bg-violet-500/10 text-violet-500"
-        />
-        <CrmMetricCard
-          title="Acción Comercial"
-          value={data.kpis.leads_with_next_action}
-          icon={TrendingUp}
-          subtext="Leads con próxima acción definida"
-          iconClassName="bg-emerald-500/10 text-emerald-500"
-        />
-        <CrmMetricCard
-          title="Tareas Pendientes"
-          value={data.kpis.pending_tasks}
-          icon={CheckSquare}
-          subtext={`${data.kpis.overdue_tasks} tareas vencidas`}
-          iconClassName={
-            data.kpis.overdue_tasks > 0
-              ? 'bg-red-500/10 text-red-500 animate-pulse'
-              : 'bg-amber-500/10 text-amber-500'
-          }
-        />
-      </section>
-
-      {/* Funnel & Conversion rates */}
-      <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Embudo */}
-        <div className="rounded-xl border border-border bg-card/65 p-6 shadow-xs lg:col-span-2 flex flex-col gap-6">
-          <div className="flex items-center gap-2 font-bold text-foreground text-sm uppercase tracking-wider border-b border-border/60 pb-3">
-            <Layers className="h-5 w-5 text-violet-500" />
-            <span>Embudo Comercial (Funnel)</span>
-          </div>
-
-          <div className="flex flex-col gap-4">
-            {data.funnel.map((item, idx) => {
-              const maxCount = Math.max(...data.funnel.map((f) => f.count), 1);
-              const percentageWidth = Math.max((item.count / maxCount) * 100, 2);
-
-              const barColors = [
-                'from-blue-600 to-blue-500',
-                'from-indigo-600 to-indigo-500',
-                'from-violet-600 to-violet-500',
-                'from-purple-600 to-purple-500',
-                'from-pink-600 to-pink-500',
-                'from-emerald-600 to-emerald-500',
-              ];
-              const colorClass = barColors[idx % barColors.length];
-
-              return (
-                <div key={item.stage} className="flex items-center gap-4">
-                  <div className="w-28 text-sm font-medium text-foreground truncate" title={item.label}>
-                    {item.label}
-                  </div>
-                  <div className="flex-1 bg-muted/30 rounded-full h-8 overflow-hidden relative border border-border/20 shadow-inner">
-                    <div
-                      className={`h-full bg-gradient-to-r ${colorClass} rounded-full transition-all duration-500 flex items-center justify-end pr-4 text-xs font-bold text-white shadow-md`}
-                      style={{ width: `${percentageWidth}%` }}
-                    >
-                      {item.count > 0 && <span>{item.count}</span>}
-                    </div>
-                    {item.count === 0 && (
-                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xs text-muted-foreground font-medium">
-                        0 leads
-                      </span>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Call Metrics */}
-        <div className="rounded-xl border border-border bg-card/65 p-6 shadow-xs flex flex-col gap-4">
-          <div className="flex items-center gap-2 font-bold text-foreground text-sm uppercase tracking-wider border-b border-border/60 pb-3">
-            <PhoneCall className="h-5 w-5 text-violet-500" />
-            <span>Métricas de Llamadas</span>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="p-3 bg-muted/20 rounded-lg">
-              <span className="text-[10px] text-muted-foreground font-semibold block uppercase">
-                Total Llamadas
-              </span>
-              <span className="text-xl font-extrabold text-foreground">{data.calls.total_calls}</span>
-            </div>
-            <div className="p-3 bg-muted/20 rounded-lg">
-              <span className="text-[10px] text-muted-foreground font-semibold block uppercase">
-                Atendidas
-              </span>
-              <span className="text-xl font-extrabold text-emerald-500">{data.calls.answered_calls}</span>
-            </div>
-            <div className="p-3 bg-muted/20 rounded-lg">
-              <span className="text-[10px] text-muted-foreground font-semibold block uppercase">
-                No Atendidas
-              </span>
-              <span className="text-xl font-extrabold text-amber-500">{data.calls.unanswered_calls}</span>
-            </div>
-            <div className="p-3 bg-muted/20 rounded-lg">
-              <span className="text-[10px] text-muted-foreground font-semibold block uppercase">
-                Fallidas/Buzón
-              </span>
-              <span className="text-xl font-extrabold text-indigo-500">
-                {data.calls.failed_calls + data.calls.voicemail_calls}
-              </span>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-border/40">
-            <div>
-              <span className="text-xs text-muted-foreground block">Duración Promedio</span>
-              <span className="text-sm font-bold text-foreground">
-                {Math.floor(data.calls.average_duration_seconds / 60)}m{' '}
-                {Math.round(data.calls.average_duration_seconds % 60)}s
-              </span>
-            </div>
-            <div>
-              <span className="text-xs text-muted-foreground block">Billed Minutes</span>
-              <span className="text-sm font-bold text-foreground">
-                {data.calls.total_billed_minutes.toFixed(1)} min
-              </span>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Conversion Cards */}
-      <section className="flex flex-col gap-3">
-        <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-          Tasas de Conversión
-        </div>
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
-          <div className="rounded-xl border border-border bg-card/65 p-4 text-center shadow-xs">
-            <span className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground block">
-              Tasa Contacto
-            </span>
-            <p className="mt-2 text-2xl font-extrabold text-blue-500">{data.conversion.contact_rate}%</p>
-            <p className="mt-1 text-[10px] text-muted-foreground">contactados / total</p>
-          </div>
-          <div className="rounded-xl border border-border bg-card/65 p-4 text-center shadow-xs">
-            <span className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground block">
-              Tasa Conexión
-            </span>
-            <p className="mt-2 text-2xl font-extrabold text-indigo-500">{data.conversion.connection_rate}%</p>
-            <p className="mt-1 text-[10px] text-muted-foreground">conectados / contactados</p>
-          </div>
-          <div className="rounded-xl border border-border bg-card/65 p-4 text-center shadow-xs">
-            <span className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground block">
-              Tasa Calificación
-            </span>
-            <p className="mt-2 text-2xl font-extrabold text-violet-500">{data.conversion.qualification_rate}%</p>
-            <p className="mt-1 text-[10px] text-muted-foreground">calificados / conectados</p>
-          </div>
-          <div className="rounded-xl border border-border bg-card/65 p-4 text-center shadow-xs">
-            <span className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground block">
-              Tasa Agendamiento
-            </span>
-            <p className="mt-2 text-2xl font-extrabold text-pink-500">{data.conversion.schedule_rate}%</p>
-            <p className="mt-1 text-[10px] text-muted-foreground">agendados / calificados</p>
-          </div>
-          <div className="rounded-xl border border-border bg-card/65 p-4 text-center shadow-xs">
-            <span className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground block">
-              Tasa Cierre
-            </span>
-            <p className="mt-2 text-2xl font-extrabold text-emerald-500">{data.conversion.win_rate}%</p>
-            <p className="mt-1 text-[10px] text-muted-foreground">ganados / agendados</p>
-          </div>
-        </div>
-      </section>
-
-      {/* Sources & Campaigns performance tables */}
-      <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Sources table */}
-        <div className="rounded-xl border border-border bg-card/65 p-5 shadow-xs flex flex-col gap-4">
-          <div className="text-sm font-bold text-foreground uppercase tracking-wider border-b border-border/60 pb-2">
-            Rendimiento por Fuente (Source)
-          </div>
-          {data.sources.length === 0 ? (
-            <div className="py-8 text-center text-sm text-muted-foreground">
-              No hay datos de fuentes disponibles.
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead>
-                  <tr className="border-b border-border/60 text-xs font-semibold text-muted-foreground uppercase">
-                    <th className="py-2 px-3">Fuente</th>
-                    <th className="py-2 px-3 text-center">Total Leads</th>
-                    <th className="py-2 px-3 text-center">Calificados</th>
-                    <th className="py-2 px-3 text-center">Agendados</th>
-                    <th className="py-2 px-3 text-center">Ganados</th>
-                    <th className="py-2 px-3 text-right">Conv. Rate</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.sources.map((src) => (
-                    <tr key={src.source} className="border-b border-border/40 hover:bg-muted/5 transition">
-                      <td className="py-2 px-3 font-medium text-foreground">{src.source}</td>
-                      <td className="py-2 px-3 text-center text-muted-foreground">{src.total_leads}</td>
-                      <td className="py-2 px-3 text-center text-muted-foreground">{src.qualified_leads}</td>
-                      <td className="py-2 px-3 text-center text-muted-foreground">{src.scheduled_leads}</td>
-                      <td className="py-2 px-3 text-center text-muted-foreground">{src.won_leads}</td>
-                      <td className="py-2 px-3 text-right font-semibold text-violet-500">
-                        {src.conversion_rate}%
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-
-        {/* Campaigns table */}
-        <div className="rounded-xl border border-border bg-card/65 p-5 shadow-xs flex flex-col gap-4">
-          <div className="text-sm font-bold text-foreground uppercase tracking-wider border-b border-border/60 pb-2">
-            Rendimiento por Campaña (Campaign)
-          </div>
-          {data.campaigns.length === 0 ? (
-            <div className="py-8 text-center text-sm text-muted-foreground">
-              No hay datos de campañas disponibles.
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead>
-                  <tr className="border-b border-border/60 text-xs font-semibold text-muted-foreground uppercase">
-                    <th className="py-2 px-3">Campaña</th>
-                    <th className="py-2 px-3 text-center">Total Leads</th>
-                    <th className="py-2 px-3 text-center">Calificados</th>
-                    <th className="py-2 px-3 text-center">Agendados</th>
-                    <th className="py-2 px-3 text-center">Ganados</th>
-                    <th className="py-2 px-3 text-right">Conv. Rate</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.campaigns.map((camp) => (
-                    <tr key={camp.campaign} className="border-b border-border/40 hover:bg-muted/5 transition">
-                      <td className="py-2 px-3 font-medium text-foreground">{camp.campaign}</td>
-                      <td className="py-2 px-3 text-center text-muted-foreground">{camp.total_leads}</td>
-                      <td className="py-2 px-3 text-center text-muted-foreground">{camp.qualified_leads}</td>
-                      <td className="py-2 px-3 text-center text-muted-foreground">{camp.scheduled_leads}</td>
-                      <td className="py-2 px-3 text-center text-muted-foreground">{camp.won_leads}</td>
-                      <td className="py-2 px-3 text-right font-semibold text-violet-500">
-                        {camp.conversion_rate}%
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      </section>
-
-      {/* Pending Actions human intervention required */}
-      <section className="rounded-xl border border-border bg-card/65 p-6 shadow-xs flex flex-col gap-4">
-        <div className="flex items-center justify-between border-b border-border/60 pb-3">
-          <div className="flex items-center gap-2 font-bold text-foreground text-sm uppercase tracking-wider">
-            <AlertCircle className="h-5 w-5 text-red-500" />
-            <span>Leads que Requieren Acción Humana</span>
-          </div>
-          <span className="text-xs font-semibold px-2.5 py-1 bg-red-500/10 text-red-500 rounded-full border border-red-500/15">
-            {data.pending_actions.length} pendientes
-          </span>
-        </div>
-
-        {data.pending_actions.length === 0 ? (
-          <div className="py-8 text-center text-sm text-muted-foreground">
-            No hay acciones pendientes en este momento. ¡Buen trabajo!
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm border-collapse">
-              <thead>
-                <tr className="border-b border-border/60 text-xs font-semibold text-muted-foreground uppercase">
-                  <th className="py-3 px-4">Contacto</th>
-                  <th className="py-3 px-4">Etapa</th>
-                  <th className="py-3 px-4">Próxima Acción / Motivo</th>
-                  <th className="py-3 px-4">Fuente / Campaña</th>
-                  <th className="py-3 px-4">Fecha</th>
-                  <th className="py-3 px-4 text-right">Acción</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.pending_actions.map((action) => (
-                  <tr key={action.lead_id} className="border-b border-border/40 hover:bg-muted/10 transition">
-                    <td className="py-3 px-4 font-semibold text-foreground">{action.contact_name}</td>
-                    <td className="py-3 px-4">
-                      <span className="text-xs font-medium px-2 py-0.5 rounded bg-violet-500/10 text-violet-500 border border-violet-500/20">
-                        {STAGE_TRANSLATIONS[action.stage] || action.stage}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 text-muted-foreground font-medium">
-                      {action.next_action || 'Revisión manual requerida (contactado sin conectar)'}
-                    </td>
-                    <td className="py-3 px-4 text-xs text-muted-foreground">
-                      <span className="bg-muted px-1.5 py-0.5 rounded">{action.source || 'Sin fuente'}</span>
-                      {action.campaign && (
-                        <span className="ml-1 bg-muted px-1.5 py-0.5 rounded">{action.campaign}</span>
-                      )}
-                    </td>
-                    <td className="py-3 px-4 text-xs text-muted-foreground">
-                      {new Date(action.updated_at).toLocaleDateString()}
-                    </td>
-                    <td className="py-3 px-4 text-right">
-                      <Link
-                        href={`/${locale}/crm/leads/${action.lead_id}`}
-                        className="inline-flex items-center gap-1 text-xs font-bold text-violet-500 hover:text-violet-600 transition"
-                      >
-                        Atender <ArrowRight className="h-3 w-3" />
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
-    </div>
-  );
+    {!data.kpis.overdue_tasks && !data.pending_actions.length ? <PendingActions data={data} locale={locale} /> : null}
+  </div>;
 }
+
+function PendingActions({ data, locale }: { data: CrmDashboardResponse; locale: string }) { return <section className="rounded-xl border border-border bg-card p-4 sm:p-6"><div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-base font-semibold">Acciones humanas</h2>{data.kpis.overdue_tasks ? <Link href={`/${locale}/crm/tasks`} className="rounded-full bg-destructive/10 px-3 py-1 text-xs font-semibold text-destructive">{data.kpis.overdue_tasks} tareas vencidas</Link> : null}</div>{data.pending_actions.length ? <div className="mt-3 divide-y divide-border">{data.pending_actions.map((item) => <article key={item.lead_id} className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h3 className="text-sm font-semibold">{item.contact_name}</h3><CrmStageBadge stageKey={item.stage} stageName={item.stage} /></div><p className="mt-1 whitespace-pre-wrap break-words text-sm text-muted-foreground">{item.next_action || 'Seguimiento comercial pendiente'}</p><p className="mt-1 text-xs text-muted-foreground">Actualizado {formatCrmDate(item.updated_at)}</p></div><Link href={`/${locale}/crm/leads/${item.lead_id}`} className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-md border border-border px-3 text-sm font-medium outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring">Abrir Lead</Link></article>)}</div> : <Empty text="No hay acciones comerciales pendientes en el período." />}</section>; }
+
+function CallsPanel({ data }: { data: CrmDashboardResponse }) { const calls = data.calls; return <section className="rounded-xl border border-border bg-card p-4 sm:p-6"><h2 className="flex items-center gap-2 text-base font-semibold"><PhoneCall className="size-4 text-primary" />Llamadas</h2>{calls.total_calls ? <><dl className="mt-4 grid grid-cols-2 gap-4"><Metric label="Total" value={calls.total_calls} /><Metric label="Atendidas" value={calls.answered_calls} /><Metric label="No atendidas" value={calls.unanswered_calls} /><Metric label="Fallidas" value={calls.failed_calls} /><Metric label="Buzón de voz" value={calls.voicemail_calls} /><Metric label="Minutos facturados" value={`${calls.total_billed_minutes.toFixed(1)} min`} /></dl><p className="mt-4 border-t border-border pt-4 text-sm text-muted-foreground">Duración promedio: <strong className="text-foreground">{formatDuration(calls.average_duration_seconds)}</strong></p></> : <Empty text="No hay llamadas registradas en este período." />}</section>; }
+
+function Breakdown({ title, empty, items }: { title: string; empty: string; items: BreakdownItem[] }) { return <section className="rounded-xl border border-border bg-card p-4 sm:p-6"><h2 className="text-base font-semibold">{title}</h2>{items.length ? <><div className="mt-4 hidden overflow-x-auto md:block"><table className="w-full text-left text-sm"><thead><tr className="border-b border-border text-xs text-muted-foreground"><th className="py-2 font-medium">Nombre</th><th className="py-2 text-right font-medium">Total</th><th className="py-2 text-right font-medium">Calificados</th><th className="py-2 text-right font-medium">Agendados</th><th className="py-2 text-right font-medium">Ganados</th><th className="py-2 text-right font-medium">Conversión</th></tr></thead><tbody>{items.map((item) => <tr key={item.name} className="border-b border-border/60 last:border-0"><td className="max-w-44 break-words py-3 font-medium">{item.name}</td><td className="py-3 text-right">{item.total}</td><td className="py-3 text-right">{item.qualified}</td><td className="py-3 text-right">{item.scheduled}</td><td className="py-3 text-right">{item.won}</td><td className="py-3 text-right font-semibold">{item.conversion.toFixed(1)}%</td></tr>)}</tbody></table></div><div className="mt-4 space-y-3 md:hidden">{items.map((item) => <article key={item.name} className="rounded-lg border border-border p-3"><h3 className="break-words text-sm font-semibold">{item.name}</h3><dl className="mt-3 grid grid-cols-2 gap-3"><Metric label="Total" value={item.total} /><Metric label="Calificados" value={item.qualified} /><Metric label="Agendados" value={item.scheduled} /><Metric label="Ganados" value={item.won} /><Metric label="Conversión" value={`${item.conversion.toFixed(1)}%`} /></dl></article>)}</div></> : <Empty text={empty} />}</section>; }
+
+function Metric({ label, value }: { label: string; value: string | number }) { return <div><dt className="text-xs text-muted-foreground">{label}</dt><dd className="mt-1 text-lg font-semibold">{value}</dd></div>; }
+function Empty({ text }: { text: string }) { return <div className="mt-4 rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">{text}</div>; }

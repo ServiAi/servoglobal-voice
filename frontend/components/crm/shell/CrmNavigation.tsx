@@ -16,7 +16,7 @@ const GROUPS = [
   {
     label: 'Operación',
     links: [
-      { label: 'Pipeline', path: '/crm', icon: KanbanSquare, exact: true },
+      { label: 'Inicio CRM', path: '/crm', icon: KanbanSquare, exact: true },
       { label: 'Leads', path: '/crm/leads', icon: Users },
       { label: 'Tareas', path: '/crm/tasks', icon: CheckSquare2 },
     ],
