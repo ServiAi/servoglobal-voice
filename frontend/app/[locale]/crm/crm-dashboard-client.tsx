@@ -40,13 +40,15 @@ export function CrmDashboardClient({
         startTransition(() => {
           router.refresh();
         });
-        setTimeout(() => setSuccessMsg(null), 3000);
+        return true;
       } else {
         setError(`Error al actualizar etapa: ${res.detail}`);
+        return false;
       }
     } catch (err) {
       console.error(err);
       setError('Ocurrió un error inesperado.');
+      return false;
     }
   };
 
@@ -54,7 +56,7 @@ export function CrmDashboardClient({
     <div className="flex flex-col gap-8">
       {/* Toast Alert Feedback */}
       {(error || successMsg || isPending) && (
-        <div className="fixed bottom-5 right-5 z-50 max-w-sm rounded-lg border bg-card p-4 shadow-lg transition-all duration-300">
+        <div className="fixed bottom-4 left-4 right-4 z-50 max-w-sm rounded-lg border bg-card p-4 shadow-lg sm:left-auto" role="status" aria-live="polite">
           {isPending && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <div className="h-4 w-4 animate-spin rounded-full border-2 border-violet-500 border-t-transparent" />
@@ -69,7 +71,6 @@ export function CrmDashboardClient({
           )}
           {successMsg && !isPending && (
             <div className="flex items-center gap-2 text-sm text-emerald-500">
-              <div className="h-2 w-2 rounded-full bg-emerald-500 animate-ping" />
               <span>{successMsg}</span>
             </div>
           )}
