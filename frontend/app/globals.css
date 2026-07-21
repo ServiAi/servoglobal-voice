@@ -177,6 +177,17 @@
 }
 
 @layer components {
+  .crm-filter-control {
+    height: var(--control-height);
+    width: 100%;
+    border-radius: var(--radius-control);
+    border: 1px solid hsl(var(--input));
+    background: hsl(var(--background));
+    padding-inline: 0.75rem;
+    color: hsl(var(--foreground));
+    font-size: 0.875rem;
+  }
+
   [data-brand-spotlight-scope] {
     --spotlight-x: -1000;
     --spotlight-y: -1000;
