@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation';
 import { fetchMeProfile } from '@/lib/api/me';
 import { getAccessToken } from '@/lib/auth/server';
 import { locales, type Locale } from '@/i18n';
-import { CrmHeader } from '@/components/crm/CrmHeader';
+import { CrmShell } from '@/components/crm/shell/CrmShell';
 
 type Props = {
   children: React.ReactNode;
@@ -34,18 +34,12 @@ export default async function CrmLayout({ children, params }: Props) {
   const { profile } = result;
 
   return (
-    <div className="min-h-screen bg-background text-foreground transition-colors duration-300">
-      {/* Shared Navigation Header */}
-      <CrmHeader
-        locale={locale}
-        tenantName={profile.tenant_name}
-        userName={profile.name ?? profile.email}
-      />
-
-      {/* Main Content Area */}
-      <main className="mx-auto max-w-[1400px] px-6 py-8">
-        {children}
-      </main>
-    </div>
+    <CrmShell
+      locale={locale}
+      tenantName={profile.tenant_name}
+      userName={profile.name ?? profile.email}
+    >
+      {children}
+    </CrmShell>
   );
 }
