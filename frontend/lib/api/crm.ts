@@ -23,7 +23,10 @@ import type {
   WhatsAppConfigResponse,
   WhatsAppMessageResponse,
   WhatsAppTemplateResponse,
-  WhatsAppTestRequest,
+  WhatsAppTemplateSyncResponse,
+  WhatsAppTestMessageRequest,
+  WhatsAppTestMessageResponse,
+  WhatsAppTestResponse,
   BookingConfigRequest,
   BookingConfigResponse,
   BookingCreateRequest,
@@ -413,18 +416,22 @@ export function configureWhatsAppIntegration(accessToken: string, payload: Whats
   return requestIntegrationEndpoint<WhatsAppConfigResponse>('POST', 'whatsapp/config', accessToken, undefined, payload);
 }
 
-export function testWhatsAppIntegration(accessToken: string, payload: WhatsAppTestRequest) {
-  return requestIntegrationEndpoint<{ status: string; provider_message_id?: string | null; error_message?: string | null }>(
-    'POST',
-    'whatsapp/test',
-    accessToken,
-    undefined,
-    payload
-  );
+export function testWhatsAppIntegration(accessToken: string) {
+  return requestIntegrationEndpoint<WhatsAppTestResponse>('POST', 'whatsapp/test', accessToken);
 }
 
 export function fetchWhatsAppTemplates(accessToken: string) {
   return requestIntegrationEndpoint<WhatsAppTemplateResponse[]>('GET', 'whatsapp/templates', accessToken);
+}
+
+export function syncWhatsAppTemplates(accessToken: string) {
+  return requestIntegrationEndpoint<WhatsAppTemplateSyncResponse>('POST', 'whatsapp/templates/sync', accessToken);
+}
+
+export function sendWhatsAppTestMessage(accessToken: string, payload: WhatsAppTestMessageRequest) {
+  return requestIntegrationEndpoint<WhatsAppTestMessageResponse>(
+    'POST', 'whatsapp/test-message', accessToken, undefined, payload
+  );
 }
 
 export function configureCalComIntegration(accessToken: string, payload: BookingConfigRequest) {
@@ -605,16 +612,13 @@ export function configureAdminTenantWhatsAppIntegration(
 
 export function testAdminTenantWhatsAppIntegration(
   accessToken: string,
-  tenantId: string,
-  payload: WhatsAppTestRequest
+  tenantId: string
 ) {
-  return requestBackendEndpoint<{ status: string; provider_message_id?: string | null; error_message?: string | null }>(
+  return requestBackendEndpoint<WhatsAppTestResponse>(
     'POST',
     'admin',
     `tenants/${tenantId}/integrations/whatsapp/test`,
-    accessToken,
-    undefined,
-    payload
+    accessToken
   );
 }
 
@@ -624,6 +628,22 @@ export function fetchAdminTenantWhatsAppTemplates(accessToken: string, tenantId:
     'admin',
     `tenants/${tenantId}/integrations/whatsapp/templates`,
     accessToken
+  );
+}
+
+export function syncAdminTenantWhatsAppTemplates(accessToken: string, tenantId: string) {
+  return requestBackendEndpoint<WhatsAppTemplateSyncResponse>(
+    'POST', 'admin', `tenants/${tenantId}/integrations/whatsapp/templates/sync`, accessToken
+  );
+}
+
+export function sendAdminTenantWhatsAppTestMessage(
+  accessToken: string,
+  tenantId: string,
+  payload: WhatsAppTestMessageRequest
+) {
+  return requestBackendEndpoint<WhatsAppTestMessageResponse>(
+    'POST', 'admin', `tenants/${tenantId}/integrations/whatsapp/test-message`, accessToken, undefined, payload
   );
 }
 

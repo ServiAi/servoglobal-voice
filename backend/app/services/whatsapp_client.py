@@ -41,12 +41,13 @@ class WhatsAppCloudClient:
         config: WhatsAppClientConfig,
         *,
         json: dict[str, Any] | None = None,
+        params: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         url = f"https://graph.facebook.com/{WHATSAPP_GRAPH_VERSION}/{path.lstrip('/')}"
         headers = {"Authorization": f"Bearer {config.access_token}", "Content-Type": "application/json"}
         try:
             with httpx.Client(timeout=self.timeout) as client:
-                response = client.request(method, url, headers=headers, json=json)
+                response = client.request(method, url, headers=headers, json=json, params=params)
         except httpx.HTTPError as exc:
             raise WhatsAppCloudClientError(sanitize_whatsapp_error(str(exc)) or "WhatsApp request failed") from exc
 
@@ -61,6 +62,41 @@ class WhatsAppCloudClient:
 
     def get_phone_number_info(self, config: WhatsAppClientConfig) -> dict[str, Any]:
         return self._request("GET", config.phone_number_id, config)
+
+    def get_message_templates(
+        self,
+        config: WhatsAppClientConfig,
+        *,
+        business_account_id: str,
+        limit: int = 100,
+    ) -> dict[str, Any]:
+        if not business_account_id.strip():
+            raise ValueError("Business Account ID / WABA ID is required to sync templates.")
+        page_size = min(max(limit, 1), 100)
+        templates: list[dict[str, Any]] = []
+        after: str | None = None
+        while len(templates) < 500:
+            params: dict[str, Any] = {
+                "limit": page_size,
+                "fields": "name,status,category,language,components",
+            }
+            if after:
+                params["after"] = after
+            payload = self._request(
+                "GET",
+                f"{business_account_id}/message_templates",
+                config,
+                params=params,
+            )
+            data = payload.get("data")
+            if isinstance(data, list):
+                templates.extend(item for item in data if isinstance(item, dict))
+            cursors = (payload.get("paging") or {}).get("cursors") or {}
+            next_after = cursors.get("after")
+            if not next_after or next_after == after or not (payload.get("paging") or {}).get("next"):
+                break
+            after = str(next_after)
+        return {"data": templates[:500]}
 
     def send_template_message(
         self,

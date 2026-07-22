@@ -161,13 +161,40 @@ class WhatsAppConfigResponse(BaseModel):
 
 
 class WhatsAppTestRequest(BaseModel):
-    to_phone: Optional[str] = Field(None, max_length=80)
-    template_key: str = Field(default="lead_follow_up", max_length=80)
+    pass
 
 
 class WhatsAppTestResponse(BaseModel):
     status: str
+    message: Optional[str] = None
+    sends_message: bool = False
+    error_message: Optional[str] = None
+
+
+class WhatsAppTemplateSyncResponse(BaseModel):
+    status: str
+    fetched_count: int = 0
+    approved_count: int = 0
+    synced_count: int = 0
+    ignored_count: int = 0
+    error_message: Optional[str] = None
+
+
+class WhatsAppTestMessageRequest(BaseModel):
+    to_phone: str = Field(..., min_length=8, max_length=32)
+    template_key: Optional[str] = Field(None, max_length=80)
+    provider_template_name: Optional[str] = Field(None, max_length=120)
+    language: Optional[str] = Field(None, max_length=16)
+    variables: dict[str, str] = Field(default_factory=dict)
+
+
+class WhatsAppTestMessageResponse(BaseModel):
+    status: str
+    whatsapp_message_id: Optional[str] = None
     provider_message_id: Optional[str] = None
+    template_key: Optional[str] = None
+    to_phone_masked: Optional[str] = None
+    message: Optional[str] = None
     error_message: Optional[str] = None
 
 

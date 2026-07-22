@@ -135,6 +135,38 @@ class WhatsAppWebhookTests(Integration2ATestCase):
             message = db.scalar(select(CrmWhatsAppMessage).where(CrmWhatsAppMessage.provider_message_id == "wamid.status-missing-tenant"))
         self.assertEqual(message.status, "sent")
 
+    def test_whatsapp_status_webhook_updates_test_message_without_activity(self):
+        self.configure_whatsapp()
+        with SessionLocal() as db:
+            message = CrmWhatsAppMessage(
+                tenant_id=self.tenant.id,
+                provider_message_id="wamid.test-message",
+                direction="outbound",
+                to_phone="573001112233",
+                status="sent",
+                metadata_json={"test_message": True},
+                sent_at=datetime.now(timezone.utc),
+            )
+            db.add(message)
+            db.commit()
+
+        response = self.client.post(
+            "/api/v1/webhook/whatsapp",
+            json={"entry": [{"changes": [{"value": {
+                "metadata": {"phone_number_id": "phone-number-1"},
+                "statuses": [{"id": "wamid.test-message", "status": "delivered"}],
+            }}]}]},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        with SessionLocal() as db:
+            message = db.scalar(select(CrmWhatsAppMessage).where(CrmWhatsAppMessage.provider_message_id == "wamid.test-message"))
+            activity_count = db.scalar(select(func.count()).select_from(CrmActivity))
+            event = db.scalar(select(TenantIntegrationEvent).where(TenantIntegrationEvent.event_type == "whatsapp_status_delivered"))
+        self.assertEqual(message.status, "delivered")
+        self.assertEqual(activity_count, 0)
+        self.assertIsNotNone(event)
+
     def test_whatsapp_webhook_inbound_associates_safe_contact_without_creating_lead(self):
         self.configure_whatsapp()
         lead_id, _ = self.seed_lead()

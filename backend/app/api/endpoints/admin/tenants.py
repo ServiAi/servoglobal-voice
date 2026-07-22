@@ -40,6 +40,9 @@ from app.schemas.integrations import (
     WhatsAppConfigRequest,
     WhatsAppConfigResponse,
     WhatsAppTemplateResponse,
+    WhatsAppTemplateSyncResponse,
+    WhatsAppTestMessageRequest,
+    WhatsAppTestMessageResponse,
     WhatsAppTestRequest,
     WhatsAppTestResponse,
     VoiceProviderConfigRequest,
@@ -60,6 +63,7 @@ from app.services.google_calendar_oauth_service import GoogleCalendarOAuthServic
 from app.services.integration_event_service import IntegrationEventService
 from app.services.integration_service import IntegrationService
 from app.services.whatsapp_config_service import WhatsAppConfigService
+from app.services.whatsapp_message_service import WhatsAppMessageService
 from app.services.whatsapp_template_service import WhatsAppTemplateService
 from app.services.voice_config_service import VoiceConfigService
 from app.services.voice_agent_service import VoiceAgentService
@@ -736,7 +740,7 @@ def configure_tenant_whatsapp_admin(
 )
 def test_tenant_whatsapp_admin(
     tenant_id: str,
-    body: WhatsAppTestRequest,
+    body: WhatsAppTestRequest | None = None,
     db: Session = Depends(get_current_internal_db),
 ) -> Any:
     try:
@@ -744,8 +748,49 @@ def test_tenant_whatsapp_admin(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     result = WhatsAppConfigService(db).test_connection(tenant_id)
+    return result
+
+
+@router.post(
+    "/tenants/{tenant_id}/integrations/whatsapp/templates/sync",
+    response_model=WhatsAppTemplateSyncResponse,
+)
+def sync_tenant_whatsapp_templates_admin(
+    tenant_id: str,
+    db: Session = Depends(get_current_internal_db),
+) -> Any:
+    try:
+        OnboardingService(db).get_tenant(tenant_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    try:
+        result = WhatsAppConfigService(db).sync_templates(tenant_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
     if result.status == "failed":
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=result.error_message or "WhatsApp test failed.")
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=result.error_message or "WhatsApp template sync failed.")
+    return result
+
+
+@router.post(
+    "/tenants/{tenant_id}/integrations/whatsapp/test-message",
+    response_model=WhatsAppTestMessageResponse,
+)
+def send_tenant_whatsapp_test_message_admin(
+    tenant_id: str,
+    body: WhatsAppTestMessageRequest,
+    db: Session = Depends(get_current_internal_db),
+) -> Any:
+    try:
+        OnboardingService(db).get_tenant(tenant_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    try:
+        result = WhatsAppMessageService(db).send_test_template_message(tenant_id, body)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    if result.status == "failed":
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=result.error_message or "WhatsApp test message failed.")
     return result
 
 

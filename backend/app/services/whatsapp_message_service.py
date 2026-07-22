@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.models.crm import CrmActivity, CrmContact, CrmLead, CrmWhatsAppMessage
 from app.models.integrations import TenantWhatsAppConfig
 from app.schemas.crm import WhatsAppActionRequest, WhatsAppActionResponse
+from app.schemas.integrations import WhatsAppTestMessageRequest, WhatsAppTestMessageResponse
 from app.services.crm_activity_service import CrmActivityService
 from app.services.integration_event_service import IntegrationEventService
 from app.services.whatsapp_client import WhatsAppCloudClient, WhatsAppCloudClientError, sanitize_whatsapp_error
@@ -42,6 +43,11 @@ def safe_preview(value: str | None) -> str | None:
     if value is None:
         return None
     return value.replace("\r", " ").replace("\n", " ")[:240]
+
+
+def mask_phone(phone: str) -> str:
+    digits = normalize_phone(phone) or ""
+    return f"***{digits[-4:]}" if len(digits) >= 4 else "***"
 
 
 def extract_provider_message_id(payload: dict[str, Any]) -> str | None:
@@ -205,6 +211,87 @@ class WhatsAppMessageService:
             metadata={"message_id": provider_message_id},
         )
         return WhatsAppSendResult(status="sent", message=message, provider_message_id=provider_message_id)
+
+    def send_test_template_message(
+        self,
+        tenant_id: str,
+        request: WhatsAppTestMessageRequest,
+    ) -> WhatsAppTestMessageResponse:
+        phone = normalize_phone(request.to_phone)
+        if not phone or len(phone) < 8:
+            raise ValueError("A valid destination phone is required")
+        config, client_config = self.configs.get_active_client_config(tenant_id)
+        template = self.templates.get_synced_template(
+            tenant_id,
+            template_key=request.template_key,
+            provider_template_name=request.provider_template_name,
+        )
+        parameter_defs = (template.variables_json or {}).get("parameters") or []
+        required_keys = [str(item.get("key")) for item in parameter_defs if isinstance(item, dict) and item.get("key")]
+        missing = [key for key in required_keys if not request.variables.get(key)]
+        if missing:
+            raise ValueError(f"Missing template variables: {', '.join(missing)}")
+        components = []
+        if required_keys:
+            components = [{
+                "type": "body",
+                "parameters": [{"type": "text", "text": request.variables[key]} for key in required_keys],
+            }]
+        try:
+            payload = self.client.send_template_message(
+                client_config,
+                to_phone=phone,
+                template_name=template.provider_template_name,
+                language=request.language or template.language or config.default_language,
+                components=components,
+            )
+            provider_message_id = extract_provider_message_id(payload)
+        except WhatsAppCloudClientError as exc:
+            error_message = sanitize_whatsapp_error(str(exc)) or "WhatsApp test message failed"
+            self.events.record_event(
+                tenant_id=tenant_id,
+                provider=self.provider,
+                event_type="whatsapp_test_message",
+                status="failed",
+                message=error_message,
+            )
+            return WhatsAppTestMessageResponse(status="failed", error_message=error_message, to_phone_masked=mask_phone(phone))
+        message = CrmWhatsAppMessage(
+            tenant_id=tenant_id,
+            template_id=template.id,
+            template_key=template.template_key,
+            direction="outbound",
+            to_phone=phone,
+            from_phone=config.display_phone_number,
+            provider_message_id=provider_message_id,
+            status="sent",
+            metadata_json={
+                "test_message": True,
+                "template_key": template.template_key,
+                "source": "integration_test_message",
+            },
+            sent_at=datetime.now(timezone.utc),
+        )
+        self.db.add(message)
+        self.db.commit()
+        self.db.refresh(message)
+        self.events.record_event(
+            tenant_id=tenant_id,
+            provider=self.provider,
+            event_type="whatsapp_test_message",
+            status="success",
+            resource_type="crm_whatsapp_message",
+            resource_id=message.id,
+            metadata={"template_key": template.template_key, "provider_message_id": provider_message_id},
+        )
+        return WhatsAppTestMessageResponse(
+            status="sent",
+            whatsapp_message_id=message.id,
+            provider_message_id=provider_message_id,
+            template_key=template.template_key,
+            to_phone_masked=mask_phone(phone),
+            message="Mensaje de prueba enviado. El estado final se actualizará por webhook.",
+        )
 
     def action_response(self, result: WhatsAppSendResult) -> WhatsAppActionResponse:
         return WhatsAppActionResponse(

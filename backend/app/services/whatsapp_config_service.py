@@ -6,8 +6,14 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.integrations import TenantWhatsAppConfig
-from app.schemas.integrations import WhatsAppConfigRequest, WhatsAppConfigResponse, WhatsAppTestResponse
+from app.schemas.integrations import (
+    WhatsAppConfigRequest,
+    WhatsAppConfigResponse,
+    WhatsAppTemplateSyncResponse,
+    WhatsAppTestResponse,
+)
 from app.services.integration_event_service import IntegrationEventService
+from app.services.whatsapp_template_service import WhatsAppTemplateService
 from app.services.secret_manager_service import SecretManager
 from app.services.whatsapp_client import (
     WhatsAppClientConfig,
@@ -130,4 +136,50 @@ class WhatsAppConfigService:
             resource_type="tenant_whatsapp_config",
             resource_id=config.id,
         )
-        return WhatsAppTestResponse(status="success")
+        return WhatsAppTestResponse(
+            status="success",
+            message=(
+                "Conexión exitosa con Meta. Se validó el access token y el Phone Number ID. "
+                "Esta prueba no envía mensajes."
+            ),
+            sends_message=False,
+        )
+
+    def sync_templates(self, tenant_id: str) -> WhatsAppTemplateSyncResponse:
+        config, client_config = self.get_active_client_config(tenant_id)
+        if not (config.business_account_id or "").strip():
+            raise ValueError("Business Account ID / WABA ID is required to sync templates.")
+        try:
+            payload = self.client.get_message_templates(
+                client_config,
+                business_account_id=config.business_account_id,
+            )
+            templates = payload.get("data") if isinstance(payload.get("data"), list) else []
+            result = WhatsAppTemplateService(self.db).sync_approved_templates_from_meta(tenant_id, templates)
+        except WhatsAppCloudClientError as exc:
+            message = sanitize_whatsapp_error(str(exc)) or "WhatsApp template sync failed"
+            self.events.record_event(
+                tenant_id=tenant_id,
+                provider=self.provider,
+                event_type="whatsapp_templates_sync",
+                status="failed",
+                resource_type="tenant_whatsapp_config",
+                resource_id=config.id,
+                message=message,
+            )
+            return WhatsAppTemplateSyncResponse(status="failed", error_message=message)
+        self.events.record_event(
+            tenant_id=tenant_id,
+            provider=self.provider,
+            event_type="whatsapp_templates_sync",
+            status="success",
+            resource_type="tenant_whatsapp_config",
+            resource_id=config.id,
+            metadata={
+                "fetched_count": result.fetched_count,
+                "approved_count": result.approved_count,
+                "synced_count": result.synced_count,
+                "ignored_count": result.ignored_count,
+            },
+        )
+        return WhatsAppTemplateSyncResponse(status="success", **result.__dict__)

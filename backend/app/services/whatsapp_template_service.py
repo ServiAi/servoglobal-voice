@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
+import re
 from typing import Any
 
 from sqlalchemy import select
@@ -31,6 +33,14 @@ DEFAULT_WHATSAPP_TEMPLATES = [
 ]
 
 
+@dataclass(frozen=True)
+class WhatsAppTemplateSyncResult:
+    fetched_count: int
+    approved_count: int
+    synced_count: int
+    ignored_count: int
+
+
 class WhatsAppTemplateService:
     def __init__(self, db: Session) -> None:
         self.db = db
@@ -58,6 +68,86 @@ class WhatsAppTemplateService:
             .where(TenantWhatsAppTemplate.tenant_id == tenant_id)
             .order_by(TenantWhatsAppTemplate.template_key)
         ).all()
+
+    def sync_approved_templates_from_meta(
+        self,
+        tenant_id: str,
+        provider_templates: list[dict[str, Any]],
+    ) -> WhatsAppTemplateSyncResult:
+        approved = [item for item in provider_templates if str(item.get("status", "")).upper() == "APPROVED"]
+        synced = 0
+        for item in approved:
+            provider_name = str(item.get("name") or "").strip()
+            if not provider_name:
+                continue
+            template_key = re.sub(r"[^a-z0-9_]+", "_", provider_name.lower()).strip("_")[:80]
+            if not template_key:
+                continue
+            body = ""
+            for component in item.get("components") or []:
+                if isinstance(component, dict) and str(component.get("type", "")).upper() == "BODY":
+                    body = str(component.get("text") or "")
+                    break
+            parameter_keys = list(dict.fromkeys(re.findall(r"\{\{\s*(\d+)\s*\}\}", body)))
+            variables = {
+                "parameters": [{"key": key, "label": f"Variable {key}"} for key in parameter_keys],
+                "meta_status": "APPROVED",
+                "source": "meta_sync",
+            }
+            template = self.db.scalar(
+                select(TenantWhatsAppTemplate).where(
+                    TenantWhatsAppTemplate.tenant_id == tenant_id,
+                    TenantWhatsAppTemplate.template_key == template_key,
+                )
+            )
+            if template is None:
+                template = TenantWhatsAppTemplate(tenant_id=tenant_id, template_key=template_key)
+                self.db.add(template)
+            template.provider_template_name = provider_name
+            template.name = provider_name
+            template.category = str(item.get("category") or "transactional").lower()
+            template.language = str(item.get("language") or "es")
+            template.body = body
+            template.variables_json = variables
+            template.status = "active"
+            synced += 1
+        self.db.commit()
+        return WhatsAppTemplateSyncResult(
+            fetched_count=len(provider_templates),
+            approved_count=len(approved),
+            synced_count=synced,
+            ignored_count=len(provider_templates) - len(approved),
+        )
+
+    def get_synced_template(
+        self,
+        tenant_id: str,
+        *,
+        template_key: str | None,
+        provider_template_name: str | None,
+    ) -> TenantWhatsAppTemplate:
+        if not template_key and not provider_template_name:
+            raise ValueError("Template is required")
+        conditions = []
+        if template_key:
+            conditions.append(TenantWhatsAppTemplate.template_key == template_key)
+        if provider_template_name:
+            conditions.append(TenantWhatsAppTemplate.provider_template_name == provider_template_name)
+        template = self.db.scalar(
+            select(TenantWhatsAppTemplate).where(
+                TenantWhatsAppTemplate.tenant_id == tenant_id,
+                *conditions,
+            )
+        )
+        metadata = template.variables_json if template else {}
+        if (
+            template is None
+            or template.status != "active"
+            or metadata.get("source") != "meta_sync"
+            or metadata.get("meta_status") != "APPROVED"
+        ):
+            raise ValueError("Template must be active and approved by Meta")
+        return template
 
     def get_template(self, tenant_id: str, template_key: str) -> TenantWhatsAppTemplate:
         self.ensure_default_templates(tenant_id)

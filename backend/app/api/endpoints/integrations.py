@@ -24,6 +24,9 @@ from app.schemas.integrations import (
     WhatsAppConfigRequest,
     WhatsAppConfigResponse,
     WhatsAppTemplateResponse,
+    WhatsAppTemplateSyncResponse,
+    WhatsAppTestMessageRequest,
+    WhatsAppTestMessageResponse,
     WhatsAppTestRequest,
     WhatsAppTestResponse,
     VoiceProviderConfigRequest,
@@ -45,6 +48,7 @@ from app.services.voice_agent_service import VoiceAgentService
 from app.services.integration_event_service import IntegrationEventService
 from app.services.integration_service import IntegrationService
 from app.services.whatsapp_config_service import WhatsAppConfigService
+from app.services.whatsapp_message_service import WhatsAppMessageService
 from app.services.whatsapp_template_service import WhatsAppTemplateService
 
 router = APIRouter(prefix="/api/v1/integrations", tags=["Integrations"])
@@ -269,13 +273,40 @@ def configure_whatsapp(
 
 @router.post("/whatsapp/test", response_model=WhatsAppTestResponse)
 def test_whatsapp(
-    body: WhatsAppTestRequest,
+    body: WhatsAppTestRequest | None = None,
     context: AuthContext = Depends(require_roles(["platform_admin", "tenant_admin"])),
     db: Session = Depends(get_db),
 ) -> Any:
     result = WhatsAppConfigService(db).test_connection(context.tenant.id)
+    return result
+
+
+@router.post("/whatsapp/templates/sync", response_model=WhatsAppTemplateSyncResponse)
+def sync_whatsapp_templates(
+    context: AuthContext = Depends(require_roles(["platform_admin", "tenant_admin"])),
+    db: Session = Depends(get_db),
+) -> Any:
+    try:
+        result = WhatsAppConfigService(db).sync_templates(context.tenant.id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
     if result.status == "failed":
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=result.error_message or "WhatsApp test failed.")
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=result.error_message or "WhatsApp template sync failed.")
+    return result
+
+
+@router.post("/whatsapp/test-message", response_model=WhatsAppTestMessageResponse)
+def send_whatsapp_test_message(
+    body: WhatsAppTestMessageRequest,
+    context: AuthContext = Depends(require_roles(["platform_admin", "tenant_admin"])),
+    db: Session = Depends(get_db),
+) -> Any:
+    try:
+        result = WhatsAppMessageService(db).send_test_template_message(context.tenant.id, body)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    if result.status == "failed":
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=result.error_message or "WhatsApp test message failed.")
     return result
 
 

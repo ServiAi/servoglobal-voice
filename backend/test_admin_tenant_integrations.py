@@ -20,7 +20,8 @@ from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.main import app
 from app.models.identity import Tenant, TenantMembership, User
-from app.models.integrations import TenantBookingConfig, TenantIntegration
+from app.models.crm import CrmWhatsAppMessage
+from app.models.integrations import TenantBookingConfig, TenantIntegration, TenantWhatsAppConfig, TenantWhatsAppTemplate
 from app.services.resend_service import ResendService
 
 
@@ -144,6 +145,19 @@ class AdminTenantIntegrationTests(unittest.TestCase):
             },
         )
 
+    def _configure_whatsapp(self):
+        return self.client.post(
+            f"/api/v1/admin/tenants/{self.tenant.id}/integrations/whatsapp/config",
+            json={
+                "phone_number_id": "phone-number-1",
+                "business_account_id": "waba-1",
+                "display_phone_number": "+573001112233",
+                "default_language": "es",
+                "status": "active",
+                "access_token": "EA_secret_token_12345678901234567890",
+            },
+        )
+
         with patch(
             "app.services.booking_config_service.CalComClient.get_available_slots",
             side_effect=Exception("Cal.com API error 401: invalid token cal_secret_test"),
@@ -230,3 +244,50 @@ class AdminTenantIntegrationTests(unittest.TestCase):
         self.assertEqual(res2.status_code, 200)
         self.assertTrue(res2.json()["has_secret"])
         self.assertEqual(res2.json()["sender_name"], "ServiGlobal IA Updated")
+
+    def test_admin_sync_whatsapp_templates(self):
+        self.assertEqual(self._configure_whatsapp().status_code, 200)
+        provider_payload = {"data": [{
+            "name": "appointment_reminder",
+            "status": "APPROVED",
+            "language": "es",
+            "category": "UTILITY",
+            "components": [{"type": "BODY", "text": "Hola {{1}}"}],
+        }]}
+        with patch("app.services.whatsapp_client.WhatsAppCloudClient.get_message_templates", return_value=provider_payload):
+            response = self.client.post(
+                f"/api/v1/admin/tenants/{self.tenant.id}/integrations/whatsapp/templates/sync"
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["synced_count"], 1)
+
+    def test_admin_send_whatsapp_test_message(self):
+        self.assertEqual(self._configure_whatsapp().status_code, 200)
+        with SessionLocal() as db:
+            db.add(TenantWhatsAppTemplate(
+                tenant_id=self.tenant.id,
+                template_key="appointment_reminder",
+                provider_template_name="appointment_reminder",
+                name="appointment_reminder",
+                category="utility",
+                language="es",
+                body="Hola",
+                variables_json={"parameters": [], "meta_status": "APPROVED", "source": "meta_sync"},
+                status="active",
+            ))
+            db.commit()
+        with patch(
+            "app.services.whatsapp_client.WhatsAppCloudClient.send_template_message",
+            return_value={"messages": [{"id": "wamid.admin-test"}]},
+        ):
+            response = self.client.post(
+                f"/api/v1/admin/tenants/{self.tenant.id}/integrations/whatsapp/test-message",
+                json={"to_phone": "+573001112233", "template_key": "appointment_reminder"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["to_phone_masked"], "***2233")
+        with SessionLocal() as db:
+            message = db.scalar(select(CrmWhatsAppMessage).where(CrmWhatsAppMessage.provider_message_id == "wamid.admin-test"))
+        self.assertIsNone(message.lead_id)

@@ -43,17 +43,23 @@ export function WhatsAppIntegrationCard({ accessToken, initialConfig, templates 
       </div>
 
       <div className="space-y-6">
-        <WhatsAppConfigForm
-          accessToken={accessToken}
-          config={config}
-          mode={mode}
-          tenantId={tenantId}
-          onSaved={(nextConfig) => {
-            setConfig(nextConfig);
-            notify('success', 'Configuracion WhatsApp guardada.');
-          }}
-          onError={(text) => notify('error', text)}
-        />
+        <section className="space-y-3">
+          <div>
+            <h3 className="font-medium text-foreground">Configuración</h3>
+            <p className="text-sm text-muted-foreground">Credenciales y datos de WhatsApp Business para este tenant.</p>
+          </div>
+          <WhatsAppConfigForm
+            accessToken={accessToken}
+            config={config}
+            mode={mode}
+            tenantId={tenantId}
+            onSaved={(nextConfig) => {
+              setConfig(nextConfig);
+              notify('success', 'Configuración WhatsApp guardada.');
+            }}
+            onError={(text) => notify('error', text)}
+          />
+        </section>
         <div className="border-t border-border pt-4">
           <WhatsAppTestForm
             accessToken={accessToken}

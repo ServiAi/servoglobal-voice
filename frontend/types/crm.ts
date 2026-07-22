@@ -339,9 +339,11 @@ export type WhatsAppConfigResponse = {
   last_error_message?: string | null;
 };
 
-export type WhatsAppTestRequest = {
-  to_phone?: string | null;
-  template_key?: string;
+export type WhatsAppTestResponse = {
+  status: string;
+  message?: string | null;
+  sends_message: boolean;
+  error_message?: string | null;
 };
 
 export type WhatsAppTemplateResponse = {
@@ -354,6 +356,33 @@ export type WhatsAppTemplateResponse = {
   body: string;
   variables: Record<string, unknown>;
   status: string;
+};
+
+export type WhatsAppTemplateSyncResponse = {
+  status: string;
+  fetched_count: number;
+  approved_count: number;
+  synced_count: number;
+  ignored_count: number;
+  error_message?: string | null;
+};
+
+export type WhatsAppTestMessageRequest = {
+  to_phone: string;
+  template_key?: string | null;
+  provider_template_name?: string | null;
+  language?: string | null;
+  variables?: Record<string, string>;
+};
+
+export type WhatsAppTestMessageResponse = {
+  status: string;
+  whatsapp_message_id?: string | null;
+  provider_message_id?: string | null;
+  template_key?: string | null;
+  to_phone_masked?: string | null;
+  message?: string | null;
+  error_message?: string | null;
 };
 
 export type BookingConfigRequest = {

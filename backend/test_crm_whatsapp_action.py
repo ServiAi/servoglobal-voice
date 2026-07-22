@@ -4,7 +4,8 @@ from sqlalchemy import func, select
 
 from _integrations_2a_test_base import Integration2ATestCase, SessionLocal
 from app.models.crm import CrmActivity, CrmWhatsAppMessage
-from app.models.integrations import TenantIntegrationEvent
+from app.models.integrations import TenantIntegrationEvent, TenantWhatsAppTemplate
+from app.schemas.integrations import WhatsAppTestMessageRequest
 from app.services.whatsapp_client import WhatsAppCloudClient
 
 
@@ -24,6 +25,7 @@ class CrmWhatsAppActionTests(Integration2ATestCase):
             "/api/v1/integrations/whatsapp/config",
             json={
                 "phone_number_id": "phone-number-1",
+                "business_account_id": "waba-1",
                 "display_phone_number": "+573001112233",
                 "default_language": "es",
                 "status": "active",
@@ -31,6 +33,26 @@ class CrmWhatsAppActionTests(Integration2ATestCase):
             },
         )
         self.assertEqual(response.status_code, 200)
+
+    def seed_synced_template(self):
+        with SessionLocal() as db:
+            template = TenantWhatsAppTemplate(
+                tenant_id=self.tenant.id,
+                template_key="appointment_reminder",
+                provider_template_name="appointment_reminder",
+                name="appointment_reminder",
+                category="utility",
+                language="es",
+                body="Hola {{1}}, cita {{2}}",
+                variables_json={
+                    "parameters": [{"key": "1", "label": "Variable 1"}, {"key": "2", "label": "Variable 2"}],
+                    "meta_status": "APPROVED",
+                    "source": "meta_sync",
+                },
+                status="active",
+            )
+            db.add(template)
+            db.commit()
 
     def test_whatsapp_action_requires_contact_phone(self):
         self.configure_whatsapp()
@@ -106,6 +128,56 @@ class CrmWhatsAppActionTests(Integration2ATestCase):
         response = self.client.post(f"/api/v1/crm/leads/{other_lead_id}/actions/whatsapp", json={"template_key": "lead_follow_up"})
 
         self.assertEqual(response.status_code, 404)
+
+    def test_send_whatsapp_test_message_sends_persists_without_lead_and_masks_phone(self):
+        self.configure_whatsapp()
+        self.seed_synced_template()
+        with SessionLocal() as db:
+            from app.services.whatsapp_message_service import WhatsAppMessageService
+
+            result = WhatsAppMessageService(db, client=_Client()).send_test_template_message(
+                self.tenant.id,
+                WhatsAppTestMessageRequest(
+                    to_phone="+573001112233",
+                    template_key="appointment_reminder",
+                    variables={"1": "Aly", "2": "mañana a las 10 AM"},
+                ),
+            )
+
+        self.assertEqual(result.status, "sent")
+        self.assertEqual(result.to_phone_masked, "***2233")
+        with SessionLocal() as db:
+            message = db.get(CrmWhatsAppMessage, result.whatsapp_message_id)
+            activity_count = db.scalar(select(func.count()).select_from(CrmActivity))
+            event = db.scalar(select(TenantIntegrationEvent).where(TenantIntegrationEvent.event_type == "whatsapp_test_message"))
+        self.assertIsNone(message.lead_id)
+        self.assertIsNone(message.contact_id)
+        self.assertTrue(message.metadata_json["test_message"])
+        self.assertEqual(activity_count, 0)
+        self.assertIsNotNone(event)
+
+    def test_send_whatsapp_test_message_requires_template_variables(self):
+        self.configure_whatsapp()
+        self.seed_synced_template()
+        with SessionLocal() as db:
+            from app.services.whatsapp_message_service import WhatsAppMessageService
+
+            with self.assertRaisesRegex(ValueError, "Missing template variables: 1, 2"):
+                WhatsAppMessageService(db, client=_Client()).send_test_template_message(
+                    self.tenant.id,
+                    WhatsAppTestMessageRequest(to_phone="573001112233", template_key="appointment_reminder"),
+                )
+
+    def test_send_whatsapp_test_message_rejects_unapproved_template(self):
+        self.configure_whatsapp()
+        with SessionLocal() as db:
+            from app.services.whatsapp_message_service import WhatsAppMessageService
+
+            with self.assertRaisesRegex(ValueError, "approved by Meta"):
+                WhatsAppMessageService(db, client=_Client()).send_test_template_message(
+                    self.tenant.id,
+                    WhatsAppTestMessageRequest(to_phone="573001112233", template_key="lead_follow_up"),
+                )
 
 
 if __name__ == "__main__":
