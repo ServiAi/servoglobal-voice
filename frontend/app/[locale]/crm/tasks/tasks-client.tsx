@@ -7,21 +7,25 @@ import { CrmTaskList } from '@/components/crm/CrmTaskList';
 import { CrmTaskForm } from '@/components/crm/CrmTaskForm';
 import { createCrmTask, updateCrmTask, deleteCrmTask } from '@/lib/api/crm';
 import { ShieldAlert, Filter, CheckSquare } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 
 type TasksClientProps = {
   tasks: TaskResponse[];
   accessToken: string;
   locale: string;
+  userRole?: string;
 };
 
 export function TasksClient({
   tasks,
   accessToken,
   locale,
+  userRole,
 }: TasksClientProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const t = useTranslations('crm.tasks');
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -73,9 +77,9 @@ export function TasksClient({
     setError(null);
     const res = await createCrmTask(accessToken, taskPayload);
     if (res.ok) {
-      triggerRefresh('Tarea creada con éxito.');
+      triggerRefresh(t('created'));
     } else {
-      setError(`Error al crear tarea: ${res.detail}`);
+      setError(t('createError', { detail: res.detail }));
       throw new Error(res.detail);
     }
   };
@@ -84,9 +88,9 @@ export function TasksClient({
     setError(null);
     const res = await updateCrmTask(accessToken, taskId, { status: nextStatus });
     if (res.ok) {
-      triggerRefresh('Estado de tarea actualizado.');
+      triggerRefresh(t('updated'));
     } else {
-      setError(`Error al actualizar tarea: ${res.detail}`);
+      setError(t('updateError', { detail: res.detail }));
     }
   };
 
@@ -94,14 +98,21 @@ export function TasksClient({
     setError(null);
     const res = await deleteCrmTask(accessToken, taskId);
     if (res.ok) {
-      triggerRefresh('Tarea eliminada con éxito.');
+      triggerRefresh(t('deleted'));
     } else {
-      setError(`Error al eliminar tarea: ${res.detail}`);
+      setError(t('deleteError', { detail: res.detail }));
     }
   };
 
   const pendingCount = tasks.filter((t) => t.status === 'pending').length;
   const completedCount = tasks.filter((t) => t.status === 'done').length;
+  const today = new Date();
+  const todayKey = today.toDateString();
+  const openTasks = tasks.filter((task) => task.status !== 'done');
+  const overdueCount = openTasks.filter((task) => task.due_at && new Date(task.due_at) < today && new Date(task.due_at).toDateString() !== todayKey).length;
+  const todayCount = openTasks.filter((task) => task.due_at && new Date(task.due_at).toDateString() === todayKey).length;
+  const upcomingCount = openTasks.filter((task) => task.due_at && new Date(task.due_at) > today && new Date(task.due_at).toDateString() !== todayKey).length;
+  const undatedCount = openTasks.filter((task) => !task.due_at).length;
 
   return (
     <div className="flex flex-col gap-6">
@@ -111,7 +122,7 @@ export function TasksClient({
           {isPending && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <div className="h-4 w-4 animate-spin rounded-full border-2 border-violet-500 border-t-transparent" />
-              <span>Sincronizando tareas...</span>
+              <span>{t('syncing')}</span>
             </div>
           )}
           {error && (
@@ -132,11 +143,25 @@ export function TasksClient({
       {/* Header section */}
       <section className="flex flex-col gap-2">
         <h2 className="text-2xl font-bold tracking-tight text-foreground">
-          Gestión de Tareas
+          {t('title')}
         </h2>
         <p className="text-sm text-muted-foreground">
-          Organiza, completa y programa actividades de seguimiento de leads.
+          {t('description')}
         </p>
+      </section>
+
+      <section aria-label={t('temporalSummary')} className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {[
+          [t('overdue'), overdueCount, 'text-destructive'],
+          [t('today'), todayCount, 'text-amber-600 dark:text-amber-400'],
+          [t('upcoming'), upcomingCount, 'text-primary'],
+          [t('undated'), undatedCount, 'text-muted-foreground'],
+        ].map(([label, value, tone]) => (
+          <div key={label} className="rounded-xl border border-border bg-card p-4 shadow-xs">
+            <p className="text-sm font-medium text-muted-foreground">{label}</p>
+            <p className={`mt-1 text-2xl font-bold ${tone}`}>{value}</p>
+          </div>
+        ))}
       </section>
 
       {/* Grid: Filters & Creation vs Tasks List */}
@@ -144,43 +169,43 @@ export function TasksClient({
         {/* Left Side: Filters & Creation (1 col) */}
         <div className="lg:col-span-1 flex flex-col gap-6">
           {/* Filters Form */}
-          <div className="rounded-xl border border-border bg-card/65 p-5 shadow-xs flex flex-col gap-4">
-            <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider pb-2 border-b border-border/60">
-              <Filter className="h-4 w-4 text-violet-500" />
-              <span>Filtrar Tareas</span>
+          <div className="rounded-xl border border-border bg-card p-4 shadow-xs sm:p-5 flex flex-col gap-4">
+            <div className="flex items-center gap-2 text-sm font-semibold text-foreground pb-3 border-b border-border">
+              <Filter className="h-4 w-4 text-primary" />
+              <span>{t('filters')}</span>
             </div>
 
             <form onSubmit={handleApplyFilters} className="flex flex-col gap-4">
               <div className="flex flex-col gap-1">
-                <label htmlFor="filter-status" className="text-2xs font-bold text-muted-foreground uppercase">
-                  Estado
+                <label htmlFor="filter-status" className="text-sm font-medium text-foreground">
+                  {t('status')}
                 </label>
                 <select
                   id="filter-status"
                   value={status}
                   onChange={(e) => setStatus(e.target.value)}
-                  className="w-full rounded-md border border-border bg-zinc-950/40 px-3 py-2 text-sm text-foreground focus:border-violet-500 focus:outline-none"
+                  className="min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
-                  <option value="">Todos</option>
-                  <option value="pending">Pendiente</option>
-                  <option value="done">Completado</option>
+                  <option value="">{t('all')}</option>
+                  <option value="pending">{t('pending')}</option>
+                  <option value="done">{t('completed')}</option>
                 </select>
               </div>
 
               <div className="flex flex-col gap-1">
-                <label htmlFor="filter-priority" className="text-2xs font-bold text-muted-foreground uppercase">
-                  Prioridad
+                <label htmlFor="filter-priority" className="text-sm font-medium text-foreground">
+                  {t('priority')}
                 </label>
                 <select
                   id="filter-priority"
                   value={priority}
                   onChange={(e) => setPriority(e.target.value)}
-                  className="w-full rounded-md border border-border bg-zinc-950/40 px-3 py-2 text-sm text-foreground focus:border-violet-500 focus:outline-none"
+                  className="min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
-                  <option value="">Todas</option>
-                  <option value="high">Alta</option>
-                  <option value="medium">Media</option>
-                  <option value="low">Baja</option>
+                  <option value="">{t('allPriorities')}</option>
+                  <option value="high">{t('high')}</option>
+                  <option value="medium">{t('medium')}</option>
+                  <option value="low">{t('low')}</option>
                 </select>
               </div>
 
@@ -188,36 +213,36 @@ export function TasksClient({
                 <button
                   type="button"
                   onClick={handleResetFilters}
-                  className="rounded-md border border-border px-3 py-1.5 text-xs font-semibold text-muted-foreground hover:bg-muted"
+                  className="min-h-11 rounded-md border border-border px-3 py-2 text-sm font-semibold text-muted-foreground hover:bg-muted"
                 >
-                  Limpiar
+                  {t('clear')}
                 </button>
                 <button
                   type="submit"
-                  className="rounded-md bg-violet-600 px-4 py-1.5 text-xs font-bold text-white hover:bg-violet-500"
+                  className="min-h-11 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
                 >
-                  Filtrar
+                  {t('apply')}
                 </button>
               </div>
             </form>
           </div>
 
           {/* Creation Form */}
-          <CrmTaskForm onSubmit={handleCreateTask} />
+          <CrmTaskForm onSubmit={handleCreateTask} userRole={userRole} />
         </div>
 
         {/* Right Side: Tasks List (2 cols) */}
         <div className="lg:col-span-2 flex flex-col gap-4">
-          <div className="rounded-xl border border-border bg-card/65 p-6 shadow-xs flex flex-col gap-4">
+          <div className="rounded-xl border border-border bg-card p-4 shadow-xs sm:p-6 flex flex-col gap-4">
             <div className="border-b border-border/60 pb-3 flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <CheckSquare className="h-5 w-5 text-violet-500" />
-                <h3 className="text-base font-bold text-foreground">Lista de Tareas</h3>
+                <CheckSquare className="h-5 w-5 text-primary" />
+                <h3 className="text-base font-bold text-foreground">{t('list')}</h3>
               </div>
-              <div className="flex gap-3 text-2xs text-muted-foreground font-semibold uppercase">
-                <span className="text-amber-500">{pendingCount} Pendientes</span>
-                <span className="text-zinc-500/40">•</span>
-                <span className="text-emerald-500">{completedCount} Completadas</span>
+              <div className="flex flex-wrap gap-2 text-xs text-muted-foreground font-semibold">
+                <span className="text-amber-500">{t('pendingCount', { count: pendingCount })}</span>
+                <span aria-hidden="true">•</span>
+                <span className="text-emerald-500">{t('completedCount', { count: completedCount })}</span>
               </div>
             </div>
 
@@ -226,6 +251,7 @@ export function TasksClient({
               onToggleStatus={handleToggleTaskStatus}
               onDelete={handleDeleteTask}
               showLeadInfo={true}
+              userRole={userRole}
               locale={locale}
             />
           </div>

@@ -200,9 +200,10 @@ export function CrmLeadQuickActions({
           <>
             <Button
               variant="outline" size="sm"
-              disabled={loadingAction !== null}
+              disabled={loadingAction !== null || !contactPhone}
+              title={!contactPhone ? 'El lead no tiene teléfono registrado' : undefined}
               onClick={() => setWhatsappModalOpen(true)}
-              className="flex items-center justify-start gap-2 bg-zinc-950/20 text-foreground hover:bg-emerald-500/10 hover:text-emerald-500 hover:border-emerald-500/20 transition cursor-pointer"
+              className="flex items-center justify-start gap-2 bg-background text-foreground hover:bg-emerald-500/10 hover:text-emerald-500 hover:border-emerald-500/20 transition"
             >
               <MessageSquare className="h-4 w-4 text-emerald-500" />
               <span className="truncate">Enviar WhatsApp</span>
@@ -212,7 +213,7 @@ export function CrmLeadQuickActions({
               variant="outline" size="sm"
               disabled={loadingAction !== null}
               onClick={() => handleOutboundAction('chatwoot')}
-              className="flex items-center justify-start gap-2 bg-zinc-950/20 text-foreground hover:bg-sky-500/10 hover:text-sky-500 hover:border-sky-500/20 transition cursor-pointer"
+              className="flex items-center justify-start gap-2 bg-background text-foreground hover:bg-sky-500/10 hover:text-sky-500 hover:border-sky-500/20 transition"
             >
               <MessageCircle className="h-4 w-4 text-sky-500" />
               <span className="truncate">Chatwoot</span>
@@ -220,9 +221,10 @@ export function CrmLeadQuickActions({
 
             <Button
               variant="outline" size="sm"
-              disabled={loadingAction !== null}
+              disabled={loadingAction !== null || !contactPhone}
+              title={!contactPhone ? 'El lead no tiene teléfono registrado' : undefined}
               onClick={() => setVoiceCallModalOpen(true)}
-              className="flex items-center justify-start gap-2 bg-zinc-950/20 text-foreground hover:bg-indigo-500/10 hover:text-indigo-500 hover:border-indigo-500/20 transition cursor-pointer"
+              className="flex items-center justify-start gap-2 bg-background text-foreground hover:bg-indigo-500/10 hover:text-indigo-500 hover:border-indigo-500/20 transition"
             >
               <Phone className="h-4 w-4 text-indigo-500" />
               <span className="truncate">Llamar (Agente AI)</span>
@@ -232,7 +234,7 @@ export function CrmLeadQuickActions({
               variant="outline" size="sm"
               disabled={loadingAction !== null}
               onClick={() => setBookingModalOpen(true)}
-              className="flex items-center justify-start gap-2 bg-zinc-950/20 text-foreground hover:bg-fuchsia-500/10 hover:text-fuchsia-500 hover:border-fuchsia-500/20 transition cursor-pointer"
+              className="flex items-center justify-start gap-2 bg-background text-foreground hover:bg-fuchsia-500/10 hover:text-fuchsia-500 hover:border-fuchsia-500/20 transition"
             >
               <Calendar className="h-4 w-4 text-fuchsia-500" />
               <span className="truncate">Agendar reunión</span>
@@ -242,7 +244,7 @@ export function CrmLeadQuickActions({
               variant="outline" size="sm"
               disabled={loadingAction !== null}
               onClick={() => setEmailModalOpen(true)}
-              className="flex items-center justify-start gap-2 bg-zinc-950/20 text-foreground hover:bg-amber-500/10 hover:text-amber-500 hover:border-amber-500/20 transition cursor-pointer col-span-2 sm:col-span-4 lg:col-span-2"
+              className="col-span-2 flex items-center justify-start gap-2 bg-background text-foreground transition hover:border-amber-500/20 hover:bg-amber-500/10 hover:text-amber-500 sm:col-span-4 lg:col-span-2"
             >
               <Mail className="h-4 w-4 text-amber-500" />
               <span className="truncate">Enviar resumen Email</span>
@@ -259,7 +261,7 @@ export function CrmLeadQuickActions({
               variant="outline" size="sm"
               disabled={loadingAction !== null || currentStageKey === 'won'}
               onClick={() => setTerminalStage('won')}
-              className="flex items-center justify-start gap-2 bg-zinc-950/20 text-foreground hover:bg-emerald-500/10 hover:text-emerald-500 hover:border-emerald-500/20 transition cursor-pointer"
+              className="flex items-center justify-start gap-2 bg-background text-foreground transition hover:border-emerald-500/20 hover:bg-emerald-500/10 hover:text-emerald-500"
             >
               <CheckCircle2 className="h-4 w-4 text-emerald-500" />
               <span className="truncate">Marcar Ganado</span>
@@ -269,7 +271,7 @@ export function CrmLeadQuickActions({
               variant="outline" size="sm"
               disabled={loadingAction !== null || currentStageKey === 'lost'}
               onClick={() => setTerminalStage('lost')}
-              className="flex items-center justify-start gap-2 bg-zinc-950/20 text-foreground hover:bg-red-500/10 hover:text-red-500 hover:border-red-500/20 transition cursor-pointer"
+              className="flex items-center justify-start gap-2 bg-background text-foreground transition hover:border-red-500/20 hover:bg-red-500/10 hover:text-red-500"
             >
               <XCircle className="h-4 w-4 text-red-500" />
               <span className="truncate">Marcar Perdido</span>
@@ -279,7 +281,7 @@ export function CrmLeadQuickActions({
               variant="outline" size="sm"
               disabled={loadingAction !== null || currentStageKey === 'not_interested'}
               onClick={() => setTerminalStage('not_interested')}
-              className="flex items-center justify-start gap-2 bg-zinc-950/20 text-foreground hover:bg-zinc-500/15 hover:text-zinc-400 hover:border-zinc-500/20 transition cursor-pointer col-span-2 sm:col-span-4 lg:col-span-2"
+              className="col-span-2 flex items-center justify-start gap-2 bg-background text-foreground transition hover:border-muted-foreground/20 hover:bg-muted sm:col-span-4 lg:col-span-2"
             >
               <AlertCircle className="h-4 w-4 text-zinc-400" />
               <span className="truncate">No Interesado</span>
@@ -330,7 +332,7 @@ export function CrmLeadQuickActions({
                 placeholder="Indica el motivo (ej: Cliente firmó contrato, Presupuesto no califica, No atiende llamadas...)"
                 value={reason}
                 onChange={(e) => { setReason(e.target.value); if (validationError) setValidationError(null); }}
-                className="w-full rounded-md border border-border bg-zinc-950/40 p-2.5 text-sm text-foreground focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 transition"
+                className="w-full rounded-md border border-input bg-background p-2.5 text-sm text-foreground outline-none transition focus-visible:ring-2 focus-visible:ring-ring"
               />
               {validationError && (
                 <span className="text-2xs font-semibold text-red-500">{validationError}</span>
@@ -346,7 +348,7 @@ export function CrmLeadQuickActions({
                 placeholder="Cualquier nota extra relevante para el historial comercial..."
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                className="w-full rounded-md border border-border bg-zinc-950/40 p-2.5 text-sm text-foreground focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 transition"
+                className="w-full rounded-md border border-input bg-background p-2.5 text-sm text-foreground outline-none transition focus-visible:ring-2 focus-visible:ring-ring"
               />
             </div>
           </div>
@@ -357,7 +359,7 @@ export function CrmLeadQuickActions({
               Cancelar
             </Button>
             <Button type="button" disabled={loadingAction !== null}
-              onClick={handleTerminalStageSubmit} className="bg-violet-600 hover:bg-violet-500 text-white font-bold">
+              onClick={handleTerminalStageSubmit}>
               {loadingAction !== null ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
               Guardar Cambios
             </Button>

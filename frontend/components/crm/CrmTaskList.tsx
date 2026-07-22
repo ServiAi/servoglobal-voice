@@ -1,5 +1,7 @@
 'use client';
 
+import { formatCrmDate } from './lead-workspace/crm-format';
+
 import React, { useState } from 'react';
 import type { TaskResponse } from '@/types/crm';
 import { Card } from '../ui/card';
@@ -85,17 +87,15 @@ export function CrmTaskList({
     if (!dateStr) return null;
     const date = new Date(dateStr);
     if (isNaN(date.getTime())) return null;
-
-    const isOverdue = date.getTime() < Date.now();
-
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const tomorrow = new Date(today);
+    tomorrow.setDate(today.getDate() + 1);
+    const dueDay = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const state = dueDay < today ? 'overdue' : dueDay < tomorrow ? 'today' : 'future';
     return {
-      label: date.toLocaleDateString('es-ES', {
-        day: 'numeric',
-        month: 'short',
-        hour: '2-digit',
-        minute: '2-digit',
-      }),
-      isOverdue,
+      label: formatCrmDate(dateStr),
+      state,
     };
   };
 
@@ -155,18 +155,14 @@ export function CrmTaskList({
 
                     {dueInfo && (
                       <span className={cn(
-                        'inline-flex items-center gap-1 rounded bg-muted/40 px-2 py-0.5 text-2xs font-mono border',
-                        dueInfo.isOverdue && !isDone
+                        'inline-flex items-center gap-1 rounded border bg-muted/40 px-2 py-0.5 text-xs',
+                        dueInfo.state === 'overdue' && !isDone
                           ? 'text-red-500 bg-red-500/5 border-red-500/10'
                           : 'text-muted-foreground border-border/50'
                       )}>
                         <Calendar className="h-3 w-3 shrink-0" />
                         <span>{dueInfo.label}</span>
-                        {dueInfo.isOverdue && !isDone && (
-                          <span className="font-bold text-[9px] uppercase tracking-wide ml-0.5 animate-pulse text-red-500">
-                            (Vencida)
-                          </span>
-                        )}
+                        {!isDone ? <span className="ml-0.5 font-bold">({dueInfo.state === 'overdue' ? 'Vencida' : dueInfo.state === 'today' ? 'Hoy' : 'Próxima'})</span> : <span className="ml-0.5 font-bold">(Completada)</span>}
                       </span>
                     )}
 

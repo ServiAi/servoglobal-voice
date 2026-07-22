@@ -10,7 +10,11 @@
     "build:check": "npm run clean:next && next build && npm run clean:next",
     "clean:next": "node -e \"require('fs').rmSync('.next', { recursive: true, force: true })\"",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "qa:auth": "playwright test --project=auth --headed",
+    "qa:visual": "playwright test --project=crm-visual",
+    "qa:visual:update": "playwright test --project=crm-visual --update-snapshots",
+    "qa:report": "playwright show-report"
   },
   "dependencies": {
     "@calcom/embed-react": "^1.5.3",
@@ -41,6 +45,8 @@
     "ultravox-client": "^0.5.0"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.12.1",
+    "@playwright/test": "^1.61.1",
     "@types/d3": "^7.4.3",
     "@types/node": "^20",
     "@types/react": "^18",

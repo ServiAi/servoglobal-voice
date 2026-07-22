@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { getAccessToken } from '@/lib/auth/server';
 import { locales, type Locale } from '@/i18n';
 import { fetchCrmTasks } from '@/lib/api/crm';
+import { fetchMeProfile } from '@/lib/api/me';
 import { TasksClient } from './tasks-client';
 import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
@@ -33,7 +34,10 @@ export default async function CrmTasksPage({ params, searchParams }: Props) {
     priority: typeof resolvedSearchParams.priority === 'string' ? resolvedSearchParams.priority : undefined,
   };
 
-  const result = await fetchCrmTasks(accessToken, filters);
+  const [result, meResult] = await Promise.all([
+    fetchCrmTasks(accessToken, filters),
+    fetchMeProfile(accessToken),
+  ]);
 
   if (!result.ok) {
     return (
@@ -55,6 +59,7 @@ export default async function CrmTasksPage({ params, searchParams }: Props) {
       tasks={result.data}
       accessToken={accessToken}
       locale={locale}
+      userRole={meResult.ok ? meResult.profile.role : undefined}
     />
   );
 }

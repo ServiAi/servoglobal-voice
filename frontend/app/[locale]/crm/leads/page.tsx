@@ -81,7 +81,7 @@ export default async function CrmLeadsPage({ params, searchParams }: Props) {
   return (
     <div className="flex flex-col gap-6">
       {/* Header path */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-start gap-4">
         <Link
           href={`/${locale}/crm`}
           className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border bg-card text-muted-foreground hover:text-foreground transition shadow-2xs"
@@ -89,12 +89,13 @@ export default async function CrmLeadsPage({ params, searchParams }: Props) {
         >
           <ArrowLeft className="h-4 w-4" />
         </Link>
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight text-foreground">
-            Listado de Leads
-          </h2>
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">Leads</h1>
+            <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-semibold text-muted-foreground">{result.data.total}</span>
+          </div>
           <p className="text-sm text-muted-foreground">
-            Busca, filtra y examina a todos tus prospectos calificados o en proceso.
+            Busca, filtra y revisa tus prospectos sin perder el contexto comercial.
           </p>
         </div>
       </div>

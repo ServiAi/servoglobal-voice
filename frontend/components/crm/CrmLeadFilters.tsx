@@ -1,313 +1,160 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
-import { useRouter, usePathname, useSearchParams } from 'next/navigation';
-import { Search, Filter, X } from 'lucide-react';
+import * as Dialog from '@radix-ui/react-dialog';
+import { Filter, Search, SlidersHorizontal, X } from 'lucide-react';
+import { useId, useState, type FormEvent, type ReactNode } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { CRM_STAGES, CRM_STATUSES, getStageLabel, getStatusLabel } from './config/crm-display';
 
-const STAGE_TRANSLATIONS: Record<string, string> = {
-  new: 'Nuevo',
-  contacted: 'Contactado',
-  connected: 'Conectado',
-  qualified: 'Calificado',
-  scheduled: 'Agendado',
-  voicemail: 'Buzón de voz',
-  follow_up: 'En seguimiento',
-  not_interested: 'No Interesado',
-  won: 'Ganado',
-  lost: 'Perdido',
+const ADVANCED_FILTERS = ['source', 'campaign', 'has_phone', 'has_email', 'date_from', 'date_to', 'sort_by', 'sort_order'] as const;
+const FILTER_LABELS: Record<string, string> = {
+  search: 'Búsqueda',
+  stage_key: 'Etapa',
+  status: 'Estado',
+  source: 'Origen',
+  campaign: 'Campaña',
+  has_phone: 'Teléfono',
+  has_email: 'Correo',
+  date_from: 'Desde',
+  date_to: 'Hasta',
+  sort_by: 'Orden',
+  sort_order: 'Dirección',
 };
-
-const STAGES = Object.entries(STAGE_TRANSLATIONS).map(([key, name]) => ({ key, name }));
 
 function toDateInputValue(value: string) {
   return /^\d{4}-\d{2}-\d{2}/.test(value) ? value.slice(0, 10) : '';
 }
 
-function toStartOfDayUtc(date: string) {
-  return date ? `${date}T00:00:00Z` : '';
-}
-
-function toEndOfDayUtc(date: string) {
-  return date ? `${date}T23:59:59Z` : '';
+function displayValue(key: string, value: string) {
+  if (key === 'stage_key') return getStageLabel(value);
+  if (key === 'status') return getStatusLabel(value);
+  if (key === 'has_phone' || key === 'has_email') return value === 'true' ? 'Sí' : 'No';
+  if (key === 'sort_by') return { created_at: 'Fecha de registro', contact_name: 'Contacto', lead_score: 'Score' }[value] ?? 'Actualización';
+  if (key === 'sort_order') return value === 'asc' ? 'Ascendente' : 'Descendente';
+  return value;
 }
 
 export function CrmLeadFilters() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-
-  // Local state for the filter fields
-  const [search, setSearch] = useState(searchParams.get('search') || '');
-  const [stageKey, setStageKey] = useState(searchParams.get('stage_key') || '');
-  const [status, setStatus] = useState(searchParams.get('status') || '');
-  const [source, setSource] = useState(searchParams.get('source') || '');
-  const [campaign, setCampaign] = useState(searchParams.get('campaign') || '');
-  const [hasPhone, setHasPhone] = useState(searchParams.get('has_phone') || '');
-  const [hasEmail, setHasEmail] = useState(searchParams.get('has_email') || '');
-  const [sortBy, setSortBy] = useState(searchParams.get('sort_by') || 'updated_at');
-  const [sortOrder, setSortOrder] = useState(searchParams.get('sort_order') || 'desc');
-  const [dateFrom, setDateFrom] = useState(toDateInputValue(searchParams.get('date_from') || ''));
-  const [dateTo, setDateTo] = useState(toDateInputValue(searchParams.get('date_to') || ''));
-
-  const createQueryString = useCallback(
-    (params: Record<string, string>) => {
-      const newSearchParams = new URLSearchParams(searchParams.toString());
-      // Reset page when filters change
-      newSearchParams.delete('page');
-
-      Object.entries(params).forEach(([name, value]) => {
-        if (value !== undefined && value !== null && value !== '') {
-          newSearchParams.set(name, value);
-        } else {
-          newSearchParams.delete(name);
-        }
-      });
-
-      return newSearchParams.toString();
-    },
-    [searchParams]
+  const formId = useId();
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const queryKey = searchParams.toString();
+  const advancedCount = ADVANCED_FILTERS.filter((key) => {
+    const value = searchParams.get(key);
+    return Boolean(value && !((key === 'sort_by' && value === 'updated_at') || (key === 'sort_order' && value === 'desc')));
+  }).length;
+  const activeFilters = Array.from(searchParams.entries()).filter(([key, value]) =>
+    Boolean(FILTER_LABELS[key] && value && key !== 'page' && key !== 'page_size' && !((key === 'sort_by' && value === 'updated_at') || (key === 'sort_order' && value === 'desc')))
   );
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    router.push(
-      `${pathname}?${createQueryString({
-        search,
-        stage_key: stageKey,
-        status,
-        source,
-        campaign,
-        has_phone: hasPhone,
-        has_email: hasEmail,
-        sort_by: sortBy,
-        sort_order: sortOrder,
-        date_from: toStartOfDayUtc(dateFrom),
-        date_to: toEndOfDayUtc(dateTo),
-      })}`
-    );
+  const navigate = (params: URLSearchParams) => {
+    params.delete('page');
+    const query = params.toString();
+    router.push(query ? `${pathname}?${query}` : pathname);
   };
 
-  const handleReset = () => {
-    setSearch('');
-    setStageKey('');
-    setStatus('');
-    setSource('');
-    setCampaign('');
-    setHasPhone('');
-    setHasEmail('');
-    setSortBy('updated_at');
-    setSortOrder('desc');
-    setDateFrom('');
-    setDateTo('');
-    router.push(pathname);
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    const params = new URLSearchParams(searchParams.toString());
+    Object.keys(FILTER_LABELS).forEach((key) => params.delete(key));
+
+    data.forEach((rawValue, key) => {
+      const value = String(rawValue).trim();
+      if (!value) return;
+      if (key === 'date_from') params.set(key, `${value}T00:00:00Z`);
+      else if (key === 'date_to') params.set(key, `${value}T23:59:59Z`);
+      else if (!((key === 'sort_by' && value === 'updated_at') || (key === 'sort_order' && value === 'desc'))) params.set(key, value);
+    });
+    setAdvancedOpen(false);
+    navigate(params);
+  };
+
+  const removeFilter = (key: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete(key);
+    navigate(params);
   };
 
   return (
-    <div className="rounded-xl border border-border bg-card/65 p-5 shadow-xs">
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider pb-2 border-b border-border/60">
-          <Filter className="h-4 w-4 text-violet-500" />
-          <span>Filtros Avanzados</span>
-        </div>
-
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {/* Search bar */}
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="search" className="text-xs font-medium text-muted-foreground">
-              Buscar contacto / empresa
-            </label>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
-              <input
-                type="text"
-                id="search"
-                placeholder="Nombre, teléfono..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-full rounded-md border border-border bg-zinc-950/40 py-2 pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 transition-all"
-              />
-            </div>
-          </div>
-
-          {/* Stage Key select */}
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="stageKey" className="text-xs font-medium text-muted-foreground">
-              Etapa del embudo
-            </label>
-            <select
-              id="stageKey"
-              value={stageKey}
-              onChange={(e) => setStageKey(e.target.value)}
-              className="w-full rounded-md border border-border bg-zinc-950/40 py-2 px-3 text-sm text-foreground focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 transition-all"
-            >
+    <div className="space-y-3">
+      <form id={formId} key={queryKey} onSubmit={handleSubmit} className="rounded-[var(--radius-card)] border border-border bg-card p-3 shadow-sm">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(16rem,1fr)_12rem_12rem_auto_auto]">
+          <label className="relative sm:col-span-2 xl:col-span-1">
+            <span className="sr-only">Buscar leads</span>
+            <Search aria-hidden="true" className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <input name="search" defaultValue={searchParams.get('search') ?? ''} placeholder="Buscar leads..." className="h-[var(--control-height)] w-full rounded-[var(--radius-control)] border border-input bg-background pl-9 pr-3 text-sm placeholder:text-muted-foreground" />
+          </label>
+          <label>
+            <span className="sr-only">Etapa</span>
+            <select name="stage_key" defaultValue={searchParams.get('stage_key') ?? ''} className="h-[var(--control-height)] w-full rounded-[var(--radius-control)] border border-input bg-background px-3 text-sm">
               <option value="">Todas las etapas</option>
-              {STAGES.map((s) => (
-                <option key={s.key} value={s.key}>
-                  {s.name}
-                </option>
-              ))}
+              {CRM_STAGES.map((stage) => <option key={stage.key} value={stage.key}>{stage.label}</option>)}
             </select>
-          </div>
-
-          {/* Status select */}
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="status" className="text-xs font-medium text-muted-foreground">
-              Estado del lead
-            </label>
-            <select
-              id="status"
-              value={status}
-              onChange={(e) => setStatus(e.target.value)}
-              className="w-full rounded-md border border-border bg-zinc-950/40 py-2 px-3 text-sm text-foreground focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 transition-all"
-            >
+          </label>
+          <label>
+            <span className="sr-only">Estado</span>
+            <select name="status" defaultValue={searchParams.get('status') ?? ''} className="h-[var(--control-height)] w-full rounded-[var(--radius-control)] border border-input bg-background px-3 text-sm">
               <option value="">Todos los estados</option>
-              <option value="open">Abierto</option>
-              <option value="won">Ganado</option>
-              <option value="lost">Perdido</option>
-              <option value="unqualified">Descalificado</option>
-              <option value="paused">Pausado</option>
+              {CRM_STATUSES.map((status) => <option key={status.key} value={status.key}>{status.label}</option>)}
             </select>
-          </div>
-
-          {/* Source input */}
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="source" className="text-xs font-medium text-muted-foreground">
-              Origen (Source)
-            </label>
-            <input
-              type="text"
-              id="source"
-              placeholder="Ej: web, ultravox"
-              value={source}
-              onChange={(e) => setSource(e.target.value)}
-              className="w-full rounded-md border border-border bg-zinc-950/40 py-2 px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 transition-all"
-            />
-          </div>
-
-          {/* Campaign input */}
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="campaign" className="text-xs font-medium text-muted-foreground">
-              Campaña
-            </label>
-            <input
-              type="text"
-              id="campaign"
-              placeholder="Ej: ads_facebook"
-              value={campaign}
-              onChange={(e) => setCampaign(e.target.value)}
-              className="w-full rounded-md border border-border bg-zinc-950/40 py-2 px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 transition-all"
-            />
-          </div>
-
-          {/* Contact filtering checkboxes */}
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="hasPhone" className="text-xs font-medium text-muted-foreground">
-              Tiene Teléfono
-            </label>
-            <select
-              id="hasPhone"
-              value={hasPhone}
-              onChange={(e) => setHasPhone(e.target.value)}
-              className="w-full rounded-md border border-border bg-zinc-950/40 py-2 px-3 text-sm text-foreground focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 transition-all"
-            >
-              <option value="">Cualquiera</option>
-              <option value="true">Sí</option>
-              <option value="false">No</option>
-            </select>
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="hasEmail" className="text-xs font-medium text-muted-foreground">
-              Tiene Email
-            </label>
-            <select
-              id="hasEmail"
-              value={hasEmail}
-              onChange={(e) => setHasEmail(e.target.value)}
-              className="w-full rounded-md border border-border bg-zinc-950/40 py-2 px-3 text-sm text-foreground focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 transition-all"
-            >
-              <option value="">Cualquiera</option>
-              <option value="true">Sí</option>
-              <option value="false">No</option>
-            </select>
-          </div>
-
-          {/* Date From */}
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="dateFrom" className="text-xs font-medium text-muted-foreground">
-              Fecha desde
-            </label>
-            <input
-              type="date"
-              id="dateFrom"
-              value={dateFrom}
-              onChange={(e) => setDateFrom(e.target.value)}
-              className="w-full rounded-md border border-border bg-zinc-950/40 py-2 px-3 text-sm text-foreground focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 transition-all cursor-pointer"
-            />
-          </div>
-
-          {/* Date To */}
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="dateTo" className="text-xs font-medium text-muted-foreground">
-              Fecha hasta
-            </label>
-            <input
-              type="date"
-              id="dateTo"
-              value={dateTo}
-              onChange={(e) => setDateTo(e.target.value)}
-              className="w-full rounded-md border border-border bg-zinc-950/40 py-2 px-3 text-sm text-foreground focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 transition-all cursor-pointer"
-            />
-          </div>
-
-          {/* Sorting */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-muted-foreground">
-              Ordenar por
-            </label>
-            <div className="flex gap-2">
-              <select
-                id="sortBy"
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value)}
-                className="w-2/3 rounded-md border border-border bg-zinc-950/40 py-2 px-3 text-sm text-foreground focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 transition-all"
-              >
-                <option value="updated_at">Última actualización</option>
-                <option value="created_at">Fecha de registro</option>
-                <option value="contact_name">Nombre de contacto</option>
-                <option value="lead_score">Lead Score</option>
-              </select>
-              <select
-                id="sortOrder"
-                value={sortOrder}
-                onChange={(e) => setSortOrder(e.target.value)}
-                className="w-1/3 rounded-md border border-border bg-zinc-950/40 py-2 px-3 text-sm text-foreground focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 transition-all"
-              >
-                <option value="desc">Desc</option>
-                <option value="asc">Asc</option>
-              </select>
-            </div>
-          </div>
-        </div>
-
-        {/* Buttons */}
-        <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/40">
-          <button
-            type="button"
-            onClick={handleReset}
-            className="inline-flex items-center gap-1.5 rounded-md border border-border px-4 py-2 text-xs font-semibold text-muted-foreground hover:bg-muted hover:text-foreground transition-all"
-          >
-            <X className="h-3.5 w-3.5" />
-            Limpiar
-          </button>
-          <button
-            type="submit"
-            className="inline-flex items-center gap-1.5 rounded-md bg-violet-600 px-5 py-2 text-xs font-bold text-white hover:bg-violet-500 transition-all shadow-md shadow-violet-500/10"
-          >
-            Aplicar Filtros
+          </label>
+          <Dialog.Root open={advancedOpen} onOpenChange={setAdvancedOpen}>
+            <Dialog.Trigger asChild>
+              <button type="button" className="inline-flex h-[var(--control-height)] items-center justify-center gap-2 rounded-[var(--radius-control)] border border-border px-3 text-sm font-medium hover:bg-muted">
+                <SlidersHorizontal aria-hidden="true" className="size-4" /> Más filtros
+                {advancedCount > 0 ? <span className="rounded-full bg-[hsl(var(--brand))] px-2 py-0.5 text-xs text-[hsl(var(--brand-foreground))]">{advancedCount}</span> : null}
+              </button>
+            </Dialog.Trigger>
+            <Dialog.Portal>
+              <Dialog.Overlay className="fixed inset-0 z-50 bg-[hsl(var(--overlay)/0.62)]" />
+              <Dialog.Content className="fixed inset-y-0 right-0 z-50 w-[min(25rem,100vw)] overflow-y-auto border-l border-border bg-background p-5 shadow-xl">
+                <div className="mb-6 flex items-start justify-between gap-4">
+                  <div><Dialog.Title className="font-semibold">Filtros avanzados</Dialog.Title><Dialog.Description className="mt-1 text-sm text-muted-foreground">Refina el listado sin perder los filtros principales.</Dialog.Description></div>
+                  <Dialog.Close aria-label="Cerrar filtros" className="inline-flex size-10 items-center justify-center rounded-[var(--radius-control)] hover:bg-muted"><X aria-hidden="true" className="size-5" /></Dialog.Close>
+                </div>
+                <div className="space-y-4">
+                  <FilterField label="Origen"><input form={formId} name="source" defaultValue={searchParams.get('source') ?? ''} placeholder="Ej. web" className="crm-filter-control" /></FilterField>
+                  <FilterField label="Campaña"><input form={formId} name="campaign" defaultValue={searchParams.get('campaign') ?? ''} placeholder="Ej. demo-crm" className="crm-filter-control" /></FilterField>
+                  <FilterField label="Tiene teléfono"><select form={formId} name="has_phone" defaultValue={searchParams.get('has_phone') ?? ''} className="crm-filter-control"><option value="">Cualquiera</option><option value="true">Sí</option><option value="false">No</option></select></FilterField>
+                  <FilterField label="Tiene correo"><select form={formId} name="has_email" defaultValue={searchParams.get('has_email') ?? ''} className="crm-filter-control"><option value="">Cualquiera</option><option value="true">Sí</option><option value="false">No</option></select></FilterField>
+                  <div className="grid grid-cols-2 gap-3">
+                    <FilterField label="Desde"><input form={formId} name="date_from" type="date" defaultValue={toDateInputValue(searchParams.get('date_from') ?? '')} className="crm-filter-control" /></FilterField>
+                    <FilterField label="Hasta"><input form={formId} name="date_to" type="date" defaultValue={toDateInputValue(searchParams.get('date_to') ?? '')} className="crm-filter-control" /></FilterField>
+                  </div>
+                  <FilterField label="Ordenar por"><select form={formId} name="sort_by" defaultValue={searchParams.get('sort_by') ?? 'updated_at'} className="crm-filter-control"><option value="updated_at">Última actualización</option><option value="created_at">Fecha de registro</option><option value="contact_name">Contacto</option><option value="lead_score">Lead score</option></select></FilterField>
+                  <FilterField label="Dirección"><select form={formId} name="sort_order" defaultValue={searchParams.get('sort_order') ?? 'desc'} className="crm-filter-control"><option value="desc">Descendente</option><option value="asc">Ascendente</option></select></FilterField>
+                </div>
+                <div className="sticky bottom-0 mt-6 flex gap-2 border-t border-border bg-background pt-4">
+                  <button type="button" onClick={() => router.push(pathname)} className="h-10 flex-1 rounded-[var(--radius-control)] border border-border text-sm font-medium hover:bg-muted">Limpiar</button>
+                  <button type="submit" form={formId} className="h-10 flex-1 rounded-[var(--radius-control)] bg-[hsl(var(--brand))] text-sm font-semibold text-[hsl(var(--brand-foreground))]">Aplicar</button>
+                </div>
+              </Dialog.Content>
+            </Dialog.Portal>
+          </Dialog.Root>
+          <button type="submit" className="inline-flex h-[var(--control-height)] items-center justify-center gap-2 rounded-[var(--radius-control)] bg-[hsl(var(--brand))] px-4 text-sm font-semibold text-[hsl(var(--brand-foreground))]">
+            <Filter aria-hidden="true" className="size-4" /> Aplicar
           </button>
         </div>
       </form>
+
+      {activeFilters.length > 0 ? (
+        <div className="flex flex-wrap items-center gap-2" aria-label="Filtros activos">
+          {activeFilters.map(([key, value]) => (
+            <span key={key} className="inline-flex min-h-8 items-center gap-1 rounded-full border border-border bg-muted px-3 text-xs font-medium">
+              {FILTER_LABELS[key]}: {displayValue(key, value)}
+              <button type="button" onClick={() => removeFilter(key)} aria-label={`Quitar filtro ${FILTER_LABELS[key]}`} className="ml-1 inline-flex size-6 items-center justify-center rounded-full hover:bg-background"><X aria-hidden="true" className="size-3" /></button>
+            </span>
+          ))}
+          <button type="button" onClick={() => router.push(pathname)} className="min-h-8 px-2 text-xs font-semibold text-[hsl(var(--brand))] hover:underline">Limpiar todos</button>
+        </div>
+      ) : null}
     </div>
   );
+}
+
+function FilterField({ label, children }: { label: string; children: ReactNode }) {
+  return <label className="grid gap-1.5 text-xs font-medium text-muted-foreground"><span>{label}</span>{children}</label>;
 }
