@@ -28,6 +28,9 @@ pnpm-debug.log*
 *.log
 logs
 *.log.*
+frontend/playwright/.auth/
+frontend/playwright-report/
+frontend/test-results/
 
 # OS generated files
 .DS_Store
