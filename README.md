@@ -1,126 +1,104 @@
-﻿# ServiGlobal · IA - Landing de Servi-IA
+# ServiGlobal IA
 
-Landing page comercial para presentar **Servi-IA**, la solución de agentes de voz e IA de **ServiGlobal · IA**. La página está enfocada en convertir visitantes mediante demos, explicación de implementación guiada, preconsultoría y rutas comerciales claras según el tipo de operación.
+Plataforma multitenant para operar agentes de voz y canales comerciales desde una landing pública, un dashboard privado y un CRM. El repositorio ya no contiene únicamente la landing: integra identidad, analítica, CRM, email, formularios, reservas, WhatsApp, voz y control de consumo por tenant.
 
-## Enfoque Comercial Actual
+## Estado actual
 
-- **ServiGlobal · IA** funciona como marca paraguas.
-- **Servi-IA** es la solución implementada para cada cliente.
-- El primer paso comercial es una **preconsultoría gratuita de 20-30 minutos**.
-- La oferta se comunica como implementación guiada, operación mensual y consumo adicional según uso.
-- La landing prioriza tres verticales de salida al mercado:
-  - Bienes Raíces / Lead Qualification;
-  - Salud y Reservas / Agendamiento;
-  - Cobranza y Recuperación / Seguimiento.
+- Landing pública bilingüe (`es`/`en`) con demos inbound WebRTC y outbound/callback.
+- Autenticación Auth0, onboarding y administración de tenants, membresías y agentes.
+- Dashboard operativo con KPIs, tendencias, distribución, heatmap, llamadas recientes, uso y ahorro estimado.
+- CRM multitenant con pipeline, leads, detalle, timeline, notas, tareas, métricas y acciones rápidas.
+- Ingesta de llamadas Ultravox con persistencia, normalización, resumen y correlación con leads.
+- Email transaccional por tenant mediante Resend, composer Markdown/MDX controlado, adjuntos local/S3 y formularios públicos con tokens opacos.
+- Reservas Cal.com: disponibilidad, creación, cancelación, reprogramación y reconciliación por webhook.
+- Google Calendar en modo foundation: conexión/desconexión y consulta de conexiones; la inserción directa de eventos sigue deshabilitada.
+- WhatsApp Cloud API por tenant: configuración cifrada, plantillas, envío CRM, mensajes y webhook Meta.
+- Voz por tenant: proveedor y agentes configurables, llamadas CRM, webhook y herramientas internas de booking protegidas.
+- Planes, límites, consumo, alertas y comparación de ahorro por tenant.
 
-## Funcionalidades Implementadas
+La matriz detallada de capacidades y limitaciones está en [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md).
 
-### 1. Hero Section
+## Arquitectura
 
-- Mensaje de valor para agentes de voz con IA integrados a la operación del cliente.
-- CTAs principales hacia preconsultoría y demo.
-- Animación visual para reforzar la experiencia de agente de voz.
-
-### 2. Verticales Prioritarias y Casos de Uso
-
-- La sección de soluciones prioriza verticales donde el retorno es más claro y el despliegue suele ser más rápido.
-- Verticales prioritarias:
-  - **Bienes Raíces / Lead Qualification:** respuesta rápida, calificación y agenda para asesores.
-  - **Salud y Reservas / Agendamiento:** confirmaciones, reprogramación y contexto para citas.
-  - **Cobranza y Recuperación / Seguimiento:** recordatorios, registro y escalamiento.
-- Resultados principales:
-  - **Agendamiento inteligente:** disponibilidad, confirmaciones, reprogramaciones y contexto para citas.
-  - **Captación y calificación de leads:** formularios inteligentes, llamadas con contexto y priorización comercial.
-  - **Atención automatizada / triage:** clasificación de solicitudes, respuestas repetitivas y escalamiento cuando corresponde.
-- Otros sectores quedan como aplicaciones compatibles en segundo plano.
-
-### 3. Demos de Agentes de Voz
-
-- **Clic para llamar (Inbound/Web):** formulario y conexión desde navegador con Servi-IA.
-- **Servi-IA te llama (Outbound/Callback):** formulario para solicitar llamada inmediata o programada con contexto previo.
-- Ambos formularios incluyen consentimiento visible para tratamiento de datos antes de iniciar la interacción.
-- La demo inbound usa la integración existente con Ultravox y la outbound conserva el flujo actual hacia el backend.
-
-### 4. Implementación Guiada
-
-- La página comunica un proceso de acompañamiento:
-  - preconsultoría y diagnóstico;
-  - implementación / piloto;
-  - producción, soporte y optimización.
-- El posicionamiento evita vender una plataforma autoservicio y enfatiza diseño, integración y operación acompañada.
-
-### 5. Integraciones
-
-La landing presenta compatibilidad con canales y sistemas existentes, sin exigir reemplazar la operación actual:
-
-- telefonía / PBX / VoIP;
-- CRM y herramientas de operación;
-- calendarios;
-- mensajería y WhatsApp;
-- formularios web y canales digitales.
-
-### 6. Pricing
-
-El pricing está alineado con tres rutas comerciales:
-
-- **Web Conversion:** para captación y conversión digital inteligente. Incluye formulario inteligente WebRTC, clic para llamar, leads web/campañas/redes y callback con contexto.
-- **Voice Cloud / PBX:** para operación de voz real, PSTN, PBX e integración telefónica.
-- **Enterprise:** ruta a medida para alto volumen, múltiples agentes o integraciones críticas.
-
-Condiciones visibles en landing:
-
-- setup visible por plan;
-- operación mensual del servicio, no solo consumo de minutos;
-- bolsa inicial de 2,000 minutos IA en planes base;
-- minuto IA adicional por plan: Web Conversion USD 0.16/min, Voice Cloud / PBX USD 0.18/min y Enterprise USD 0.14-0.16/min según volumen;
-- escala de consumo adicional visible desde USD 0.18/min hasta USD 0.14/min según volumen;
-- consultoría o cambio adicional de USD 60;
-- segundo agente sin setup sujeto a complejidad, con descuento mensual;
-- costos de Meta / WhatsApp a cargo del cliente;
-- valores en USD con TRM vigente al día y exentos de IVA.
-
-### 7. Internacionalización
-
-- Soporte multi-idioma con `next-intl`.
-- Traducciones en `frontend/messages/es.json` y `frontend/messages/en.json`.
-- Los textos visibles de pricing, casos de uso, demos y consentimiento se manejan desde archivos de traducción.
-
-## Infraestructura y Despliegue
-
-### Stack Tecnológico
-
-- **Frontend:** Next.js 15, React, Tailwind CSS, Framer Motion, Lucide React, next-intl.
-- **Backend:** FastAPI (Python), Docker.
-- **IA/Voz:** Ultravox en la demo inbound existente.
-
-### CI/CD y Hosting
-
-- **Hosting:** VPS en Hostinger.
-- **Orquestación:** Dokploy.
-- **CI/CD:** GitHub Actions (`dokploy_deploy.yml`) para despliegue mediante webhooks de Dokploy.
-
-## Estructura del Proyecto
-
-- `/frontend`: aplicación Next.js.
-  - `/components/landing`: secciones de la landing (`Hero`, `UseCases`, `Pricing`, `VoiceDemo`, `Booking`, etc.).
-  - `/messages`: archivos de traducción (`es.json`, `en.json`).
-- `/backend`: API FastAPI existente.
-- `.github/workflows`: flujos de CI/CD.
-
-## Cómo Ejecutar Localmente
-
-### Frontend
-
-```bash
-cd frontend
-npm install
-npm run dev
+```text
+Navegador / proveedores
+        |
+        +-- Next.js 15 (landing, dashboard, CRM, admin)
+        |
+        +-- FastAPI (API, webhooks, herramientas internas)
+                 |
+                 +-- PostgreSQL + Alembic
+                 +-- Auth0
+                 +-- Ultravox / Cal.com / Meta / Resend
+                 +-- almacenamiento local o S3 compatible
 ```
 
-### Backend
+- `frontend/`: Next.js, React, TypeScript, Tailwind, next-intl y Playwright.
+- `backend/`: FastAPI, SQLAlchemy 2, Alembic, PostgreSQL y clientes de proveedores.
+- `docs/`: documentación canónica vigente.
+- `docs-local/`: decisiones y cierres históricos por fase/sprint.
 
-```bash
+Consulta [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) y [docs/API_REFERENCE.md](docs/API_REFERENCE.md).
+
+## Ejecución local
+
+Requisitos: Node.js 20+, Python 3.11+ y PostgreSQL 16.
+
+```powershell
+docker compose up -d postgres pgadmin
+
 cd backend
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
+alembic upgrade head
 uvicorn app.main:app --reload
 ```
+
+En otra terminal:
+
+```powershell
+cd frontend
+npm.cmd install
+npm.cmd run dev
+```
+
+Copie únicamente las variables necesarias desde `backend/.env.example` y `frontend/.env.example`. No confirme archivos `.env` ni secretos. La guía completa está en [docs/OPERATIONS.md](docs/OPERATIONS.md).
+
+## Validación
+
+```powershell
+cd backend
+python -m unittest discover -p "test_*.py"
+python -m compileall app
+alembic heads
+
+cd ..\frontend
+npm.cmd run lint
+npx.cmd tsc --noEmit --incremental false
+npm.cmd run build
+
+cd ..
+git diff --check
+```
+
+`alembic heads` debe devolver una sola cabeza. Algunos tests de integración requieren servicios o credenciales de prueba; nunca deben apuntar a producción.
+
+## Documentación
+
+- [Índice documental](docs/README.md)
+- [Estado funcional](docs/PROJECT_STATUS.md)
+- [Arquitectura](docs/ARCHITECTURE.md)
+- [Referencia de API](docs/API_REFERENCE.md)
+- [Configuración, despliegue y operación](docs/OPERATIONS.md)
+- [Especificación vigente](SPECS.md)
+- [Contenido comercial de la landing](landing_content.md)
+
+## Reglas de contribución
+
+- No trabajar directamente sobre `develop`.
+- Mantener aislamiento multitenant; la UI tenant nunca envía `tenant_id`.
+- Cifrar secretos por tenant y no exponerlos ni registrarlos en logs.
+- No mezclar cambios de WhatsApp y voz en una misma rama de implementación.
+- Ejecutar tests, lint, typecheck, build y `git diff --check` antes de entregar.
+- Para Sprint 3, leer primero las reglas de `docs-local/fase-3/agent-rules/`.

@@ -11,6 +11,13 @@ out/
 build/
 dist/
 docs
+!docs/
+docs/*
+!docs/README.md
+!docs/PROJECT_STATUS.md
+!docs/ARCHITECTURE.md
+!docs/API_REFERENCE.md
+!docs/OPERATIONS.md
 
 # Environment variables
 .env
