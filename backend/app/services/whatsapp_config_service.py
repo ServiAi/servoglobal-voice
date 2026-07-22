@@ -69,8 +69,8 @@ class WhatsAppConfigService:
             self.db.add(config)
 
         config.status = request.status
-        config.phone_number_id = request.phone_number_id
-        config.business_account_id = request.business_account_id
+        config.phone_number_id = request.phone_number_id.strip()
+        config.business_account_id = request.business_account_id.strip() if request.business_account_id else None
         config.display_phone_number = request.display_phone_number
         config.default_language = request.default_language
         config.last_error_message = None
@@ -147,12 +147,13 @@ class WhatsAppConfigService:
 
     def sync_templates(self, tenant_id: str) -> WhatsAppTemplateSyncResponse:
         config, client_config = self.get_active_client_config(tenant_id)
-        if not (config.business_account_id or "").strip():
+        business_account_id = (config.business_account_id or "").strip()
+        if not business_account_id:
             raise ValueError("Business Account ID / WABA ID is required to sync templates.")
         try:
             payload = self.client.get_message_templates(
                 client_config,
-                business_account_id=config.business_account_id,
+                business_account_id=business_account_id,
             )
             templates = payload.get("data") if isinstance(payload.get("data"), list) else []
             result = WhatsAppTemplateService(self.db).sync_approved_templates_from_meta(tenant_id, templates)

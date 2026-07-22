@@ -136,6 +136,28 @@ class WhatsAppIntegrationTests(Integration2ATestCase):
         self.assertEqual(templates[0].variables_json["parameters"][0]["key"], "1")
         self.assertIsNotNone(event)
 
+    def test_sync_whatsapp_templates_strips_waba_id_whitespace(self):
+        payload = self._payload()
+        payload["business_account_id"] = " 1288669749863149 "
+        self.client.post("/api/v1/integrations/whatsapp/config", json=payload)
+
+        class _Client(WhatsAppCloudClient):
+            received_business_account_id = None
+
+            def get_message_templates(self, config, *, business_account_id, limit=100):
+                self.received_business_account_id = business_account_id
+                return {"data": []}
+
+        client = _Client()
+        with SessionLocal() as db:
+            from app.services.whatsapp_config_service import WhatsAppConfigService
+
+            WhatsAppConfigService(db, client=client).sync_templates(self.tenant.id)
+            config = db.scalar(select(TenantWhatsAppConfig).where(TenantWhatsAppConfig.tenant_id == self.tenant.id))
+
+        self.assertEqual(config.business_account_id, "1288669749863149")
+        self.assertEqual(client.received_business_account_id, "1288669749863149")
+
     def test_whatsapp_error_sanitizer_redacts_token_phone_and_email(self):
         sanitized = sanitize_whatsapp_error(
             "Bearer EA_secret_token_12345678901234567890 person@example.com +57 300 123 4567"

@@ -70,7 +70,8 @@ class WhatsAppCloudClient:
         business_account_id: str,
         limit: int = 100,
     ) -> dict[str, Any]:
-        if not business_account_id.strip():
+        business_account_id = business_account_id.strip()
+        if not business_account_id:
             raise ValueError("Business Account ID / WABA ID is required to sync templates.")
         page_size = min(max(limit, 1), 100)
         templates: list[dict[str, Any]] = []
