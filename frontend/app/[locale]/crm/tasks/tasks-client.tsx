@@ -7,6 +7,7 @@ import { CrmTaskList } from '@/components/crm/CrmTaskList';
 import { CrmTaskForm } from '@/components/crm/CrmTaskForm';
 import { createCrmTask, updateCrmTask, deleteCrmTask } from '@/lib/api/crm';
 import { ShieldAlert, Filter, CheckSquare } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 
 type TasksClientProps = {
   tasks: TaskResponse[];
@@ -24,6 +25,7 @@ export function TasksClient({
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const t = useTranslations('crm.tasks');
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -75,9 +77,9 @@ export function TasksClient({
     setError(null);
     const res = await createCrmTask(accessToken, taskPayload);
     if (res.ok) {
-      triggerRefresh('Tarea creada con éxito.');
+      triggerRefresh(t('created'));
     } else {
-      setError(`Error al crear tarea: ${res.detail}`);
+      setError(t('createError', { detail: res.detail }));
       throw new Error(res.detail);
     }
   };
@@ -86,9 +88,9 @@ export function TasksClient({
     setError(null);
     const res = await updateCrmTask(accessToken, taskId, { status: nextStatus });
     if (res.ok) {
-      triggerRefresh('Estado de tarea actualizado.');
+      triggerRefresh(t('updated'));
     } else {
-      setError(`Error al actualizar tarea: ${res.detail}`);
+      setError(t('updateError', { detail: res.detail }));
     }
   };
 
@@ -96,9 +98,9 @@ export function TasksClient({
     setError(null);
     const res = await deleteCrmTask(accessToken, taskId);
     if (res.ok) {
-      triggerRefresh('Tarea eliminada con éxito.');
+      triggerRefresh(t('deleted'));
     } else {
-      setError(`Error al eliminar tarea: ${res.detail}`);
+      setError(t('deleteError', { detail: res.detail }));
     }
   };
 
@@ -120,7 +122,7 @@ export function TasksClient({
           {isPending && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <div className="h-4 w-4 animate-spin rounded-full border-2 border-violet-500 border-t-transparent" />
-              <span>Sincronizando tareas...</span>
+              <span>{t('syncing')}</span>
             </div>
           )}
           {error && (
@@ -141,19 +143,19 @@ export function TasksClient({
       {/* Header section */}
       <section className="flex flex-col gap-2">
         <h2 className="text-2xl font-bold tracking-tight text-foreground">
-          Gestión de Tareas
+          {t('title')}
         </h2>
         <p className="text-sm text-muted-foreground">
-          Organiza, completa y programa actividades de seguimiento de leads.
+          {t('description')}
         </p>
       </section>
 
-      <section aria-label="Resumen temporal" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <section aria-label={t('temporalSummary')} className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {[
-          ['Vencidas', overdueCount, 'text-destructive'],
-          ['Para hoy', todayCount, 'text-amber-600 dark:text-amber-400'],
-          ['Próximas', upcomingCount, 'text-primary'],
-          ['Sin fecha', undatedCount, 'text-muted-foreground'],
+          [t('overdue'), overdueCount, 'text-destructive'],
+          [t('today'), todayCount, 'text-amber-600 dark:text-amber-400'],
+          [t('upcoming'), upcomingCount, 'text-primary'],
+          [t('undated'), undatedCount, 'text-muted-foreground'],
         ].map(([label, value, tone]) => (
           <div key={label} className="rounded-xl border border-border bg-card p-4 shadow-xs">
             <p className="text-sm font-medium text-muted-foreground">{label}</p>
@@ -170,13 +172,13 @@ export function TasksClient({
           <div className="rounded-xl border border-border bg-card p-4 shadow-xs sm:p-5 flex flex-col gap-4">
             <div className="flex items-center gap-2 text-sm font-semibold text-foreground pb-3 border-b border-border">
               <Filter className="h-4 w-4 text-primary" />
-              <span>Filtrar Tareas</span>
+              <span>{t('filters')}</span>
             </div>
 
             <form onSubmit={handleApplyFilters} className="flex flex-col gap-4">
               <div className="flex flex-col gap-1">
                 <label htmlFor="filter-status" className="text-sm font-medium text-foreground">
-                  Estado
+                  {t('status')}
                 </label>
                 <select
                   id="filter-status"
@@ -184,15 +186,15 @@ export function TasksClient({
                   onChange={(e) => setStatus(e.target.value)}
                   className="min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
-                  <option value="">Todos</option>
-                  <option value="pending">Pendiente</option>
-                  <option value="done">Completado</option>
+                  <option value="">{t('all')}</option>
+                  <option value="pending">{t('pending')}</option>
+                  <option value="done">{t('completed')}</option>
                 </select>
               </div>
 
               <div className="flex flex-col gap-1">
                 <label htmlFor="filter-priority" className="text-sm font-medium text-foreground">
-                  Prioridad
+                  {t('priority')}
                 </label>
                 <select
                   id="filter-priority"
@@ -200,10 +202,10 @@ export function TasksClient({
                   onChange={(e) => setPriority(e.target.value)}
                   className="min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
-                  <option value="">Todas</option>
-                  <option value="high">Alta</option>
-                  <option value="medium">Media</option>
-                  <option value="low">Baja</option>
+                  <option value="">{t('allPriorities')}</option>
+                  <option value="high">{t('high')}</option>
+                  <option value="medium">{t('medium')}</option>
+                  <option value="low">{t('low')}</option>
                 </select>
               </div>
 
@@ -213,13 +215,13 @@ export function TasksClient({
                   onClick={handleResetFilters}
                   className="min-h-11 rounded-md border border-border px-3 py-2 text-sm font-semibold text-muted-foreground hover:bg-muted"
                 >
-                  Limpiar
+                  {t('clear')}
                 </button>
                 <button
                   type="submit"
                   className="min-h-11 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
                 >
-                  Filtrar
+                  {t('apply')}
                 </button>
               </div>
             </form>
@@ -235,12 +237,12 @@ export function TasksClient({
             <div className="border-b border-border/60 pb-3 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <CheckSquare className="h-5 w-5 text-primary" />
-                <h3 className="text-base font-bold text-foreground">Lista de Tareas</h3>
+                <h3 className="text-base font-bold text-foreground">{t('list')}</h3>
               </div>
               <div className="flex flex-wrap gap-2 text-xs text-muted-foreground font-semibold">
-                <span className="text-amber-500">{pendingCount} Pendientes</span>
+                <span className="text-amber-500">{t('pendingCount', { count: pendingCount })}</span>
                 <span aria-hidden="true">•</span>
-                <span className="text-emerald-500">{completedCount} Completadas</span>
+                <span className="text-emerald-500">{t('completedCount', { count: completedCount })}</span>
               </div>
             </div>
 

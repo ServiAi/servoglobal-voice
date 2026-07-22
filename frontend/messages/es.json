@@ -685,5 +685,58 @@
   "languageSwitcher": {
     "es": "ES",
     "en": "EN"
+  },
+  "crm": {
+    "navigation": {
+      "ariaLabel": "Navegación principal del CRM",
+      "operation": "Operación",
+      "analysis": "Análisis",
+      "configuration": "Configuración",
+      "home": "Inicio CRM",
+      "leads": "Leads",
+      "tasks": "Tareas",
+      "performance": "Rendimiento",
+      "voiceMetrics": "Métricas de voz",
+      "integrations": "Integraciones",
+      "leadDetail": "Detalle del lead",
+      "pipeline": "Pipeline"
+    },
+    "tasks": {
+      "created": "Tarea creada con éxito.",
+      "updated": "Estado de tarea actualizado.",
+      "deleted": "Tarea eliminada con éxito.",
+      "createError": "Error al crear tarea: {detail}",
+      "updateError": "Error al actualizar tarea: {detail}",
+      "deleteError": "Error al eliminar tarea: {detail}",
+      "syncing": "Sincronizando tareas...",
+      "title": "Gestión de Tareas",
+      "description": "Organiza, completa y programa actividades de seguimiento de leads.",
+      "temporalSummary": "Resumen temporal",
+      "overdue": "Vencidas",
+      "today": "Para hoy",
+      "upcoming": "Próximas",
+      "undated": "Sin fecha",
+      "filters": "Filtrar Tareas",
+      "status": "Estado",
+      "all": "Todos",
+      "pending": "Pendiente",
+      "completed": "Completado",
+      "priority": "Prioridad",
+      "allPriorities": "Todas",
+      "high": "Alta",
+      "medium": "Media",
+      "low": "Baja",
+      "clear": "Limpiar",
+      "apply": "Filtrar",
+      "list": "Lista de Tareas",
+      "pendingCount": "{count} pendientes",
+      "completedCount": "{count} completadas"
+    },
+    "integrationStatus": {
+      "active": "Activa",
+      "configured": "Configurada",
+      "error": "Requiere atención",
+      "notConfigured": "Sin configurar"
+    }
   }
 }

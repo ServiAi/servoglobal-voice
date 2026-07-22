@@ -35,9 +35,10 @@ for (const locale of locales) {
             page.on('pageerror', (error) => browserErrors.push(error.message));
 
             await applyTheme(page, theme);
-            const response = await page.goto(`/${locale}/${route}`, { waitUntil: 'networkidle' });
+            const response = await page.goto(`/${locale}/${route}`, { waitUntil: 'domcontentloaded' });
             expect(response?.ok(), `HTTP ${response?.status()} en /${locale}/${route}`).toBeTruthy();
             await expect(page).toHaveURL(new RegExp(`/${locale}/${route.replace('/', '\\/')}(?:[/?#]|$)`));
+            await expect(page.locator('body')).toBeVisible();
             await expect(page.locator('html')).toHaveAttribute('lang', new RegExp(`^${locale}(?:-|$)`, 'i'));
 
             const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
@@ -46,7 +47,9 @@ for (const locale of locales) {
             const accessibility = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze();
             expect(accessibility.violations, JSON.stringify(accessibility.violations, null, 2)).toEqual([]);
             expect(browserErrors, browserErrors.join('\n')).toEqual([]);
-            await expect(page).toHaveScreenshot(`${locale}-${route.replaceAll('/', '-')}-${viewport.name}-${theme}.png`, { fullPage: true });
+            if (process.env.QA_VISUAL_SNAPSHOTS === 'true') {
+              await expect(page).toHaveScreenshot(`${locale}-${route.replaceAll('/', '-')}-${viewport.name}-${theme}.png`, { fullPage: true });
+            }
           });
         }
       });

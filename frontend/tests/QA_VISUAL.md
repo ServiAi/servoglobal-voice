@@ -11,10 +11,11 @@ Completa el login Auth0 en Chromium. Cuando el CRM esté visible, pulsa **Resume
 ## 2. Crear las capturas base
 
 ```powershell
+$env:QA_VISUAL_SNAPSHOTS='true'
 npm run qa:visual:update
 ```
 
-Revisa y versiona solo las capturas aprobadas. La matriz cubre locales `es` y `en`, temas claro y oscuro, y ocho viewports entre 1440 y 320 px.
+Las capturas son opt-in porque pueden contener información real. Úsalas solo con datos anonimizados; revisa y versiona únicamente las aprobadas. La matriz cubre locales `es` y `en`, temas claro y oscuro, y ocho viewports entre 1440 y 320 px.
 
 ## 3. Ejecutar regresión visual
 

@@ -11,27 +11,28 @@ import {
   Users,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useTranslations } from 'next-intl';
 
 const GROUPS = [
   {
-    label: 'Operación',
+    label: 'operation',
     links: [
-      { label: 'Inicio CRM', path: '/crm', icon: KanbanSquare, exact: true },
-      { label: 'Leads', path: '/crm/leads', icon: Users },
-      { label: 'Tareas', path: '/crm/tasks', icon: CheckSquare2 },
+      { label: 'home', path: '/crm', icon: KanbanSquare, exact: true },
+      { label: 'leads', path: '/crm/leads', icon: Users },
+      { label: 'tasks', path: '/crm/tasks', icon: CheckSquare2 },
     ],
   },
   {
-    label: 'Análisis',
+    label: 'analysis',
     links: [
-      { label: 'Rendimiento', path: '/crm/dashboard', icon: BarChart3 },
-      { label: 'Métricas de voz', path: '/dashboard', icon: MessageSquareMore },
+      { label: 'performance', path: '/crm/dashboard', icon: BarChart3 },
+      { label: 'voiceMetrics', path: '/dashboard', icon: MessageSquareMore },
     ],
   },
   {
-    label: 'Configuración',
+    label: 'configuration',
     links: [
-      { label: 'Integraciones', path: '/crm/settings/integrations', icon: Settings },
+      { label: 'integrations', path: '/crm/settings/integrations', icon: Settings },
     ],
   },
 ] as const;
@@ -43,13 +44,14 @@ type CrmNavigationProps = {
 
 export function CrmNavigation({ locale, onNavigate }: CrmNavigationProps) {
   const pathname = usePathname();
+  const t = useTranslations('crm.navigation');
 
   return (
-    <nav aria-label="Navegación principal del CRM" className="space-y-6">
+    <nav aria-label={t('ariaLabel')} className="space-y-6">
       {GROUPS.map((group) => (
         <div key={group.label}>
           <p className="mb-2 px-3 text-xs font-semibold uppercase tracking-[0.12em] text-[hsl(var(--sidebar-muted))]">
-            {group.label}
+            {t(group.label)}
           </p>
           <ul className="space-y-1">
             {group.links.map((item) => {
@@ -73,7 +75,7 @@ export function CrmNavigation({ locale, onNavigate }: CrmNavigationProps) {
                     )}
                   >
                     <Icon aria-hidden="true" className="size-4 shrink-0" />
-                    <span>{item.label}</span>
+                    <span>{t(item.label)}</span>
                   </Link>
                 </li>
               );

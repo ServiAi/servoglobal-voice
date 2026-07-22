@@ -685,5 +685,58 @@
   "languageSwitcher": {
     "es": "ES",
     "en": "EN"
+  },
+  "crm": {
+    "navigation": {
+      "ariaLabel": "Main CRM navigation",
+      "operation": "Operations",
+      "analysis": "Analysis",
+      "configuration": "Configuration",
+      "home": "CRM Home",
+      "leads": "Leads",
+      "tasks": "Tasks",
+      "performance": "Performance",
+      "voiceMetrics": "Voice metrics",
+      "integrations": "Integrations",
+      "leadDetail": "Lead details",
+      "pipeline": "Pipeline"
+    },
+    "tasks": {
+      "created": "Task created successfully.",
+      "updated": "Task status updated.",
+      "deleted": "Task deleted successfully.",
+      "createError": "Unable to create task: {detail}",
+      "updateError": "Unable to update task: {detail}",
+      "deleteError": "Unable to delete task: {detail}",
+      "syncing": "Syncing tasks...",
+      "title": "Task Management",
+      "description": "Organize, complete, and schedule lead follow-up activities.",
+      "temporalSummary": "Time-based summary",
+      "overdue": "Overdue",
+      "today": "Due today",
+      "upcoming": "Upcoming",
+      "undated": "No due date",
+      "filters": "Filter Tasks",
+      "status": "Status",
+      "all": "All",
+      "pending": "Pending",
+      "completed": "Completed",
+      "priority": "Priority",
+      "allPriorities": "All",
+      "high": "High",
+      "medium": "Medium",
+      "low": "Low",
+      "clear": "Clear",
+      "apply": "Filter",
+      "list": "Task List",
+      "pendingCount": "{count} pending",
+      "completedCount": "{count} completed"
+    },
+    "integrationStatus": {
+      "active": "Active",
+      "configured": "Configured",
+      "error": "Needs attention",
+      "notConfigured": "Not configured"
+    }
   }
 }

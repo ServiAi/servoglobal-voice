@@ -1,3 +1,7 @@
+'use client';
+
+import { useTranslations } from 'next-intl';
+
 type IntegrationStatus = 'active' | 'configured' | 'error' | 'not_configured';
 
 const styles: Record<IntegrationStatus, string> = {
@@ -7,18 +11,13 @@ const styles: Record<IntegrationStatus, string> = {
   not_configured: 'border-border bg-muted text-muted-foreground',
 };
 
-const labels: Record<IntegrationStatus, string> = {
-  active: 'Activa',
-  configured: 'Configurada',
-  error: 'Requiere atención',
-  not_configured: 'Sin configurar',
-};
-
 export function CrmIntegrationStatusBadge({ status }: { status: IntegrationStatus }) {
+  const t = useTranslations('crm.integrationStatus');
+  const labelKey = status === 'not_configured' ? 'notConfigured' : status;
   return (
     <span className={`inline-flex min-h-7 items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${styles[status]}`}>
       <span aria-hidden="true" className="mr-1.5 h-1.5 w-1.5 rounded-full bg-current" />
-      {labels[status]}
+      {t(labelKey)}
     </span>
   );
 }
