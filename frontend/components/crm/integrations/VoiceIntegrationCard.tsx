@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { AlertCircle, CheckCircle2, Phone, Plus, Edit2, RotateCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { FieldHelp } from './FieldHelp';
 import type {
   VoiceProviderConfigRequest,
   VoiceProviderConfigResponse,
@@ -246,7 +247,7 @@ export function VoiceIntegrationCard({
           </h3>
           <div className="space-y-3">
             <label className="grid gap-1 text-xs font-medium text-muted-foreground">
-              Nombre descriptivo
+              <span className="flex items-center gap-1">Nombre descriptivo <FieldHelp label="Nombre descriptivo de voz" required={false}>Es un nombre interno para reconocer esta configuración; no se obtiene del proveedor.</FieldHelp></span>
               <input
                 type="text"
                 className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-hidden focus:ring-1 focus:ring-ring"
@@ -256,7 +257,7 @@ export function VoiceIntegrationCard({
             </label>
 
             <label className="grid gap-1 text-xs font-medium text-muted-foreground">
-              Ultravox API Key
+              <span className="flex items-center gap-1">Ultravox API Key <FieldHelp label="Ultravox API Key" required={!config?.has_secret}>Créala en el panel de Ultravox → Settings → API Keys. Solo es obligatoria la primera vez.</FieldHelp></span>
               <input
                 type="password"
                 placeholder={config?.has_secret ? '••••••••••••••••••••' : 'uvx_api_...'}
@@ -266,7 +267,7 @@ export function VoiceIntegrationCard({
             </label>
 
             <label className="grid gap-1 text-xs font-medium text-muted-foreground">
-              Webhook Secret (Firma)
+              <span className="flex items-center gap-1">Webhook Secret (Firma) <FieldHelp label="Webhook Secret" required={false}>Créalo como una cadena secreta y configura el mismo valor en el webhook del proveedor.</FieldHelp></span>
               <input
                 type="password"
                 placeholder={config?.has_webhook_secret ? '••••••••••••••••••••' : 'Secreto opcional'}
@@ -276,7 +277,7 @@ export function VoiceIntegrationCard({
             </label>
 
             <label className="grid gap-1 text-xs font-medium text-muted-foreground">
-              Base URL Proveedor
+              <span className="flex items-center gap-1">Base URL Proveedor <FieldHelp label="Base URL Proveedor" required>Usa la URL base oficial del proveedor; para Ultravox es https://api.ultravox.ai.</FieldHelp></span>
               <input
                 type="text"
                 className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-hidden focus:ring-1 focus:ring-ring"
@@ -287,7 +288,7 @@ export function VoiceIntegrationCard({
 
             <div className="grid grid-cols-2 gap-2">
               <label className="grid gap-1 text-xs font-medium text-muted-foreground">
-                Default Agent ID
+                <span className="flex items-center gap-1">Default Agent ID <FieldHelp label="Default Agent ID" required={false}>Copia el ID del agente predeterminado desde el panel de Ultravox. Puede quedar vacío si se selecciona por otra regla.</FieldHelp></span>
                 <input
                   type="text"
                   placeholder="ID de agente por defecto"
@@ -298,7 +299,7 @@ export function VoiceIntegrationCard({
               </label>
 
               <label className="grid gap-1 text-xs font-medium text-muted-foreground">
-                Outgoing Number (SIP)
+                <span className="flex items-center gap-1">Outgoing Number (SIP) <FieldHelp label="Outgoing Number SIP" required={false}>Es el número saliente asignado por tu operador SIP/PBX, en formato internacional.</FieldHelp></span>
                 <input
                   type="text"
                   placeholder="+57..."
@@ -311,7 +312,7 @@ export function VoiceIntegrationCard({
 
             <div className="grid grid-cols-2 gap-2">
               <label className="grid gap-1 text-xs font-medium text-muted-foreground">
-                Idioma
+                <span className="flex items-center gap-1">Idioma <FieldHelp label="Idioma predeterminado de voz" required>Selecciona el idioma principal que usará la integración.</FieldHelp></span>
                 <select
                   className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-hidden focus:ring-1 focus:ring-ring"
                   value={configForm.default_language}
@@ -323,7 +324,7 @@ export function VoiceIntegrationCard({
               </label>
 
               <label className="grid gap-1 text-xs font-medium text-muted-foreground">
-                Zona horaria
+                <span className="flex items-center gap-1">Zona horaria <FieldHelp label="Zona horaria de voz" required>Usa una zona IANA como America/Bogota para interpretar horarios correctamente.</FieldHelp></span>
                 <input
                   type="text"
                   className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-hidden focus:ring-1 focus:ring-ring"
@@ -334,7 +335,7 @@ export function VoiceIntegrationCard({
             </div>
 
             <label className="grid gap-1 text-xs font-medium text-muted-foreground">
-              Estado de Integración
+              <span className="flex items-center gap-1">Estado de Integración <FieldHelp label="Estado de integración de voz" required>Activa la integración solo cuando las credenciales y la conexión estén listas.</FieldHelp></span>
               <select
                 className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-hidden focus:ring-1 focus:ring-ring"
                 value={configForm.status}
@@ -393,7 +394,7 @@ export function VoiceIntegrationCard({
               </h4>
               <div className="grid gap-3 sm:grid-cols-2">
                 <label className="grid gap-1 text-xs font-medium text-muted-foreground">
-                  Provider Agent ID *
+                  <span className="flex items-center gap-1">Provider Agent ID * <FieldHelp label="Provider Agent ID" required>Copia el ID único del agente desde el panel del proveedor de voz.</FieldHelp></span>
                   <input
                     type="text"
                     placeholder="wk-xxxx..."
@@ -404,7 +405,7 @@ export function VoiceIntegrationCard({
                 </label>
 
                 <label className="grid gap-1 text-xs font-medium text-muted-foreground">
-                  Nombre descriptivo *
+                  <span className="flex items-center gap-1">Nombre descriptivo * <FieldHelp label="Nombre descriptivo del agente" required>Escribe un nombre interno que permita identificar el agente dentro del CRM.</FieldHelp></span>
                   <input
                     type="text"
                     placeholder="Ej. Agente Comercial"
@@ -415,7 +416,7 @@ export function VoiceIntegrationCard({
                 </label>
 
                 <label className="grid gap-1 text-xs font-medium text-muted-foreground sm:col-span-2">
-                  Descripción
+                  <span className="flex items-center gap-1">Descripción <FieldHelp label="Descripción del agente" required={false}>Resume el objetivo del agente para que el equipo pueda reconocerlo.</FieldHelp></span>
                   <input
                     type="text"
                     placeholder="Objetivo principal del agente virtual"
@@ -426,7 +427,7 @@ export function VoiceIntegrationCard({
                 </label>
 
                 <label className="grid gap-1 text-xs font-medium text-muted-foreground">
-                  Caso de Uso / Propósito
+                  <span className="flex items-center gap-1">Caso de Uso / Propósito <FieldHelp label="Caso de uso del agente" required>Selecciona la función comercial principal que cumplirá el agente.</FieldHelp></span>
                   <select
                     className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground"
                     value={agentForm.purpose}
@@ -443,7 +444,7 @@ export function VoiceIntegrationCard({
                 </label>
 
                 <label className="grid gap-1 text-xs font-medium text-muted-foreground">
-                  Voz por defecto
+                  <span className="flex items-center gap-1">Voz por defecto <FieldHelp label="Voz por defecto" required={false}>Copia el identificador de voz admitido por el proveedor; si se omite se usa su voz predeterminada.</FieldHelp></span>
                   <input
                     type="text"
                     placeholder="Ej. standard-female"
@@ -455,7 +456,7 @@ export function VoiceIntegrationCard({
 
                 <div className="grid grid-cols-2 gap-2 sm:col-span-2">
                   <label className="grid gap-1 text-xs font-medium text-muted-foreground">
-                    Idioma
+                    <span className="flex items-center gap-1">Idioma <FieldHelp label="Idioma del agente" required>Selecciona el idioma principal del agente.</FieldHelp></span>
                     <select
                       className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground"
                       value={agentForm.default_language}
@@ -467,7 +468,7 @@ export function VoiceIntegrationCard({
                   </label>
 
                   <label className="grid gap-1 text-xs font-medium text-muted-foreground">
-                    Estado agente
+                    <span className="flex items-center gap-1">Estado agente <FieldHelp label="Estado del agente" required>Selecciona Activo cuando el agente esté listo para usarse.</FieldHelp></span>
                     <select
                       className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground"
                       value={agentForm.status}

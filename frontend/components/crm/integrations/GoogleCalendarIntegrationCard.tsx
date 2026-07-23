@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { disconnectGoogleCalendar, fetchGoogleCalendarConnectUrl } from '@/lib/api/crm';
 import type { GoogleCalendarConnectionResponse } from '@/types/crm';
 import { GoogleCalendarConnectionList } from './GoogleCalendarConnectionList';
+import { FieldHelp } from './FieldHelp';
 
 type Props = {
   accessToken?: string;
@@ -55,10 +56,13 @@ export function GoogleCalendarIntegrationCard({ accessToken, connections }: Prop
           </div>
         </div>
         {accessToken && (
-          <Button type="button" variant="outline" onClick={connect} disabled={loading}>
-            {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CalendarDays className="mr-2 h-4 w-4" />}
-            Conectar
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button type="button" variant="outline" onClick={connect} disabled={loading}>
+              {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CalendarDays className="mr-2 h-4 w-4" />}
+              Conectar
+            </Button>
+            <FieldHelp align="right" label="Conectar Google Calendar" required={false}>No requiere copiar credenciales. Haz clic en Conectar, elige tu cuenta de Google y autoriza el acceso solicitado.</FieldHelp>
+          </div>
         )}
       </div>
       <GoogleCalendarConnectionList connections={items} onDisconnect={accessToken ? disconnect : undefined} />

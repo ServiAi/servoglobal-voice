@@ -6,6 +6,7 @@ import { Save, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { configureResendIntegration, configureAdminTenantResendIntegration } from '@/lib/api/crm';
 import type { ResendIntegrationConfigResponse } from '@/types/crm';
+import { FieldHelp } from './FieldHelp';
 
 type Props = {
   accessToken: string;
@@ -52,23 +53,23 @@ export function ResendConfigForm({ accessToken, config, mode = 'tenant', tenantI
   return (
     <form onSubmit={handleSubmit} className="grid gap-4 md:grid-cols-2">
       <label className="flex flex-col gap-1 text-sm">
-        <span className="font-medium text-muted-foreground">Nombre remitente</span>
+        <span className="flex items-center gap-1 font-medium text-muted-foreground">Nombre remitente <FieldHelp label="Nombre remitente" required={false}>Es el nombre comercial que verán los destinatarios junto al correo.</FieldHelp></span>
         <input className="rounded-md border border-border bg-background px-3 py-2" value={senderName} onChange={(e) => setSenderName(e.target.value)} />
       </label>
       <label className="flex flex-col gap-1 text-sm">
-        <span className="font-medium text-muted-foreground">Email remitente</span>
+        <span className="flex items-center gap-1 font-medium text-muted-foreground">Email remitente <FieldHelp label="Email remitente" required>Créalo y verifícalo dentro de Domains en Resend; debe pertenecer a un dominio verificado.</FieldHelp></span>
         <input required type="email" className="rounded-md border border-border bg-background px-3 py-2" value={senderEmail} onChange={(e) => setSenderEmail(e.target.value)} />
       </label>
       <label className="flex flex-col gap-1 text-sm">
-        <span className="font-medium text-muted-foreground">Reply-To</span>
+        <span className="flex items-center gap-1 font-medium text-muted-foreground">Reply-To <FieldHelp label="Reply-To" required={false}>Indica el correo que recibirá las respuestas. Si se omite, se usa el email remitente.</FieldHelp></span>
         <input type="email" className="rounded-md border border-border bg-background px-3 py-2" value={replyTo} onChange={(e) => setReplyTo(e.target.value)} />
       </label>
       <label className="flex flex-col gap-1 text-sm">
-        <span className="font-medium text-muted-foreground">Dominio</span>
+        <span className="flex items-center gap-1 font-medium text-muted-foreground">Dominio <FieldHelp label="Dominio" required={false}>Cópialo desde Resend → Domains después de completar la verificación DNS.</FieldHelp></span>
         <input className="rounded-md border border-border bg-background px-3 py-2" value={defaultDomain} onChange={(e) => setDefaultDomain(e.target.value)} />
       </label>
       <label className="flex flex-col gap-1 text-sm md:col-span-2">
-        <span className="font-medium text-muted-foreground">Resend API key</span>
+        <span className="flex items-center gap-1 font-medium text-muted-foreground">Resend API key <FieldHelp label="Resend API key" required={!config?.has_secret}>Créala en Resend → API Keys. Solo es obligatoria al configurar por primera vez; luego puede dejarse vacía para conservarla.</FieldHelp></span>
         <input type="password" className="rounded-md border border-border bg-background px-3 py-2" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder={config?.has_secret ? 'Conservar API key existente' : 're_...'} />
       </label>
       <div className="flex items-center justify-between gap-3 md:col-span-2">

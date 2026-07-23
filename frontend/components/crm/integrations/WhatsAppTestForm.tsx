@@ -15,6 +15,7 @@ import {
   testWhatsAppIntegration,
 } from '@/lib/api/crm';
 import type { WhatsAppTemplateResponse, WhatsAppTemplateSyncResponse } from '@/types/crm';
+import { FieldHelp } from './FieldHelp';
 
 type Props = {
   accessToken: string;
@@ -138,14 +139,14 @@ export function WhatsAppTestForm({ accessToken, templates: initialTemplates, dis
         <form onSubmit={sendTestMessage} className="space-y-3">
           <div className="grid gap-3 md:grid-cols-2">
             <label className="space-y-1 text-sm">
-              <span>Plantilla aprobada</span>
+              <span className="flex items-center gap-1">Plantilla aprobada <FieldHelp label="Plantilla aprobada" required>Primero sincroniza las plantillas que Meta muestra con estado APPROVED y selecciona una de la lista.</FieldHelp></span>
               <select className="w-full rounded-md border border-border bg-background px-3 py-2" value={templateKey} onChange={(event) => { setTemplateKey(event.target.value); setVariables({}); }} required>
                 <option value="">Selecciona una plantilla</option>
                 {approvedTemplates.map((template) => <option key={template.id} value={template.template_key}>{template.name} ({template.language})</option>)}
               </select>
             </label>
             <label className="space-y-1 text-sm">
-              <span>Número destino</span>
+              <span className="flex items-center gap-1">Número destino <FieldHelp label="Número destino" required>Escribe el número que recibirá la prueba en formato internacional, por ejemplo +573001112233.</FieldHelp></span>
               <input className="w-full rounded-md border border-border bg-background px-3 py-2" value={toPhone} onChange={(event) => setToPhone(event.target.value)} placeholder="+573001112233" minLength={8} maxLength={32} required />
             </label>
           </div>
@@ -153,7 +154,10 @@ export function WhatsAppTestForm({ accessToken, templates: initialTemplates, dis
             <div className="grid gap-3 md:grid-cols-2">
               {parameters.map((parameter) => (
                 <label key={parameter.key} className="space-y-1 text-sm">
-                  <span>{parameter.label || `Variable ${parameter.key}`}</span>
+                  <span className="flex items-center gap-1">
+                    {parameter.label || `Variable ${parameter.key}`}
+                    <FieldHelp label={parameter.label || `Variable ${parameter.key}`} required>Escribe el valor que reemplazará esta variable de la plantilla aprobada en Meta.</FieldHelp>
+                  </span>
                   <input className="w-full rounded-md border border-border bg-background px-3 py-2" value={variables[parameter.key] || ''} onChange={(event) => setVariables((current) => ({ ...current, [parameter.key]: event.target.value }))} required />
                 </label>
               ))}
