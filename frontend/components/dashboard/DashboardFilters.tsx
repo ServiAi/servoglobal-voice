@@ -57,67 +57,67 @@ export function DashboardFilters({ initialFilters, initialQueryString = '' }: Da
   };
 
   return (
-    <div className="rounded-xl border border-white/10 bg-zinc-900/50 p-4 mb-8">
+    <div className="rounded-xl border border-border bg-card p-4 shadow-xs">
       <form onSubmit={handleApply} className="flex flex-wrap items-end gap-4">
         
         <div className="flex flex-col gap-1.5 flex-1 min-w-[150px]">
-          <label htmlFor="from" className="text-xs font-medium text-zinc-400">
+          <label htmlFor="from" className="text-xs font-medium text-muted-foreground">
             Fecha Desde
           </label>
           <div className="relative">
-            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
+            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <input
               type="date"
               id="from"
               value={from}
               onChange={(e) => setFrom(e.target.value)}
-              className="w-full rounded-md border border-white/10 bg-zinc-950 py-2 pl-10 pr-3 text-sm text-zinc-200 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+              className="w-full rounded-md border border-border bg-background py-2 pl-10 pr-3 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-ring"
             />
           </div>
         </div>
 
         <div className="flex flex-col gap-1.5 flex-1 min-w-[150px]">
-          <label htmlFor="to" className="text-xs font-medium text-zinc-400">
+          <label htmlFor="to" className="text-xs font-medium text-muted-foreground">
             Fecha Hasta
           </label>
           <div className="relative">
-            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
+            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <input
               type="date"
               id="to"
               value={to}
               onChange={(e) => setTo(e.target.value)}
-              className="w-full rounded-md border border-white/10 bg-zinc-950 py-2 pl-10 pr-3 text-sm text-zinc-200 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+              className="w-full rounded-md border border-border bg-background py-2 pl-10 pr-3 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-ring"
             />
           </div>
         </div>
 
         <div className="flex flex-col gap-1.5 flex-1 min-w-[150px]">
-          <label htmlFor="agent_id" className="text-xs font-medium text-zinc-400">
+          <label htmlFor="agent_id" className="text-xs font-medium text-muted-foreground">
             ID de Agente
           </label>
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <input
               type="text"
               id="agent_id"
               placeholder="Todos los agentes"
               value={agentId}
               onChange={(e) => setAgentId(e.target.value)}
-              className="w-full rounded-md border border-white/10 bg-zinc-950 py-2 pl-10 pr-3 text-sm text-zinc-200 placeholder:text-zinc-600 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+              className="w-full rounded-md border border-border bg-background py-2 pl-10 pr-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-ring"
             />
           </div>
         </div>
 
         <div className="flex flex-col gap-1.5 flex-1 min-w-[150px]">
-          <label htmlFor="status" className="text-xs font-medium text-zinc-400">
+          <label htmlFor="status" className="text-xs font-medium text-muted-foreground">
             Estado de Llamada
           </label>
           <select
             id="status"
             value={status}
             onChange={(e) => setStatus(e.target.value)}
-            className="w-full appearance-none rounded-md border border-white/10 bg-zinc-950 py-2 pl-3 pr-8 text-sm text-zinc-200 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+            className="w-full appearance-none rounded-md border border-border bg-background py-2 pl-3 pr-8 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-ring"
           >
             <option value="">Todos los estados</option>
             <option value="answered">Contestadas</option>
@@ -132,14 +132,14 @@ export function DashboardFilters({ initialFilters, initialQueryString = '' }: Da
         <div className="flex items-center gap-2 mt-2 sm:mt-0">
           <button
             type="submit"
-            className="rounded-md bg-cyan-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-cyan-500"
+            className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
           >
             Filtrar
           </button>
           <button
             type="button"
             onClick={handleReset}
-            className="rounded-md border border-white/10 px-4 py-2 text-sm font-medium text-zinc-300 transition hover:bg-white/5"
+            className="rounded-md border border-border px-4 py-2 text-sm font-medium text-foreground transition hover:bg-muted"
           >
             Limpiar
           </button>

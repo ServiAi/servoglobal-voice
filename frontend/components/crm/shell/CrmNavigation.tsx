@@ -5,8 +5,7 @@ import { usePathname } from 'next/navigation';
 import {
   BarChart3,
   CheckSquare2,
-  KanbanSquare,
-  MessageSquareMore,
+  Gauge,
   Settings,
   Users,
 } from 'lucide-react';
@@ -17,7 +16,7 @@ const GROUPS = [
   {
     label: 'operation',
     links: [
-      { label: 'home', path: '/crm', icon: KanbanSquare, exact: true },
+      { label: 'home', path: '/crm', icon: Gauge, exact: true },
       { label: 'leads', path: '/crm/leads', icon: Users },
       { label: 'tasks', path: '/crm/tasks', icon: CheckSquare2 },
     ],
@@ -26,7 +25,6 @@ const GROUPS = [
     label: 'analysis',
     links: [
       { label: 'performance', path: '/crm/dashboard', icon: BarChart3 },
-      { label: 'voiceMetrics', path: '/dashboard', icon: MessageSquareMore },
     ],
   },
   {

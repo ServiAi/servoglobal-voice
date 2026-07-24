@@ -1,8 +1,7 @@
 'use client';
 
-import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Activity, Building2 } from 'lucide-react';
+import { Building2 } from 'lucide-react';
 import { ThemeToggle } from '@/components/shared/ThemeToggle';
 import { CrmMobileDrawer } from './CrmMobileDrawer';
 import { CrmUserMenu } from './CrmUserMenu';
@@ -11,6 +10,7 @@ import { useTranslations } from 'next-intl';
 type CrmTopbarProps = { locale: string; tenantName: string; userName: string };
 
 function getTitleKey(pathname: string) {
+  if (pathname.endsWith('/crm')) return 'voiceMetrics';
   if (pathname.includes('/crm/settings/integrations')) return 'integrations';
   if (pathname.includes('/crm/dashboard')) return 'performance';
   if (pathname.includes('/crm/leads/')) return 'leadDetail';
@@ -34,14 +34,6 @@ export function CrmTopbar({ locale, tenantName, userName }: CrmTopbarProps) {
         <Building2 aria-hidden="true" className="size-4 shrink-0 text-[hsl(var(--brand))]" />
         <span className="max-w-40 truncate text-xs font-medium">{tenantName}</span>
       </div>
-      <Link
-        href={`/${locale}/dashboard`}
-        className="inline-flex h-10 items-center gap-2 rounded-[var(--radius-control)] border border-border px-3 text-sm font-medium hover:bg-accent"
-      >
-        <Activity aria-hidden="true" className="size-4 text-[hsl(var(--brand))]" />
-        <span className="hidden sm:inline">{t('voiceMetrics')}</span>
-        <span className="sr-only sm:hidden">{t('voiceMetrics')}</span>
-      </Link>
       <ThemeToggle />
       <div className="hidden xl:block">
         <CrmUserMenu userName={userName} compact />

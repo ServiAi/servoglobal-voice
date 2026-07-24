@@ -59,7 +59,7 @@ export function getAuthorizeUrl(config: Auth0Config, state: string, codeChalleng
 
 export function normalizeReturnTo(returnTo: string | null): string {
   if (!returnTo || !returnTo.startsWith('/') || returnTo.startsWith('//')) {
-    return '/es/dashboard';
+    return '/es/crm';
   }
   return returnTo;
 }

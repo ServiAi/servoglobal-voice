@@ -64,7 +64,7 @@ export function Footer() {
         <div className="flex flex-col md:flex-row justify-between items-center pt-8 border-t border-zinc-200 dark:border-white/10 text-xs text-zinc-500 dark:text-neutral-600 gap-4">
           <div>{t('copyright')}</div>
           <div className="flex items-center gap-4">
-            <Link href={`/${locale}/dashboard`} className="hover:text-violet-600 dark:hover:text-violet-400 transition-colors font-medium">
+            <Link href={`/${locale}/crm`} className="hover:text-violet-600 dark:hover:text-violet-400 transition-colors font-medium">
               Acceso Clientes
             </Link>
             <div className="h-3 w-px bg-zinc-300 dark:bg-white/10" />

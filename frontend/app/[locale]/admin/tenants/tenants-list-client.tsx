@@ -115,7 +115,7 @@ export function TenantsListClient({
         {/* Back link */}
         <div className="mb-6">
           <Link
-            href={`/${locale}/dashboard`}
+            href={`/${locale}/crm`}
             className="inline-flex items-center gap-1.5 text-sm text-zinc-500 transition hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
           >
             <ArrowLeft className="h-4 w-4" />
