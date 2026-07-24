@@ -7,7 +7,7 @@ import { CrmMobileDrawer } from './CrmMobileDrawer';
 import { CrmUserMenu } from './CrmUserMenu';
 import { useTranslations } from 'next-intl';
 
-type CrmTopbarProps = { locale: string; tenantName: string; userName: string };
+type CrmTopbarProps = { collapsed: boolean; locale: string; tenantName: string; userName: string };
 
 function getTitleKey(pathname: string) {
   if (pathname.endsWith('/crm')) return 'voiceMetrics';
@@ -19,12 +19,12 @@ function getTitleKey(pathname: string) {
   return 'pipeline';
 }
 
-export function CrmTopbar({ locale, tenantName, userName }: CrmTopbarProps) {
+export function CrmTopbar({ collapsed, locale, tenantName, userName }: CrmTopbarProps) {
   const pathname = usePathname();
   const t = useTranslations('crm.navigation');
 
   return (
-    <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-border bg-background/92 px-4 backdrop-blur-md sm:px-6 lg:ml-64">
+    <header className={`sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-border bg-background/92 px-4 backdrop-blur-md transition-[margin] duration-200 sm:px-6 ${collapsed ? 'lg:ml-20' : 'lg:ml-64'}`}>
       <CrmMobileDrawer locale={locale} tenantName={tenantName} userName={userName} />
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-semibold sm:text-base">{t(getTitleKey(pathname))}</p>
@@ -35,7 +35,7 @@ export function CrmTopbar({ locale, tenantName, userName }: CrmTopbarProps) {
         <span className="max-w-40 truncate text-xs font-medium">{tenantName}</span>
       </div>
       <ThemeToggle />
-      <div className="hidden xl:block">
+      <div className="hidden lg:block">
         <CrmUserMenu userName={userName} compact />
       </div>
     </header>

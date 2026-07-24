@@ -36,11 +36,12 @@ const GROUPS = [
 ] as const;
 
 type CrmNavigationProps = {
+  collapsed?: boolean;
   locale: string;
   onNavigate?: () => void;
 };
 
-export function CrmNavigation({ locale, onNavigate }: CrmNavigationProps) {
+export function CrmNavigation({ collapsed = false, locale, onNavigate }: CrmNavigationProps) {
   const pathname = usePathname();
   const t = useTranslations('crm.navigation');
 
@@ -48,7 +49,7 @@ export function CrmNavigation({ locale, onNavigate }: CrmNavigationProps) {
     <nav aria-label={t('ariaLabel')} className="space-y-6">
       {GROUPS.map((group) => (
         <div key={group.label}>
-          <p className="mb-2 px-3 text-xs font-semibold uppercase tracking-[0.12em] text-[hsl(var(--sidebar-muted))]">
+          <p className={collapsed ? 'sr-only' : 'mb-2 px-3 text-xs font-semibold uppercase tracking-[0.12em] text-[hsl(var(--sidebar-muted))]'}>
             {t(group.label)}
           </p>
           <ul className="space-y-1">
@@ -64,16 +65,18 @@ export function CrmNavigation({ locale, onNavigate }: CrmNavigationProps) {
                   <Link
                     href={href}
                     onClick={onNavigate}
+                    title={collapsed ? t(item.label) : undefined}
                     aria-current={active ? 'page' : undefined}
                     className={cn(
                       'flex min-h-10 items-center gap-3 rounded-[var(--radius-control)] border-l-2 px-3 text-sm font-medium transition-colors',
+                      collapsed && 'justify-center px-0',
                       active
                         ? 'border-[hsl(var(--sidebar-accent))] bg-[hsl(var(--sidebar-accent)/0.16)] text-[hsl(var(--sidebar-foreground))]'
                         : 'border-transparent text-[hsl(var(--sidebar-muted))] hover:bg-white/5 hover:text-[hsl(var(--sidebar-foreground))]'
                     )}
                   >
                     <Icon aria-hidden="true" className="size-4 shrink-0" />
-                    <span>{t(item.label)}</span>
+                    <span className={collapsed ? 'sr-only' : undefined}>{t(item.label)}</span>
                   </Link>
                 </li>
               );
