@@ -24,6 +24,13 @@ from app.models.crm import (
     CrmVoiceCall,
     CrmVoiceCallEvent,
 )
+from app.models.notifications import (
+    DomainEvent,
+    NotificationDelivery,
+    TenantCapability,
+    TenantNotificationRecipient,
+    TenantNotificationRule,
+)
 
 __all__ = [
     "AccessAuditLog",

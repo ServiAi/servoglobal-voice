@@ -4,7 +4,7 @@
       "command": "cmd",
       "args": ["/c", "uv", "run", "postgres-mcp", "--access-mode=unrestricted"],
       "env": {
-        "DATABASE_URI": "{env:DATABASE_URI}"
+        "DATABASE_URI": "{env:DATABASE_URL}"
       }
     },
 
@@ -44,6 +44,7 @@
         "DEBUG": "auth0-mcp"
       }
     },
+    
     "context7": {
       "command": "cmd",
       "args": ["/c", "npx", "-y", "https://mcp.context7.com/mcp"],
