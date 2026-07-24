@@ -11,6 +11,8 @@ from app.services.secret_manager_service import SecretManager
 
 
 class IntegrationService:
+    supported_providers = ("resend", "voice", "whatsapp", "calcom", "google_calendar")
+
     def __init__(self, db: Session, secret_manager: SecretManager | None = None) -> None:
         self.db = db
         self.secret_manager = secret_manager or SecretManager()
@@ -25,6 +27,36 @@ class IntegrationService:
                 TenantIntegration.provider == provider,
             )
         )
+
+    def is_enabled(self, tenant_id: str, provider: str) -> bool:
+        integration = self.get_integration(tenant_id, provider)
+        return integration.enabled if integration else True
+
+    def list_availability(self, tenant_id: str) -> list[dict[str, object]]:
+        integrations = {item.provider: item for item in self.list_integrations(tenant_id)}
+        return [
+            {"provider": provider, "enabled": integrations.get(provider).enabled if provider in integrations else True}
+            for provider in self.supported_providers
+        ]
+
+    def set_enabled(self, tenant_id: str, provider: str, enabled: bool) -> TenantIntegration:
+        if provider not in self.supported_providers:
+            raise ValueError("Unsupported integration provider.")
+        integration = self.get_integration(tenant_id, provider)
+        if integration is None:
+            integration = TenantIntegration(
+                tenant_id=tenant_id,
+                provider=provider,
+                enabled=enabled,
+                status="inactive",
+                config_json={},
+            )
+            self.db.add(integration)
+        else:
+            integration.enabled = enabled
+        self.db.commit()
+        self.db.refresh(integration)
+        return integration
 
     def upsert_resend(
         self,

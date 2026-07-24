@@ -3,6 +3,7 @@ import { getAccessToken } from '@/lib/auth/server';
 import {
   fetchBookingConfig,
   fetchGoogleCalendarConnections,
+  fetchIntegrationAvailability,
   fetchTenantIntegrations,
   fetchVoiceConfig,
   fetchVoiceAgents,
@@ -29,6 +30,7 @@ export default async function CrmIntegrationsPage({ params }: Props) {
     redirect(`/api/auth/login?returnTo=/${locale}/crm/settings/integrations`);
   }
   const [
+    availabilityResult,
     integrationsResult,
     bookingConfigResult,
     googleConnectionsResult,
@@ -37,6 +39,7 @@ export default async function CrmIntegrationsPage({ params }: Props) {
     whatsappConfigResult,
     whatsappTemplatesResult,
   ] = await Promise.all([
+    fetchIntegrationAvailability(accessToken),
     fetchTenantIntegrations(accessToken),
     fetchBookingConfig(accessToken),
     fetchGoogleCalendarConnections(accessToken),
@@ -49,14 +52,29 @@ export default async function CrmIntegrationsPage({ params }: Props) {
   const resendConfig = integrationsResult.ok
     ? integrationsResult.data.find((item) => item.provider === 'resend')
     : undefined;
+  const enabledProviders = new Set(
+    availabilityResult.ok
+      ? availabilityResult.data.filter((item) => item.enabled).map((item) => item.provider)
+      : ['resend', 'voice', 'whatsapp', 'calcom', 'google_calendar']
+  );
   const summaries = [
     { name: 'Email transaccional', status: !integrationsResult.ok ? 'error' : resendConfig?.status === 'active' ? 'active' : resendConfig ? 'configured' : 'not_configured' },
     { name: 'Voz', status: !voiceConfigResult.ok ? 'error' : voiceConfigResult.data?.status === 'active' ? 'active' : voiceConfigResult.data ? 'configured' : 'not_configured' },
     { name: 'WhatsApp', status: !whatsappConfigResult.ok ? 'error' : whatsappConfigResult.data?.status === 'active' ? 'active' : whatsappConfigResult.data ? 'configured' : 'not_configured' },
     { name: 'Reservas', status: !bookingConfigResult.ok ? 'error' : bookingConfigResult.data?.status === 'active' ? 'active' : bookingConfigResult.data ? 'configured' : 'not_configured' },
     { name: 'Google Calendar', status: !googleConnectionsResult.ok ? 'error' : googleConnectionsResult.data.length ? 'active' : 'not_configured' },
-  ] as const;
-  const loadErrors = [integrationsResult, bookingConfigResult, googleConnectionsResult, voiceConfigResult, voiceAgentsResult, whatsappConfigResult, whatsappTemplatesResult].filter((result) => !result.ok).length;
+  ].filter((_, index) => enabledProviders.has(['resend', 'voice', 'whatsapp', 'calcom', 'google_calendar'][index])) as Array<{
+    name: string;
+    status: 'active' | 'configured' | 'not_configured' | 'error';
+  }>;
+  const loadErrors = [
+    !availabilityResult.ok,
+    enabledProviders.has('resend') && !integrationsResult.ok,
+    enabledProviders.has('calcom') && !bookingConfigResult.ok,
+    enabledProviders.has('google_calendar') && !googleConnectionsResult.ok,
+    enabledProviders.has('voice') && (!voiceConfigResult.ok || !voiceAgentsResult.ok),
+    enabledProviders.has('whatsapp') && (!whatsappConfigResult.ok || !whatsappTemplatesResult.ok),
+  ].filter(Boolean).length;
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-6">
@@ -79,25 +97,31 @@ export default async function CrmIntegrationsPage({ params }: Props) {
       )}
       <section className="flex flex-col gap-4" aria-labelledby="communication-integrations">
       <h2 id="communication-integrations" className="text-lg font-semibold text-foreground">Comunicación</h2>
-      <ResendIntegrationCard accessToken={accessToken} initialConfig={resendConfig} />
-      <VoiceIntegrationCard
-        accessToken={accessToken}
-        initialConfig={voiceConfigResult.ok ? voiceConfigResult.data : undefined}
-        initialAgents={voiceAgentsResult.ok ? voiceAgentsResult.data : []}
-      />
-      <WhatsAppIntegrationCard
-        accessToken={accessToken}
-        initialConfig={whatsappConfigResult.ok ? whatsappConfigResult.data : undefined}
-        templates={whatsappTemplatesResult.ok ? whatsappTemplatesResult.data : []}
-      />
+      {enabledProviders.has('resend') && <ResendIntegrationCard accessToken={accessToken} initialConfig={resendConfig} />}
+      {enabledProviders.has('voice') && (
+        <VoiceIntegrationCard
+          accessToken={accessToken}
+          initialConfig={voiceConfigResult.ok ? voiceConfigResult.data : undefined}
+          initialAgents={voiceAgentsResult.ok ? voiceAgentsResult.data : []}
+        />
+      )}
+      {enabledProviders.has('whatsapp') && (
+        <WhatsAppIntegrationCard
+          accessToken={accessToken}
+          initialConfig={whatsappConfigResult.ok ? whatsappConfigResult.data : undefined}
+          templates={whatsappTemplatesResult.ok ? whatsappTemplatesResult.data : []}
+        />
+      )}
       </section>
       <section className="flex flex-col gap-4" aria-labelledby="scheduling-integrations">
       <h2 id="scheduling-integrations" className="text-lg font-semibold text-foreground">Agenda y reservas</h2>
-      <CalComIntegrationCard accessToken={accessToken} initialConfig={bookingConfigResult.ok ? bookingConfigResult.data : undefined} />
-      <GoogleCalendarIntegrationCard
-        accessToken={accessToken}
-        connections={googleConnectionsResult.ok ? googleConnectionsResult.data : []}
-      />
+      {enabledProviders.has('calcom') && <CalComIntegrationCard accessToken={accessToken} initialConfig={bookingConfigResult.ok ? bookingConfigResult.data : undefined} />}
+      {enabledProviders.has('google_calendar') && (
+        <GoogleCalendarIntegrationCard
+          accessToken={accessToken}
+          connections={googleConnectionsResult.ok ? googleConnectionsResult.data : []}
+        />
+      )}
       </section>
     </div>
   );

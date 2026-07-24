@@ -16,6 +16,7 @@ import type {
   EmailTemplateItem,
   ResendIntegrationConfigRequest,
   ResendIntegrationConfigResponse,
+  IntegrationAvailabilityResponse,
   ResendTestEmailRequest,
   WhatsAppActionRequest,
   WhatsAppActionResponse,
@@ -404,6 +405,10 @@ export function fetchTenantIntegrations(accessToken: string) {
   return requestIntegrationEndpoint<ResendIntegrationConfigResponse[]>('GET', '', accessToken);
 }
 
+export function fetchIntegrationAvailability(accessToken: string) {
+  return requestIntegrationEndpoint<IntegrationAvailabilityResponse[]>('GET', 'availability', accessToken);
+}
+
 export function fetchBookingConfig(accessToken: string) {
   return requestIntegrationEndpoint<BookingConfigResponse>('GET', 'booking/config', accessToken);
 }
@@ -525,6 +530,31 @@ export function fetchAdminTenantIntegrations(accessToken: string, tenantId: stri
     'admin',
     `tenants/${tenantId}/integrations`,
     accessToken
+  );
+}
+
+export function fetchAdminTenantIntegrationAvailability(accessToken: string, tenantId: string) {
+  return requestBackendEndpoint<IntegrationAvailabilityResponse[]>(
+    'GET',
+    'admin',
+    `tenants/${tenantId}/integrations/availability`,
+    accessToken
+  );
+}
+
+export function updateAdminTenantIntegrationAvailability(
+  accessToken: string,
+  tenantId: string,
+  provider: IntegrationAvailabilityResponse['provider'],
+  enabled: boolean
+) {
+  return requestBackendEndpoint<IntegrationAvailabilityResponse>(
+    'PATCH',
+    'admin',
+    `tenants/${tenantId}/integrations/availability/${provider}`,
+    accessToken,
+    undefined,
+    { enabled }
   );
 }
 

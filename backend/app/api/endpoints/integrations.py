@@ -17,6 +17,7 @@ from app.schemas.integrations import (
     EmailTemplateUpsertRequest,
     GoogleCalendarConnectionResponse,
     GoogleCalendarConnectUrlResponse,
+    IntegrationAvailabilityResponse,
     ResendIntegrationConfigRequest,
     ResendIntegrationConfigResponse,
     ResendTestEmailRequest,
@@ -53,6 +54,23 @@ from app.services.whatsapp_template_service import WhatsAppTemplateService
 
 router = APIRouter(prefix="/api/v1/integrations", tags=["Integrations"])
 
+_READ_ROLES = ["platform_admin", "tenant_admin", "tenant_analyst", "tenant_viewer"]
+_WRITE_ROLES = ["platform_admin", "tenant_admin"]
+
+
+def require_enabled_integration(provider: str, roles: list[str]):
+    role_dependency = require_roles(roles)
+
+    def dependency(
+        context: AuthContext = Depends(role_dependency),
+        db: Session = Depends(get_db),
+    ) -> AuthContext:
+        if not IntegrationService(db).is_enabled(context.tenant.id, provider):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Integration is not enabled for this tenant.")
+        return context
+
+    return dependency
+
 
 def _resend_response(
     integration_service: IntegrationService,
@@ -76,16 +94,28 @@ def _resend_response(
 
 @router.get("", response_model=list[ResendIntegrationConfigResponse])
 def list_integrations(
-    context: AuthContext = Depends(require_roles(["platform_admin", "tenant_admin", "tenant_analyst", "tenant_viewer"])),
+    context: AuthContext = Depends(require_roles(_READ_ROLES)),
     db: Session = Depends(get_db),
 ) -> Any:
     integration_service = IntegrationService(db)
-    return [_resend_response(integration_service, context.tenant.id, EmailConfigService(db))]
+    return (
+        [_resend_response(integration_service, context.tenant.id, EmailConfigService(db))]
+        if integration_service.is_enabled(context.tenant.id, "resend")
+        else []
+    )
+
+
+@router.get("/availability", response_model=list[IntegrationAvailabilityResponse])
+def list_integration_availability(
+    context: AuthContext = Depends(require_roles(_READ_ROLES)),
+    db: Session = Depends(get_db),
+) -> Any:
+    return IntegrationService(db).list_availability(context.tenant.id)
 
 
 @router.get("/booking/config", response_model=BookingConfigResponse)
 def get_booking_config(
-    context: AuthContext = Depends(require_roles(["platform_admin", "tenant_admin", "tenant_analyst", "tenant_viewer"])),
+    context: AuthContext = Depends(require_enabled_integration("calcom", _READ_ROLES)),
     db: Session = Depends(get_db),
 ) -> Any:
     return BookingConfigService(db).get_config_response(context.tenant.id)
@@ -94,7 +124,7 @@ def get_booking_config(
 @router.post("/calcom/config", response_model=BookingConfigResponse)
 def configure_calcom(
     body: BookingConfigRequest,
-    context: AuthContext = Depends(require_roles(["platform_admin", "tenant_admin"])),
+    context: AuthContext = Depends(require_enabled_integration("calcom", _WRITE_ROLES)),
     db: Session = Depends(get_db),
 ) -> Any:
     try:
@@ -115,7 +145,7 @@ def configure_calcom(
 
 @router.post("/calcom/test", response_model=CalComTestResponse)
 def test_calcom(
-    context: AuthContext = Depends(require_roles(["platform_admin", "tenant_admin"])),
+    context: AuthContext = Depends(require_enabled_integration("calcom", _WRITE_ROLES)),
     db: Session = Depends(get_db),
 ) -> Any:
     try:
@@ -132,7 +162,7 @@ def get_calcom_slots(
     date: str,
     jornada: str | None = None,
     reference_datetime: str | None = None,
-    context: AuthContext = Depends(require_roles(["platform_admin", "tenant_admin", "tenant_analyst", "tenant_viewer"])),
+    context: AuthContext = Depends(require_enabled_integration("calcom", _READ_ROLES)),
     db: Session = Depends(get_db),
 ) -> Any:
     try:
@@ -148,7 +178,7 @@ def get_calcom_slots(
 
 @router.get("/google-calendar/connect-url", response_model=GoogleCalendarConnectUrlResponse)
 def google_calendar_connect_url(
-    context: AuthContext = Depends(require_roles(["platform_admin", "tenant_admin"])),
+    context: AuthContext = Depends(require_enabled_integration("google_calendar", _WRITE_ROLES)),
     db: Session = Depends(get_db),
 ) -> Any:
     try:
@@ -165,7 +195,7 @@ def google_calendar_callback() -> Any:
 
 @router.get("/google-calendar/connections", response_model=list[GoogleCalendarConnectionResponse])
 def list_google_calendar_connections(
-    context: AuthContext = Depends(require_roles(["platform_admin", "tenant_admin", "tenant_analyst", "tenant_viewer"])),
+    context: AuthContext = Depends(require_enabled_integration("google_calendar", _READ_ROLES)),
     db: Session = Depends(get_db),
 ) -> Any:
     service = GoogleCalendarOAuthService(db)
@@ -175,7 +205,7 @@ def list_google_calendar_connections(
 @router.post("/google-calendar/disconnect", response_model=GoogleCalendarConnectionResponse)
 def disconnect_google_calendar(
     connection_id: str,
-    context: AuthContext = Depends(require_roles(["platform_admin", "tenant_admin"])),
+    context: AuthContext = Depends(require_enabled_integration("google_calendar", _WRITE_ROLES)),
     db: Session = Depends(get_db),
 ) -> Any:
     service = GoogleCalendarOAuthService(db)
@@ -189,7 +219,7 @@ def disconnect_google_calendar(
 @router.post("/resend/config", response_model=ResendIntegrationConfigResponse)
 def configure_resend(
     body: ResendIntegrationConfigRequest,
-    context: AuthContext = Depends(require_roles(["platform_admin", "tenant_admin"])),
+    context: AuthContext = Depends(require_enabled_integration("resend", _WRITE_ROLES)),
     db: Session = Depends(get_db),
 ) -> Any:
     tenant_id = context.tenant.id
@@ -239,7 +269,7 @@ def configure_resend(
 @router.post("/resend/test", response_model=ResendTestEmailResponse)
 def test_resend(
     body: ResendTestEmailRequest,
-    context: AuthContext = Depends(require_roles(["platform_admin", "tenant_admin"])),
+    context: AuthContext = Depends(require_enabled_integration("resend", _WRITE_ROLES)),
     db: Session = Depends(get_db),
 ) -> Any:
     try:
@@ -253,7 +283,7 @@ def test_resend(
 
 @router.get("/whatsapp/config", response_model=WhatsAppConfigResponse)
 def get_whatsapp_config(
-    context: AuthContext = Depends(require_roles(["platform_admin", "tenant_admin", "tenant_analyst", "tenant_viewer"])),
+    context: AuthContext = Depends(require_enabled_integration("whatsapp", _READ_ROLES)),
     db: Session = Depends(get_db),
 ) -> Any:
     return WhatsAppConfigService(db).get_response(context.tenant.id)
@@ -262,7 +292,7 @@ def get_whatsapp_config(
 @router.post("/whatsapp/config", response_model=WhatsAppConfigResponse)
 def configure_whatsapp(
     body: WhatsAppConfigRequest,
-    context: AuthContext = Depends(require_roles(["platform_admin", "tenant_admin"])),
+    context: AuthContext = Depends(require_enabled_integration("whatsapp", _WRITE_ROLES)),
     db: Session = Depends(get_db),
 ) -> Any:
     try:
@@ -274,7 +304,7 @@ def configure_whatsapp(
 @router.post("/whatsapp/test", response_model=WhatsAppTestResponse)
 def test_whatsapp(
     body: WhatsAppTestRequest | None = None,
-    context: AuthContext = Depends(require_roles(["platform_admin", "tenant_admin"])),
+    context: AuthContext = Depends(require_enabled_integration("whatsapp", _WRITE_ROLES)),
     db: Session = Depends(get_db),
 ) -> Any:
     result = WhatsAppConfigService(db).test_connection(context.tenant.id)
@@ -283,7 +313,7 @@ def test_whatsapp(
 
 @router.post("/whatsapp/templates/sync", response_model=WhatsAppTemplateSyncResponse)
 def sync_whatsapp_templates(
-    context: AuthContext = Depends(require_roles(["platform_admin", "tenant_admin"])),
+    context: AuthContext = Depends(require_enabled_integration("whatsapp", _WRITE_ROLES)),
     db: Session = Depends(get_db),
 ) -> Any:
     try:
@@ -298,7 +328,7 @@ def sync_whatsapp_templates(
 @router.post("/whatsapp/test-message", response_model=WhatsAppTestMessageResponse)
 def send_whatsapp_test_message(
     body: WhatsAppTestMessageRequest,
-    context: AuthContext = Depends(require_roles(["platform_admin", "tenant_admin"])),
+    context: AuthContext = Depends(require_enabled_integration("whatsapp", _WRITE_ROLES)),
     db: Session = Depends(get_db),
 ) -> Any:
     try:
@@ -312,7 +342,7 @@ def send_whatsapp_test_message(
 
 @router.get("/whatsapp/templates", response_model=list[WhatsAppTemplateResponse])
 def list_whatsapp_templates(
-    context: AuthContext = Depends(require_roles(["platform_admin", "tenant_admin", "tenant_analyst", "tenant_viewer"])),
+    context: AuthContext = Depends(require_enabled_integration("whatsapp", _READ_ROLES)),
     db: Session = Depends(get_db),
 ) -> Any:
     templates = WhatsAppTemplateService(db).list_templates(context.tenant.id)
@@ -334,7 +364,7 @@ def list_whatsapp_templates(
 
 @router.get("/resend/templates", response_model=list[EmailTemplateItem])
 def list_resend_templates(
-    context: AuthContext = Depends(require_roles(["platform_admin", "tenant_admin", "tenant_analyst", "tenant_viewer"])),
+    context: AuthContext = Depends(require_enabled_integration("resend", _READ_ROLES)),
     db: Session = Depends(get_db),
 ) -> Any:
     templates = EmailTemplateService(db).ensure_default_templates(context.tenant.id)
@@ -344,7 +374,7 @@ def list_resend_templates(
 @router.post("/resend/templates", response_model=EmailTemplateItem)
 def upsert_resend_template(
     body: EmailTemplateUpsertRequest,
-    context: AuthContext = Depends(require_roles(["platform_admin", "tenant_admin"])),
+    context: AuthContext = Depends(require_enabled_integration("resend", _WRITE_ROLES)),
     db: Session = Depends(get_db),
 ) -> Any:
     tenant_id = context.tenant.id
@@ -374,7 +404,7 @@ def upsert_resend_template(
 
 @router.get("/voice/config", response_model=VoiceProviderConfigResponse)
 def get_voice_config(
-    context: AuthContext = Depends(require_roles(["platform_admin", "tenant_admin", "tenant_analyst", "tenant_viewer"])),
+    context: AuthContext = Depends(require_enabled_integration("voice", _READ_ROLES)),
     db: Session = Depends(get_db),
 ) -> Any:
     return VoiceConfigService(db).get_config_response(context.tenant.id)
@@ -383,7 +413,7 @@ def get_voice_config(
 @router.post("/voice/config", response_model=VoiceProviderConfigResponse)
 def configure_voice(
     body: VoiceProviderConfigRequest,
-    context: AuthContext = Depends(require_roles(["platform_admin", "tenant_admin"])),
+    context: AuthContext = Depends(require_enabled_integration("voice", _WRITE_ROLES)),
     db: Session = Depends(get_db),
 ) -> Any:
     try:
@@ -396,7 +426,7 @@ def configure_voice(
 @router.post("/voice/test")
 def test_voice(
     provider: str = "ultravox",
-    context: AuthContext = Depends(require_roles(["platform_admin", "tenant_admin"])),
+    context: AuthContext = Depends(require_enabled_integration("voice", _WRITE_ROLES)),
     db: Session = Depends(get_db),
 ) -> Any:
     try:
@@ -412,7 +442,7 @@ def test_voice(
 
 @router.get("/voice/agents", response_model=list[VoiceAgentConfigResponse])
 def list_voice_agents(
-    context: AuthContext = Depends(require_roles(["platform_admin", "tenant_admin", "tenant_analyst", "tenant_viewer"])),
+    context: AuthContext = Depends(require_enabled_integration("voice", _READ_ROLES)),
     db: Session = Depends(get_db),
 ) -> Any:
     service = VoiceAgentService(db)
@@ -423,7 +453,7 @@ def list_voice_agents(
 @router.post("/voice/agents", response_model=VoiceAgentConfigResponse)
 def create_voice_agent(
     body: VoiceAgentConfigRequest,
-    context: AuthContext = Depends(require_roles(["platform_admin", "tenant_admin"])),
+    context: AuthContext = Depends(require_enabled_integration("voice", _WRITE_ROLES)),
     db: Session = Depends(get_db),
 ) -> Any:
     try:
@@ -438,7 +468,7 @@ def create_voice_agent(
 def update_voice_agent(
     agent_config_id: str,
     body: VoiceAgentConfigRequest,
-    context: AuthContext = Depends(require_roles(["platform_admin", "tenant_admin"])),
+    context: AuthContext = Depends(require_enabled_integration("voice", _WRITE_ROLES)),
     db: Session = Depends(get_db),
 ) -> Any:
     try:

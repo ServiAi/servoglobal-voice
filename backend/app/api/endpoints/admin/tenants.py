@@ -33,6 +33,8 @@ from app.schemas.integrations import (
     BookingConfigResponse,
     CalComTestResponse,
     GoogleCalendarConnectionResponse,
+    IntegrationAvailabilityResponse,
+    IntegrationAvailabilityUpdateRequest,
     ResendIntegrationConfigRequest,
     ResendIntegrationConfigResponse,
     ResendTestEmailRequest,
@@ -500,6 +502,48 @@ def list_tenant_integrations_admin(
     integration_service = IntegrationService(db)
     config_service = EmailConfigService(db)
     return [_resend_response(integration_service, tenant_id, config_service)]
+
+
+@router.get(
+    "/tenants/{tenant_id}/integrations/availability",
+    response_model=list[IntegrationAvailabilityResponse],
+)
+def list_tenant_integration_availability_admin(
+    tenant_id: str,
+    db: Session = Depends(get_current_internal_db),
+) -> Any:
+    try:
+        OnboardingService(db).get_tenant(tenant_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return IntegrationService(db).list_availability(tenant_id)
+
+
+@router.patch(
+    "/tenants/{tenant_id}/integrations/availability/{provider}",
+    response_model=IntegrationAvailabilityResponse,
+)
+def update_tenant_integration_availability_admin(
+    tenant_id: str,
+    provider: str,
+    body: IntegrationAvailabilityUpdateRequest,
+    db: Session = Depends(get_current_internal_db),
+) -> Any:
+    try:
+        OnboardingService(db).get_tenant(tenant_id)
+        integration = IntegrationService(db).set_enabled(tenant_id, provider, body.enabled)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    IntegrationEventService(db).record_event(
+        tenant_id=tenant_id,
+        provider=provider,
+        event_type="integration_availability_updated",
+        status="success",
+        resource_type="tenant_integration",
+        resource_id=integration.id,
+        metadata={"enabled": body.enabled},
+    )
+    return IntegrationAvailabilityResponse(provider=provider, enabled=body.enabled)
 
 
 @router.get("/tenants/{tenant_id}/integrations/booking/config", response_model=BookingConfigResponse)

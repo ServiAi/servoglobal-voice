@@ -20,6 +20,7 @@ class TenantIntegration(Base, TimestampMixin):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
     tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False)
     provider: Mapped[str] = mapped_column(String(40), nullable=False)
+    enabled: Mapped[bool] = mapped_column(sa.Boolean, nullable=False, default=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="inactive")
     display_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
     config_json: Mapped[dict] = mapped_column(sa.JSON, nullable=False, default=dict)

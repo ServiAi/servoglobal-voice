@@ -90,6 +90,41 @@ class AdminTenantIntegrationTests(unittest.TestCase):
         self.assertEqual(len(response.json()), 1)
         self.assertEqual(response.json()[0]["provider"], "resend")
 
+    def test_platform_admin_can_disable_integration_and_tenant_cannot_access_it(self):
+        response = self.client.patch(
+            f"/api/v1/admin/tenants/{self.tenant.id}/integrations/availability/whatsapp",
+            json={"enabled": False},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"provider": "whatsapp", "enabled": False})
+        tenant_response = self.client.get("/api/v1/integrations/whatsapp/config")
+        self.assertEqual(tenant_response.status_code, 404)
+
+        availability = self.client.get("/api/v1/integrations/availability")
+        self.assertEqual(availability.status_code, 200)
+        whatsapp = next(item for item in availability.json() if item["provider"] == "whatsapp")
+        self.assertFalse(whatsapp["enabled"])
+
+    def test_integrations_default_to_enabled_and_can_be_reenabled_without_losing_config(self):
+        initial = self.client.get(f"/api/v1/admin/tenants/{self.tenant.id}/integrations/availability")
+        self.assertEqual(initial.status_code, 200)
+        self.assertTrue(all(item["enabled"] for item in initial.json()))
+
+        self.client.patch(
+            f"/api/v1/admin/tenants/{self.tenant.id}/integrations/availability/resend",
+            json={"enabled": False},
+        )
+        self.assertEqual(self._configure(self.tenant.id).status_code, 200)
+        reenabled = self.client.patch(
+            f"/api/v1/admin/tenants/{self.tenant.id}/integrations/availability/resend",
+            json={"enabled": True},
+        )
+        self.assertEqual(reenabled.status_code, 200)
+        tenant_integrations = self.client.get("/api/v1/integrations")
+        self.assertEqual(tenant_integrations.status_code, 200)
+        self.assertEqual(tenant_integrations.json()[0]["sender_email"], "comercial@mail.serviglobal-ia.com")
+
     def test_platform_admin_can_configure_resend_for_specific_tenant(self):
         self.is_internal = True
         response = self._configure(self.tenant.id)

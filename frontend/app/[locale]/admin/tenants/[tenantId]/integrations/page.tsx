@@ -2,6 +2,7 @@ import { locales, type Locale } from '@/i18n';
 import {
   fetchAdminTenantBookingConfig,
   fetchAdminTenantGoogleCalendarConnections,
+  fetchAdminTenantIntegrationAvailability,
   fetchAdminTenantIntegrations,
   fetchAdminTenantVoiceConfig,
   fetchAdminTenantVoiceAgents,
@@ -17,6 +18,7 @@ import { CalComIntegrationCard } from '@/components/crm/integrations/CalComInteg
 import { GoogleCalendarIntegrationCard } from '@/components/crm/integrations/GoogleCalendarIntegrationCard';
 import { VoiceIntegrationCard } from '@/components/crm/integrations/VoiceIntegrationCard';
 import { WhatsAppIntegrationCard } from '@/components/crm/integrations/WhatsAppIntegrationCard';
+import { IntegrationAvailabilityPanel } from '@/components/crm/integrations/IntegrationAvailabilityPanel';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 
@@ -38,14 +40,25 @@ export default async function AdminTenantIntegrationsPage({ params }: Props) {
   // Guard access to internal platform admin
   const { accessToken } = await requireInternalAdminAccess(locale, returnTo);
 
-  // Fetch the configurations using our admin API client method
-  const integrationsResult = await fetchAdminTenantIntegrations(accessToken, tenantId);
-  const bookingConfigResult = await fetchAdminTenantBookingConfig(accessToken, tenantId);
-  const googleConnectionsResult = await fetchAdminTenantGoogleCalendarConnections(accessToken, tenantId);
-  const voiceConfigResult = await fetchAdminTenantVoiceConfig(accessToken, tenantId);
-  const voiceAgentsResult = await fetchAdminTenantVoiceAgents(accessToken, tenantId);
-  const whatsappConfigResult = await fetchAdminTenantWhatsAppConfig(accessToken, tenantId);
-  const whatsappTemplatesResult = await fetchAdminTenantWhatsAppTemplates(accessToken, tenantId);
+  const [
+    integrationsResult,
+    availabilityResult,
+    bookingConfigResult,
+    googleConnectionsResult,
+    voiceConfigResult,
+    voiceAgentsResult,
+    whatsappConfigResult,
+    whatsappTemplatesResult,
+  ] = await Promise.all([
+    fetchAdminTenantIntegrations(accessToken, tenantId),
+    fetchAdminTenantIntegrationAvailability(accessToken, tenantId),
+    fetchAdminTenantBookingConfig(accessToken, tenantId),
+    fetchAdminTenantGoogleCalendarConnections(accessToken, tenantId),
+    fetchAdminTenantVoiceConfig(accessToken, tenantId),
+    fetchAdminTenantVoiceAgents(accessToken, tenantId),
+    fetchAdminTenantWhatsAppConfig(accessToken, tenantId),
+    fetchAdminTenantWhatsAppTemplates(accessToken, tenantId),
+  ]);
 
   if (!integrationsResult.ok) {
     redirectAdminAccessFailure(integrationsResult.status, locale, returnTo);
@@ -73,6 +86,14 @@ export default async function AdminTenantIntegrationsPage({ params }: Props) {
         <p className="text-sm text-muted-foreground">Configura proveedores externos para este tenant</p>
       </div>
 
+      {availabilityResult.ok && (
+        <IntegrationAvailabilityPanel
+          accessToken={accessToken}
+          tenantId={tenantId}
+          initialItems={availabilityResult.data}
+        />
+      )}
+
       <ResendIntegrationCard
         accessToken={accessToken}
         initialConfig={resendConfig}
@@ -83,6 +104,8 @@ export default async function AdminTenantIntegrationsPage({ params }: Props) {
         accessToken={accessToken}
         initialConfig={voiceConfigResult.ok ? voiceConfigResult.data : undefined}
         initialAgents={voiceAgentsResult.ok ? voiceAgentsResult.data : []}
+        mode="admin"
+        tenantId={tenantId}
       />
       <WhatsAppIntegrationCard
         accessToken={accessToken}

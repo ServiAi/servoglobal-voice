@@ -312,6 +312,13 @@ export type ResendIntegrationConfigResponse = {
   last_error_message?: string | null;
 };
 
+export type IntegrationProvider = 'resend' | 'voice' | 'whatsapp' | 'calcom' | 'google_calendar';
+
+export type IntegrationAvailabilityResponse = {
+  provider: IntegrationProvider;
+  enabled: boolean;
+};
+
 export type ResendTestEmailRequest = {
   to_email: string;
 };

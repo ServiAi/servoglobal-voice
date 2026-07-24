@@ -26,6 +26,15 @@ class ResendIntegrationConfigResponse(BaseModel):
     last_error_message: Optional[str] = None
 
 
+class IntegrationAvailabilityResponse(BaseModel):
+    provider: str
+    enabled: bool
+
+
+class IntegrationAvailabilityUpdateRequest(BaseModel):
+    enabled: bool
+
+
 class ResendTestEmailRequest(BaseModel):
     to_email: str = Field(..., min_length=3, max_length=255)
 
