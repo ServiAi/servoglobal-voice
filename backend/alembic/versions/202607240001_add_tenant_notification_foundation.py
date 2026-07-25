@@ -52,7 +52,7 @@ def upgrade() -> None:
             "group_key",
             "channel",
             "destination",
-            name="uq_tenant_notification_recipients_tenant_group_channel_destination",
+            name="uq_tenant_notif_recipients_tenant_group_channel_dest",
         ),
     )
     op.create_index(

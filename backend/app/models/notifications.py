@@ -34,7 +34,7 @@ class TenantNotificationRecipient(Base, TimestampMixin):
             "group_key",
             "channel",
             "destination",
-            name="uq_tenant_notification_recipients_tenant_group_channel_destination",
+            name="uq_tenant_notif_recipients_tenant_group_channel_dest",
         ),
         Index("ix_tenant_notification_recipients_tenant_group_status", "tenant_id", "group_key", "status"),
         Index("ix_tenant_notification_recipients_tenant_channel_status", "tenant_id", "channel", "status"),
