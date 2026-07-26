@@ -179,3 +179,34 @@ class WhatsAppTemplateService:
         if not parameters:
             return []
         return [{"type": "body", "parameters": parameters}]
+
+    def get_approved_parameter_keys(self, template: TenantWhatsAppTemplate) -> list[str]:
+        parameters = (template.variables_json or {}).get("parameters")
+        if parameters is None:
+            return []
+        if not isinstance(parameters, list):
+            raise ValueError("Template parameters are malformed")
+        keys: list[str] = []
+        for item in parameters:
+            if not isinstance(item, dict) or not item.get("key"):
+                raise ValueError("Template parameters are malformed")
+            keys.append(str(item["key"]))
+        return keys
+
+    def build_approved_template_components(
+        self,
+        template: TenantWhatsAppTemplate,
+        variables: dict[str, str],
+    ) -> list[dict[str, Any]]:
+        keys = self.get_approved_parameter_keys(template)
+        if not keys:
+            return []
+        missing = [key for key in keys if key not in variables]
+        if missing:
+            raise ValueError(f"Missing template variables: {', '.join(missing)}")
+        return [
+            {
+                "type": "body",
+                "parameters": [{"type": "text", "text": str(variables[key])} for key in keys],
+            }
+        ]

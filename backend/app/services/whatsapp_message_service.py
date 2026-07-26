@@ -15,12 +15,21 @@ from app.schemas.crm import WhatsAppActionRequest, WhatsAppActionResponse
 from app.schemas.integrations import WhatsAppTestMessageRequest, WhatsAppTestMessageResponse
 from app.services.crm_activity_service import CrmActivityService
 from app.services.integration_event_service import IntegrationEventService
+from app.services.notification_delivery_status_service import NotificationDeliveryStatusService
 from app.services.whatsapp_client import WhatsAppCloudClient, WhatsAppCloudClientError, sanitize_whatsapp_error
 from app.services.whatsapp_config_service import WhatsAppConfigService
 from app.services.whatsapp_template_service import WhatsAppTemplateService
 
 
 logger = logging.getLogger(__name__)
+
+_ALLOWED_NOTIFICATION_METADATA_KEYS = {
+    "source",
+    "notification_delivery_id",
+    "domain_event_id",
+    "notification_rule_id",
+    "template_key",
+}
 
 
 @dataclass
@@ -68,6 +77,7 @@ class WhatsAppMessageService:
         self.templates = WhatsAppTemplateService(db)
         self.events = IntegrationEventService(db)
         self.activities = CrmActivityService(db)
+        self.delivery_status = NotificationDeliveryStatusService(db)
 
     def _get_lead(self, tenant_id: str, lead_id: str) -> CrmLead:
         lead = self.db.scalar(
@@ -212,6 +222,136 @@ class WhatsAppMessageService:
         )
         return WhatsAppSendResult(status="sent", message=message, provider_message_id=provider_message_id)
 
+    def _sanitize_notification_metadata(self, metadata: dict[str, Any] | None, *, template_key: str) -> dict[str, Any]:
+        safe = {
+            key: value
+            for key, value in (metadata or {}).items()
+            if key in _ALLOWED_NOTIFICATION_METADATA_KEYS and isinstance(value, (str, int, float, bool))
+        }
+        safe["template_key"] = template_key
+        return safe
+
+    def send_template_notification(
+        self,
+        *,
+        tenant_id: str,
+        to_phone: str,
+        template_key: str,
+        variables: dict[str, str],
+        metadata: dict[str, Any],
+        lead_id: str | None = None,
+        contact_id: str | None = None,
+    ) -> WhatsAppSendResult:
+        config, client_config = self.configs.get_active_client_config(tenant_id)
+        template = self.templates.get_synced_template(
+            tenant_id, template_key=template_key, provider_template_name=None
+        )
+        components = self.templates.build_approved_template_components(template, variables)
+
+        lead: CrmLead | None = None
+        if lead_id:
+            lead = self.db.scalar(select(CrmLead).where(CrmLead.tenant_id == tenant_id, CrmLead.id == lead_id))
+            if lead is None:
+                raise ValueError("Lead not found")
+
+        contact: CrmContact | None = None
+        if contact_id:
+            contact = self.db.scalar(
+                select(CrmContact).where(CrmContact.tenant_id == tenant_id, CrmContact.id == contact_id)
+            )
+            if contact is None:
+                raise ValueError("Contact not found")
+
+        normalized_phone = normalize_phone(to_phone)
+        if not normalized_phone or len(normalized_phone) < 8 or len(normalized_phone) > 32:
+            raise ValueError("A valid destination phone is required")
+
+        safe_metadata = self._sanitize_notification_metadata(metadata, template_key=template.template_key)
+        body_preview = safe_preview(self.templates.render_template(template, variables))
+
+        message = CrmWhatsAppMessage(
+            tenant_id=tenant_id,
+            lead_id=lead.id if lead else None,
+            contact_id=contact.id if contact else None,
+            template_id=template.id,
+            template_key=template.template_key,
+            direction="outbound",
+            to_phone=normalized_phone,
+            from_phone=config.display_phone_number,
+            message_preview=body_preview,
+            status="queued",
+            metadata_json=safe_metadata,
+        )
+        self.db.add(message)
+        self.db.commit()
+        self.db.refresh(message)
+
+        self.events.record_event(
+            tenant_id=tenant_id,
+            provider=self.provider,
+            event_type="whatsapp_notification_requested",
+            status="queued",
+            resource_type="crm_whatsapp_message",
+            resource_id=message.id,
+        )
+
+        try:
+            payload = self.client.send_template_message(
+                client_config,
+                to_phone=normalized_phone,
+                template_name=template.provider_template_name,
+                language=template.language or config.default_language,
+                components=components,
+            )
+            provider_message_id = extract_provider_message_id(payload)
+        except WhatsAppCloudClientError as exc:
+            error_message = sanitize_whatsapp_error(str(exc)) or "WhatsApp send failed"
+            message.status = "failed"
+            message.error_message = error_message
+            message.failed_at = datetime.now(timezone.utc)
+            self.db.commit()
+            self.db.refresh(message)
+            self.events.record_event(
+                tenant_id=tenant_id,
+                provider=self.provider,
+                event_type="whatsapp_notification_failed",
+                status="failed",
+                resource_type="crm_whatsapp_message",
+                resource_id=message.id,
+                message=error_message,
+            )
+            return WhatsAppSendResult(status="failed", message=message, error_message=error_message)
+
+        message.provider_message_id = provider_message_id
+        message.status = "sent"
+        message.sent_at = datetime.now(timezone.utc)
+        self.db.commit()
+        self.db.refresh(message)
+
+        if message.lead_id and message.contact_id:
+            self.activities.create_activity(
+                tenant_id=tenant_id,
+                lead_id=message.lead_id,
+                contact_id=message.contact_id,
+                activity_type="whatsapp_notification_sent",
+                title="WhatsApp enviado",
+                description=f"Plantilla: {template.name}",
+                outcome="sent",
+                deduplication_key=f"whatsapp_notification_sent:{message.id}",
+                payload_json={"message_id": message.id, "template_key": template.template_key, "status": "sent"},
+            )
+
+        self.events.record_event(
+            tenant_id=tenant_id,
+            provider=self.provider,
+            event_type="whatsapp_notification_sent",
+            status="success",
+            resource_type="crm_whatsapp_message",
+            resource_id=message.id,
+            metadata={"message_id": provider_message_id},
+        )
+        return WhatsAppSendResult(status="sent", message=message, provider_message_id=provider_message_id)
+
     def send_test_template_message(
         self,
         tenant_id: str,
@@ -344,6 +484,7 @@ class WhatsAppMessageService:
                 continue
             now = datetime.now(timezone.utc)
             message.status = status
+            status_error_message = None
             if status == "delivered":
                 message.delivered_at = now
             elif status == "read":
@@ -351,7 +492,15 @@ class WhatsAppMessageService:
             elif status == "failed":
                 message.failed_at = now
                 error = item.get("errors")
-                message.error_message = sanitize_whatsapp_error(str(error)) if error else "WhatsApp delivery failed"
+                status_error_message = sanitize_whatsapp_error(str(error)) if error else "WhatsApp delivery failed"
+                message.error_message = status_error_message
+            self.delivery_status.apply_provider_status(
+                tenant_id=config.tenant_id,
+                provider_message_id=provider_message_id,
+                status=status,
+                occurred_at=now,
+                error_message=status_error_message,
+            )
             self.db.commit()
             self.events.record_event(
                 tenant_id=message.tenant_id,
