@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import replace
 from datetime import UTC, timedelta
 from typing import Any
@@ -14,6 +15,9 @@ from app.services.booking_config_service import BookingConfigService
 from app.services.calcom_client import CalComClient, CalComClientConfig, parse_utc_start, sanitize_calcom_error
 from app.services.crm_activity_service import CrmActivityService
 from app.services.integration_event_service import IntegrationEventService
+from app.services.notification_event_pipeline import NotificationEventPipeline
+
+logger = logging.getLogger(__name__)
 
 
 class BookingService:
@@ -23,10 +27,26 @@ class BookingService:
         *,
         config_service: BookingConfigService | None = None,
         calcom_client: CalComClient | None = None,
+        notification_pipeline: NotificationEventPipeline | None = None,
     ) -> None:
         self.db = db
         self.config_service = config_service or BookingConfigService(db)
         self.calcom_client = calcom_client or CalComClient()
+        self._notification_pipeline = notification_pipeline
+
+    def _notify_booking_event_safely(self, *, tenant_id: str, booking_id: str, event_type: str) -> None:
+        pipeline = self._notification_pipeline or NotificationEventPipeline(self.db)
+        try:
+            pipeline.process_booking_event(
+                tenant_id=tenant_id, booking_id=booking_id, event_type=event_type
+            )
+        except Exception as exc:  # noqa: BLE001 - a notification failure must never affect the booking
+            logger.error(
+                "booking_notification_pipeline_error tenant_id=%s booking_id=%s error_type=%s",
+                tenant_id,
+                booking_id,
+                type(exc).__name__,
+            )
 
     def get_available_slots_for_tenant(
         self,
@@ -157,6 +177,9 @@ class BookingService:
             resource_type="crm_booking",
             resource_id=booking.id,
             metadata={"booking_id": booking.id, "provider_booking_uid": booking.provider_booking_uid},
+        )
+        self._notify_booking_event_safely(
+            tenant_id=tenant_id, booking_id=booking.id, event_type="booking.created"
         )
         return booking
 
@@ -332,8 +355,13 @@ class BookingService:
         result = self.calcom_client.cancel_booking(client_config, booking.provider_booking_uid)
         self.map_calcom_response_to_crm_booking(booking, result)
         booking.status = "cancelled"
+        self.db.commit()
+        self.db.refresh(booking)
         self.record_crm_activity(booking, "booking_created", "Reserva cancelada manualmente desde el CRM")
         self.record_crm_booking_event(booking, "booking_cancelled", booking.status, self._safe_provider_summary(result))
+        self._notify_booking_event_safely(
+            tenant_id=tenant_id, booking_id=booking.id, event_type="booking.cancelled"
+        )
         return {"status": "success", "booking_id": booking.id}
 
     def reschedule_lead_booking(
@@ -349,9 +377,20 @@ class BookingService:
         result = self.calcom_client.reschedule_booking(client_config, booking.provider_booking_uid, new_start_time)
         self.map_calcom_response_to_crm_booking(booking, result)
         booking.status = "scheduled"
+
+        new_start_at = parse_utc_start(new_start_time)
+        duration_minutes = booking.duration_minutes or config.default_length_minutes
+        booking.start_at = new_start_at
+        booking.end_at = new_start_at + timedelta(minutes=duration_minutes)
+        self.db.commit()
+        self.db.refresh(booking)
+
         self.record_crm_activity(booking, "booking_created", "Reserva reprogramada desde el CRM")
         self.record_crm_booking_event(
             booking, "booking_rescheduled", booking.status, self._safe_provider_summary(result)
+        )
+        self._notify_booking_event_safely(
+            tenant_id=tenant_id, booking_id=booking.id, event_type="booking.rescheduled"
         )
         return {"status": "success", "booking_id": booking.id}
 

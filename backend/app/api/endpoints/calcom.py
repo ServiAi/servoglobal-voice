@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models.crm import CrmBooking, CrmBookingEvent
 from app.services.crm_activity_service import CrmActivityService
+from app.services.notification_event_pipeline import run_booking_notification_pipeline_task
 from app.services.calcom_service import (
     CalComConfigurationError,
     CalComInputError,
@@ -18,7 +19,6 @@ from app.services.calcom_service import (
     create_booking,
 )
 from datetime import datetime
-from zoneinfo import ZoneInfo
 import logging
 
 logger = logging.getLogger(__name__)
@@ -93,46 +93,6 @@ async def create_new_booking(request: CreateBookingRequest):
 
 # ── Webhook Nativo de Cal.com ────────────────────────────────────────────────
 
-MESES = {
-    1: "enero",
-    2: "febrero",
-    3: "marzo",
-    4: "abril",
-    5: "mayo",
-    6: "junio",
-    7: "julio",
-    8: "agosto",
-    9: "septiembre",
-    10: "octubre",
-    11: "noviembre",
-    12: "diciembre",
-}
-DIAS = {
-    0: "Lunes",
-    1: "Martes",
-    2: "Miércoles",
-    3: "Jueves",
-    4: "Viernes",
-    5: "Sábado",
-    6: "Domingo",
-}
-
-
-def format_calcom_datetime(iso_string: str) -> tuple[str, str]:
-    """Convierte ISO 8601 UTC a la hora de Colombia con el formato amigable de Serviglobal."""
-    # Reemplazamos 'Z' para compatibilidad con fromisoformat()
-    dt_utc = datetime.fromisoformat(iso_string.replace("Z", "+00:00"))
-    # Convertimos a hora local Colombia
-    dt_bogota = dt_utc.astimezone(ZoneInfo("America/Bogota"))
-
-    dia_semana = DIAS[dt_bogota.weekday()]
-    mes = MESES[dt_bogota.month]
-    date_str = f"{dia_semana} {dt_bogota.day} de {mes} de {dt_bogota.year}"
-    time_str = dt_bogota.strftime("%I:%M %p").lstrip("0")
-
-    return date_str, time_str
-
-
 def _calcom_webhook_status(trigger_event: str | None, payload: dict) -> str:
     status_value = payload.get("status")
     if status_value:
@@ -155,18 +115,52 @@ def _safe_webhook_metadata(payload: dict) -> dict:
     }
 
 
-def _sync_crm_booking_from_calcom_webhook(db: Session, trigger_event: str | None, payload: dict) -> bool:
+_CALCOM_TRIGGER_TO_DOMAIN_EVENT = {
+    "BOOKING_CREATED": "booking.created",
+    "BOOKING_CANCELLED": "booking.cancelled",
+    "BOOKING_RESCHEDULED": "booking.rescheduled",
+}
+
+
+def _sync_crm_booking_from_calcom_webhook(
+    db: Session, trigger_event: str | None, payload: dict
+) -> CrmBooking | None:
     metadata = _safe_webhook_metadata(payload)
+    if metadata.get("source") != "serviglobal_crm":
+        return None
+
     crm_booking_id = metadata.get("crm_booking_id")
     if not crm_booking_id:
-        return False
+        return None
 
-    booking = db.scalar(select(CrmBooking).where(CrmBooking.id == crm_booking_id))
+    booking = db.scalar(
+        select(CrmBooking).where(
+            CrmBooking.id == crm_booking_id,
+            CrmBooking.provider == "calcom",
+        )
+    )
     if booking is None:
-        return False
+        return None
+
     crm_lead_id = metadata.get("crm_lead_id")
-    if crm_lead_id and booking.lead_id and crm_lead_id != booking.lead_id:
-        return False
+    if crm_lead_id and crm_lead_id != (booking.lead_id or ""):
+        return None
+
+    incoming_provider_id = str(payload.get("id") or "").strip()
+    incoming_provider_uid = str(payload.get("uid") or payload.get("bookingUid") or "").strip()
+
+    if (
+        booking.provider_booking_id
+        and incoming_provider_id
+        and str(booking.provider_booking_id) != incoming_provider_id
+    ):
+        return None
+    if (
+        booking.provider_booking_uid
+        and incoming_provider_uid
+        and str(booking.provider_booking_uid) != incoming_provider_uid
+    ):
+        return None
 
     if trigger_event == "BOOKING_CANCELLED":
         booking.status = "cancelled"
@@ -181,8 +175,8 @@ def _sync_crm_booking_from_calcom_webhook(db: Session, trigger_event: str | None
     elif trigger_event == "BOOKING_CREATED":
         booking.status = _calcom_webhook_status(trigger_event, payload)
 
-    booking.provider_booking_id = str(payload.get("id") or "") or booking.provider_booking_id
-    booking.provider_booking_uid = str(payload.get("uid") or payload.get("bookingUid") or "") or booking.provider_booking_uid
+    booking.provider_booking_id = incoming_provider_id or booking.provider_booking_id
+    booking.provider_booking_uid = incoming_provider_uid or booking.provider_booking_uid
     booking.meeting_url = payload.get("meetingUrl") or payload.get("meeting_url") or payload.get("videoCallUrl") or booking.meeting_url
 
     safe_summary = {
@@ -212,7 +206,7 @@ def _sync_crm_booking_from_calcom_webhook(db: Session, trigger_event: str | None
             description=f"Cal.com {trigger_event or 'webhook'}",
             payload_json=safe_summary,
         )
-    return True
+    return booking
 
 
 
@@ -225,10 +219,8 @@ async def receive_calcom_webhook(
 ):
     """
     Recibe el Webhook nativo desde Cal.com.
-    Intercepta el evento BOOKING_CREATED y envía las notificaciones y notas al CRM de Chatwoot.
+    Sincroniza la reserva del CRM y programa las notificaciones multiempresa en background.
     """
-    from app.services.notification_service import notification_service
-
     # --- VALIDACIÓN CRIPTOGRÁFICA DE SEGURIDAD (Bypass BFM) ---
     calcom_secret = os.getenv("CALCOM_WEBHOOK_SECRET")
     
@@ -263,73 +255,29 @@ async def receive_calcom_webhook(
         payload = payload_data.get("payload", {})
         if not isinstance(payload, dict):
             payload = {}
-        crm_synced = _sync_crm_booking_from_calcom_webhook(db, trigger_event, payload)
+        booking = _sync_crm_booking_from_calcom_webhook(db, trigger_event, payload)
 
-        if trigger_event == "BOOKING_CREATED":
-
-            # Extraer datos de los asistentes / respuestas
-            attendees = payload.get("attendees", [])
-            responses = payload.get("responses", {})
-
-            # Función auxiliar rápida para extraer el valor manejando diccionarios o strings
-            def get_res_value(key):
-                val = responses.get(key)
-                if isinstance(val, dict):
-                    return val.get("value", "")
-                return val if isinstance(val, str) else ""
-
-            # Nombre y email preferimos sacarlos del primer attendee o responses
-            client_name = get_res_value("name") or (
-                attendees[0].get("name") if attendees else "Desconocido"
-            )
-            client_email = get_res_value("email") or (
-                attendees[0].get("email") if attendees else ""
-            )
-
-            # Teléfono generalmente está en las respuestas. Búsqueda robusta:
-            client_phone = get_res_value("phone") or get_res_value("attendeePhoneNumber")
-            
-            if not client_phone:
-                # Buscar en todas las llaves de responses por si le cambiaron el ID al campo en Cal.com
-                for key, val in responses.items():
-                    str_val = val.get("value", "") if isinstance(val, dict) else val
-                    if isinstance(str_val, str) and (
-                        "phone" in key.lower()
-                        or "tel" in key.lower()
-                        or "cel" in key.lower()
-                        or "+" in str_val
-                    ):
-                        client_phone = str_val
-                        break
-
-            start_time_iso = payload.get("startTime")
-            if not start_time_iso or not client_phone:
-                logger.warning("[Cal.com] Faltan datos críticos para notificación de booking.")
-                return {"status": "ignored", "reason": "missing_data_or_no_phone"}
-
-            try:
-                date_str, time_str = format_calcom_datetime(start_time_iso)
-            except Exception as e:
-                logger.error(f"[Cal.com] Error parseando fecha {start_time_iso}: {e}")
-                date_str, time_str = "Fecha", "Hora"
-
-            logger.info("[Cal.com] Agendamiento recibido trigger=%s crm_synced=%s", trigger_event, crm_synced)
-
-            # Lanzamos la notificación en background para que Cal.com reciba el OK rápidamente (200)
-            background_tasks.add_task(
-                notification_service.notify_new_booking,
-                client_phone=client_phone,
-                client_name=client_name,
-                date_str=date_str,
-                time_str=time_str,
-                client_email=client_email,
-            )
-
-            return {"status": "processing_notifications"}
-        else:
+        domain_event_type = _CALCOM_TRIGGER_TO_DOMAIN_EVENT.get(trigger_event or "")
+        if booking is None:
+            return {"status": "ignored", "reason": "booking_unreconciled"}
+        if domain_event_type is None:
             return {"status": "ignored", "reason": "not_booking_created"}
 
-    except Exception as e:
-        logger.error(f"[Cal.com] Error procesando webhook: {e}")
-        # Retornamos 200 igual para que Cal.com no reintente con errores de parseo
-        return {"status": "error", "detail": str(e)}
+        background_tasks.add_task(
+            run_booking_notification_pipeline_task,
+            tenant_id=booking.tenant_id,
+            booking_id=booking.id,
+            event_type=domain_event_type,
+        )
+        return {"status": "processing_notifications"}
+
+    except Exception as exc:
+        # Retornamos 200 igual para que Cal.com no reintente con errores de parseo.
+        logger.error(
+            "calcom_webhook_processing_error error_type=%s",
+            type(exc).__name__,
+        )
+        return {
+            "status": "error",
+            "reason": "webhook_processing_failed",
+        }

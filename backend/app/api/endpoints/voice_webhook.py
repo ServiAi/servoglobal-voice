@@ -3,21 +3,25 @@ from __future__ import annotations
 import json
 import logging
 from typing import Any
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
+from app.services.notification_event_pipeline import run_call_notification_pipeline_task
 from app.services.voice_webhook_service import VoiceWebhookService
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/voice", tags=["Voice Webhooks"])
 
+_NOTIFIABLE_CALL_STATUSES = {"completed", "failed", "no_answer", "busy"}
+
 
 @router.post("/webhook/{provider}")
 async def voice_webhook(
     provider: str,
     request: Request,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ) -> Any:
     raw_body = await request.body()
@@ -54,10 +58,18 @@ async def voice_webhook(
 
     try:
         result = service.handle_provider_event(provider, payload)
-        return result
     except Exception as exc:
         logger.error("Error processing voice webhook: %s", type(exc).__name__)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Webhook processing error",
         ) from exc
+
+    if result.get("status") == "processed" and result.get("call_status") in _NOTIFIABLE_CALL_STATUSES:
+        background_tasks.add_task(
+            run_call_notification_pipeline_task,
+            tenant_id=call.tenant_id,
+            voice_call_id=result["voice_call_id"],
+        )
+
+    return result
