@@ -56,6 +56,9 @@ class NotificationDeliveryStatusService:
             delivery.status = "failed"
             delivery.failed_at = occurred_at
             delivery.error_message = sanitize_whatsapp_error(error_message) if error_message else delivery.error_message
+            delivery.claim_token = None
+            delivery.claimed_at = None
+            delivery.claim_expires_at = None
             self.db.add(delivery)
             return delivery
 
@@ -73,6 +76,14 @@ class NotificationDeliveryStatusService:
             delivery.read_at = occurred_at
             if delivery.delivered_at is None:
                 delivery.delivered_at = occurred_at
+
+        # A confirmed provider status is definitive: release any pending
+        # claim/backoff so the worker never retries an already-delivered message.
+        delivery.next_attempt_at = None
+        delivery.claim_token = None
+        delivery.claimed_at = None
+        delivery.claim_expires_at = None
+        delivery.error_message = None
 
         self.db.add(delivery)
         return delivery

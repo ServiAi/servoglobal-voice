@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.models.crm import CrmActivity, CrmContact, CrmLead, CrmWhatsAppMessage
 from app.models.integrations import TenantWhatsAppConfig
+from app.models.notifications import NotificationDelivery
 from app.schemas.crm import WhatsAppActionRequest, WhatsAppActionResponse
 from app.schemas.integrations import WhatsAppTestMessageRequest, WhatsAppTestMessageResponse
 from app.services.crm_activity_service import CrmActivityService
@@ -239,9 +240,20 @@ class WhatsAppMessageService:
         template_key: str,
         variables: dict[str, str],
         metadata: dict[str, Any],
+        notification_delivery_id: str | None = None,
         lead_id: str | None = None,
         contact_id: str | None = None,
     ) -> WhatsAppSendResult:
+        if notification_delivery_id:
+            delivery = self.db.scalar(
+                select(NotificationDelivery).where(
+                    NotificationDelivery.tenant_id == tenant_id,
+                    NotificationDelivery.id == notification_delivery_id,
+                )
+            )
+            if delivery is None:
+                raise ValueError("Notification delivery not found for tenant")
+
         config, client_config = self.configs.get_active_client_config(tenant_id)
         template = self.templates.get_synced_template(
             tenant_id, template_key=template_key, provider_template_name=None
@@ -281,6 +293,7 @@ class WhatsAppMessageService:
             message_preview=body_preview,
             status="queued",
             metadata_json=safe_metadata,
+            notification_delivery_id=notification_delivery_id,
         )
         self.db.add(message)
         self.db.commit()

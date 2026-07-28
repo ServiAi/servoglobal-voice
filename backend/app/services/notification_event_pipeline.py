@@ -9,12 +9,17 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.db.session import SessionLocal
 from app.domain.events import _check_json_safe
 from app.models.crm import CrmBooking, CrmContact, CrmLead, CrmVoiceCall
 from app.models.notifications import DomainEvent
 from app.services.domain_event_service import DomainEventIdempotencyConflictError, DomainEventService
 from app.services.notification_orchestrator import NotificationOrchestrator
+from app.services.notification_retry_policy import NotificationRetryPolicy
+from app.services.notification_schedule_reconciliation_service import (
+    NotificationScheduleReconciliationService,
+)
 from app.services.whatsapp_client import WhatsAppCloudClient
 from app.services.whatsapp_notification_executor import WhatsAppNotificationExecutor
 
@@ -87,6 +92,7 @@ class NotificationEventPipeline:
         self._whatsapp_client = whatsapp_client
         self._domain_events = DomainEventService(db)
         self._orchestrator = NotificationOrchestrator(db)
+        self._schedule_reconciliation = NotificationScheduleReconciliationService(db)
 
     # ------------------------------------------------------------------
     # Booking events
@@ -129,6 +135,10 @@ class NotificationEventPipeline:
             except NotificationEventPipelineIdentityConflictError:
                 self.db.rollback()
                 return _safe_result(error_code="domain_event_identity_conflict")
+
+            self._schedule_reconciliation.reconcile_for_event(
+                tenant_id=tenant_id, event_id=event.id, now=current_time
+            )
 
             return self._plan_and_execute(
                 tenant_id=tenant_id, event=event, event_created=created, now=current_time
@@ -181,6 +191,10 @@ class NotificationEventPipeline:
             except NotificationEventPipelineIdentityConflictError:
                 self.db.rollback()
                 return _safe_result(error_code="domain_event_identity_conflict")
+
+            self._schedule_reconciliation.reconcile_for_event(
+                tenant_id=tenant_id, event_id=event.id, now=current_time
+            )
 
             return self._plan_and_execute(
                 tenant_id=tenant_id, event=event, event_created=created, now=current_time
@@ -261,6 +275,12 @@ class NotificationEventPipeline:
             )
 
         executor = WhatsAppNotificationExecutor(self.db, client=self._whatsapp_client)
+        retry_policy = NotificationRetryPolicy(
+            self.db,
+            base_retry_seconds=settings.NOTIFICATION_WORKER_BASE_RETRY_SECONDS,
+            max_retry_seconds=settings.NOTIFICATION_WORKER_MAX_RETRY_SECONDS,
+            jitter_seconds=settings.NOTIFICATION_WORKER_JITTER_SECONDS,
+        )
         for delivery in plan_result.deliveries:
             if delivery.channel != "whatsapp" or delivery.status != "pending":
                 continue
@@ -268,11 +288,24 @@ class NotificationEventPipeline:
             if scheduled_for > now:
                 continue
             try:
-                executor.execute(tenant_id=tenant_id, delivery_id=delivery.id, now=now)
+                result = executor.execute(tenant_id=tenant_id, delivery_id=delivery.id, now=now)
             except Exception as exc:  # noqa: BLE001 - one failed delivery must not block the rest
                 self.db.rollback()
                 self._log_safe_error(tenant_id=tenant_id, resource_id=delivery.id, exc=exc)
                 continue
+            if result.outcome == "failed":
+                try:
+                    retry_policy.apply_failure(
+                        tenant_id=tenant_id,
+                        delivery_id=delivery.id,
+                        now=now,
+                        error_code=result.error_code or "whatsapp_provider_send_failed",
+                        retryable=result.retryable if result.retryable is not None else True,
+                        max_attempts=settings.NOTIFICATION_WORKER_MAX_ATTEMPTS,
+                    )
+                except Exception as exc:  # noqa: BLE001 - retry scheduling must not break the caller
+                    self.db.rollback()
+                    self._log_safe_error(tenant_id=tenant_id, resource_id=delivery.id, exc=exc)
 
         sent_count = sum(1 for d in plan_result.deliveries if d.status in ("sent", "delivered", "read"))
         failed_count = sum(1 for d in plan_result.deliveries if d.status == "failed")

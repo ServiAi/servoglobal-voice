@@ -220,6 +220,7 @@ class NotificationOrchestrator:
             attempts=0,
             idempotency_key=idempotency_key,
             metadata_json=metadata,
+            next_attempt_at=scheduled_for if status == "pending" else None,
         )
         self.db.add(delivery)
         try:
@@ -252,6 +253,11 @@ class NotificationOrchestrator:
             and existing.recipient == recipient
             and existing.template_key == rule.template_key
         ):
+            if existing.status == "pending" and existing.next_attempt_at is None:
+                existing.next_attempt_at = existing.scheduled_for
+                self.db.add(existing)
+                self.db.commit()
+                self.db.refresh(existing)
             return existing
         raise NotificationEventProcessingError(
             tenant_id=existing.tenant_id, event_id=event.id, code="delivery_idempotency_conflict"

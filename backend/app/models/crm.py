@@ -302,6 +302,12 @@ class CrmWhatsAppMessage(Base, TimestampMixin):
         Index("ix_crm_whatsapp_messages_tenant_status", "tenant_id", "status"),
         Index("ix_crm_whatsapp_messages_tenant_provider_message", "tenant_id", "provider_message_id"),
         Index("ix_crm_whatsapp_messages_tenant_created_at", "tenant_id", "created_at"),
+        Index(
+            "ix_crm_whatsapp_messages_tenant_notification_delivery",
+            "tenant_id",
+            "notification_delivery_id",
+            "created_at",
+        ),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
@@ -309,6 +315,9 @@ class CrmWhatsAppMessage(Base, TimestampMixin):
     lead_id: Mapped[str | None] = mapped_column(ForeignKey("crm_leads.id"), nullable=True)
     contact_id: Mapped[str | None] = mapped_column(ForeignKey("crm_contacts.id"), nullable=True)
     template_id: Mapped[str | None] = mapped_column(ForeignKey("tenant_whatsapp_templates.id"), nullable=True)
+    notification_delivery_id: Mapped[str | None] = mapped_column(
+        ForeignKey("notification_deliveries.id"), nullable=True
+    )
     provider: Mapped[str] = mapped_column(String(40), nullable=False, default="whatsapp_cloud")
     provider_message_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     direction: Mapped[str] = mapped_column(String(16), nullable=False, default="outbound")

@@ -1,7 +1,7 @@
 import copy
 import os
 import unittest
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from uuid import uuid4
 
@@ -19,8 +19,9 @@ from app.domain.notification_variables import (
 from app.models.crm import CrmActivity, CrmContact, CrmLead, CrmPipelineStage, CrmWhatsAppMessage
 from app.models.identity import Tenant
 from app.models.integrations import TenantIntegrationEvent, TenantWhatsAppConfig, TenantWhatsAppTemplate
-from app.models.notifications import NotificationDelivery, TenantNotificationRule
+from app.models.notifications import DomainEvent, NotificationDelivery, TenantNotificationRule
 from app.services.domain_event_service import DomainEventService
+from app.services.notification_delivery_claim_service import NotificationDeliveryClaimService
 from app.services.notification_variable_mapper import NotificationVariableMapper
 from app.services.secret_manager_service import SecretManager
 from app.services.whatsapp_client import WhatsAppCloudClient, WhatsAppCloudClientError
@@ -897,6 +898,191 @@ class WhatsAppWebhookDeliverySyncTests(_BaseExecutorTestCase):
             self.db.query(CrmActivity).filter(CrmActivity.activity_type == "whatsapp_status_delivered").first()
         )
         self.assertIsNotNone(activity)
+
+
+# ---------------------------------------------------------------------------
+# execute_claimed — token ownership, FK linkage, cancellation (Phase 6)
+# ---------------------------------------------------------------------------
+class WhatsAppExecuteClaimedTests(_BaseExecutorTestCase):
+    def _claim(self, tenant_id, delivery_id, *, now=FIXED_NOW, lease_seconds=120, max_attempts=5):
+        return NotificationDeliveryClaimService(self.db).claim_one(
+            tenant_id=tenant_id, delivery_id=delivery_id, now=now, lease_seconds=lease_seconds, max_attempts=max_attempts
+        )
+
+    def _create_event_with_resource(self, tenant_id, *, event_type, resource_id, created_at):
+        payload = _make_payload()
+        result = DomainEventService(self.db).publish(
+            tenant_id=tenant_id,
+            event_type=event_type,
+            source="calcom",
+            idempotency_key=f"evt-{uuid4().hex[:8]}",
+            payload=payload,
+            resource_type="crm_booking",
+            resource_id=resource_id,
+            available_at=PAST_SCHEDULE,
+        )
+        event = result.event
+        event.created_at = created_at
+        self.db.add(event)
+        self.db.commit()
+        self.db.refresh(event)
+        return event
+
+    def test_execute_claimed_accepts_correct_token(self):
+        ctx = self._seed_happy_path()
+        claim = self._claim(ctx["tenant_id"], ctx["delivery"].id)
+        result = WhatsAppNotificationExecutor(self.db, client=_FakeWhatsAppClient()).execute_claimed(
+            tenant_id=ctx["tenant_id"], delivery_id=ctx["delivery"].id, claim_token=claim.claim_token, now=FIXED_NOW
+        )
+        self.assertEqual(result.outcome, "sent")
+
+    def test_execute_claimed_rejects_wrong_token(self):
+        ctx = self._seed_happy_path()
+        self._claim(ctx["tenant_id"], ctx["delivery"].id)
+        with self.assertRaises(WhatsAppNotificationExecutionError) as cm:
+            WhatsAppNotificationExecutor(self.db, client=_FakeWhatsAppClient()).execute_claimed(
+                tenant_id=ctx["tenant_id"], delivery_id=ctx["delivery"].id, claim_token="wrong-token", now=FIXED_NOW
+            )
+        self.assertEqual(cm.exception.code, "delivery_claim_mismatch")
+
+    def test_execute_claimed_rejects_wrong_token_without_disturbing_real_claim(self):
+        ctx = self._seed_happy_path()
+        claim = self._claim(ctx["tenant_id"], ctx["delivery"].id)
+        with self.assertRaises(WhatsAppNotificationExecutionError):
+            WhatsAppNotificationExecutor(self.db, client=_FakeWhatsAppClient()).execute_claimed(
+                tenant_id=ctx["tenant_id"], delivery_id=ctx["delivery"].id, claim_token="wrong-token", now=FIXED_NOW
+            )
+        self.db.refresh(ctx["delivery"])
+        self.assertEqual(ctx["delivery"].status, "processing")
+        self.assertEqual(ctx["delivery"].claim_token, claim.claim_token)
+
+    def test_execute_claimed_rejects_empty_token(self):
+        ctx = self._seed_happy_path()
+        self._claim(ctx["tenant_id"], ctx["delivery"].id)
+        with self.assertRaises(WhatsAppNotificationExecutionError) as cm:
+            WhatsAppNotificationExecutor(self.db, client=_FakeWhatsAppClient()).execute_claimed(
+                tenant_id=ctx["tenant_id"], delivery_id=ctx["delivery"].id, claim_token="", now=FIXED_NOW
+            )
+        self.assertEqual(cm.exception.code, "delivery_claim_mismatch")
+
+    def test_execute_claimed_rejects_wrong_tenant(self):
+        ctx = self._seed_happy_path()
+        claim = self._claim(ctx["tenant_id"], ctx["delivery"].id)
+        other_tenant_id = self._create_tenant("wrong-tenant")
+        with self.assertRaises(WhatsAppNotificationExecutionError) as cm:
+            WhatsAppNotificationExecutor(self.db, client=_FakeWhatsAppClient()).execute_claimed(
+                tenant_id=other_tenant_id, delivery_id=ctx["delivery"].id, claim_token=claim.claim_token, now=FIXED_NOW
+            )
+        self.assertEqual(cm.exception.code, "delivery_not_found")
+
+    def test_execute_claimed_does_not_increment_attempts(self):
+        ctx = self._seed_happy_path()
+        claim = self._claim(ctx["tenant_id"], ctx["delivery"].id)
+        self.db.refresh(ctx["delivery"])
+        self.assertEqual(ctx["delivery"].attempts, 1)
+        WhatsAppNotificationExecutor(self.db, client=_FakeWhatsAppClient()).execute_claimed(
+            tenant_id=ctx["tenant_id"], delivery_id=ctx["delivery"].id, claim_token=claim.claim_token, now=FIXED_NOW
+        )
+        self.db.refresh(ctx["delivery"])
+        self.assertEqual(ctx["delivery"].attempts, 1)
+
+    def test_message_stores_notification_delivery_fk(self):
+        ctx = self._seed_happy_path()
+        claim = self._claim(ctx["tenant_id"], ctx["delivery"].id)
+        result = WhatsAppNotificationExecutor(self.db, client=_FakeWhatsAppClient()).execute_claimed(
+            tenant_id=ctx["tenant_id"], delivery_id=ctx["delivery"].id, claim_token=claim.claim_token, now=FIXED_NOW
+        )
+        self.assertEqual(result.message.notification_delivery_id, ctx["delivery"].id)
+
+    def test_send_template_notification_rejects_delivery_from_other_tenant(self):
+        ctx_a = self._seed_happy_path()
+        ctx_b = self._seed_happy_path()
+        service = WhatsAppMessageService(self.db, client=_FakeWhatsAppClient())
+        with self.assertRaises(ValueError):
+            service.send_template_notification(
+                tenant_id=ctx_a["tenant_id"],
+                to_phone="+573001112233",
+                template_key=ctx_a["template"].template_key,
+                variables={"1": "x", "2": "y"},
+                metadata={},
+                notification_delivery_id=ctx_b["delivery"].id,
+            )
+
+    def test_cancel_requested_delivery_is_cancelled_not_sent(self):
+        ctx = self._seed_happy_path()
+        claim = self._claim(ctx["tenant_id"], ctx["delivery"].id)
+        delivery = ctx["delivery"]
+        self.db.refresh(delivery)
+        delivery.metadata_json = {"cancel_requested": True, "cancel_reason": "booking_cancelled"}
+        self.db.add(delivery)
+        self.db.commit()
+        client = _FakeWhatsAppClient()
+        result = WhatsAppNotificationExecutor(self.db, client=client).execute_claimed(
+            tenant_id=ctx["tenant_id"], delivery_id=delivery.id, claim_token=claim.claim_token, now=FIXED_NOW
+        )
+        self.assertEqual(result.outcome, "cancelled")
+        self.assertEqual(client.send_calls, 0)
+        self.db.refresh(delivery)
+        self.assertEqual(delivery.status, "cancelled")
+        self.assertIsNone(delivery.claim_token)
+
+    def test_superseded_event_delivery_is_cancelled(self):
+        tenant_id = self._create_tenant("superseded-tenant")
+        self._configure_whatsapp(tenant_id)
+        template = self._create_synced_template(tenant_id)
+        rule = self._create_rule(tenant_id, template_key=template.template_key)
+        booking_id = "bk-superseded"
+        created_event = self._create_event_with_resource(
+            tenant_id, event_type="booking.created", resource_id=booking_id, created_at=PAST_SCHEDULE
+        )
+        delivery = self._create_delivery(tenant_id, created_event, rule, scheduled_for=PAST_SCHEDULE)
+        self._create_event_with_resource(
+            tenant_id,
+            event_type="booking.cancelled",
+            resource_id=booking_id,
+            created_at=PAST_SCHEDULE + timedelta(seconds=10),
+        )
+        claim = self._claim(tenant_id, delivery.id)
+        client = _FakeWhatsAppClient()
+        result = WhatsAppNotificationExecutor(self.db, client=client).execute_claimed(
+            tenant_id=tenant_id, delivery_id=delivery.id, claim_token=claim.claim_token, now=FIXED_NOW
+        )
+        self.assertEqual(result.outcome, "cancelled")
+        self.assertEqual(client.send_calls, 0)
+
+    def test_latest_event_delivery_is_not_treated_as_superseded(self):
+        tenant_id = self._create_tenant("latest-tenant")
+        self._configure_whatsapp(tenant_id)
+        template = self._create_synced_template(tenant_id)
+        rule = self._create_rule(tenant_id, template_key=template.template_key)
+        booking_id = "bk-latest"
+        self._create_event_with_resource(
+            tenant_id, event_type="booking.created", resource_id=booking_id, created_at=PAST_SCHEDULE
+        )
+        rescheduled_event = self._create_event_with_resource(
+            tenant_id,
+            event_type="booking.rescheduled",
+            resource_id=booking_id,
+            created_at=PAST_SCHEDULE + timedelta(seconds=10),
+        )
+        delivery = self._create_delivery(tenant_id, rescheduled_event, rule, scheduled_for=PAST_SCHEDULE)
+        claim = self._claim(tenant_id, delivery.id)
+        client = _FakeWhatsAppClient()
+        result = WhatsAppNotificationExecutor(self.db, client=client).execute_claimed(
+            tenant_id=tenant_id, delivery_id=delivery.id, claim_token=claim.claim_token, now=FIXED_NOW
+        )
+        self.assertEqual(result.outcome, "sent")
+        self.assertEqual(client.send_calls, 1)
+
+    def test_normal_call_delivery_is_not_considered_superseded(self):
+        # Deliveries with no crm_booking resource (e.g. call events) never go
+        # through the superseding check.
+        ctx = self._seed_happy_path()
+        claim = self._claim(ctx["tenant_id"], ctx["delivery"].id)
+        result = WhatsAppNotificationExecutor(self.db, client=_FakeWhatsAppClient()).execute_claimed(
+            tenant_id=ctx["tenant_id"], delivery_id=ctx["delivery"].id, claim_token=claim.claim_token, now=FIXED_NOW
+        )
+        self.assertEqual(result.outcome, "sent")
 
 
 if __name__ == "__main__":

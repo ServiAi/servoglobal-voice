@@ -859,6 +859,131 @@ class PlanningAndExecutionTests(_BasePipelineTestCase):
         real_http_client.assert_not_called()
         self.assertEqual(self.client.send_calls, 1)
 
+    def test_provider_failure_schedules_a_retry_via_retry_policy(self):
+        tenant_id = self._create_tenant()
+        self._setup_immediate_rule(tenant_id)
+        booking = self._create_booking(tenant_id)
+
+        failing_pipeline = NotificationEventPipeline(
+            self.db, whatsapp_client=_FakeWhatsAppClient(fail_phones={"573001112233"})
+        )
+        failing_pipeline.process_booking_event(
+            tenant_id=tenant_id, booking_id=booking.id, event_type="booking.created", now=NOW
+        )
+        delivery = self._deliveries_for(tenant_id)[0]
+        self.assertEqual(delivery.status, "failed")
+        self.assertIsNotNone(delivery.next_attempt_at)
+        self.assertIsNone(delivery.claim_token)
+
+
+# ---------------------------------------------------------------------------
+# Schedule reconciliation (Phase 6)
+# ---------------------------------------------------------------------------
+class ScheduleReconciliationPipelineTests(_BasePipelineTestCase):
+    def _setup_reminder_rule(self, tenant_id: str) -> None:
+        self._configure_whatsapp(tenant_id)
+        template = self._create_template(tenant_id)
+        self._enable_capability(tenant_id)
+        self._create_rule(
+            tenant_id,
+            event_type="booking.created",
+            template_key=template.template_key,
+            schedule_mode="relative_to_booking",
+            schedule_offset_minutes=-60,
+        )
+        self._create_rule(
+            tenant_id,
+            event_type="booking.rescheduled",
+            template_key=template.template_key,
+            schedule_mode="relative_to_booking",
+            schedule_offset_minutes=-60,
+            name="regla-pipeline-rescheduled",
+        )
+
+    def test_booking_cancelled_cancels_prior_pending_reminder(self):
+        tenant_id = self._create_tenant()
+        self._setup_reminder_rule(tenant_id)
+        booking = self._create_booking(tenant_id, start_at=FUTURE)
+
+        self.pipeline.process_booking_event(
+            tenant_id=tenant_id, booking_id=booking.id, event_type="booking.created", now=NOW
+        )
+        pending_delivery = self._deliveries_for(tenant_id)[0]
+        self.assertEqual(pending_delivery.status, "pending")
+
+        booking.status = "cancelled"
+        self.db.add(booking)
+        self.db.commit()
+        self.pipeline.process_booking_event(
+            tenant_id=tenant_id, booking_id=booking.id, event_type="booking.cancelled", now=NOW
+        )
+
+        self.db.refresh(pending_delivery)
+        self.assertEqual(pending_delivery.status, "cancelled")
+        self.assertIsNone(pending_delivery.next_attempt_at)
+
+    def test_booking_rescheduled_cancels_prior_pending_reminder(self):
+        tenant_id = self._create_tenant()
+        self._setup_reminder_rule(tenant_id)
+        booking = self._create_booking(tenant_id, start_at=FUTURE)
+
+        self.pipeline.process_booking_event(
+            tenant_id=tenant_id, booking_id=booking.id, event_type="booking.created", now=NOW
+        )
+        pending_delivery = self._deliveries_for(tenant_id)[0]
+
+        booking.start_at = FUTURE + timedelta(days=1)
+        booking.end_at = booking.start_at + timedelta(minutes=30)
+        self.db.add(booking)
+        self.db.commit()
+        self.pipeline.process_booking_event(
+            tenant_id=tenant_id, booking_id=booking.id, event_type="booking.rescheduled", now=NOW
+        )
+
+        self.db.refresh(pending_delivery)
+        self.assertEqual(pending_delivery.status, "cancelled")
+        self.assertEqual(pending_delivery.error_message, "booking_schedule_superseded")
+
+    def test_reconciliation_does_not_touch_other_bookings(self):
+        tenant_id = self._create_tenant()
+        self._setup_reminder_rule(tenant_id)
+        untouched_booking = self._create_booking(tenant_id, start_at=FUTURE, provider_booking_uid="uid-untouched")
+        self.pipeline.process_booking_event(
+            tenant_id=tenant_id, booking_id=untouched_booking.id, event_type="booking.created", now=NOW
+        )
+        untouched_delivery = self._deliveries_for(tenant_id)[0]
+
+        other_booking = self._create_booking(tenant_id, start_at=FUTURE, provider_booking_uid="uid-other")
+        self.pipeline.process_booking_event(
+            tenant_id=tenant_id, booking_id=other_booking.id, event_type="booking.created", now=NOW
+        )
+        other_booking.status = "cancelled"
+        self.db.add(other_booking)
+        self.db.commit()
+        self.pipeline.process_booking_event(
+            tenant_id=tenant_id, booking_id=other_booking.id, event_type="booking.cancelled", now=NOW
+        )
+
+        self.db.refresh(untouched_delivery)
+        self.assertEqual(untouched_delivery.status, "pending")
+
+    def test_call_event_does_not_trigger_reconciliation(self):
+        tenant_id = self._create_tenant()
+        self._configure_whatsapp(tenant_id)
+        template = self._create_template(tenant_id)
+        self._enable_capability(tenant_id, capability_key="call_notifications")
+        self._create_rule(
+            tenant_id,
+            event_type="call.completed",
+            template_key=template.template_key,
+            capability_key="call_notifications",
+        )
+        call = self._create_call(tenant_id)
+        result = self.pipeline.process_call_event(tenant_id=tenant_id, voice_call_id=call.id, now=NOW)
+        # No exception, no crm_booking reconciliation side effects — the call
+        # pipeline result must complete normally.
+        self.assertIn(result.status, ("processed", "partial"))
+
 
 # ---------------------------------------------------------------------------
 # BookingService integration

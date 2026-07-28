@@ -373,6 +373,167 @@ class NotificationModelsTests(unittest.TestCase):
                 db.commit()
             db.rollback()
 
+    # Phase 6 — worker state columns --------------------------------------
+    def test_delivery_worker_state_columns_default_to_none(self):
+        tenant_id = self._create_tenant("empresa-worker-state")
+        event_id, rule_id = self._seed_event_and_rule(tenant_id, "worker-state")
+
+        with SessionLocal() as db:
+            delivery = NotificationDelivery(
+                tenant_id=tenant_id,
+                domain_event_id=event_id,
+                notification_rule_id=rule_id,
+                channel="whatsapp",
+                recipient="+570000000099",
+                idempotency_key="dlv-worker-state",
+            )
+            db.add(delivery)
+            db.commit()
+            db.refresh(delivery)
+
+            self.assertIsNone(delivery.next_attempt_at)
+            self.assertIsNone(delivery.claim_token)
+            self.assertIsNone(delivery.claimed_at)
+            self.assertIsNone(delivery.claim_expires_at)
+
+    def test_delivery_worker_state_columns_are_persisted(self):
+        from datetime import datetime, timezone
+
+        tenant_id = self._create_tenant("empresa-worker-state-2")
+        event_id, rule_id = self._seed_event_and_rule(tenant_id, "worker-state-2")
+        now = datetime(2026, 8, 1, 10, 0, 0, tzinfo=timezone.utc)
+
+        with SessionLocal() as db:
+            delivery = NotificationDelivery(
+                tenant_id=tenant_id,
+                domain_event_id=event_id,
+                notification_rule_id=rule_id,
+                channel="whatsapp",
+                recipient="+570000000098",
+                idempotency_key="dlv-worker-state-2",
+                next_attempt_at=now,
+                claim_token="tok-abc123",
+                claimed_at=now,
+                claim_expires_at=now,
+            )
+            db.add(delivery)
+            db.commit()
+            delivery_id = delivery.id
+
+        with SessionLocal() as db:
+            reloaded = db.get(NotificationDelivery, delivery_id)
+            self.assertEqual(reloaded.claim_token, "tok-abc123")
+            self.assertIsNotNone(reloaded.next_attempt_at)
+            self.assertIsNotNone(reloaded.claimed_at)
+            self.assertIsNotNone(reloaded.claim_expires_at)
+
+    def test_crm_whatsapp_message_notification_delivery_fk(self):
+        from app.models.crm import CrmWhatsAppMessage
+
+        tenant_id = self._create_tenant("empresa-message-fk")
+        event_id, rule_id = self._seed_event_and_rule(tenant_id, "message-fk")
+
+        with SessionLocal() as db:
+            delivery = NotificationDelivery(
+                tenant_id=tenant_id,
+                domain_event_id=event_id,
+                notification_rule_id=rule_id,
+                channel="whatsapp",
+                recipient="+570000000097",
+                idempotency_key="dlv-message-fk",
+            )
+            db.add(delivery)
+            db.commit()
+            db.refresh(delivery)
+            delivery_id = delivery.id
+
+            message = CrmWhatsAppMessage(
+                tenant_id=tenant_id,
+                provider="whatsapp_cloud",
+                direction="outbound",
+                to_phone="+570000000097",
+                status="queued",
+                metadata_json={},
+                notification_delivery_id=delivery_id,
+            )
+            db.add(message)
+            db.commit()
+            db.refresh(message)
+            self.assertEqual(message.notification_delivery_id, delivery_id)
+
+    def test_crm_whatsapp_message_allows_multiple_messages_per_delivery(self):
+        from app.models.crm import CrmWhatsAppMessage
+
+        tenant_id = self._create_tenant("empresa-message-fk-multi")
+        event_id, rule_id = self._seed_event_and_rule(tenant_id, "message-fk-multi")
+
+        with SessionLocal() as db:
+            delivery = NotificationDelivery(
+                tenant_id=tenant_id,
+                domain_event_id=event_id,
+                notification_rule_id=rule_id,
+                channel="whatsapp",
+                recipient="+570000000096",
+                idempotency_key="dlv-message-fk-multi",
+            )
+            db.add(delivery)
+            db.commit()
+            db.refresh(delivery)
+
+            db.add_all(
+                [
+                    CrmWhatsAppMessage(
+                        tenant_id=tenant_id,
+                        provider="whatsapp_cloud",
+                        direction="outbound",
+                        to_phone="+570000000096",
+                        status="failed",
+                        metadata_json={},
+                        notification_delivery_id=delivery.id,
+                    ),
+                    CrmWhatsAppMessage(
+                        tenant_id=tenant_id,
+                        provider="whatsapp_cloud",
+                        direction="outbound",
+                        to_phone="+570000000096",
+                        status="sent",
+                        metadata_json={},
+                        notification_delivery_id=delivery.id,
+                    ),
+                ]
+            )
+            # No uniqueness constraint: a delivery may produce more than one
+            # CRM message across retries/attempts.
+            db.commit()
+
+            count = (
+                db.query(CrmWhatsAppMessage)
+                .filter(CrmWhatsAppMessage.notification_delivery_id == delivery.id)
+                .count()
+            )
+            self.assertEqual(count, 2)
+
+    def test_crm_whatsapp_message_notification_delivery_fk_rejects_unknown_id(self):
+        from app.models.crm import CrmWhatsAppMessage
+
+        tenant_id = self._create_tenant("empresa-message-fk-bad")
+
+        with SessionLocal() as db:
+            db.add(
+                CrmWhatsAppMessage(
+                    tenant_id=tenant_id,
+                    provider="whatsapp_cloud",
+                    direction="outbound",
+                    to_phone="+570000000095",
+                    status="queued",
+                    metadata_json={},
+                    notification_delivery_id="nonexistent-delivery-id",
+                )
+            )
+            with self.assertRaises(IntegrityError):
+                db.commit()
+            db.rollback()
+
 
 if __name__ == "__main__":
     unittest.main()

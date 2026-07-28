@@ -866,6 +866,64 @@ class NotificationOrchestratorTests(_BaseNotificationTestCase):
         orchestrator.plan_event(tenant_id=tenant_id, event_id=event.id, now=FIXED_NOW)
         self.assertEqual(self.db.query(CrmWhatsAppMessage).count(), 0)
 
+    # Phase 6 — next_attempt_at bookkeeping ---------------------------------
+    def test_pending_delivery_gets_next_attempt_at_equal_to_scheduled_for(self):
+        tenant_id = self._create_tenant("orch-next-attempt-pending")
+        self._enable_capability(tenant_id)
+        self._create_rule(tenant_id=tenant_id, name="regla-next-attempt")
+        event = self._publish_event(
+            tenant_id=tenant_id, idempotency_key="evt-next-1", payload=_valid_booking_payload()
+        )
+        orchestrator = NotificationOrchestrator(self.db)
+        result = orchestrator.plan_event(tenant_id=tenant_id, event_id=event.id, now=FIXED_NOW)
+        delivery = result.deliveries[0]
+        self.assertEqual(delivery.status, "pending")
+        self.assertEqual(_naive(delivery.next_attempt_at), _naive(delivery.scheduled_for))
+
+    def test_skipped_delivery_has_no_next_attempt_at(self):
+        tenant_id = self._create_tenant("orch-next-attempt-skipped")
+        self._enable_capability(tenant_id)
+        self._create_rule(
+            tenant_id=tenant_id,
+            name="recordatorio-vencido-next-attempt",
+            schedule_mode="relative_to_booking",
+            schedule_offset_minutes=-600,
+        )
+        event = self._publish_event(
+            tenant_id=tenant_id, idempotency_key="evt-next-2", payload=_valid_booking_payload()
+        )
+        orchestrator = NotificationOrchestrator(self.db)
+        result = orchestrator.plan_event(tenant_id=tenant_id, event_id=event.id, now=FIXED_NOW)
+        delivery = result.deliveries[0]
+        self.assertEqual(delivery.status, "skipped")
+        self.assertIsNone(delivery.next_attempt_at)
+
+    def test_reconciling_pending_delivery_backfills_missing_next_attempt_at(self):
+        tenant_id = self._create_tenant("orch-next-attempt-backfill")
+        self._enable_capability(tenant_id)
+        self._create_rule(tenant_id=tenant_id, name="regla-backfill")
+        event = self._publish_event(
+            tenant_id=tenant_id, idempotency_key="evt-next-3", payload=_valid_booking_payload()
+        )
+        orchestrator = NotificationOrchestrator(self.db)
+        first = orchestrator.plan_event(tenant_id=tenant_id, event_id=event.id, now=FIXED_NOW)
+        delivery = first.deliveries[0]
+        delivery.next_attempt_at = None
+        self.db.add(delivery)
+        self.db.commit()
+
+        # Force replanning by resetting the event back to pending, simulating
+        # a reconciliation path that revisits an existing delivery.
+        event_row = self.db.query(DomainEvent).filter(DomainEvent.id == event.id).first()
+        event_row.status = "pending"
+        self.db.add(event_row)
+        self.db.commit()
+
+        second = orchestrator.plan_event(tenant_id=tenant_id, event_id=event.id, now=FIXED_NOW)
+        reconciled = second.deliveries[0]
+        self.assertIsNotNone(reconciled.next_attempt_at)
+        self.assertEqual(_naive(reconciled.next_attempt_at), _naive(reconciled.scheduled_for))
+
     def test_no_external_service_is_called(self):
         forbidden_tokens = ("httpx", "requests", "boto3", "urllib", "socket.")
         for path in _PHASE3_SOURCE_FILES:

@@ -1,3 +1,5 @@
+from dataclasses import dataclass
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -96,9 +98,85 @@ class Settings(BaseSettings):
     EMAIL_MAX_TOTAL_ATTACHMENTS_BYTES: int = 15728640
     PUBLIC_FORM_BASE_URL: str = "https://staging.serviglobal-ia.com"
 
+    # Durable notification worker (Phase 6)
+    NOTIFICATION_WORKER_BATCH_SIZE: int = 25
+    NOTIFICATION_WORKER_POLL_SECONDS: float = 5.0
+    NOTIFICATION_WORKER_LEASE_SECONDS: int = 120
+    NOTIFICATION_WORKER_MAX_ATTEMPTS: int = 5
+    NOTIFICATION_WORKER_BASE_RETRY_SECONDS: int = 30
+    NOTIFICATION_WORKER_MAX_RETRY_SECONDS: int = 3600
+    NOTIFICATION_WORKER_JITTER_SECONDS: int = 10
+    NOTIFICATION_WORKER_RECOVERY_BATCH_SIZE: int = 50
+    NOTIFICATION_WORKER_RECOVERY_INTERVAL_SECONDS: int = 60
+    NOTIFICATION_WORKER_LEGACY_STALE_SECONDS: int = 300
+
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", extra="ignore"
     )
 
 
 settings = Settings()
+
+
+class NotificationWorkerConfigurationError(ValueError):
+    pass
+
+
+@dataclass(frozen=True)
+class NotificationWorkerSettings:
+    """Validated, immutable snapshot of the durable notification worker configuration."""
+
+    batch_size: int
+    poll_seconds: float
+    lease_seconds: int
+    max_attempts: int
+    base_retry_seconds: int
+    max_retry_seconds: int
+    jitter_seconds: int
+    recovery_batch_size: int
+    recovery_interval_seconds: int
+    legacy_stale_seconds: int
+
+    @classmethod
+    def from_settings(cls, source: "Settings") -> "NotificationWorkerSettings":
+        config = cls(
+            batch_size=source.NOTIFICATION_WORKER_BATCH_SIZE,
+            poll_seconds=source.NOTIFICATION_WORKER_POLL_SECONDS,
+            lease_seconds=source.NOTIFICATION_WORKER_LEASE_SECONDS,
+            max_attempts=source.NOTIFICATION_WORKER_MAX_ATTEMPTS,
+            base_retry_seconds=source.NOTIFICATION_WORKER_BASE_RETRY_SECONDS,
+            max_retry_seconds=source.NOTIFICATION_WORKER_MAX_RETRY_SECONDS,
+            jitter_seconds=source.NOTIFICATION_WORKER_JITTER_SECONDS,
+            recovery_batch_size=source.NOTIFICATION_WORKER_RECOVERY_BATCH_SIZE,
+            recovery_interval_seconds=source.NOTIFICATION_WORKER_RECOVERY_INTERVAL_SECONDS,
+            legacy_stale_seconds=source.NOTIFICATION_WORKER_LEGACY_STALE_SECONDS,
+        )
+        config._validate()
+        return config
+
+    def _validate(self) -> None:
+        invalid: list[str] = []
+        if not (1 <= self.batch_size <= 100):
+            invalid.append("batch_size")
+        if not (1 <= self.poll_seconds <= 60):
+            invalid.append("poll_seconds")
+        if not (30 <= self.lease_seconds <= 900):
+            invalid.append("lease_seconds")
+        if not (1 <= self.max_attempts <= 10):
+            invalid.append("max_attempts")
+        if not (5 <= self.base_retry_seconds <= 3600):
+            invalid.append("base_retry_seconds")
+        if self.max_retry_seconds < self.base_retry_seconds:
+            invalid.append("max_retry_seconds")
+        if not (0 <= self.jitter_seconds <= 300):
+            invalid.append("jitter_seconds")
+        if not (1 <= self.recovery_batch_size <= 200):
+            invalid.append("recovery_batch_size")
+        if not (10 <= self.recovery_interval_seconds <= 3600):
+            invalid.append("recovery_interval_seconds")
+        if not (60 <= self.legacy_stale_seconds <= 3600):
+            invalid.append("legacy_stale_seconds")
+        if invalid:
+            raise NotificationWorkerConfigurationError(
+                f"invalid_notification_worker_settings:{','.join(invalid)}"
+            )

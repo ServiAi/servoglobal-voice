@@ -119,6 +119,17 @@ class NotificationDelivery(Base, TimestampMixin):
         Index("ix_notification_deliveries_tenant_provider_message", "tenant_id", "provider_message_id"),
         Index("ix_notification_deliveries_tenant_domain_event", "tenant_id", "domain_event_id"),
         Index("ix_notification_deliveries_tenant_rule", "tenant_id", "notification_rule_id"),
+        Index(
+            "ix_notification_deliveries_worker_due",
+            "status",
+            "next_attempt_at",
+            "scheduled_for",
+        ),
+        Index(
+            "ix_notification_deliveries_processing_lease",
+            "status",
+            "claim_expires_at",
+        ),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
@@ -139,6 +150,10 @@ class NotificationDelivery(Base, TimestampMixin):
     read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     failed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     metadata_json: Mapped[dict] = mapped_column(sa.JSON, nullable=False, default=dict)
+    next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    claim_token: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    claim_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     tenant = relationship("Tenant")
     domain_event: Mapped[DomainEvent] = relationship(back_populates="deliveries")
