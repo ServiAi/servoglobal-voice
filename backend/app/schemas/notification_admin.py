@@ -55,13 +55,11 @@ class NotificationCatalogResponse(BaseModel):
 class NotificationCapabilityItem(BaseModel):
     capability_key: str
     enabled: bool
-    config_json: dict = Field(default_factory=dict)
     updated_at: Optional[datetime] = None
 
 
 class NotificationCapabilityUpdateRequest(BaseModel):
     enabled: bool
-    config_json: Optional[dict] = None
 
 
 class NotificationRuleItem(BaseModel):
@@ -126,7 +124,6 @@ class NotificationRecipientItem(BaseModel):
     channel: str
     destination_masked: str
     status: str
-    metadata_json: dict = Field(default_factory=dict)
     created_at: datetime
     updated_at: datetime
 
@@ -137,7 +134,6 @@ class NotificationRecipientCreateRequest(BaseModel):
     channel: str = "whatsapp"
     destination: str = Field(..., min_length=1, max_length=255)
     status: str = "active"
-    metadata_json: dict = Field(default_factory=dict)
 
 
 class NotificationRecipientUpdateRequest(BaseModel):
@@ -145,7 +141,6 @@ class NotificationRecipientUpdateRequest(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=160)
     destination: Optional[str] = Field(None, min_length=1, max_length=255)
     status: Optional[str] = None
-    metadata_json: Optional[dict] = None
 
 
 class NotificationDeliveryItem(BaseModel):

@@ -34,6 +34,7 @@ from app.domain.notification_variables import (
     NotificationVariableSource,
     validate_variable_mapping,
 )
+from app.models.integrations import TenantWhatsAppTemplate
 from app.models.notifications import (
     DomainEvent,
     NotificationDelivery,
@@ -42,6 +43,7 @@ from app.models.notifications import (
     TenantNotificationRule,
 )
 from app.services.whatsapp_message_service import mask_phone, normalize_phone
+from app.services.whatsapp_template_service import WhatsAppTemplateService
 
 KNOWN_CAPABILITY_KEYS = ("booking_notifications", "call_notifications")
 _RECIPIENT_STATUSES = {"active", "inactive"}
@@ -144,9 +146,7 @@ class NotificationAdminService:
                 result.append(TenantCapability(tenant_id=tenant_id, capability_key=key, enabled=False, config_json={}))
         return result
 
-    def update_capability(
-        self, *, tenant_id: str, capability_key: str, enabled: bool, config_json: Optional[dict]
-    ) -> TenantCapability:
+    def update_capability(self, *, tenant_id: str, capability_key: str, enabled: bool) -> TenantCapability:
         if capability_key not in KNOWN_CAPABILITY_KEYS:
             raise NotificationAdminError(code="unknown_capability_key", kind="unprocessable")
 
@@ -162,8 +162,6 @@ class NotificationAdminService:
             capability = TenantCapability(tenant_id=tenant_id, capability_key=capability_key, config_json={})
             self.db.add(capability)
         capability.enabled = enabled
-        if config_json is not None:
-            capability.config_json = config_json
         self.db.commit()
         self.db.refresh(capability)
         return capability
@@ -186,11 +184,8 @@ class NotificationAdminService:
 
     def rule_configuration_error(self, rule: TenantNotificationRule) -> Optional[str]:
         try:
-            validate_notification_rule(rule)
-            validate_variable_mapping(rule.variable_mapping_json)
-        except NotificationRuleConfigurationError as exc:
-            return exc.code
-        except NotificationVariableConfigurationError as exc:
+            self._validate_rule_or_raise(rule)
+        except NotificationAdminError as exc:
             return exc.code
         return None
 
@@ -282,6 +277,8 @@ class NotificationAdminService:
         rule = self.get_rule(tenant_id=tenant_id, rule_id=rule_id)
         if rule is None:
             return None
+        if enabled:
+            self._validate_rule_or_raise(rule)
         rule.enabled = enabled
         self.db.commit()
         self.db.refresh(rule)
@@ -296,6 +293,38 @@ class NotificationAdminService:
             validate_variable_mapping(rule.variable_mapping_json)
         except NotificationVariableConfigurationError as exc:
             raise NotificationAdminError(code=exc.code, kind="unprocessable") from None
+        self._validate_template_or_raise(
+            tenant_id=rule.tenant_id,
+            template_key=rule.template_key,
+            variable_mapping_json=rule.variable_mapping_json,
+        )
+
+    def _validate_template_or_raise(
+        self, *, tenant_id: str, template_key: Optional[str], variable_mapping_json: dict
+    ) -> None:
+        template = self.db.scalar(
+            select(TenantWhatsAppTemplate).where(
+                TenantWhatsAppTemplate.tenant_id == tenant_id,
+                TenantWhatsAppTemplate.template_key == template_key,
+            )
+        )
+        metadata = (template.variables_json or {}) if template is not None else {}
+        if (
+            template is None
+            or template.status != "active"
+            or metadata.get("source") != "meta_sync"
+            or metadata.get("meta_status") != "APPROVED"
+        ):
+            raise NotificationAdminError(code="whatsapp_template_not_approved", kind="unprocessable")
+
+        try:
+            required_keys = WhatsAppTemplateService(self.db).get_approved_parameter_keys(template)
+        except ValueError:
+            raise NotificationAdminError(code="template_variables_malformed", kind="unprocessable") from None
+
+        missing = [key for key in required_keys if key not in (variable_mapping_json or {})]
+        if missing:
+            raise NotificationAdminError(code="template_variable_mapping_missing", kind="unprocessable")
 
     # ------------------------------------------------------------- recipients
     def list_recipients(self, *, tenant_id: str) -> list[TenantNotificationRecipient]:
@@ -344,7 +373,6 @@ class NotificationAdminService:
             channel=payload.channel,
             destination=destination,
             status=payload.status,
-            metadata_json=payload.metadata_json,
         )
         self.db.add(recipient)
         try:

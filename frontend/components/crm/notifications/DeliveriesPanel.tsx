@@ -6,7 +6,10 @@ import { Loader2 } from 'lucide-react';
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { fetchNotificationDeliveries } from '@/lib/api/notification-admin';
+import {
+  fetchNotificationDeliveriesAction,
+  fetchNotificationDeliveryAction,
+} from '@/app/[locale]/crm/settings/notifications/actions';
 import type {
   NotificationCatalogResponse,
   NotificationDeliveryItem,
@@ -15,6 +18,7 @@ import type {
   NotificationRuleItem,
 } from '@/types/notifications';
 import { NotificationStatusBadge } from './NotificationStatusBadge';
+import { toLocalDayEndIso, toLocalDayStartIso } from '@/lib/notifications/date-range';
 
 const STATUSES: NotificationDeliveryStatus[] = [
   'pending',
@@ -30,47 +34,69 @@ const STATUSES: NotificationDeliveryStatus[] = [
 ];
 
 type Props = {
-  accessToken: string;
   initialDeliveries: NotificationDeliveryListResponse | null;
   rules: NotificationRuleItem[];
   catalog: NotificationCatalogResponse | null;
 };
 
-export function DeliveriesPanel({ accessToken, initialDeliveries, rules, catalog }: Props) {
+export function DeliveriesPanel({ initialDeliveries, rules, catalog }: Props) {
   const t = useTranslations('crm.notifications.deliveries');
   const [listing, setListing] = useState(initialDeliveries);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const [selected, setSelected] = useState<NotificationDeliveryItem | null>(null);
-  const [filters, setFilters] = useState({
+  const [detailError, setDetailError] = useState(false);
+  const emptyFilters = {
     status_filter: '',
     event_type: '',
     rule_id: '',
     date_from: '',
     date_to: '',
-  });
+  };
+  const [filters, setFilters] = useState(emptyFilters);
+  const [appliedFilters, setAppliedFilters] = useState(emptyFilters);
 
   const applyFilters = async (nextFilters: typeof filters, page = 1) => {
     setLoading(true);
-    const result = await fetchNotificationDeliveries(accessToken, {
+    setLoadError(false);
+    const result = await fetchNotificationDeliveriesAction({
       page,
       page_size: listing?.page_size ?? 25,
       status_filter: nextFilters.status_filter || undefined,
       event_type: nextFilters.event_type || undefined,
       rule_id: nextFilters.rule_id || undefined,
-      date_from: nextFilters.date_from ? new Date(nextFilters.date_from).toISOString() : undefined,
-      date_to: nextFilters.date_to ? new Date(nextFilters.date_to).toISOString() : undefined,
+      date_from: nextFilters.date_from ? toLocalDayStartIso(nextFilters.date_from) : undefined,
+      date_to: nextFilters.date_to ? toLocalDayEndIso(nextFilters.date_to) : undefined,
     });
     setLoading(false);
-    if (result.ok) setListing(result.data);
+    if (!result.ok) {
+      setLoadError(true);
+      return;
+    }
+    setListing(result.data);
   };
 
   const updateFilter = (key: keyof typeof filters, value: string) => {
-    const next = { ...filters, [key]: value };
-    setFilters(next);
-    applyFilters(next);
+    setFilters((current) => ({ ...current, [key]: value }));
   };
 
-  const changePage = (page: number) => applyFilters(filters, page);
+  const submitFilters = () => {
+    setAppliedFilters(filters);
+    applyFilters(filters);
+  };
+
+  const changePage = (page: number) => applyFilters(appliedFilters, page);
+
+  const openDetail = async (item: NotificationDeliveryItem) => {
+    setSelected(item);
+    setDetailError(false);
+    const result = await fetchNotificationDeliveryAction(item.id);
+    if (result.ok) {
+      setSelected(result.data);
+    } else {
+      setDetailError(true);
+    }
+  };
 
   const items = listing?.items ?? [];
 
@@ -142,6 +168,19 @@ export function DeliveriesPanel({ accessToken, initialDeliveries, rules, catalog
         </label>
       </div>
 
+      <div className="flex justify-end">
+        <Button type="button" variant="outline" size="sm" disabled={loading} onClick={submitFilters}>
+          {loading && <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />}
+          {t('filters.apply')}
+        </Button>
+      </div>
+
+      {loadError && (
+        <p role="alert" className="rounded-md border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
+          {t('filters.error')}
+        </p>
+      )}
+
       {loading && (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="size-4 animate-spin" aria-hidden="true" />
@@ -174,8 +213,8 @@ export function DeliveriesPanel({ accessToken, initialDeliveries, rules, catalog
                     key={item.id}
                     tabIndex={0}
                     role="button"
-                    onClick={() => setSelected(item)}
-                    onKeyDown={(event) => (event.key === 'Enter' || event.key === ' ') && setSelected(item)}
+                    onClick={() => openDetail(item)}
+                    onKeyDown={(event) => (event.key === 'Enter' || event.key === ' ') && openDetail(item)}
                     className="cursor-pointer hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <td className="px-4 py-3 text-muted-foreground">{new Date(item.created_at).toLocaleString()}</td>
@@ -198,7 +237,7 @@ export function DeliveriesPanel({ accessToken, initialDeliveries, rules, catalog
               <li key={item.id}>
                 <button
                   type="button"
-                  onClick={() => setSelected(item)}
+                  onClick={() => openDetail(item)}
                   className="w-full rounded-xl border border-border bg-card p-4 text-left shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <div className="flex items-start justify-between gap-2">
@@ -240,12 +279,22 @@ export function DeliveriesPanel({ accessToken, initialDeliveries, rules, catalog
         </>
       )}
 
-      {selected && <DeliveryDetailDialog delivery={selected} onClose={() => setSelected(null)} />}
+      {selected && (
+        <DeliveryDetailDialog delivery={selected} staleData={detailError} onClose={() => setSelected(null)} />
+      )}
     </div>
   );
 }
 
-function DeliveryDetailDialog({ delivery, onClose }: { delivery: NotificationDeliveryItem; onClose: () => void }) {
+function DeliveryDetailDialog({
+  delivery,
+  staleData,
+  onClose,
+}: {
+  delivery: NotificationDeliveryItem;
+  staleData: boolean;
+  onClose: () => void;
+}) {
   const t = useTranslations('crm.notifications.deliveries.detail');
 
   const timeline = [
@@ -262,6 +311,11 @@ function DeliveryDetailDialog({ delivery, onClose }: { delivery: NotificationDel
         <DialogHeader>
           <DialogTitle>{t('title')}</DialogTitle>
         </DialogHeader>
+        {staleData && (
+          <p role="alert" className="rounded-md border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
+            {t('staleData')}
+          </p>
+        )}
         <dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-sm">
           <dt className="text-muted-foreground">{t('status')}</dt>
           <dd>

@@ -72,7 +72,6 @@ def _recipient_item(recipient) -> NotificationRecipientItem:
         channel=recipient.channel,
         destination_masked=mask_phone(recipient.destination),
         status=recipient.status,
-        metadata_json=recipient.metadata_json,
         created_at=recipient.created_at,
         updated_at=recipient.updated_at,
     )
@@ -115,7 +114,6 @@ def update_capability(
             tenant_id=context.tenant.id,
             capability_key=capability_key,
             enabled=body.enabled,
-            config_json=body.config_json,
         )
     except NotificationAdminError as exc:
         _raise_admin_error(exc)
@@ -169,7 +167,10 @@ def update_rule_enabled(
     db: Session = Depends(get_db),
 ) -> Any:
     service = NotificationAdminService(db)
-    rule = service.set_rule_enabled(tenant_id=context.tenant.id, rule_id=rule_id, enabled=body.enabled)
+    try:
+        rule = service.set_rule_enabled(tenant_id=context.tenant.id, rule_id=rule_id, enabled=body.enabled)
+    except NotificationAdminError as exc:
+        _raise_admin_error(exc)
     if rule is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="rule_not_found")
     return _rule_item(service, rule)

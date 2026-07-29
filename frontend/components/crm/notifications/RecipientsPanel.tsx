@@ -6,26 +6,29 @@ import { Loader2, Pencil, Plus } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { createNotificationRecipient, updateNotificationRecipient } from '@/lib/api/notification-admin';
+import {
+  createNotificationRecipientAction,
+  updateNotificationRecipientAction,
+} from '@/app/[locale]/crm/settings/notifications/actions';
 import type {
   NotificationRecipientCreateRequest,
   NotificationRecipientItem,
 } from '@/types/notifications';
 
 type Props = {
-  accessToken: string;
   canEdit: boolean;
   initialRecipients: NotificationRecipientItem[];
 };
 
 const KNOWN_RECIPIENT_ERROR_CODES = new Set(['duplicate_recipient', 'invalid_destination']);
 
-export function RecipientsPanel({ accessToken, canEdit, initialRecipients }: Props) {
+export function RecipientsPanel({ canEdit, initialRecipients }: Props) {
   const t = useTranslations('crm.notifications.recipients');
   const [recipients, setRecipients] = useState(initialRecipients);
   const [editing, setEditing] = useState<NotificationRecipientItem | null>(null);
   const [creating, setCreating] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [toggleErrorId, setToggleErrorId] = useState<string | null>(null);
 
   const drawerOpen = creating || editing !== null;
   const closeDrawer = () => {
@@ -43,12 +46,15 @@ export function RecipientsPanel({ accessToken, canEdit, initialRecipients }: Pro
 
   const toggleStatus = async (recipient: NotificationRecipientItem) => {
     setBusyId(recipient.id);
+    setToggleErrorId(null);
     const nextStatus = recipient.status === 'active' ? 'inactive' : 'active';
-    const result = await updateNotificationRecipient(accessToken, recipient.id, { status: nextStatus });
+    const result = await updateNotificationRecipientAction(recipient.id, { status: nextStatus });
     setBusyId(null);
-    if (result.ok) {
-      setRecipients((current) => current.map((item) => (item.id === recipient.id ? result.data : item)));
+    if (!result.ok) {
+      setToggleErrorId(recipient.id);
+      return;
     }
+    setRecipients((current) => current.map((item) => (item.id === recipient.id ? result.data : item)));
   };
 
   return (
@@ -92,21 +98,28 @@ export function RecipientsPanel({ accessToken, canEdit, initialRecipients }: Pro
                     </td>
                     {canEdit && (
                       <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <Button type="button" variant="outline" size="sm" onClick={() => setEditing(recipient)}>
-                            <Pencil className="size-3.5" aria-hidden="true" />
-                            <span className="sr-only sm:not-sr-only sm:ml-1.5">{t('actions.edit')}</span>
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            disabled={busyId === recipient.id}
-                            onClick={() => toggleStatus(recipient)}
-                          >
-                            {busyId === recipient.id && <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />}
-                            {recipient.status === 'active' ? t('actions.deactivate') : t('actions.activate')}
-                          </Button>
+                        <div className="flex flex-col gap-1">
+                          <div className="flex items-center gap-2">
+                            <Button type="button" variant="outline" size="sm" onClick={() => setEditing(recipient)}>
+                              <Pencil className="size-3.5" aria-hidden="true" />
+                              <span className="sr-only sm:not-sr-only sm:ml-1.5">{t('actions.edit')}</span>
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              disabled={busyId === recipient.id}
+                              onClick={() => toggleStatus(recipient)}
+                            >
+                              {busyId === recipient.id && <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />}
+                              {recipient.status === 'active' ? t('actions.deactivate') : t('actions.activate')}
+                            </Button>
+                          </div>
+                          {toggleErrorId === recipient.id && (
+                            <p role="alert" className="text-xs text-destructive">
+                              {t('actions.toggleError')}
+                            </p>
+                          )}
                         </div>
                       </td>
                     )}
@@ -130,20 +143,27 @@ export function RecipientsPanel({ accessToken, canEdit, initialRecipients }: Pro
                   <dd className="text-right">{recipient.destination_masked}</dd>
                 </dl>
                 {canEdit && (
-                  <div className="mt-3 flex gap-2">
-                    <Button type="button" variant="outline" size="sm" className="flex-1" onClick={() => setEditing(recipient)}>
-                      {t('actions.edit')}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="flex-1"
-                      disabled={busyId === recipient.id}
-                      onClick={() => toggleStatus(recipient)}
-                    >
-                      {recipient.status === 'active' ? t('actions.deactivate') : t('actions.activate')}
-                    </Button>
+                  <div className="mt-3 flex flex-col gap-1">
+                    <div className="flex gap-2">
+                      <Button type="button" variant="outline" size="sm" className="flex-1" onClick={() => setEditing(recipient)}>
+                        {t('actions.edit')}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="flex-1"
+                        disabled={busyId === recipient.id}
+                        onClick={() => toggleStatus(recipient)}
+                      >
+                        {recipient.status === 'active' ? t('actions.deactivate') : t('actions.activate')}
+                      </Button>
+                    </div>
+                    {toggleErrorId === recipient.id && (
+                      <p role="alert" className="text-xs text-destructive">
+                        {t('actions.toggleError')}
+                      </p>
+                    )}
                   </div>
                 )}
               </li>
@@ -153,7 +173,7 @@ export function RecipientsPanel({ accessToken, canEdit, initialRecipients }: Pro
       )}
 
       {drawerOpen && (
-        <RecipientFormDialog accessToken={accessToken} recipient={editing} onClose={closeDrawer} onSaved={handleSaved} />
+        <RecipientFormDialog recipient={editing} onClose={closeDrawer} onSaved={handleSaved} />
       )}
     </div>
   );
@@ -175,12 +195,10 @@ function RecipientStatusBadge({ status }: { status: 'active' | 'inactive' }) {
 }
 
 function RecipientFormDialog({
-  accessToken,
   recipient,
   onClose,
   onSaved,
 }: {
-  accessToken: string;
   recipient: NotificationRecipientItem | null;
   onClose: () => void;
   onSaved: (recipient: NotificationRecipientItem) => void;
@@ -199,13 +217,13 @@ function RecipientFormDialog({
     setErrorCode(null);
 
     const result = recipient
-      ? await updateNotificationRecipient(accessToken, recipient.id, {
+      ? await updateNotificationRecipientAction(recipient.id, {
           group_key: groupKey,
           name,
           status,
           ...(destination ? { destination } : {}),
         })
-      : await createNotificationRecipient(accessToken, {
+      : await createNotificationRecipientAction({
           group_key: groupKey,
           name,
           destination,

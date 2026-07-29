@@ -1,7 +1,26 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
+import { toLocalDayEndIso, toLocalDayStartIso } from '../lib/notifications/date-range';
 
 const PATH = '/es/crm/settings/notifications';
+
+test.describe('helpers de rango de fechas', () => {
+  test('un rango de un mismo día cubre el día local completo sin desplazarse', () => {
+    const start = toLocalDayStartIso('2026-03-15');
+    const end = toLocalDayEndIso('2026-03-15');
+    const startMs = new Date(start).getTime();
+    const endMs = new Date(end).getTime();
+
+    // El rango de un mismo día debe cubrir 24h menos 1ms, no colapsar en el
+    // mismo instante como hacía `new Date('YYYY-MM-DD').toISOString()`.
+    expect(endMs - startMs).toBe(24 * 60 * 60 * 1000 - 1);
+
+    const expectedStart = new Date(2026, 2, 15, 0, 0, 0, 0);
+    const expectedEnd = new Date(2026, 2, 15, 23, 59, 59, 999);
+    expect(startMs).toBe(expectedStart.getTime());
+    expect(endMs).toBe(expectedEnd.getTime());
+  });
+});
 
 test.describe('Automatizaciones y notificaciones', () => {
   test('vista desktop carga sin errores de accesibilidad críticos', async ({ page }) => {
@@ -39,97 +58,57 @@ test.describe('Automatizaciones y notificaciones', () => {
     }
   });
 
-  test('togglear una capacidad actualiza su estado visual', async ({ page }) => {
+  test('togglear una capacidad hace un viaje de ida y vuelta contra el backend', async ({ page }) => {
+    // El bearer token ya no viaja al cliente: la mutación corre en un Server
+    // Action, así que no se puede interceptar con page.route(); se valida
+    // contra el backend real que el estado visual va y vuelve.
     await page.goto(PATH, { waitUntil: 'networkidle' });
     const toggle = page.getByRole('switch').first();
     const isEditable = await toggle.isEnabled().catch(() => false);
     test.skip(!isEditable, 'La sesión de QA no tiene permisos de escritura para automatizaciones.');
 
-    const nextEnabled = (await toggle.getAttribute('aria-checked')) !== 'true';
-    await page.route('**/api/v1/admin/notifications/capabilities/**', async (route) => {
-      const request = route.request();
-      const body = request.postDataJSON() as { enabled: boolean };
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          capability_key: 'booking_notifications',
-          enabled: body.enabled,
-          config_json: {},
-          updated_at: new Date().toISOString(),
-        }),
-      });
-    });
-
+    const initial = await toggle.getAttribute('aria-checked');
     await toggle.click();
-    await expect(toggle).toHaveAttribute('aria-checked', String(nextEnabled));
+    await expect(toggle).not.toHaveAttribute('aria-checked', initial ?? 'false');
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-checked', initial ?? 'false');
   });
 
-  test('crear una regla nueva agrega la fila a la tabla', async ({ page }) => {
+  test('el flujo de creación de reglas exige una plantilla aprobada por Meta', async ({ page }) => {
+    // La creación depende de un Server Action; sin plantillas sincronizadas y
+    // aprobadas por Meta en el tenant de QA, la creación debe permanecer
+    // deshabilitada con un estado vacío explícito en vez de aceptar cualquier
+    // template_key de texto libre.
     await page.goto(PATH, { waitUntil: 'networkidle' });
     await page.getByRole('tab', { name: /Reglas/i }).click();
     const newRuleButton = page.getByRole('button', { name: /Nueva regla/i });
-    const canEdit = await newRuleButton.isVisible().catch(() => false);
-    test.skip(!canEdit, 'La sesión de QA no tiene permisos de escritura para automatizaciones.');
+    const canCreate = await newRuleButton.isVisible().catch(() => false);
 
-    await page.route('**/api/v1/admin/notifications/rules', async (route) => {
-      if (route.request().method() !== 'POST') return route.continue();
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          id: 'qa-rule-1',
-          name: 'Regla QA Playwright',
-          capability_key: 'booking_notifications',
-          event_type: 'booking.created',
-          channel: 'whatsapp',
-          action_type: 'send_whatsapp_template',
-          template_key: 'booking_confirmation',
-          recipient_strategy: 'event_customer',
-          recipient_group_key: null,
-          conditions_json: [],
-          variable_mapping_json: {},
-          schedule_mode: 'immediate',
-          schedule_offset_minutes: 0,
-          priority: 100,
-          enabled: true,
-          configuration_error: null,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        }),
-      });
-    });
+    if (!canCreate) {
+      const canEdit = await page.getByRole('button', { name: /^Editar$/i }).first().isVisible().catch(() => false);
+      test.skip(!canEdit, 'La sesión de QA no tiene permisos de escritura para automatizaciones.');
+      await expect(page.getByText(/plantillas de WhatsApp aprobadas por Meta/i)).toBeVisible();
+      return;
+    }
 
     await newRuleButton.click();
-    await page.getByLabel(/^Nombre$/i).fill('Regla QA Playwright');
-    await page.getByLabel(/^Capacidad$/i).selectOption('booking_notifications');
-    await page.getByLabel(/^Evento$/i).selectOption('booking.created');
-    const templateField = page.getByLabel(/^Plantilla/i);
-    if ((await templateField.evaluate((el) => el.tagName)) === 'SELECT') {
-      await templateField.selectOption({ index: 1 }).catch(() => templateField.fill('booking_confirmation'));
-    } else {
-      await templateField.fill('booking_confirmation');
-    }
-    await page.getByRole('button', { name: /^Guardar$/i }).click();
-
-    await expect(page.getByText('Regla QA Playwright')).toBeVisible();
+    const templateField = page.getByLabel(/^Plantilla WhatsApp$/i);
+    await expect(templateField).toBeVisible();
+    await expect(templateField.locator('option')).not.toHaveCount(0);
   });
 
-  test('filtrar entregas por estado actualiza la tabla', async ({ page }) => {
+  test('aplicar filtros de entregas no genera errores', async ({ page }) => {
     await page.goto(PATH, { waitUntil: 'networkidle' });
     await page.getByRole('tab', { name: /Entregas/i }).click();
 
-    await page.route('**/api/v1/admin/notifications/deliveries?*', async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ items: [], page: 1, page_size: 25, total: 0, pages: 0 }),
-      });
-    });
+    const applyButton = page.getByRole('button', { name: /Aplicar filtros/i });
+    await expect(applyButton).toBeVisible();
 
     const statusFilter = page.locator('#notifications-panel-deliveries select').first();
     await statusFilter.selectOption('failed');
-    await expect(page.getByText(/No hay entregas para los filtros seleccionados\./i)).toBeVisible();
+    await applyButton.click();
+
+    await expect(page.locator('#notifications-panel-deliveries [role="alert"]')).toHaveCount(0);
   });
 
   test('abrir el detalle de una entrega no expone datos sensibles', async ({ page }) => {

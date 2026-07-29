@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { AlertTriangle, Loader2 } from 'lucide-react';
 
-import { updateNotificationCapability } from '@/lib/api/notification-admin';
+import { updateNotificationCapabilityAction } from '@/app/[locale]/crm/settings/notifications/actions';
 import type {
   NotificationCapabilityItem,
   NotificationCatalogResponse,
@@ -19,7 +19,6 @@ import { RecipientsPanel } from './RecipientsPanel';
 import { DeliveriesPanel } from './DeliveriesPanel';
 
 type Props = {
-  accessToken: string;
   canEdit: boolean;
   overview: NotificationOverviewResponse | null;
   catalog: NotificationCatalogResponse | null;
@@ -35,7 +34,6 @@ type TabKey = 'overview' | 'rules' | 'recipients' | 'deliveries';
 const TAB_KEYS: TabKey[] = ['overview', 'rules', 'recipients', 'deliveries'];
 
 export function NotificationsWorkspace({
-  accessToken,
   canEdit,
   overview,
   catalog,
@@ -78,12 +76,7 @@ export function NotificationsWorkspace({
         hidden={activeTab !== 'overview'}
       >
         {activeTab === 'overview' && (
-          <OverviewTab
-            accessToken={accessToken}
-            canEdit={canEdit}
-            overview={overview}
-            initialCapabilities={initialCapabilities}
-          />
+          <OverviewTab canEdit={canEdit} overview={overview} initialCapabilities={initialCapabilities} />
         )}
       </div>
 
@@ -95,7 +88,6 @@ export function NotificationsWorkspace({
       >
         {activeTab === 'rules' && (
           <RulesPanel
-            accessToken={accessToken}
             canEdit={canEdit}
             catalog={catalog}
             initialRules={initialRules}
@@ -111,7 +103,7 @@ export function NotificationsWorkspace({
         hidden={activeTab !== 'recipients'}
       >
         {activeTab === 'recipients' && (
-          <RecipientsPanel accessToken={accessToken} canEdit={canEdit} initialRecipients={initialRecipients} />
+          <RecipientsPanel canEdit={canEdit} initialRecipients={initialRecipients} />
         )}
       </div>
 
@@ -122,12 +114,7 @@ export function NotificationsWorkspace({
         hidden={activeTab !== 'deliveries'}
       >
         {activeTab === 'deliveries' && (
-          <DeliveriesPanel
-            accessToken={accessToken}
-            initialDeliveries={initialDeliveries}
-            rules={initialRules}
-            catalog={catalog}
-          />
+          <DeliveriesPanel initialDeliveries={initialDeliveries} rules={initialRules} catalog={catalog} />
         )}
       </div>
     </div>
@@ -135,12 +122,10 @@ export function NotificationsWorkspace({
 }
 
 function OverviewTab({
-  accessToken,
   canEdit,
   overview,
   initialCapabilities,
 }: {
-  accessToken: string;
   canEdit: boolean;
   overview: NotificationOverviewResponse | null;
   initialCapabilities: NotificationCapabilityItem[];
@@ -167,7 +152,7 @@ function OverviewTab({
   const toggleCapability = async (capabilityKey: string, enabled: boolean) => {
     setSavingKey(capabilityKey);
     setErrorKey(null);
-    const result = await updateNotificationCapability(accessToken, capabilityKey, { enabled });
+    const result = await updateNotificationCapabilityAction(capabilityKey, { enabled });
     setSavingKey(null);
     if (!result.ok) {
       setErrorKey(capabilityKey);

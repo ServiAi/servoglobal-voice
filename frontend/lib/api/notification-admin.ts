@@ -1,3 +1,5 @@
+import 'server-only';
+
 import { requestBackendEndpoint } from './crm';
 import type {
   NotificationCapabilityItem,

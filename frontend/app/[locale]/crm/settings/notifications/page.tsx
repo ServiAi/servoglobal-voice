@@ -74,7 +74,6 @@ export default async function CrmNotificationsPage({ params }: Props) {
       )}
 
       <NotificationsWorkspace
-        accessToken={accessToken}
         canEdit={canEdit}
         overview={overviewResult.ok ? overviewResult.data : null}
         catalog={catalogResult.ok ? catalogResult.data : null}

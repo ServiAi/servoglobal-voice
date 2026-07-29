@@ -20,9 +20,16 @@ from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.main import app
 from app.models.identity import Tenant, TenantMembership, User
+from app.models.integrations import TenantWhatsAppTemplate
 from app.models.notifications import DomainEvent, NotificationDelivery, TenantNotificationRule
 
 _BASE = "/api/v1/admin/notifications"
+
+_APPROVED_VARIABLES_JSON = {
+    "source": "meta_sync",
+    "meta_status": "APPROVED",
+    "parameters": [{"key": "1", "label": "Variable 1"}],
+}
 
 _VALID_RULE_PAYLOAD = {
     "name": "Confirmacion de reserva",
@@ -30,6 +37,8 @@ _VALID_RULE_PAYLOAD = {
     "event_type": "booking.created",
     "template_key": "booking_confirmation",
     "recipient_strategy": "event_customer",
+    "conditions_json": [],
+    "variable_mapping_json": {"1": {"source": "literal", "value": "Reserva confirmada"}},
     "schedule_mode": "immediate",
     "schedule_offset_minutes": 0,
     "priority": 100,
@@ -76,6 +85,21 @@ class NotificationAdminTests(unittest.TestCase):
             db.add(TenantMembership(tenant_id=self.other_tenant_id, user_id=other_admin.id, role="tenant_admin", status="active"))
             db.commit()
             self.other_admin_user_id = other_admin.id
+
+            db.add(
+                TenantWhatsAppTemplate(
+                    tenant_id=self.tenant_id,
+                    template_key="booking_confirmation",
+                    provider_template_name="booking_confirmation",
+                    name="Confirmacion de reserva",
+                    category="transactional",
+                    language="es",
+                    body="Tu reserva ha sido confirmada: {{1}}",
+                    variables_json=dict(_APPROVED_VARIABLES_JSON),
+                    status="active",
+                )
+            )
+            db.commit()
 
         self._active_tenant_id = self.tenant_id
         self._active_user_id = self.user_ids["tenant_admin"]
@@ -125,6 +149,35 @@ class NotificationAdminTests(unittest.TestCase):
         response = self.client.post(f"{_BASE}/recipients", json=payload)
         self.assertEqual(response.status_code, 200, response.text)
         return response.json()
+
+    def _seed_template(self, *, tenant_id: str, template_key: str, **overrides) -> None:
+        with SessionLocal() as db:
+            payload = {
+                "tenant_id": tenant_id,
+                "template_key": template_key,
+                "provider_template_name": template_key,
+                "name": template_key,
+                "category": "transactional",
+                "language": "es",
+                "body": "Tu reserva ha sido confirmada: {{1}}",
+                "variables_json": dict(_APPROVED_VARIABLES_JSON),
+                "status": "active",
+                **overrides,
+            }
+            existing = db.scalar(
+                select(TenantWhatsAppTemplate).where(
+                    TenantWhatsAppTemplate.tenant_id == tenant_id,
+                    TenantWhatsAppTemplate.template_key == template_key,
+                )
+            )
+            if existing is not None:
+                for key, value in payload.items():
+                    if key in ("tenant_id", "template_key"):
+                        continue
+                    setattr(existing, key, value)
+            else:
+                db.add(TenantWhatsAppTemplate(**payload))
+            db.commit()
 
     def _seed_delivery(self, *, tenant_id: str, rule_id: str, event_type: str = "booking.created", status: str = "pending", recipient: str = "573001112233", **overrides) -> str:
         with SessionLocal() as db:
@@ -363,6 +416,124 @@ class NotificationAdminTests(unittest.TestCase):
         self._as("tenant_admin")
         response = self.client.delete(f"{_BASE}/rules/{rule['id']}")
         self.assertEqual(response.status_code, 405)
+
+    # ------------------------------------------------------ whatsapp templates (11)
+    def test_create_rule_nonexistent_template_returns_422(self):
+        self._as("tenant_admin")
+        response = self.client.post(
+            f"{_BASE}/rules",
+            json={**_VALID_RULE_PAYLOAD, "template_key": "does_not_exist"},
+        )
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.json()["detail"], "whatsapp_template_not_approved")
+
+    def test_create_rule_other_tenant_template_returns_422(self):
+        self._seed_template(tenant_id=self.other_tenant_id, template_key="other_tenant_only")
+        self._as("tenant_admin")
+        response = self.client.post(
+            f"{_BASE}/rules",
+            json={**_VALID_RULE_PAYLOAD, "template_key": "other_tenant_only"},
+        )
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.json()["detail"], "whatsapp_template_not_approved")
+
+    def test_create_rule_unapproved_template_returns_422(self):
+        self._seed_template(
+            tenant_id=self.tenant_id,
+            template_key="draft_template",
+            variables_json={"source": "meta_sync", "meta_status": "DRAFT", "parameters": [{"key": "1", "label": "Variable 1"}]},
+        )
+        self._as("tenant_admin")
+        response = self.client.post(
+            f"{_BASE}/rules",
+            json={**_VALID_RULE_PAYLOAD, "template_key": "draft_template"},
+        )
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.json()["detail"], "whatsapp_template_not_approved")
+
+    def test_create_rule_with_approved_meta_template_succeeds(self):
+        rule = self._create_rule()
+        self.assertIsNone(rule["configuration_error"])
+        self.assertEqual(rule["template_key"], "booking_confirmation")
+
+    def test_create_rule_missing_required_template_variable_returns_422(self):
+        self._as("tenant_admin")
+        response = self.client.post(
+            f"{_BASE}/rules",
+            json={**_VALID_RULE_PAYLOAD, "variable_mapping_json": {}},
+        )
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.json()["detail"], "template_variable_mapping_missing")
+
+    def test_create_rule_accepts_all_required_template_variables(self):
+        self._seed_template(
+            tenant_id=self.tenant_id,
+            template_key="two_param_template",
+            variables_json={
+                "source": "meta_sync",
+                "meta_status": "APPROVED",
+                "parameters": [{"key": "1", "label": "Variable 1"}, {"key": "2", "label": "Variable 2"}],
+            },
+        )
+        rule = self._create_rule(
+            name="Regla con dos variables",
+            template_key="two_param_template",
+            variable_mapping_json={
+                "1": {"source": "literal", "value": "Hola"},
+                "2": {"source": "literal", "value": "Adios"},
+            },
+        )
+        self.assertIsNone(rule["configuration_error"])
+
+    def test_cannot_enable_rule_with_invalid_configuration(self):
+        rule = self._create_rule(enabled=False)
+        with SessionLocal() as db:
+            db_rule = db.get(TenantNotificationRule, rule["id"])
+            db_rule.recipient_strategy = "configured_group"
+            db_rule.recipient_group_key = None
+            db.commit()
+        self._as("tenant_admin")
+        response = self.client.patch(f"{_BASE}/rules/{rule['id']}/enabled", json={"enabled": True})
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.json()["detail"], "recipient_group_key_required")
+        listing = self.client.get(f"{_BASE}/rules").json()
+        stored = next(item for item in listing if item["id"] == rule["id"])
+        self.assertFalse(stored["enabled"])
+        self.assertIsNotNone(stored["configuration_error"])
+
+    def test_cannot_enable_rule_when_template_no_longer_approved(self):
+        rule = self._create_rule(enabled=False)
+        self._seed_template(tenant_id=self.tenant_id, template_key="booking_confirmation", status="draft")
+        self._as("tenant_admin")
+        response = self.client.patch(f"{_BASE}/rules/{rule['id']}/enabled", json={"enabled": True})
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.json()["detail"], "whatsapp_template_not_approved")
+        listing = self.client.get(f"{_BASE}/rules").json()
+        stored = next(item for item in listing if item["id"] == rule["id"])
+        self.assertFalse(stored["enabled"])
+
+    def test_can_disable_rule_with_invalid_configuration(self):
+        rule = self._create_rule()
+        self._seed_template(tenant_id=self.tenant_id, template_key="booking_confirmation", status="draft")
+        self._as("tenant_admin")
+        response = self.client.patch(f"{_BASE}/rules/{rule['id']}/enabled", json={"enabled": False})
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.json()["enabled"])
+
+    def test_capability_response_does_not_expose_config_json(self):
+        self._as("tenant_admin")
+        response = self.client.patch(f"{_BASE}/capabilities/booking_notifications", json={"enabled": True})
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("config_json", response.text)
+        listing = self.client.get(f"{_BASE}/capabilities")
+        self.assertNotIn("config_json", listing.text)
+
+    def test_recipient_response_does_not_expose_metadata_json(self):
+        recipient = self._create_recipient()
+        self.assertNotIn("metadata_json", recipient)
+        self._as("tenant_admin")
+        listing = self.client.get(f"{_BASE}/recipients")
+        self.assertNotIn("metadata_json", listing.text)
 
     # ------------------------------------------------------------- recipients (6)
     def test_create_recipient(self):

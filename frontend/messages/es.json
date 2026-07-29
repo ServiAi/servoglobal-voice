@@ -789,7 +789,15 @@
         "actions": {
           "edit": "Editar",
           "activate": "Activar",
-          "deactivate": "Desactivar"
+          "deactivate": "Desactivar",
+          "toggleError": "No fue posible actualizar el estado de la regla."
+        },
+        "noApprovedTemplates": "Todavía no hay plantillas de WhatsApp aprobadas por Meta. Sincroniza WhatsApp para poder crear reglas.",
+        "confirmDisable": {
+          "title": "Desactivar automatización",
+          "description": "Esta regla dejará de generar nuevas notificaciones. Las entregas ya creadas conservarán su estado.",
+          "cancel": "Cancelar",
+          "confirm": "Desactivar"
         },
         "form": {
           "createTitle": "Nueva regla",
@@ -798,6 +806,8 @@
           "capability": "Capacidad",
           "event": "Evento",
           "template": "Plantilla WhatsApp",
+          "requiredParameters": "Parámetros requeridos por la plantilla: {params}",
+          "missingRequiredParameters": "Falta completar el mapeo de los parámetros: {params}",
           "recipientStrategy": "Estrategia de destinatario",
           "recipientGroup": "Grupo o ruta del destinatario",
           "scheduleMode": "Momento del envío",
@@ -832,6 +842,9 @@
             "condition_invalid": "Alguna condición no es válida.",
             "variable_spec_invalid": "Alguna variable de plantilla no es válida.",
             "relative_to_booking_requires_booking_event": "La programación relativa solo aplica a eventos de reserva.",
+            "whatsapp_template_not_approved": "La plantilla seleccionada no está aprobada por Meta para tu organización.",
+            "template_variable_mapping_missing": "Falta mapear alguno de los parámetros requeridos por la plantilla.",
+            "template_variables_malformed": "La configuración de parámetros de la plantilla no es válida.",
             "generic": "No fue posible guardar la regla."
           }
         }
@@ -854,7 +867,8 @@
         "actions": {
           "edit": "Editar",
           "activate": "Activar",
-          "deactivate": "Desactivar"
+          "deactivate": "Desactivar",
+          "toggleError": "No fue posible actualizar el estado del destinatario."
         },
         "form": {
           "createTitle": "Nuevo destinatario",
@@ -891,7 +905,9 @@
           "dateTo": "Hasta",
           "allStatuses": "Todos los estados",
           "allEvents": "Todos los eventos",
-          "allRules": "Todas las reglas"
+          "allRules": "Todas las reglas",
+          "apply": "Aplicar filtros",
+          "error": "No fue posible cargar las entregas con los filtros seleccionados."
         },
         "status": {
           "pending": "Pendiente",
@@ -907,6 +923,7 @@
         },
         "detail": {
           "title": "Detalle de la entrega",
+          "staleData": "No fue posible actualizar el detalle. Mostrando los últimos datos disponibles.",
           "status": "Estado",
           "rule": "Regla",
           "event": "Evento",
@@ -930,7 +947,9 @@
       "common": {
         "close": "Cerrar",
         "loading": "Cargando…",
-        "required": "Obligatorio"
+        "required": "Obligatorio",
+        "timezoneSuggestion": "Sugerencia: America/Bogota",
+        "defaultValue": "Valor por defecto"
       }
     }
   }

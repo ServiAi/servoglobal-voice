@@ -30,13 +30,11 @@ export type NotificationCatalogResponse = {
 export type NotificationCapabilityItem = {
   capability_key: string;
   enabled: boolean;
-  config_json: Record<string, unknown>;
   updated_at: string | null;
 };
 
 export type NotificationCapabilityUpdateRequest = {
   enabled: boolean;
-  config_json?: Record<string, unknown>;
 };
 
 export type NotificationConditionOperator =
@@ -114,7 +112,6 @@ export type NotificationRecipientItem = {
   channel: string;
   destination_masked: string;
   status: 'active' | 'inactive';
-  metadata_json: Record<string, unknown>;
   created_at: string;
   updated_at: string;
 };
@@ -125,7 +122,6 @@ export type NotificationRecipientCreateRequest = {
   channel?: string;
   destination: string;
   status?: 'active' | 'inactive';
-  metadata_json?: Record<string, unknown>;
 };
 
 export type NotificationRecipientUpdateRequest = Partial<Omit<NotificationRecipientCreateRequest, 'channel'>>;

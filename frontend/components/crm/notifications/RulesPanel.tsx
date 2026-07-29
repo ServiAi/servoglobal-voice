@@ -7,10 +7,10 @@ import { Loader2, Pencil, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
-  createNotificationRule,
-  setNotificationRuleEnabled,
-  updateNotificationRule,
-} from '@/lib/api/notification-admin';
+  createNotificationRuleAction,
+  setNotificationRuleEnabledAction,
+  updateNotificationRuleAction,
+} from '@/app/[locale]/crm/settings/notifications/actions';
 import type {
   NotificationCatalogResponse,
   NotificationCondition,
@@ -22,7 +22,6 @@ import type {
 import type { WhatsAppTemplateResponse } from '@/types/crm';
 
 type Props = {
-  accessToken: string;
   canEdit: boolean;
   catalog: NotificationCatalogResponse | null;
   initialRules: NotificationRuleItem[];
@@ -41,9 +40,34 @@ const KNOWN_RULE_ERROR_CODES = new Set([
   'condition_invalid',
   'variable_spec_invalid',
   'relative_to_booking_requires_booking_event',
+  'whatsapp_template_not_approved',
+  'template_variable_mapping_missing',
+  'template_variables_malformed',
 ]);
 
 type VariableEntry = { key: string; spec: NotificationVariableSpec };
+
+type TemplateParameter = { key: string; label?: string };
+
+function approvedTemplateParameters(template: WhatsAppTemplateResponse): TemplateParameter[] | null {
+  const variables = template.variables as {
+    source?: string;
+    meta_status?: string;
+    parameters?: TemplateParameter[];
+  };
+  if (
+    template.status !== 'active' ||
+    variables?.source !== 'meta_sync' ||
+    variables?.meta_status !== 'APPROVED'
+  ) {
+    return null;
+  }
+  return Array.isArray(variables.parameters) ? variables.parameters : [];
+}
+
+function isApprovedTemplate(template: WhatsAppTemplateResponse): boolean {
+  return approvedTemplateParameters(template) !== null;
+}
 
 function emptyFormState(): NotificationRuleCreateRequest {
   return {
@@ -79,12 +103,17 @@ function ruleToFormState(rule: NotificationRuleItem): NotificationRuleCreateRequ
   };
 }
 
-export function RulesPanel({ accessToken, canEdit, catalog, initialRules, whatsappTemplates }: Props) {
+export function RulesPanel({ canEdit, catalog, initialRules, whatsappTemplates }: Props) {
   const t = useTranslations('crm.notifications.rules');
   const [rules, setRules] = useState(initialRules);
   const [editing, setEditing] = useState<NotificationRuleItem | null>(null);
   const [creating, setCreating] = useState(false);
   const [busyRuleId, setBusyRuleId] = useState<string | null>(null);
+  const [toggleErrorId, setToggleErrorId] = useState<string | null>(null);
+  const [confirmDisable, setConfirmDisable] = useState<NotificationRuleItem | null>(null);
+
+  const approvedTemplates = whatsappTemplates.filter(isApprovedTemplate);
+  const hasApprovedTemplates = approvedTemplates.length > 0;
 
   const drawerOpen = creating || editing !== null;
 
@@ -101,23 +130,40 @@ export function RulesPanel({ accessToken, canEdit, catalog, initialRules, whatsa
     closeDrawer();
   };
 
-  const toggleEnabled = async (rule: NotificationRuleItem) => {
+  const applyToggle = async (rule: NotificationRuleItem, nextEnabled: boolean) => {
     setBusyRuleId(rule.id);
-    const result = await setNotificationRuleEnabled(accessToken, rule.id, !rule.enabled);
+    setToggleErrorId(null);
+    const result = await setNotificationRuleEnabledAction(rule.id, nextEnabled);
     setBusyRuleId(null);
-    if (result.ok) {
-      setRules((current) => current.map((item) => (item.id === rule.id ? result.data : item)));
+    if (!result.ok) {
+      setToggleErrorId(rule.id);
+      return;
     }
+    setRules((current) => current.map((item) => (item.id === rule.id ? result.data : item)));
+  };
+
+  const requestToggle = (rule: NotificationRuleItem) => {
+    if (rule.enabled) {
+      setConfirmDisable(rule);
+      return;
+    }
+    applyToggle(rule, true);
   };
 
   return (
     <div className="flex flex-col gap-4">
-      {canEdit && (
+      {canEdit && hasApprovedTemplates && (
         <div className="flex justify-end">
           <Button type="button" className="gap-2" onClick={() => setCreating(true)}>
             <Plus className="size-4" aria-hidden="true" />
             {t('form.createTitle')}
           </Button>
+        </div>
+      )}
+
+      {canEdit && !hasApprovedTemplates && (
+        <div role="status" className="rounded-lg border border-border bg-muted/40 p-4 text-sm text-muted-foreground">
+          {t('noApprovedTemplates')}
         </div>
       )}
 
@@ -158,21 +204,28 @@ export function RulesPanel({ accessToken, canEdit, catalog, initialRules, whatsa
                     </td>
                     {canEdit && (
                       <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <Button type="button" variant="outline" size="sm" onClick={() => setEditing(rule)}>
-                            <Pencil className="size-3.5" aria-hidden="true" />
-                            <span className="sr-only sm:not-sr-only sm:ml-1.5">{t('actions.edit')}</span>
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            disabled={busyRuleId === rule.id}
-                            onClick={() => toggleEnabled(rule)}
-                          >
-                            {busyRuleId === rule.id && <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />}
-                            {rule.enabled ? t('actions.deactivate') : t('actions.activate')}
-                          </Button>
+                        <div className="flex flex-col gap-1">
+                          <div className="flex items-center gap-2">
+                            <Button type="button" variant="outline" size="sm" onClick={() => setEditing(rule)}>
+                              <Pencil className="size-3.5" aria-hidden="true" />
+                              <span className="sr-only sm:not-sr-only sm:ml-1.5">{t('actions.edit')}</span>
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              disabled={busyRuleId === rule.id}
+                              onClick={() => requestToggle(rule)}
+                            >
+                              {busyRuleId === rule.id && <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />}
+                              {rule.enabled ? t('actions.deactivate') : t('actions.activate')}
+                            </Button>
+                          </div>
+                          {toggleErrorId === rule.id && (
+                            <p role="alert" className="text-xs text-destructive">
+                              {t('actions.toggleError')}
+                            </p>
+                          )}
                         </div>
                       </td>
                     )}
@@ -198,20 +251,27 @@ export function RulesPanel({ accessToken, canEdit, catalog, initialRules, whatsa
                   <dd className="text-right">{rule.priority}</dd>
                 </dl>
                 {canEdit && (
-                  <div className="mt-3 flex gap-2">
-                    <Button type="button" variant="outline" size="sm" className="flex-1" onClick={() => setEditing(rule)}>
-                      {t('actions.edit')}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="flex-1"
-                      disabled={busyRuleId === rule.id}
-                      onClick={() => toggleEnabled(rule)}
-                    >
-                      {rule.enabled ? t('actions.deactivate') : t('actions.activate')}
-                    </Button>
+                  <div className="mt-3 flex flex-col gap-1">
+                    <div className="flex gap-2">
+                      <Button type="button" variant="outline" size="sm" className="flex-1" onClick={() => setEditing(rule)}>
+                        {t('actions.edit')}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="flex-1"
+                        disabled={busyRuleId === rule.id}
+                        onClick={() => requestToggle(rule)}
+                      >
+                        {rule.enabled ? t('actions.deactivate') : t('actions.activate')}
+                      </Button>
+                    </div>
+                    {toggleErrorId === rule.id && (
+                      <p role="alert" className="text-xs text-destructive">
+                        {t('actions.toggleError')}
+                      </p>
+                    )}
                   </div>
                 )}
               </li>
@@ -220,11 +280,22 @@ export function RulesPanel({ accessToken, canEdit, catalog, initialRules, whatsa
         </>
       )}
 
+      {confirmDisable && (
+        <ConfirmDisableRuleDialog
+          busy={busyRuleId === confirmDisable.id}
+          onCancel={() => setConfirmDisable(null)}
+          onConfirm={async () => {
+            const rule = confirmDisable;
+            await applyToggle(rule, false);
+            setConfirmDisable(null);
+          }}
+        />
+      )}
+
       {drawerOpen && (
         <RuleFormDialog
-          accessToken={accessToken}
           catalog={catalog}
-          whatsappTemplates={whatsappTemplates}
+          whatsappTemplates={approvedTemplates}
           rule={editing}
           onClose={closeDrawer}
           onSaved={handleSaved}
@@ -256,15 +327,44 @@ function RuleStatusBadge({ rule }: { rule: NotificationRuleItem }) {
   );
 }
 
+function ConfirmDisableRuleDialog({
+  busy,
+  onCancel,
+  onConfirm,
+}: {
+  busy: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const t = useTranslations('crm.notifications.rules.confirmDisable');
+  return (
+    <Dialog open onOpenChange={(open) => !open && onCancel()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>{t('title')}</DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-muted-foreground">{t('description')}</p>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={onCancel} disabled={busy}>
+            {t('cancel')}
+          </Button>
+          <Button type="button" variant="destructive" onClick={onConfirm} disabled={busy} className="gap-2">
+            {busy && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+            {t('confirm')}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function RuleFormDialog({
-  accessToken,
   catalog,
   whatsappTemplates,
   rule,
   onClose,
   onSaved,
 }: {
-  accessToken: string;
   catalog: NotificationCatalogResponse | null;
   whatsappTemplates: WhatsAppTemplateResponse[];
   rule: NotificationRuleItem | null;
@@ -282,6 +382,33 @@ function RuleFormDialog({
 
   const conditions = form.conditions_json ?? [];
   const variables = Object.entries(form.variable_mapping_json ?? {}).map(([key, spec]) => ({ key, spec }));
+
+  const selectedTemplate = whatsappTemplates.find((template) => template.template_key === form.template_key) ?? null;
+  const requiredParameters = selectedTemplate ? approvedTemplateParameters(selectedTemplate) ?? [] : [];
+
+  const isMappingSatisfied = (spec: NotificationVariableSpec | undefined): boolean => {
+    if (!spec) return false;
+    if (spec.source === 'literal') {
+      return Boolean(spec.value !== undefined && spec.value !== null && spec.value !== '') || Boolean(spec.default);
+    }
+    return Boolean(spec.path) || Boolean(spec.default);
+  };
+
+  const missingRequiredParameters = requiredParameters.filter(
+    (param) => !isMappingSatisfied(form.variable_mapping_json?.[param.key])
+  );
+
+  const selectTemplate = (templateKey: string) => {
+    const template = whatsappTemplates.find((item) => item.template_key === templateKey) ?? null;
+    const parameters = template ? approvedTemplateParameters(template) ?? [] : [];
+    const nextMapping: Record<string, NotificationVariableSpec> = { ...(form.variable_mapping_json ?? {}) };
+    parameters.forEach((param) => {
+      if (!nextMapping[param.key]) {
+        nextMapping[param.key] = { source: 'literal', value: '', format: 'string', required: true };
+      }
+    });
+    setForm((current) => ({ ...current, template_key: templateKey, variable_mapping_json: nextMapping }));
+  };
 
   const updateConditions = (next: NotificationCondition[]) => set('conditions_json', next);
   const updateVariables = (next: VariableEntry[]) => {
@@ -302,8 +429,8 @@ function RuleFormDialog({
       schedule_offset_minutes: form.schedule_mode === 'immediate' ? 0 : Number(form.schedule_offset_minutes) || 0,
     };
     const result = rule
-      ? await updateNotificationRule(accessToken, rule.id, payload)
-      : await createNotificationRule(accessToken, payload);
+      ? await updateNotificationRuleAction(rule.id, payload)
+      : await createNotificationRuleAction(payload);
     setBusy(false);
     if (!result.ok) {
       setErrorCode(result.detail);
@@ -373,30 +500,31 @@ function RuleFormDialog({
               </select>
             </label>
 
-            <label className="space-y-1 text-sm">
+            <label className="space-y-1 text-sm sm:col-span-2">
               <span>{t('template')}</span>
-              {whatsappTemplates.length > 0 ? (
-                <select
-                  className="w-full rounded-md border border-border bg-background px-3 py-2"
-                  value={form.template_key}
-                  onChange={(event) => set('template_key', event.target.value)}
-                  required
-                >
-                  <option value="">—</option>
-                  {whatsappTemplates.map((template) => (
-                    <option key={template.id} value={template.template_key}>
-                      {template.name}
+              <select
+                className="w-full rounded-md border border-border bg-background px-3 py-2"
+                value={form.template_key}
+                onChange={(event) => selectTemplate(event.target.value)}
+                required
+              >
+                <option value="">—</option>
+                {whatsappTemplates.map((template) => (
+                  <option key={template.id} value={template.template_key}>
+                    {template.name}
+                  </option>
+                ))}
+                {form.template_key &&
+                  !whatsappTemplates.some((template) => template.template_key === form.template_key) && (
+                    <option value={form.template_key} disabled>
+                      {form.template_key}
                     </option>
-                  ))}
-                </select>
-              ) : (
-                <input
-                  className="w-full rounded-md border border-border bg-background px-3 py-2"
-                  value={form.template_key}
-                  onChange={(event) => set('template_key', event.target.value)}
-                  required
-                  maxLength={120}
-                />
+                  )}
+              </select>
+              {requiredParameters.length > 0 && (
+                <span className="block text-xs text-muted-foreground">
+                  {t('requiredParameters', { params: requiredParameters.map((param) => param.key).join(', ') })}
+                </span>
               )}
             </label>
 
@@ -491,11 +619,17 @@ function RuleFormDialog({
             onChange={updateVariables}
           />
 
+          {missingRequiredParameters.length > 0 && (
+            <p className="text-xs text-destructive">
+              {t('missingRequiredParameters', { params: missingRequiredParameters.map((param) => param.key).join(', ') })}
+            </p>
+          )}
+
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>
               {t('cancel')}
             </Button>
-            <Button type="submit" disabled={busy} className="gap-2">
+            <Button type="submit" disabled={busy || missingRequiredParameters.length > 0} className="gap-2">
               {busy && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
               {t('save')}
             </Button>
@@ -602,6 +736,44 @@ function VariablesBuilder({
     );
   };
 
+  const updateSource = (index: number, source: NotificationVariableSpec['source']) => {
+    onChange(
+      variables.map((entry, i) => {
+        if (i !== index) return entry;
+        const spec: NotificationVariableSpec = { ...entry.spec, source };
+        if (source === 'literal') {
+          delete spec.path;
+          delete spec.timezone_path;
+        } else {
+          delete spec.value;
+        }
+        return { ...entry, spec };
+      })
+    );
+  };
+
+  const updateTimezone = (index: number, timezone: string) => {
+    onChange(
+      variables.map((entry, i) => {
+        if (i !== index) return entry;
+        const spec: NotificationVariableSpec = { ...entry.spec, timezone: timezone || null };
+        if (timezone) delete spec.timezone_path;
+        return { ...entry, spec };
+      })
+    );
+  };
+
+  const updateTimezonePath = (index: number, timezonePath: string) => {
+    onChange(
+      variables.map((entry, i) => {
+        if (i !== index) return entry;
+        const spec: NotificationVariableSpec = { ...entry.spec, timezone_path: timezonePath || null };
+        if (timezonePath) delete spec.timezone;
+        return { ...entry, spec };
+      })
+    );
+  };
+
   return (
     <fieldset className="space-y-2 border-t border-border pt-4">
       <legend className="text-sm font-medium text-foreground">{t('variables')}</legend>
@@ -618,7 +790,7 @@ function VariablesBuilder({
             aria-label="source"
             className="rounded-md border border-border bg-background px-2 py-1.5 text-sm"
             value={entry.spec.source}
-            onChange={(event) => update(index, { source: event.target.value as NotificationVariableSpec['source'] })}
+            onChange={(event) => updateSource(index, event.target.value as NotificationVariableSpec['source'])}
           >
             {sources.map((source) => (
               <option key={source} value={source}>
@@ -655,6 +827,29 @@ function VariablesBuilder({
               </option>
             ))}
           </select>
+          <input
+            aria-label="timezone"
+            className="rounded-md border border-border bg-background px-2 py-1.5 text-sm disabled:opacity-50"
+            value={entry.spec.timezone ?? ''}
+            onChange={(event) => updateTimezone(index, event.target.value)}
+            disabled={Boolean(entry.spec.timezone_path)}
+            placeholder={tCommon('timezoneSuggestion')}
+          />
+          <input
+            aria-label="timezone path"
+            className="rounded-md border border-border bg-background px-2 py-1.5 text-sm disabled:opacity-50"
+            value={entry.spec.timezone_path ?? ''}
+            onChange={(event) => updateTimezonePath(index, event.target.value)}
+            disabled={Boolean(entry.spec.timezone)}
+            placeholder="booking.timezone"
+          />
+          <input
+            aria-label="default"
+            className="rounded-md border border-border bg-background px-2 py-1.5 text-sm"
+            value={(entry.spec.default as string) ?? ''}
+            onChange={(event) => update(index, { default: event.target.value || null })}
+            placeholder={tCommon('defaultValue')}
+          />
           <label className="flex items-center gap-2 text-xs text-muted-foreground">
             <input
               type="checkbox"

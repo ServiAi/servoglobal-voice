@@ -789,7 +789,15 @@
         "actions": {
           "edit": "Edit",
           "activate": "Activate",
-          "deactivate": "Deactivate"
+          "deactivate": "Deactivate",
+          "toggleError": "The rule status could not be updated."
+        },
+        "noApprovedTemplates": "There are no Meta-approved WhatsApp templates yet. Sync WhatsApp to be able to create rules.",
+        "confirmDisable": {
+          "title": "Disable automation",
+          "description": "This rule will stop generating new notifications. Deliveries already created will keep their status.",
+          "cancel": "Cancel",
+          "confirm": "Disable"
         },
         "form": {
           "createTitle": "New rule",
@@ -798,6 +806,8 @@
           "capability": "Capability",
           "event": "Event",
           "template": "WhatsApp template",
+          "requiredParameters": "Parameters required by the template: {params}",
+          "missingRequiredParameters": "Finish mapping these parameters: {params}",
           "recipientStrategy": "Recipient strategy",
           "recipientGroup": "Recipient group or path",
           "scheduleMode": "Send timing",
@@ -832,6 +842,9 @@
             "condition_invalid": "One of the conditions is not valid.",
             "variable_spec_invalid": "One of the template variables is not valid.",
             "relative_to_booking_requires_booking_event": "Relative scheduling only applies to booking events.",
+            "whatsapp_template_not_approved": "The selected template is not approved by Meta for your organization.",
+            "template_variable_mapping_missing": "One of the parameters required by the template is not mapped.",
+            "template_variables_malformed": "The template's parameter configuration is not valid.",
             "generic": "The rule could not be saved."
           }
         }
@@ -854,7 +867,8 @@
         "actions": {
           "edit": "Edit",
           "activate": "Activate",
-          "deactivate": "Deactivate"
+          "deactivate": "Deactivate",
+          "toggleError": "The recipient status could not be updated."
         },
         "form": {
           "createTitle": "New recipient",
@@ -891,7 +905,9 @@
           "dateTo": "To",
           "allStatuses": "All statuses",
           "allEvents": "All events",
-          "allRules": "All rules"
+          "allRules": "All rules",
+          "apply": "Apply filters",
+          "error": "Deliveries could not be loaded for the selected filters."
         },
         "status": {
           "pending": "Pending",
@@ -907,6 +923,7 @@
         },
         "detail": {
           "title": "Delivery detail",
+          "staleData": "The detail could not be refreshed. Showing the latest available data.",
           "status": "Status",
           "rule": "Rule",
           "event": "Event",
@@ -930,7 +947,9 @@
       "common": {
         "close": "Close",
         "loading": "Loading…",
-        "required": "Required"
+        "required": "Required",
+        "timezoneSuggestion": "Suggestion: America/Bogota",
+        "defaultValue": "Default value"
       }
     }
   }
