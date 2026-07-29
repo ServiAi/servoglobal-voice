@@ -86,7 +86,6 @@ def run_cycle(
     session_factory: Callable[[], object] = SessionLocal,
     now_fn: Callable[[], datetime] | None = None,
     run_recovery: bool = True,
-    should_stop: Callable[[], bool] | None = None,
     client_factory: Callable[[], object] | None = None,
 ) -> dict[str, int]:
     resolve_now = now_fn or (lambda: datetime.now(timezone.utc))
@@ -120,10 +119,11 @@ def run_cycle(
 
     counters["claimed"] = len(claims)
 
+    # A claimed batch is always processed to completion: shutdown is only
+    # honored before the *next* batch is claimed (see run_forever), never
+    # mid-batch, so a delivery is never abandoned in `processing` just
+    # because a shutdown signal happened to arrive while we were working.
     for claim in claims:
-        if should_stop is not None and should_stop():
-            break
-
         db = session_factory()
         try:
             executor = WhatsAppNotificationExecutor(
@@ -154,6 +154,8 @@ def run_cycle(
                     error_code=exc.code,
                     retryable=False,
                     max_attempts=worker_config.max_attempts,
+                    expected_claim_token=claim.claim_token,
+                    allowed_current_statuses={"processing", "failed"},
                 )
                 counters["failed"] += 1
                 _bump_decision_counter(counters, decision.action)
@@ -163,6 +165,10 @@ def run_cycle(
                 counters["sent"] += 1
             elif result.outcome == "cancelled":
                 counters["cancelled"] += 1
+            elif result.outcome == "manual_review":
+                counters["manual_review"] += 1
+            elif result.outcome in ("stale_claim_reconciled", "stale_claim_ignored"):
+                pass
             elif result.outcome == "failed":
                 counters["failed"] += 1
                 decision = _make_retry_policy(db, worker_config).apply_failure(
@@ -172,6 +178,8 @@ def run_cycle(
                     error_code=result.error_code or "whatsapp_provider_send_failed",
                     retryable=result.retryable if result.retryable is not None else True,
                     max_attempts=worker_config.max_attempts,
+                    expected_claim_token=claim.claim_token,
+                    allowed_current_statuses={"processing", "failed"},
                 )
                 _bump_decision_counter(counters, decision.action)
         except Exception as exc:  # noqa: BLE001 - one delivery must never stop the batch
@@ -250,7 +258,6 @@ def run_forever(
             session_factory=session_factory,
             now_fn=lambda: now,
             run_recovery=run_recovery,
-            should_stop=lambda: flag.stop_requested,
             client_factory=client_factory,
         )
         if run_recovery:

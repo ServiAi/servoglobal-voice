@@ -794,7 +794,10 @@ class WhatsAppWebhookDeliverySyncTests(_BaseExecutorTestCase):
         self.assertIsNotNone(ctx["delivery"].read_at)
 
     def test_webhook_failed_updates_delivery(self):
-        ctx = self._seed_webhook_pair(delivery_status="sent")
+        # "pending" is not a protected status, so a failed webhook may still
+        # apply here (unlike "sent", which must never be degraded — see
+        # test_webhook_sent_is_never_degraded_by_failed below).
+        ctx = self._seed_webhook_pair(delivery_status="pending")
         WhatsAppMessageService(self.db).handle_webhook_payload(
             self._webhook_payload(
                 phone_number_id=ctx["phone_number_id"],
@@ -809,6 +812,78 @@ class WhatsAppWebhookDeliverySyncTests(_BaseExecutorTestCase):
         self.assertIsNotNone(ctx["delivery"].error_message)
         self.assertNotIn("abcdefghijklmnopqrstuvwx0123456789", ctx["delivery"].error_message)
         self.assertNotIn("573001112233", ctx["delivery"].error_message)
+
+    def test_webhook_sent_is_never_degraded_by_failed(self):
+        ctx = self._seed_webhook_pair(delivery_status="sent")
+        WhatsAppMessageService(self.db).handle_webhook_payload(
+            self._webhook_payload(
+                phone_number_id=ctx["phone_number_id"],
+                provider_message_id=ctx["provider_message_id"],
+                status="failed",
+            )
+        )
+        self.db.refresh(ctx["delivery"])
+        self.assertEqual(ctx["delivery"].status, "sent")
+
+    def test_webhook_delivered_is_never_degraded_by_failed(self):
+        ctx = self._seed_webhook_pair(delivery_status="delivered")
+        WhatsAppMessageService(self.db).handle_webhook_payload(
+            self._webhook_payload(
+                phone_number_id=ctx["phone_number_id"],
+                provider_message_id=ctx["provider_message_id"],
+                status="failed",
+            )
+        )
+        self.db.refresh(ctx["delivery"])
+        self.assertEqual(ctx["delivery"].status, "delivered")
+
+    def test_webhook_read_is_never_degraded_by_failed(self):
+        ctx = self._seed_webhook_pair(delivery_status="read")
+        WhatsAppMessageService(self.db).handle_webhook_payload(
+            self._webhook_payload(
+                phone_number_id=ctx["phone_number_id"],
+                provider_message_id=ctx["provider_message_id"],
+                status="failed",
+            )
+        )
+        self.db.refresh(ctx["delivery"])
+        self.assertEqual(ctx["delivery"].status, "read")
+
+    def test_webhook_cancelled_is_never_degraded_by_failed(self):
+        ctx = self._seed_webhook_pair(delivery_status="cancelled")
+        WhatsAppMessageService(self.db).handle_webhook_payload(
+            self._webhook_payload(
+                phone_number_id=ctx["phone_number_id"],
+                provider_message_id=ctx["provider_message_id"],
+                status="failed",
+            )
+        )
+        self.db.refresh(ctx["delivery"])
+        self.assertEqual(ctx["delivery"].status, "cancelled")
+
+    def test_webhook_manual_review_promotes_to_sent(self):
+        ctx = self._seed_webhook_pair(delivery_status="manual_review")
+        WhatsAppMessageService(self.db).handle_webhook_payload(
+            self._webhook_payload(
+                phone_number_id=ctx["phone_number_id"],
+                provider_message_id=ctx["provider_message_id"],
+                status="sent",
+            )
+        )
+        self.db.refresh(ctx["delivery"])
+        self.assertEqual(ctx["delivery"].status, "sent")
+
+    def test_webhook_manual_review_promotes_to_delivered(self):
+        ctx = self._seed_webhook_pair(delivery_status="manual_review")
+        WhatsAppMessageService(self.db).handle_webhook_payload(
+            self._webhook_payload(
+                phone_number_id=ctx["phone_number_id"],
+                provider_message_id=ctx["provider_message_id"],
+                status="delivered",
+            )
+        )
+        self.db.refresh(ctx["delivery"])
+        self.assertEqual(ctx["delivery"].status, "delivered")
 
     def test_webhook_read_not_degraded_by_later_delivered(self):
         ctx = self._seed_webhook_pair(delivery_status="read")
@@ -1083,6 +1158,217 @@ class WhatsAppExecuteClaimedTests(_BaseExecutorTestCase):
             tenant_id=ctx["tenant_id"], delivery_id=ctx["delivery"].id, claim_token=claim.claim_token, now=FIXED_NOW
         )
         self.assertEqual(result.outcome, "sent")
+
+    # -----------------------------------------------------------------
+    # Post-Meta finalization when the claim is stolen mid-flight (Fix 3)
+    # -----------------------------------------------------------------
+    def _steal_claim_after_send(self, executor, ctx, *, new_status="processing", new_claim_token="tok-new-owner"):
+        """Wrap the executor's send call so that, right after Meta answers,
+        a different (newer) execution appears to own the delivery — as if
+        its lease had expired and someone else reclaimed it while the HTTP
+        call was in flight."""
+        original_send = executor._message_service.send_template_notification
+
+        def wrapped(*args, **kwargs):
+            result = original_send(*args, **kwargs)
+            delivery = (
+                self.db.query(NotificationDelivery).filter(NotificationDelivery.id == ctx["delivery"].id).one()
+            )
+            delivery.status = new_status
+            delivery.claim_token = new_claim_token
+            self.db.add(delivery)
+            self.db.commit()
+            return result
+
+        executor._message_service.send_template_notification = wrapped
+        return executor
+
+    def test_stale_owner_does_not_overwrite_sent_with_positive_evidence(self):
+        ctx = self._seed_happy_path()
+        claim = self._claim(ctx["tenant_id"], ctx["delivery"].id)
+        client = _FakeWhatsAppClient()
+        executor = self._steal_claim_after_send(
+            WhatsAppNotificationExecutor(self.db, client=client), ctx
+        )
+        result = executor.execute_claimed(
+            tenant_id=ctx["tenant_id"], delivery_id=ctx["delivery"].id, claim_token=claim.claim_token, now=FIXED_NOW
+        )
+        self.assertEqual(result.outcome, "stale_claim_reconciled")
+        self.db.refresh(ctx["delivery"])
+        self.assertEqual(ctx["delivery"].status, "sent")
+
+    def test_stale_owner_does_not_overwrite_manual_review(self):
+        ctx = self._seed_happy_path()
+        claim = self._claim(ctx["tenant_id"], ctx["delivery"].id)
+        client = _FakeWhatsAppClient()
+        executor = self._steal_claim_after_send(
+            WhatsAppNotificationExecutor(self.db, client=client), ctx, new_status="manual_review", new_claim_token=None
+        )
+        result = executor.execute_claimed(
+            tenant_id=ctx["tenant_id"], delivery_id=ctx["delivery"].id, claim_token=claim.claim_token, now=FIXED_NOW
+        )
+        self.assertEqual(result.outcome, "stale_claim_ignored")
+        self.db.refresh(ctx["delivery"])
+        self.assertEqual(ctx["delivery"].status, "manual_review")
+
+    def test_stale_owner_never_clears_the_new_claim_token(self):
+        ctx = self._seed_happy_path()
+        claim = self._claim(ctx["tenant_id"], ctx["delivery"].id)
+        client = _FakeWhatsAppClient()
+        executor = self._steal_claim_after_send(
+            WhatsAppNotificationExecutor(self.db, client=client), ctx, new_claim_token="tok-brand-new"
+        )
+        executor.execute_claimed(
+            tenant_id=ctx["tenant_id"], delivery_id=ctx["delivery"].id, claim_token=claim.claim_token, now=FIXED_NOW
+        )
+        self.db.refresh(ctx["delivery"])
+        self.assertEqual(ctx["delivery"].claim_token, "tok-brand-new")
+
+    def test_stale_reconciliation_never_calls_meta_again(self):
+        ctx = self._seed_happy_path()
+        claim = self._claim(ctx["tenant_id"], ctx["delivery"].id)
+        client = _FakeWhatsAppClient()
+        executor = self._steal_claim_after_send(
+            WhatsAppNotificationExecutor(self.db, client=client), ctx
+        )
+        executor.execute_claimed(
+            tenant_id=ctx["tenant_id"], delivery_id=ctx["delivery"].id, claim_token=claim.claim_token, now=FIXED_NOW
+        )
+        self.assertEqual(client.send_calls, 1)
+
+    def test_stale_reconciliation_preserves_delivered_evidence(self):
+        ctx = self._seed_happy_path()
+        claim = self._claim(ctx["tenant_id"], ctx["delivery"].id)
+        client = _FakeWhatsAppClient()
+        executor = WhatsAppNotificationExecutor(self.db, client=client)
+        real_send = executor._message_service.send_template_notification
+
+        def wrapped(*args, **kwargs):
+            result = real_send(*args, **kwargs)
+            delivery = (
+                self.db.query(NotificationDelivery).filter(NotificationDelivery.id == ctx["delivery"].id).one()
+            )
+            delivery.status = "processing"
+            delivery.claim_token = "tok-new-owner"
+            self.db.add(delivery)
+            result.message.status = "delivered"
+            result.message.delivered_at = FIXED_NOW
+            self.db.add(result.message)
+            self.db.commit()
+            return result
+
+        executor._message_service.send_template_notification = wrapped
+        result = executor.execute_claimed(
+            tenant_id=ctx["tenant_id"], delivery_id=ctx["delivery"].id, claim_token=claim.claim_token, now=FIXED_NOW
+        )
+        self.assertEqual(result.outcome, "stale_claim_reconciled")
+        self.db.refresh(ctx["delivery"])
+        self.assertEqual(ctx["delivery"].status, "delivered")
+
+    def test_stale_reconciliation_preserves_read_evidence(self):
+        ctx = self._seed_happy_path()
+        claim = self._claim(ctx["tenant_id"], ctx["delivery"].id)
+        client = _FakeWhatsAppClient()
+        executor = WhatsAppNotificationExecutor(self.db, client=client)
+        real_send = executor._message_service.send_template_notification
+
+        def wrapped(*args, **kwargs):
+            result = real_send(*args, **kwargs)
+            delivery = (
+                self.db.query(NotificationDelivery).filter(NotificationDelivery.id == ctx["delivery"].id).one()
+            )
+            delivery.status = "processing"
+            delivery.claim_token = "tok-new-owner"
+            self.db.add(delivery)
+            result.message.status = "read"
+            result.message.delivered_at = FIXED_NOW
+            result.message.read_at = FIXED_NOW
+            self.db.add(result.message)
+            self.db.commit()
+            return result
+
+        executor._message_service.send_template_notification = wrapped
+        result = executor.execute_claimed(
+            tenant_id=ctx["tenant_id"], delivery_id=ctx["delivery"].id, claim_token=claim.claim_token, now=FIXED_NOW
+        )
+        self.assertEqual(result.outcome, "stale_claim_reconciled")
+        self.db.refresh(ctx["delivery"])
+        self.assertEqual(ctx["delivery"].status, "read")
+
+
+# ---------------------------------------------------------------------------
+# Meta responds without a usable provider message id (Fix 5)
+# ---------------------------------------------------------------------------
+class WhatsAppMissingProviderMessageIdTests(_BaseExecutorTestCase):
+    class _NoIdClient(WhatsAppCloudClient):
+        def __init__(self, payload):
+            super().__init__()
+            self._payload = payload
+            self.send_calls = 0
+
+        def send_template_message(self, *args, **kwargs):
+            self.send_calls += 1
+            return self._payload
+
+    def _claim(self, tenant_id, delivery_id, *, now=FIXED_NOW, lease_seconds=120, max_attempts=5):
+        return NotificationDeliveryClaimService(self.db).claim_one(
+            tenant_id=tenant_id, delivery_id=delivery_id, now=now, lease_seconds=lease_seconds, max_attempts=max_attempts
+        )
+
+    def _run(self, payload):
+        ctx = self._seed_happy_path()
+        claim = self._claim(ctx["tenant_id"], ctx["delivery"].id)
+        client = self._NoIdClient(payload)
+        result = WhatsAppNotificationExecutor(self.db, client=client).execute_claimed(
+            tenant_id=ctx["tenant_id"], delivery_id=ctx["delivery"].id, claim_token=claim.claim_token, now=FIXED_NOW
+        )
+        return ctx, client, result
+
+    def test_empty_payload_is_manual_review(self):
+        _, _, result = self._run({})
+        self.assertEqual(result.outcome, "manual_review")
+
+    def test_empty_messages_list_is_manual_review(self):
+        _, _, result = self._run({"messages": []})
+        self.assertEqual(result.outcome, "manual_review")
+
+    def test_message_without_id_key_is_manual_review(self):
+        _, _, result = self._run({"messages": [{}]})
+        self.assertEqual(result.outcome, "manual_review")
+
+    def test_empty_id_string_is_manual_review(self):
+        _, _, result = self._run({"messages": [{"id": ""}]})
+        self.assertEqual(result.outcome, "manual_review")
+
+    def test_manual_review_error_code_and_retryable_flag(self):
+        _, _, result = self._run({})
+        self.assertEqual(result.error_code, "whatsapp_provider_message_id_missing")
+        self.assertFalse(result.retryable)
+
+    def test_manual_review_leaves_no_next_attempt(self):
+        ctx, _, result = self._run({})
+        self.db.refresh(ctx["delivery"])
+        self.assertIsNone(ctx["delivery"].next_attempt_at)
+
+    def test_manual_review_clears_the_claim(self):
+        ctx, _, result = self._run({})
+        self.db.refresh(ctx["delivery"])
+        self.assertIsNone(ctx["delivery"].claim_token)
+        self.assertIsNone(ctx["delivery"].claimed_at)
+        self.assertIsNone(ctx["delivery"].claim_expires_at)
+
+    def test_notification_delivery_id_is_preserved(self):
+        ctx, _, result = self._run({})
+        self.assertEqual(result.delivery.id, ctx["delivery"].id)
+        self.assertEqual(result.message.notification_delivery_id, ctx["delivery"].id)
+
+    def test_message_stays_queued_not_sent(self):
+        _, _, result = self._run({})
+        self.assertEqual(result.message.status, "queued")
+
+    def test_no_second_send_attempt_is_made(self):
+        _, client, _ = self._run({})
+        self.assertEqual(client.send_calls, 1)
 
 
 if __name__ == "__main__":

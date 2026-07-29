@@ -301,5 +301,151 @@ class ApplyFailureTests(_BaseRetryPolicyTestCase):
         self.assertEqual(stored, FIXED_NOW)
 
 
+class StaleOwnerProtectionTests(_BaseRetryPolicyTestCase):
+    def _set_delivery(self, delivery, **fields):
+        self.db.query(NotificationDelivery).filter(NotificationDelivery.id == delivery.id).update(fields)
+        self.db.commit()
+        self.db.refresh(delivery)
+
+    def test_correct_token_allows_retry_to_apply(self):
+        tenant_id = self._create_tenant()
+        delivery = self._create_delivery(tenant_id, attempts=1, status="processing")
+        self._set_delivery(delivery, claim_token="tok-current")
+        policy = self._policy(jitter_fn=lambda: 0)
+        decision = policy.apply_failure(
+            tenant_id=tenant_id, delivery_id=delivery.id, now=FIXED_NOW,
+            error_code="whatsapp_provider_send_failed", retryable=True, max_attempts=5,
+            expected_claim_token="tok-current", allowed_current_statuses={"processing", "failed"},
+        )
+        self.assertEqual(decision.action, "retry")
+        self.db.refresh(delivery)
+        self.assertEqual(delivery.status, "failed")
+
+    def test_wrong_token_returns_stale_owner(self):
+        tenant_id = self._create_tenant()
+        delivery = self._create_delivery(tenant_id, attempts=1, status="processing")
+        self._set_delivery(delivery, claim_token="tok-current")
+        policy = self._policy(jitter_fn=lambda: 0)
+        decision = policy.apply_failure(
+            tenant_id=tenant_id, delivery_id=delivery.id, now=FIXED_NOW,
+            error_code="whatsapp_provider_send_failed", retryable=True, max_attempts=5,
+            expected_claim_token="tok-stale", allowed_current_statuses={"processing", "failed"},
+        )
+        self.assertEqual(decision.action, "stale_owner")
+        self.assertEqual(decision.error_code, "stale_delivery_owner")
+        self.assertEqual(decision.status, "processing")
+
+    def test_wrong_token_does_not_modify_delivery(self):
+        tenant_id = self._create_tenant()
+        delivery = self._create_delivery(tenant_id, attempts=1, status="processing")
+        self._set_delivery(delivery, claim_token="tok-current", error_message=None)
+        policy = self._policy(jitter_fn=lambda: 0)
+        policy.apply_failure(
+            tenant_id=tenant_id, delivery_id=delivery.id, now=FIXED_NOW,
+            error_code="whatsapp_provider_send_failed", retryable=True, max_attempts=5,
+            expected_claim_token="tok-stale", allowed_current_statuses={"processing", "failed"},
+        )
+        self.db.refresh(delivery)
+        self.assertEqual(delivery.status, "processing")
+        self.assertEqual(delivery.claim_token, "tok-current")
+        self.assertIsNone(delivery.error_message)
+        self.assertIsNone(delivery.failed_at)
+
+    def test_old_token_does_not_clear_new_token(self):
+        tenant_id = self._create_tenant()
+        delivery = self._create_delivery(tenant_id, attempts=1, status="processing")
+        self._set_delivery(delivery, claim_token="tok-new")
+        policy = self._policy(jitter_fn=lambda: 0)
+        policy.apply_failure(
+            tenant_id=tenant_id, delivery_id=delivery.id, now=FIXED_NOW,
+            error_code="whatsapp_provider_send_failed", retryable=True, max_attempts=5,
+            expected_claim_token="tok-old", allowed_current_statuses={"processing", "failed"},
+        )
+        self.db.refresh(delivery)
+        self.assertEqual(delivery.claim_token, "tok-new")
+
+    def test_sent_is_never_downgraded_to_dead_letter_by_stale_owner(self):
+        tenant_id = self._create_tenant()
+        delivery = self._create_delivery(tenant_id, attempts=5, status="sent")
+        self._set_delivery(delivery, claim_token=None)
+        policy = self._policy(jitter_fn=lambda: 0)
+        decision = policy.apply_failure(
+            tenant_id=tenant_id, delivery_id=delivery.id, now=FIXED_NOW,
+            error_code="delivery_claim_mismatch", retryable=False, max_attempts=5,
+            expected_claim_token="tok-stale", allowed_current_statuses={"processing", "failed"},
+        )
+        self.assertEqual(decision.action, "stale_owner")
+        self.db.refresh(delivery)
+        self.assertEqual(delivery.status, "sent")
+
+    def test_delivered_is_never_downgraded_to_failed_by_stale_owner(self):
+        tenant_id = self._create_tenant()
+        delivery = self._create_delivery(tenant_id, attempts=1, status="delivered")
+        self._set_delivery(delivery, claim_token=None)
+        policy = self._policy(jitter_fn=lambda: 0)
+        decision = policy.apply_failure(
+            tenant_id=tenant_id, delivery_id=delivery.id, now=FIXED_NOW,
+            error_code="whatsapp_provider_send_failed", retryable=True, max_attempts=5,
+            expected_claim_token="tok-stale", allowed_current_statuses={"processing", "failed"},
+        )
+        self.assertEqual(decision.action, "stale_owner")
+        self.db.refresh(delivery)
+        self.assertEqual(delivery.status, "delivered")
+
+    def test_read_is_never_degraded_by_stale_owner(self):
+        tenant_id = self._create_tenant()
+        delivery = self._create_delivery(tenant_id, attempts=1, status="read")
+        self._set_delivery(delivery, claim_token=None)
+        policy = self._policy(jitter_fn=lambda: 0)
+        decision = policy.apply_failure(
+            tenant_id=tenant_id, delivery_id=delivery.id, now=FIXED_NOW,
+            error_code="whatsapp_provider_send_failed", retryable=True, max_attempts=5,
+            expected_claim_token="tok-stale", allowed_current_statuses={"processing", "failed"},
+        )
+        self.assertEqual(decision.action, "stale_owner")
+        self.db.refresh(delivery)
+        self.assertEqual(delivery.status, "read")
+
+    def test_manual_review_is_never_degraded_by_stale_owner(self):
+        tenant_id = self._create_tenant()
+        delivery = self._create_delivery(tenant_id, attempts=1, status="manual_review")
+        self._set_delivery(delivery, claim_token=None)
+        policy = self._policy(jitter_fn=lambda: 0)
+        decision = policy.apply_failure(
+            tenant_id=tenant_id, delivery_id=delivery.id, now=FIXED_NOW,
+            error_code="whatsapp_provider_send_failed", retryable=True, max_attempts=5,
+            expected_claim_token="tok-stale", allowed_current_statuses={"processing", "failed"},
+        )
+        self.assertEqual(decision.action, "stale_owner")
+        self.db.refresh(delivery)
+        self.assertEqual(delivery.status, "manual_review")
+
+    def test_status_outside_allowed_set_is_treated_as_stale(self):
+        tenant_id = self._create_tenant()
+        delivery = self._create_delivery(tenant_id, attempts=1, status="pending")
+        self._set_delivery(delivery, claim_token="tok-current")
+        policy = self._policy(jitter_fn=lambda: 0)
+        decision = policy.apply_failure(
+            tenant_id=tenant_id, delivery_id=delivery.id, now=FIXED_NOW,
+            error_code="whatsapp_provider_send_failed", retryable=True, max_attempts=5,
+            expected_claim_token="tok-current", allowed_current_statuses={"processing", "failed"},
+        )
+        self.assertEqual(decision.action, "stale_owner")
+
+    def test_commit_false_does_not_commit_but_still_mutates_session(self):
+        tenant_id = self._create_tenant()
+        delivery = self._create_delivery(tenant_id, attempts=1, status="processing")
+        policy = self._policy(jitter_fn=lambda: 0)
+        policy.apply_failure(
+            tenant_id=tenant_id, delivery_id=delivery.id, now=FIXED_NOW,
+            error_code="whatsapp_provider_send_failed", retryable=True, max_attempts=5,
+            commit=False,
+        )
+        self.assertEqual(delivery.status, "failed")
+        self.db.commit()
+        self.db.refresh(delivery)
+        self.assertEqual(delivery.status, "failed")
+
+
 if __name__ == "__main__":
     unittest.main()

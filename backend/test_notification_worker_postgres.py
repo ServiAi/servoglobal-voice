@@ -36,6 +36,8 @@ from app.db.base import Base
 from app.models.identity import Tenant
 from app.models.notifications import DomainEvent, NotificationDelivery, TenantNotificationRule
 from app.services.notification_delivery_claim_service import NotificationDeliveryClaimService
+from app.services.notification_delivery_recovery_service import NotificationDeliveryRecoveryService
+from app.services.notification_retry_policy import NotificationRetryPolicy
 
 FIXED_NOW = datetime(2026, 8, 1, 10, 0, 0, tzinfo=timezone.utc)
 PAST = FIXED_NOW - timedelta(hours=1)
@@ -193,6 +195,250 @@ class NotificationWorkerPostgresConcurrencyTests(unittest.TestCase):
             for row in rows:
                 self.assertEqual(row.status, "processing")
                 self.assertEqual(row.attempts, 1)
+        finally:
+            verify.close()
+
+
+@unittest.skipUnless(
+    NOTIFICATION_TEST_DATABASE_URL,
+    "NOTIFICATION_TEST_DATABASE_URL not set; skipping real PostgreSQL concurrency tests",
+)
+class NotificationRecoveryPostgresConcurrencyTests(unittest.TestCase):
+    """Real concurrency coverage for the Phase 6 stabilization fixes:
+    recovery's single-commit batch and the retry policy's stale-owner guard,
+    exercised against genuine concurrent PostgreSQL sessions instead of
+    sqlite (which cannot demonstrate row-level locking races)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.engine = create_engine(NOTIFICATION_TEST_DATABASE_URL, pool_pre_ping=True)
+        if cls.engine.dialect.name != "postgresql":
+            raise unittest.SkipTest("NOTIFICATION_TEST_DATABASE_URL must point to a PostgreSQL database")
+        Base.metadata.create_all(bind=cls.engine)
+        cls.SessionLocal = sessionmaker(autocommit=False, autoflush=False, expire_on_commit=False, bind=cls.engine)
+
+    @classmethod
+    def tearDownClass(cls):
+        Base.metadata.drop_all(bind=cls.engine)
+        cls.engine.dispose()
+
+    def setUp(self):
+        self.db = self.SessionLocal()
+
+    def tearDown(self):
+        self.db.rollback()
+        self.db.close()
+
+    def _create_tenant(self, session, slug: str) -> str:
+        tenant = Tenant(name=f"Empresa {slug}", slug=f"{slug}-{uuid4().hex[:8]}")
+        session.add(tenant)
+        session.commit()
+        session.refresh(tenant)
+        return tenant.id
+
+    def _seed_processing_deliveries(self, session, tenant_id: str, count: int) -> list[str]:
+        event = DomainEvent(
+            tenant_id=tenant_id,
+            event_type="booking.created",
+            source="test",
+            idempotency_key=f"evt-{uuid4().hex[:8]}",
+            payload_json={},
+            available_at=PAST,
+        )
+        rule = TenantNotificationRule(
+            tenant_id=tenant_id,
+            name=f"rule-{uuid4().hex[:8]}",
+            capability_key="booking_notifications",
+            event_type="booking.created",
+            channel="whatsapp",
+            action_type="send_whatsapp_template",
+            template_key="tpl",
+            recipient_strategy="event_customer",
+            conditions_json=[],
+            variable_mapping_json={},
+        )
+        session.add_all([event, rule])
+        session.commit()
+        session.refresh(event)
+        session.refresh(rule)
+        ids = []
+        for _ in range(count):
+            delivery = NotificationDelivery(
+                tenant_id=tenant_id,
+                domain_event_id=event.id,
+                notification_rule_id=rule.id,
+                channel="whatsapp",
+                recipient="+573001112233",
+                status="processing",
+                scheduled_for=PAST,
+                attempts=1,
+                idempotency_key=f"delivery-{uuid4().hex[:8]}",
+                metadata_json={},
+                claim_token=f"tok-{uuid4().hex[:8]}",
+                claimed_at=PAST,
+                claim_expires_at=PAST,
+            )
+            session.add(delivery)
+            session.commit()
+            session.refresh(delivery)
+            ids.append(delivery.id)
+        return ids
+
+    def _recovery_worker(self, *, batch_size: int) -> list[str]:
+        session = self.SessionLocal()
+        try:
+            policy = NotificationRetryPolicy(
+                session, base_retry_seconds=30, max_retry_seconds=3600, jitter_seconds=0, jitter_fn=lambda: 0
+            )
+            service = NotificationDeliveryRecoveryService(session, retry_policy=policy)
+            outcomes = service.recover_batch(
+                now=FIXED_NOW, legacy_stale_seconds=300, max_attempts=5, batch_size=batch_size
+            )
+            return [o.delivery_id for o in outcomes]
+        finally:
+            session.close()
+
+    def test_two_concurrent_recoveries_never_process_the_same_row(self):
+        tenant_id = self._create_tenant(self.db, "recovery-concurrency-a")
+        ids = set(self._seed_processing_deliveries(self.db, tenant_id, 20))
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            future_a = pool.submit(self._recovery_worker, batch_size=10)
+            future_b = pool.submit(self._recovery_worker, batch_size=10)
+            recovered_a = future_a.result()
+            recovered_b = future_b.result()
+
+        self.assertEqual(set(recovered_a) & set(recovered_b), set())
+        self.assertEqual(set(recovered_a) | set(recovered_b), ids)
+
+    def test_recovered_total_matches_seeded_total(self):
+        tenant_id = self._create_tenant(self.db, "recovery-concurrency-b")
+        ids = set(self._seed_processing_deliveries(self.db, tenant_id, 15))
+        recovered = self._recovery_worker(batch_size=100)
+        self.assertEqual(set(recovered), ids)
+
+    def test_old_claim_token_never_overwrites_a_newer_one(self):
+        tenant_id = self._create_tenant(self.db, "stale-owner-c")
+        delivery_id = self._seed_processing_deliveries(self.db, tenant_id, 1)[0]
+
+        # Simulate a fresh claim replacing the token this (stale) caller held.
+        setup = self.SessionLocal()
+        try:
+            delivery = setup.query(NotificationDelivery).filter(NotificationDelivery.id == delivery_id).one()
+            delivery.claim_token = "tok-new-real-owner"
+            setup.add(delivery)
+            setup.commit()
+        finally:
+            setup.close()
+
+        session = self.SessionLocal()
+        try:
+            policy = NotificationRetryPolicy(
+                session, base_retry_seconds=30, max_retry_seconds=3600, jitter_seconds=0, jitter_fn=lambda: 0
+            )
+            decision = policy.apply_failure(
+                tenant_id=tenant_id,
+                delivery_id=delivery_id,
+                now=FIXED_NOW,
+                error_code="whatsapp_provider_send_failed",
+                retryable=True,
+                max_attempts=5,
+                expected_claim_token="tok-stale-old-owner",
+                allowed_current_statuses={"processing", "failed"},
+            )
+        finally:
+            session.close()
+        self.assertEqual(decision.action, "stale_owner")
+
+        verify = self.SessionLocal()
+        try:
+            row = verify.query(NotificationDelivery).filter(NotificationDelivery.id == delivery_id).one()
+            self.assertEqual(row.claim_token, "tok-new-real-owner")
+        finally:
+            verify.close()
+
+    def test_stale_owner_never_degrades_a_sent_delivery(self):
+        tenant_id = self._create_tenant(self.db, "stale-owner-d")
+        delivery_id = self._seed_processing_deliveries(self.db, tenant_id, 1)[0]
+
+        setup = self.SessionLocal()
+        try:
+            delivery = setup.query(NotificationDelivery).filter(NotificationDelivery.id == delivery_id).one()
+            delivery.status = "sent"
+            delivery.claim_token = None
+            setup.add(delivery)
+            setup.commit()
+        finally:
+            setup.close()
+
+        session = self.SessionLocal()
+        try:
+            policy = NotificationRetryPolicy(
+                session, base_retry_seconds=30, max_retry_seconds=3600, jitter_seconds=0, jitter_fn=lambda: 0
+            )
+            decision = policy.apply_failure(
+                tenant_id=tenant_id,
+                delivery_id=delivery_id,
+                now=FIXED_NOW,
+                error_code="delivery_claim_mismatch",
+                retryable=False,
+                max_attempts=5,
+                expected_claim_token="tok-stale",
+                allowed_current_statuses={"processing", "failed"},
+            )
+        finally:
+            session.close()
+        self.assertEqual(decision.action, "stale_owner")
+
+        verify = self.SessionLocal()
+        try:
+            row = verify.query(NotificationDelivery).filter(NotificationDelivery.id == delivery_id).one()
+            self.assertEqual(row.status, "sent")
+        finally:
+            verify.close()
+
+    def test_recovery_and_finalization_race_leaves_a_valid_terminal_state(self):
+        # One real thread runs recovery on an expired-lease delivery while
+        # another concurrently finalizes it as "sent" (simulating an HTTP
+        # send that succeeded right as the lease expired). Whichever session
+        # wins the row lock first, the delivery must end on a coherent
+        # terminal state -- never left stuck in "processing".
+        tenant_id = self._create_tenant(self.db, "race-e")
+        delivery_id = self._seed_processing_deliveries(self.db, tenant_id, 1)[0]
+
+        def finalize_as_sent():
+            session = self.SessionLocal()
+            try:
+                delivery = (
+                    session.query(NotificationDelivery)
+                    .filter(NotificationDelivery.id == delivery_id)
+                    .with_for_update()
+                    .one()
+                )
+                delivery.status = "sent"
+                delivery.provider_message_id = "wamid.race"
+                delivery.sent_at = FIXED_NOW
+                delivery.claim_token = None
+                delivery.claimed_at = None
+                delivery.claim_expires_at = None
+                delivery.next_attempt_at = None
+                delivery.error_message = None
+                session.add(delivery)
+                session.commit()
+            finally:
+                session.close()
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            future_recovery = pool.submit(self._recovery_worker, batch_size=10)
+            future_finalize = pool.submit(finalize_as_sent)
+            future_recovery.result()
+            future_finalize.result()
+
+        verify = self.SessionLocal()
+        try:
+            row = verify.query(NotificationDelivery).filter(NotificationDelivery.id == delivery_id).one()
+            self.assertIn(row.status, {"sent", "failed", "dead_letter", "manual_review"})
+            self.assertNotEqual(row.status, "processing")
         finally:
             verify.close()
 

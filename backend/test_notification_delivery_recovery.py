@@ -2,6 +2,7 @@ import os
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from unittest import mock
 from uuid import uuid4
 
 TEST_DB_PATH = Path("serviai_notification_delivery_recovery_test.db")
@@ -347,6 +348,101 @@ class RecoveryReconciliationTests(_BaseRecoveryTestCase):
         self.db.refresh(delivery)
         self.assertIsNotNone(delivery.sent_at)
         self.assertIsNotNone(delivery.delivered_at)
+
+
+class RecoveryTransactionalBatchTests(_BaseRecoveryTestCase):
+    def test_batch_makes_exactly_one_commit(self):
+        tenant_id = self._create_tenant()
+        for _ in range(3):
+            delivery = self._create_processing_delivery(tenant_id, claim_expires_at=FIXED_NOW - timedelta(seconds=1))
+            self._create_message(tenant_id, delivery, status="sent", provider_message_id=f"wamid.{uuid4().hex[:6]}")
+
+        commit_calls = {"n": 0}
+        real_commit = self.db.commit
+
+        def counting_commit():
+            commit_calls["n"] += 1
+            return real_commit()
+
+        with mock.patch.object(self.db, "commit", side_effect=counting_commit):
+            self.service.recover_batch(now=FIXED_NOW, legacy_stale_seconds=300, max_attempts=5, batch_size=50)
+
+        self.assertEqual(commit_calls["n"], 1)
+
+    def test_internal_methods_do_not_commit_individually(self):
+        tenant_id = self._create_tenant()
+        delivery = self._create_processing_delivery(tenant_id, claim_expires_at=FIXED_NOW - timedelta(seconds=1))
+        self._create_message(tenant_id, delivery, status="sent", provider_message_id="wamid.no-inner-commit")
+
+        commit_calls = {"n": 0}
+        real_commit = self.db.commit
+
+        def counting_commit():
+            commit_calls["n"] += 1
+            return real_commit()
+
+        with mock.patch.object(self.db, "commit", side_effect=counting_commit):
+            self.service._recover_one(delivery, now=FIXED_NOW, max_attempts=5)
+
+        self.assertEqual(commit_calls["n"], 0)
+
+    def test_exception_during_batch_rolls_back_everything(self):
+        tenant_id = self._create_tenant()
+        delivery_a = self._create_processing_delivery(tenant_id, claim_expires_at=FIXED_NOW - timedelta(seconds=1))
+        delivery_b = self._create_processing_delivery(tenant_id, claim_expires_at=FIXED_NOW - timedelta(seconds=1))
+        self._create_message(tenant_id, delivery_a, status="sent", provider_message_id="wamid.rollback-a")
+
+        rollback_calls = {"n": 0}
+        real_rollback = self.db.rollback
+
+        def counting_rollback():
+            rollback_calls["n"] += 1
+            return real_rollback()
+
+        original_recover_one = self.service._recover_one
+        call_count = {"n": 0}
+
+        def failing_recover_one(delivery, *, now, max_attempts):
+            call_count["n"] += 1
+            if call_count["n"] == 2:
+                raise RuntimeError("boom")
+            return original_recover_one(delivery, now=now, max_attempts=max_attempts)
+
+        with mock.patch.object(self.service, "_recover_one", side_effect=failing_recover_one), mock.patch.object(
+            self.db, "rollback", side_effect=counting_rollback
+        ):
+            with self.assertRaises(RuntimeError):
+                self.service.recover_batch(now=FIXED_NOW, legacy_stale_seconds=300, max_attempts=5, batch_size=50)
+
+        self.assertEqual(rollback_calls["n"], 1)
+        self.db.rollback()
+        self.db.refresh(delivery_a)
+        self.db.refresh(delivery_b)
+        # Neither delivery's mutation survives: the whole batch was rolled back.
+        self.assertEqual(delivery_a.status, "processing")
+        self.assertEqual(delivery_b.status, "processing")
+
+    def test_batch_is_all_or_nothing_consistent_on_success(self):
+        tenant_id = self._create_tenant()
+        delivery_a = self._create_processing_delivery(tenant_id, claim_expires_at=FIXED_NOW - timedelta(seconds=1))
+        delivery_b = self._create_processing_delivery(tenant_id, claim_expires_at=FIXED_NOW - timedelta(seconds=1))
+        self._create_message(tenant_id, delivery_a, status="sent", provider_message_id="wamid.batch-a")
+        self._create_message(tenant_id, delivery_b, status="delivered", provider_message_id="wamid.batch-b")
+
+        self.service.recover_batch(now=FIXED_NOW, legacy_stale_seconds=300, max_attempts=5, batch_size=50)
+
+        self.db.refresh(delivery_a)
+        self.db.refresh(delivery_b)
+        self.assertEqual(delivery_a.status, "sent")
+        self.assertEqual(delivery_b.status, "delivered")
+
+    def test_recovery_batch_never_calls_a_whatsapp_client(self):
+        tenant_id = self._create_tenant()
+        delivery = self._create_processing_delivery(tenant_id, claim_expires_at=FIXED_NOW - timedelta(seconds=1))
+        self._create_message(tenant_id, delivery, status="sent", provider_message_id="wamid.no-client-call")
+        with mock.patch("app.services.whatsapp_client.WhatsAppCloudClient") as client_cls:
+            self.service.recover_batch(now=FIXED_NOW, legacy_stale_seconds=300, max_attempts=5, batch_size=50)
+            client_cls.assert_not_called()
 
 
 if __name__ == "__main__":

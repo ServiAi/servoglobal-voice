@@ -261,28 +261,92 @@ class RunOnceTests(_BaseWorkerTestCase):
 
 
 class RunCycleShutdownTests(_BaseWorkerTestCase):
-    def test_should_stop_finishes_current_delivery_then_stops(self):
+    def test_stop_requested_mid_batch_still_finishes_the_whole_batch(self):
+        # run_cycle no longer accepts (or consults) a should_stop callback:
+        # a claimed batch is always drained in full. This simulates a
+        # SIGTERM/SIGINT arriving while the first delivery is in flight.
         _, first = self._seed_ready_delivery()
         _, second = self._seed_ready_delivery()
+        flag = worker_module._ShutdownFlag()
         calls = {"n": 0}
 
-        def should_stop():
+        def factory():
             calls["n"] += 1
-            return calls["n"] > 1
+            if calls["n"] == 1:
+                flag.request_stop()
+            return _FakeClient()
 
         counters = worker_module.run_cycle(
             worker_config=self.worker_config,
             session_factory=SessionLocal,
             now_fn=lambda: FIXED_NOW,
-            client_factory=lambda: _FakeClient(),
-            should_stop=should_stop,
+            client_factory=factory,
         )
+        self.assertTrue(flag.stop_requested)
         self.assertEqual(counters["claimed"], 2)
+        self.assertEqual(counters["sent"], 2)
         self.db.refresh(first)
         self.db.refresh(second)
-        statuses = {first.status, second.status}
-        self.assertIn("sent", statuses)
-        self.assertIn("processing", statuses)
+        self.assertEqual(first.status, "sent")
+        self.assertEqual(second.status, "sent")
+
+    def test_forever_sigterm_during_batch_finishes_batch_then_stops(self):
+        _, first = self._seed_ready_delivery()
+        _, second = self._seed_ready_delivery()
+        flag = worker_module._ShutdownFlag()
+        calls = {"n": 0}
+
+        def factory():
+            calls["n"] += 1
+            if calls["n"] == 1:
+                flag.request_stop()
+            return _FakeClient()
+
+        sleep_calls = {"n": 0}
+
+        def sleep_fn(_seconds):
+            sleep_calls["n"] += 1
+
+        cycle_calls = {"n": 0}
+        real_run_cycle = worker_module.run_cycle
+
+        def counting_run_cycle(**kwargs):
+            cycle_calls["n"] += 1
+            return real_run_cycle(**kwargs)
+
+        with mock.patch.object(worker_module, "run_cycle", side_effect=counting_run_cycle):
+            exit_code = worker_module.run_forever(
+                worker_config=self.worker_config,
+                worker_id="w1",
+                session_factory=SessionLocal,
+                now_fn=lambda: FIXED_NOW,
+                sleep_fn=sleep_fn,
+                install_signals=False,
+                client_factory=factory,
+                shutdown_flag=flag,
+            )
+        self.assertEqual(exit_code, 0)
+        self.db.refresh(first)
+        self.db.refresh(second)
+        self.assertEqual(first.status, "sent")
+        self.assertEqual(second.status, "sent")
+        self.assertNotIn("processing", {first.status, second.status})
+        # Only one batch (one run_cycle call) is ever claimed: the flag was
+        # already set by the time the current batch finished, so run_forever
+        # must not claim a second batch.
+        self.assertEqual(cycle_calls["n"], 1)
+        self.assertEqual(sleep_calls["n"], 0)
+
+    def test_sigint_handler_sets_the_same_flag_as_sigterm(self):
+        flag = worker_module._ShutdownFlag()
+        with mock.patch("app.workers.notification_worker.signal.signal") as mock_signal:
+            worker_module._install_signal_handlers(flag)
+        handlers = {call.args[0]: call.args[1] for call in mock_signal.call_args_list}
+        import signal as signal_module
+
+        self.assertFalse(flag.stop_requested)
+        handlers[signal_module.SIGINT](signal_module.SIGINT, None)
+        self.assertTrue(flag.stop_requested)
 
     def test_forever_loop_stops_claiming_new_batches_once_flag_is_set(self):
         flag = worker_module._ShutdownFlag()

@@ -8,8 +8,13 @@ from datetime import datetime, timedelta
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.domain.notification_delivery_state import NON_RETRYABLE_ERROR_CODES
+from app.domain.notification_delivery_state import (
+    FINAL_NON_RETRYABLE_STATUSES,
+    NON_RETRYABLE_ERROR_CODES,
+)
 from app.models.notifications import NotificationDelivery
+
+_STALE_OWNER_ERROR_CODE = "stale_delivery_owner"
 
 
 @dataclass(frozen=True)
@@ -52,6 +57,9 @@ class NotificationRetryPolicy:
         error_code: str,
         retryable: bool,
         max_attempts: int,
+        expected_claim_token: str | None = None,
+        allowed_current_statuses: set[str] | None = None,
+        commit: bool = True,
     ) -> NotificationRetryDecision:
         if now.tzinfo is None or now.tzinfo.utcoffset(now) is None:
             raise ValueError("now must be timezone-aware")
@@ -64,6 +72,26 @@ class NotificationRetryPolicy:
         )
         if delivery is None:
             raise ValueError("delivery_not_found")
+
+        if expected_claim_token is not None:
+            is_stale = (
+                delivery.claim_token != expected_claim_token
+                or delivery.status in FINAL_NON_RETRYABLE_STATUSES
+                or (
+                    allowed_current_statuses is not None
+                    and delivery.status not in allowed_current_statuses
+                )
+            )
+            if is_stale:
+                # A different execution now owns (or already resolved) this
+                # delivery: leave status/claim/backoff exactly as they are so a
+                # stale caller can never degrade a confirmed outcome.
+                return NotificationRetryDecision(
+                    action="stale_owner",
+                    next_attempt_at=delivery.next_attempt_at,
+                    status=delivery.status,
+                    error_code=_STALE_OWNER_ERROR_CODE,
+                )
 
         permanent = (not retryable) or error_code in NON_RETRYABLE_ERROR_CODES
         exhausted = delivery.attempts >= max_attempts
@@ -96,5 +124,6 @@ class NotificationRetryPolicy:
         delivery.claimed_at = None
         delivery.claim_expires_at = None
         self.db.add(delivery)
-        self.db.commit()
+        if commit:
+            self.db.commit()
         return decision

@@ -65,7 +65,15 @@ class NotificationDeliveryRecoveryService:
             .with_for_update(skip_locked=True)
         )
         deliveries = self.db.execute(query).scalars().all()
-        return [self._recover_one(delivery, now=now, max_attempts=max_attempts) for delivery in deliveries]
+        try:
+            outcomes = [
+                self._recover_one(delivery, now=now, max_attempts=max_attempts) for delivery in deliveries
+            ]
+            self.db.commit()
+        except Exception:
+            self.db.rollback()
+            raise
+        return outcomes
 
     def _recover_one(
         self, delivery: NotificationDelivery, *, now: datetime, max_attempts: int
@@ -80,6 +88,7 @@ class NotificationDeliveryRecoveryService:
                 error_code=_UNSENT_MESSAGE_ERROR,
                 retryable=True,
                 max_attempts=max_attempts,
+                commit=False,
             )
             return NotificationRecoveryOutcome(delivery.tenant_id, delivery.id, decision.action)
 
@@ -108,6 +117,7 @@ class NotificationDeliveryRecoveryService:
                 error_code="whatsapp_provider_send_failed",
                 retryable=True,
                 max_attempts=max_attempts,
+                commit=False,
             )
             return NotificationRecoveryOutcome(delivery.tenant_id, delivery.id, decision.action)
 
@@ -118,6 +128,7 @@ class NotificationDeliveryRecoveryService:
             error_code=_UNSENT_MESSAGE_ERROR,
             retryable=True,
             max_attempts=max_attempts,
+            commit=False,
         )
         return NotificationRecoveryOutcome(delivery.tenant_id, delivery.id, decision.action)
 
@@ -166,7 +177,6 @@ class NotificationDeliveryRecoveryService:
         delivery.claimed_at = None
         delivery.claim_expires_at = None
         self.db.add(delivery)
-        self.db.commit()
 
     def _manual_review(self, delivery: NotificationDelivery) -> None:
         delivery.status = "manual_review"
@@ -176,4 +186,3 @@ class NotificationDeliveryRecoveryService:
         delivery.claimed_at = None
         delivery.claim_expires_at = None
         self.db.add(delivery)
-        self.db.commit()

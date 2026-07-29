@@ -32,6 +32,8 @@ _ALLOWED_NOTIFICATION_METADATA_KEYS = {
     "template_key",
 }
 
+_MISSING_PROVIDER_MESSAGE_ID_ERROR = "whatsapp_provider_message_id_missing"
+
 
 @dataclass
 class WhatsAppSendResult:
@@ -244,6 +246,7 @@ class WhatsAppMessageService:
         lead_id: str | None = None,
         contact_id: str | None = None,
     ) -> WhatsAppSendResult:
+        delivery: NotificationDelivery | None = None
         if notification_delivery_id:
             delivery = self.db.scalar(
                 select(NotificationDelivery).where(
@@ -334,6 +337,28 @@ class WhatsAppMessageService:
                 message=error_message,
             )
             return WhatsAppSendResult(status="failed", message=message, error_message=error_message)
+
+        if not provider_message_id:
+            # Meta answered successfully but did not return a usable message
+            # id: we cannot tell whether the send actually happened, so we
+            # must not claim "sent" and must not let the worker retry (that
+            # could double-send). Leave the message queued and park the
+            # delivery for a human to check manually.
+            self.db.commit()
+            self.db.refresh(message)
+            if delivery is not None:
+                delivery.status = "manual_review"
+                delivery.error_message = _MISSING_PROVIDER_MESSAGE_ID_ERROR
+                delivery.next_attempt_at = None
+                delivery.claim_token = None
+                delivery.claimed_at = None
+                delivery.claim_expires_at = None
+                self.db.add(delivery)
+                self.db.commit()
+                self.db.refresh(delivery)
+            return WhatsAppSendResult(
+                status="manual_review", message=message, error_message=_MISSING_PROVIDER_MESSAGE_ID_ERROR
+            )
 
         message.provider_message_id = provider_message_id
         message.status = "sent"

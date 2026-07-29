@@ -11,6 +11,18 @@ from app.services.whatsapp_client import sanitize_whatsapp_error
 _ACCEPTED_STATUSES = {"sent", "delivered", "read", "failed"}
 _STATUS_RANK = {"sent": 1, "delivered": 2, "read": 3}
 
+# A `failed` webhook must never overwrite a confirmed outcome or interfere
+# with a delivery currently owned by a different (newer) execution.
+_FAILED_WEBHOOK_PROTECTED_STATUSES = {
+    "sent",
+    "delivered",
+    "read",
+    "skipped",
+    "cancelled",
+    "dead_letter",
+    "processing",
+}
+
 
 class NotificationDeliveryStatusService:
     def __init__(self, db: Session) -> None:
@@ -53,6 +65,8 @@ class NotificationDeliveryStatusService:
             return None
 
         if status == "failed":
+            if delivery.status in _FAILED_WEBHOOK_PROTECTED_STATUSES:
+                return delivery
             delivery.status = "failed"
             delivery.failed_at = occurred_at
             delivery.error_message = sanitize_whatsapp_error(error_message) if error_message else delivery.error_message

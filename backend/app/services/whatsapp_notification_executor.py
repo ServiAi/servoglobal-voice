@@ -22,6 +22,7 @@ from app.services.whatsapp_template_service import WhatsAppTemplateService
 
 _RESCHEDULE_SUPERSEDABLE_TYPES = {"booking.created", "booking.rescheduled"}
 _RESCHEDULE_EVENT_TYPES = {"booking.cancelled", "booking.rescheduled"}
+_STALE_CLAIM_RANK = {"sent": 1, "delivered": 2, "read": 3}
 
 
 class WhatsAppNotificationExecutionError(RuntimeError):
@@ -206,7 +207,47 @@ class WhatsAppNotificationExecutor:
                 code="whatsapp_send_precondition_failed",
             )
 
+        if result.status == "manual_review":
+            # send_template_notification already parked the delivery in
+            # manual_review itself (Meta answered but gave no usable message
+            # id) — just report what happened, no further mutation here.
+            delivery = self._load_delivery(tenant_id=tenant_id, delivery_id=delivery_id)
+            return WhatsAppNotificationExecutionResult(
+                delivery=delivery,
+                message=result.message,
+                outcome="manual_review",
+                error_code="whatsapp_provider_message_id_missing",
+                retryable=False,
+            )
+
+        return self._finalize_after_send(
+            tenant_id=tenant_id,
+            delivery_id=delivery_id,
+            claim_token=claim_token,
+            current_time=current_time,
+            result=result,
+        )
+
+    # ------------------------------------------------------------------
+    # Post-Meta finalization — the HTTP call may have taken long enough for
+    # the lease to expire and a different execution to take over, so the
+    # outcome is only written back if this call still owns the claim.
+    # ------------------------------------------------------------------
+    def _finalize_after_send(
+        self,
+        *,
+        tenant_id: str,
+        delivery_id: str,
+        claim_token: str,
+        current_time: datetime,
+        result,
+    ) -> WhatsAppNotificationExecutionResult:
         delivery = self._load_delivery(tenant_id=tenant_id, delivery_id=delivery_id)
+        owns_claim = delivery.status == "processing" and delivery.claim_token == claim_token
+
+        if not owns_claim:
+            return self._reconcile_stale_claim(tenant_id=tenant_id, delivery_id=delivery_id, result=result)
+
         metadata_json = dict(delivery.metadata_json or {})
         if result.message is not None:
             metadata_json["crm_whatsapp_message_id"] = result.message.id
@@ -241,6 +282,53 @@ class WhatsAppNotificationExecutor:
             outcome="failed",
             error_code="whatsapp_provider_send_failed",
             retryable=True,
+        )
+
+    def _reconcile_stale_claim(
+        self, *, tenant_id: str, delivery_id: str, result
+    ) -> WhatsAppNotificationExecutionResult:
+        delivery = self._load_delivery(tenant_id=tenant_id, delivery_id=delivery_id)
+
+        if delivery.status in FINAL_NON_RETRYABLE_STATUSES:
+            return WhatsAppNotificationExecutionResult(
+                delivery=delivery, message=result.message, outcome="stale_claim_ignored"
+            )
+
+        message = self.db.scalar(
+            select(CrmWhatsAppMessage)
+            .where(
+                CrmWhatsAppMessage.tenant_id == tenant_id,
+                CrmWhatsAppMessage.notification_delivery_id == delivery_id,
+            )
+            .order_by(CrmWhatsAppMessage.created_at.desc(), CrmWhatsAppMessage.id.desc())
+        )
+        if message is None or not message.provider_message_id or message.status not in _STALE_CLAIM_RANK:
+            return WhatsAppNotificationExecutionResult(
+                delivery=delivery, message=result.message, outcome="stale_claim_ignored"
+            )
+
+        current_rank = _STALE_CLAIM_RANK.get(delivery.status, 0)
+        new_rank = _STALE_CLAIM_RANK[message.status]
+        if new_rank < current_rank:
+            return WhatsAppNotificationExecutionResult(
+                delivery=delivery, message=result.message, outcome="stale_claim_ignored"
+            )
+
+        delivery.status = message.status
+        delivery.provider_message_id = message.provider_message_id
+        if message.status in ("sent", "delivered", "read"):
+            delivery.sent_at = delivery.sent_at or message.sent_at
+        if message.status in ("delivered", "read"):
+            delivery.delivered_at = delivery.delivered_at or message.delivered_at
+        if message.status == "read":
+            delivery.read_at = delivery.read_at or message.read_at
+        delivery.next_attempt_at = None
+        delivery.error_message = None
+        self.db.add(delivery)
+        self.db.commit()
+        self.db.refresh(delivery)
+        return WhatsAppNotificationExecutionResult(
+            delivery=delivery, message=message, outcome="stale_claim_reconciled"
         )
 
     # ------------------------------------------------------------------
