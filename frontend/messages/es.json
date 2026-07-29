@@ -840,6 +840,7 @@
             "recipient_group_key_required": "Este campo requiere un grupo o ruta de destinatario.",
             "recipient_group_key_invalid_path": "La ruta del campo de destinatario no es válida.",
             "condition_invalid": "Alguna condición no es válida.",
+            "condition_numeric_value_required": "Las condiciones de comparación (mayor que, menor que, etc.) requieren un valor numérico.",
             "variable_spec_invalid": "Alguna variable de plantilla no es válida.",
             "relative_to_booking_requires_booking_event": "La programación relativa solo aplica a eventos de reserva.",
             "whatsapp_template_not_approved": "La plantilla seleccionada no está aprobada por Meta para tu organización.",

@@ -32,6 +32,7 @@ from app.domain.notification_variables import (
     NotificationVariableConfigurationError,
     NotificationVariableFormat,
     NotificationVariableSource,
+    NotificationVariableSpec,
     validate_variable_mapping,
 )
 from app.models.integrations import TenantWhatsAppTemplate
@@ -53,6 +54,14 @@ _DEFAULT_PAGE_SIZE = 25
 _MAX_PAGE_SIZE = 100
 _FIXED_CHANNEL = "whatsapp"
 _FIXED_ACTION_TYPE = "send_whatsapp_template"
+_NUMERIC_COMPARISON_OPERATORS = frozenset(
+    {
+        NotificationConditionOperator.GREATER_THAN,
+        NotificationConditionOperator.GREATER_THAN_OR_EQUAL,
+        NotificationConditionOperator.LESS_THAN,
+        NotificationConditionOperator.LESS_THAN_OR_EQUAL,
+    }
+)
 
 
 class NotificationAdminError(ValueError):
@@ -286,21 +295,47 @@ class NotificationAdminService:
 
     def _validate_rule_or_raise(self, rule: TenantNotificationRule) -> None:
         try:
-            validate_notification_rule(rule)
+            conditions = validate_notification_rule(rule)
         except NotificationRuleConfigurationError as exc:
             raise NotificationAdminError(code=exc.code, kind="unprocessable") from None
+        self._validate_numeric_conditions_or_raise(conditions)
         try:
-            validate_variable_mapping(rule.variable_mapping_json)
+            validated_mapping = validate_variable_mapping(rule.variable_mapping_json)
         except NotificationVariableConfigurationError as exc:
             raise NotificationAdminError(code=exc.code, kind="unprocessable") from None
         self._validate_template_or_raise(
             tenant_id=rule.tenant_id,
             template_key=rule.template_key,
-            variable_mapping_json=rule.variable_mapping_json,
+            variable_mapping=validated_mapping,
         )
 
+    @staticmethod
+    def _validate_numeric_conditions_or_raise(conditions: list) -> None:
+        for condition in conditions:
+            if condition.operator not in _NUMERIC_COMPARISON_OPERATORS:
+                continue
+            value = condition.value
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                raise NotificationAdminError(code="condition_numeric_value_required", kind="unprocessable")
+
+    @staticmethod
+    def _is_effective_variable_mapping(spec: Optional[NotificationVariableSpec]) -> bool:
+        if spec is None:
+            return False
+        if spec.source == NotificationVariableSource.LITERAL:
+            return spec.value is not None and spec.value != ""
+        if spec.source == NotificationVariableSource.EVENT_FIELD:
+            if not spec.path:
+                return False
+            return bool(spec.required) or spec.default is not None
+        return False
+
     def _validate_template_or_raise(
-        self, *, tenant_id: str, template_key: Optional[str], variable_mapping_json: dict
+        self,
+        *,
+        tenant_id: str,
+        template_key: Optional[str],
+        variable_mapping: dict[str, NotificationVariableSpec],
     ) -> None:
         template = self.db.scalar(
             select(TenantWhatsAppTemplate).where(
@@ -322,7 +357,9 @@ class NotificationAdminService:
         except ValueError:
             raise NotificationAdminError(code="template_variables_malformed", kind="unprocessable") from None
 
-        missing = [key for key in required_keys if key not in (variable_mapping_json or {})]
+        missing = [
+            key for key in required_keys if not self._is_effective_variable_mapping(variable_mapping.get(key))
+        ]
         if missing:
             raise NotificationAdminError(code="template_variable_mapping_missing", kind="unprocessable")
 

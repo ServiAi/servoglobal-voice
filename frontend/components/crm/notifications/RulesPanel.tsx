@@ -30,6 +30,12 @@ type Props = {
 
 const LIST_OPERATORS = new Set(['in', 'not_in']);
 const NO_VALUE_OPERATORS = new Set(['exists', 'not_exists', 'not_empty']);
+const NUMERIC_OPERATORS = new Set([
+  'greater_than',
+  'greater_than_or_equal',
+  'less_than',
+  'less_than_or_equal',
+]);
 const KNOWN_RULE_ERROR_CODES = new Set([
   'duplicate_name',
   'unsupported_event_type',
@@ -38,6 +44,7 @@ const KNOWN_RULE_ERROR_CODES = new Set([
   'recipient_group_key_required',
   'recipient_group_key_invalid_path',
   'condition_invalid',
+  'condition_numeric_value_required',
   'variable_spec_invalid',
   'relative_to_booking_requires_booking_event',
   'whatsapp_template_not_approved',
@@ -389,13 +396,19 @@ function RuleFormDialog({
   const isMappingSatisfied = (spec: NotificationVariableSpec | undefined): boolean => {
     if (!spec) return false;
     if (spec.source === 'literal') {
-      return Boolean(spec.value !== undefined && spec.value !== null && spec.value !== '') || Boolean(spec.default);
+      return spec.value !== undefined && spec.value !== null && spec.value !== '';
     }
-    return Boolean(spec.path) || Boolean(spec.default);
+    return Boolean(spec.path) && (spec.required !== false || (spec.default !== undefined && spec.default !== null));
   };
 
   const missingRequiredParameters = requiredParameters.filter(
     (param) => !isMappingSatisfied(form.variable_mapping_json?.[param.key])
+  );
+
+  const hasInvalidNumericCondition = conditions.some(
+    (condition) =>
+      NUMERIC_OPERATORS.has(condition.operator) &&
+      (typeof condition.value !== 'number' || !Number.isFinite(condition.value))
   );
 
   const selectTemplate = (templateKey: string) => {
@@ -625,11 +638,19 @@ function RuleFormDialog({
             </p>
           )}
 
+          {hasInvalidNumericCondition && (
+            <p className="text-xs text-destructive">{t('errors.condition_numeric_value_required')}</p>
+          )}
+
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>
               {t('cancel')}
             </Button>
-            <Button type="submit" disabled={busy || missingRequiredParameters.length > 0} className="gap-2">
+            <Button
+              type="submit"
+              disabled={busy || missingRequiredParameters.length > 0 || hasInvalidNumericCondition}
+              className="gap-2"
+            >
               {busy && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
               {t('save')}
             </Button>
@@ -655,6 +676,24 @@ function ConditionsBuilder({
     onChange(conditions.map((condition, i) => (i === index ? { ...condition, ...patch } : condition)));
   };
 
+  const changeOperator = (index: number, operator: NotificationConditionOperator) => {
+    onChange(
+      conditions.map((condition, i) => {
+        if (i !== index) return condition;
+        if (NO_VALUE_OPERATORS.has(operator)) {
+          const next: NotificationCondition = { ...condition, operator };
+          delete next.value;
+          return next;
+        }
+        if (NUMERIC_OPERATORS.has(operator)) {
+          const numeric = typeof condition.value === 'number' ? condition.value : Number(condition.value);
+          return { ...condition, operator, value: Number.isFinite(numeric) ? numeric : undefined };
+        }
+        return { ...condition, operator };
+      })
+    );
+  };
+
   return (
     <fieldset className="space-y-2 border-t border-border pt-4">
       <legend className="text-sm font-medium text-foreground">{t('conditions')}</legend>
@@ -671,7 +710,7 @@ function ConditionsBuilder({
             aria-label="operator"
             className="rounded-md border border-border bg-background px-2 py-1.5 text-sm"
             value={condition.operator}
-            onChange={(event) => update(index, { operator: event.target.value as NotificationConditionOperator })}
+            onChange={(event) => changeOperator(index, event.target.value as NotificationConditionOperator)}
           >
             {operators.map((operator) => (
               <option key={operator} value={operator}>
@@ -679,7 +718,18 @@ function ConditionsBuilder({
               </option>
             ))}
           </select>
-          {!NO_VALUE_OPERATORS.has(condition.operator) && (
+          {NO_VALUE_OPERATORS.has(condition.operator) ? null : NUMERIC_OPERATORS.has(condition.operator) ? (
+            <input
+              aria-label="value"
+              type="number"
+              className="rounded-md border border-border bg-background px-2 py-1.5 text-sm"
+              value={typeof condition.value === 'number' && Number.isFinite(condition.value) ? condition.value : ''}
+              onChange={(event) => {
+                const raw = event.target.value;
+                update(index, { value: raw === '' ? undefined : Number(raw) });
+              }}
+            />
+          ) : (
             <input
               aria-label="value"
               className="rounded-md border border-border bg-background px-2 py-1.5 text-sm"

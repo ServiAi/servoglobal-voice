@@ -97,6 +97,34 @@ test.describe('Automatizaciones y notificaciones', () => {
     await expect(templateField.locator('option')).not.toHaveCount(0);
   });
 
+  test('las condiciones de comparación numérica usan un input numérico', async ({ page }) => {
+    await page.goto(PATH, { waitUntil: 'networkidle' });
+    await page.getByRole('tab', { name: /Reglas/i }).click();
+    const newRuleButton = page.getByRole('button', { name: /Nueva regla/i });
+    const canCreate = await newRuleButton.isVisible().catch(() => false);
+    test.skip(!canCreate, 'No hay plantillas aprobadas o permisos de escritura en este entorno de QA.');
+
+    await newRuleButton.click();
+    await page.getByRole('button', { name: /Agregar condición/i }).click();
+
+    const operatorSelect = page.locator('select[aria-label="operator"]').first();
+    const valueInput = page.locator('input[aria-label="value"]').first();
+
+    await operatorSelect.selectOption('greater_than');
+    await expect(valueInput).toHaveAttribute('type', 'number');
+
+    await valueInput.fill('60');
+    await expect(valueInput).toHaveValue('60');
+
+    // Cambiar a un operador textual conserva el input, pero deja de ser numérico.
+    await operatorSelect.selectOption('equals');
+    await expect(valueInput).not.toHaveAttribute('type', 'number');
+
+    // Cambiar a un operador sin valor lo elimina del formulario.
+    await operatorSelect.selectOption('exists');
+    await expect(page.locator('input[aria-label="value"]')).toHaveCount(0);
+  });
+
   test('aplicar filtros de entregas no genera errores', async ({ page }) => {
     await page.goto(PATH, { waitUntil: 'networkidle' });
     await page.getByRole('tab', { name: /Entregas/i }).click();

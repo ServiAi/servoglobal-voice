@@ -840,6 +840,7 @@
             "recipient_group_key_required": "This strategy requires a recipient group or path.",
             "recipient_group_key_invalid_path": "The recipient field path is not valid.",
             "condition_invalid": "One of the conditions is not valid.",
+            "condition_numeric_value_required": "Comparison conditions (greater than, less than, etc.) require a numeric value.",
             "variable_spec_invalid": "One of the template variables is not valid.",
             "relative_to_booking_requires_booking_event": "Relative scheduling only applies to booking events.",
             "whatsapp_template_not_approved": "The selected template is not approved by Meta for your organization.",

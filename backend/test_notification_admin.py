@@ -535,6 +535,118 @@ class NotificationAdminTests(unittest.TestCase):
         listing = self.client.get(f"{_BASE}/recipients")
         self.assertNotIn("metadata_json", listing.text)
 
+    # ------------------------------------------------------ numeric conditions (3)
+    def test_numeric_condition_with_string_value_returns_422(self):
+        self._as("tenant_admin")
+        response = self.client.post(
+            f"{_BASE}/rules",
+            json={
+                **_VALID_RULE_PAYLOAD,
+                "conditions_json": [{"field": "booking.party_size", "operator": "greater_than", "value": "60"}],
+            },
+        )
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.json()["detail"], "condition_numeric_value_required")
+
+    def test_numeric_condition_with_number_value_is_valid(self):
+        rule = self._create_rule(
+            conditions_json=[{"field": "booking.party_size", "operator": "greater_than", "value": 60}],
+        )
+        self.assertIsNone(rule["configuration_error"])
+
+    def test_numeric_condition_with_boolean_value_returns_422(self):
+        self._as("tenant_admin")
+        response = self.client.post(
+            f"{_BASE}/rules",
+            json={
+                **_VALID_RULE_PAYLOAD,
+                "conditions_json": [{"field": "booking.party_size", "operator": "greater_than", "value": True}],
+            },
+        )
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.json()["detail"], "condition_numeric_value_required")
+
+    # ----------------------------------------------- effective meta parameters (9)
+    def test_literal_required_without_value_returns_422(self):
+        self._as("tenant_admin")
+        response = self.client.post(
+            f"{_BASE}/rules",
+            json={**_VALID_RULE_PAYLOAD, "variable_mapping_json": {"1": {"source": "literal", "required": False}}},
+        )
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.json()["detail"], "template_variable_mapping_missing")
+
+    def test_literal_with_empty_string_returns_422(self):
+        self._as("tenant_admin")
+        response = self.client.post(
+            f"{_BASE}/rules",
+            json={
+                **_VALID_RULE_PAYLOAD,
+                "variable_mapping_json": {"1": {"source": "literal", "value": "", "required": False}},
+            },
+        )
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.json()["detail"], "template_variable_mapping_missing")
+
+    def test_literal_with_zero_value_is_valid(self):
+        rule = self._create_rule(variable_mapping_json={"1": {"source": "literal", "value": 0}})
+        self.assertIsNone(rule["configuration_error"])
+
+    def test_literal_with_false_value_is_valid(self):
+        rule = self._create_rule(variable_mapping_json={"1": {"source": "literal", "value": False}})
+        self.assertIsNone(rule["configuration_error"])
+
+    def test_event_field_without_path_returns_422(self):
+        self._as("tenant_admin")
+        response = self.client.post(
+            f"{_BASE}/rules",
+            json={**_VALID_RULE_PAYLOAD, "variable_mapping_json": {"1": {"source": "event_field"}}},
+        )
+        self.assertEqual(response.status_code, 422)
+
+    def test_event_field_optional_without_default_returns_422(self):
+        self._as("tenant_admin")
+        response = self.client.post(
+            f"{_BASE}/rules",
+            json={
+                **_VALID_RULE_PAYLOAD,
+                "variable_mapping_json": {
+                    "1": {"source": "event_field", "path": "booking.status", "required": False}
+                },
+            },
+        )
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.json()["detail"], "template_variable_mapping_missing")
+
+    def test_event_field_required_with_path_is_valid(self):
+        rule = self._create_rule(
+            variable_mapping_json={"1": {"source": "event_field", "path": "booking.status", "required": True}}
+        )
+        self.assertIsNone(rule["configuration_error"])
+
+    def test_event_field_optional_with_default_is_valid(self):
+        rule = self._create_rule(
+            variable_mapping_json={
+                "1": {"source": "event_field", "path": "booking.status", "required": False, "default": "pendiente"}
+            }
+        )
+        self.assertIsNone(rule["configuration_error"])
+
+    def test_cannot_enable_rule_with_ineffective_meta_parameter(self):
+        rule = self._create_rule(enabled=False)
+        with SessionLocal() as db:
+            db_rule = db.get(TenantNotificationRule, rule["id"])
+            db_rule.variable_mapping_json = {"1": {"source": "literal", "value": ""}}
+            db.commit()
+        self._as("tenant_admin")
+        response = self.client.patch(f"{_BASE}/rules/{rule['id']}/enabled", json={"enabled": True})
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.json()["detail"], "template_variable_mapping_missing")
+        listing = self.client.get(f"{_BASE}/rules").json()
+        stored = next(item for item in listing if item["id"] == rule["id"])
+        self.assertFalse(stored["enabled"])
+        self.assertIsNotNone(stored["configuration_error"])
+
     # ------------------------------------------------------------- recipients (6)
     def test_create_recipient(self):
         recipient = self._create_recipient()
