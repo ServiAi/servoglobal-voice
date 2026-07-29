@@ -698,6 +698,7 @@
       "performance": "Rendimiento",
       "voiceMetrics": "Métricas de voz",
       "integrations": "Integraciones",
+      "notifications": "Automatizaciones",
       "leadDetail": "Detalle del lead",
       "pipeline": "Pipeline"
     },
@@ -737,6 +738,200 @@
       "configured": "Configurada",
       "error": "Requiere atención",
       "notConfigured": "Sin configurar"
+    },
+    "notifications": {
+      "title": "Automatizaciones y notificaciones",
+      "description": "Configura cuándo, cómo y a quién se envían las notificaciones de tu organización.",
+      "loadError": "No fue posible cargar toda la información de automatizaciones. Puedes revisar las secciones disponibles o recargar la página.",
+      "newRule": "Nueva regla",
+      "tabs": {
+        "overview": "Resumen",
+        "rules": "Reglas",
+        "recipients": "Destinatarios",
+        "deliveries": "Entregas"
+      },
+      "overview": {
+        "capabilitiesActive": "Capacidades activas",
+        "rulesActive": "Reglas activas",
+        "recipientsActive": "Destinatarios activos",
+        "pending": "Pendientes",
+        "needsAttention": "Requieren atención",
+        "capabilitiesTitle": "Capacidades",
+        "capabilityKeys": {
+          "booking_notifications": "Notificaciones de reservas",
+          "call_notifications": "Notificaciones de llamadas"
+        },
+        "capabilityState": {
+          "active": "Activo",
+          "inactive": "Inactivo",
+          "saving": "Guardando…",
+          "error": "Error al guardar"
+        }
+      },
+      "rules": {
+        "empty": "Todavía no hay reglas configuradas.",
+        "emptyAction": "Crea tu primera regla para automatizar notificaciones.",
+        "columns": {
+          "name": "Nombre",
+          "event": "Evento",
+          "template": "Plantilla",
+          "recipient": "Destinatario",
+          "schedule": "Programación",
+          "priority": "Prioridad",
+          "status": "Estado",
+          "actions": "Acciones"
+        },
+        "status": {
+          "active": "Activa",
+          "inactive": "Inactiva",
+          "invalid": "Configuración inválida"
+        },
+        "actions": {
+          "edit": "Editar",
+          "activate": "Activar",
+          "deactivate": "Desactivar"
+        },
+        "form": {
+          "createTitle": "Nueva regla",
+          "editTitle": "Editar regla",
+          "name": "Nombre",
+          "capability": "Capacidad",
+          "event": "Evento",
+          "template": "Plantilla WhatsApp",
+          "recipientStrategy": "Estrategia de destinatario",
+          "recipientGroup": "Grupo o ruta del destinatario",
+          "scheduleMode": "Momento del envío",
+          "scheduleOffset": "Desplazamiento en minutos",
+          "priority": "Prioridad",
+          "enabled": "Regla activa",
+          "conditions": "Condiciones",
+          "addCondition": "Agregar condición",
+          "removeCondition": "Quitar",
+          "variables": "Variables de plantilla",
+          "addVariable": "Agregar variable",
+          "removeVariable": "Quitar",
+          "save": "Guardar",
+          "cancel": "Cancelar",
+          "strategies": {
+            "event_customer": "Cliente del evento",
+            "configured_group": "Grupo configurado",
+            "event_field": "Campo del evento"
+          },
+          "scheduleModes": {
+            "immediate": "Inmediatamente",
+            "relative_to_booking": "Relativo a la reserva"
+          },
+          "scheduleHint": "Ejemplos: -1440 = 24 horas antes, -120 = 2 horas antes, -60 = 1 hora antes, -30 = 30 minutos antes.",
+          "errors": {
+            "duplicate_name": "Ya existe una regla con este nombre.",
+            "unsupported_event_type": "El evento seleccionado no es válido.",
+            "unsupported_capability_key": "La capacidad seleccionada no es válida.",
+            "unsupported_recipient_strategy": "La estrategia de destinatario no es válida.",
+            "recipient_group_key_required": "Este campo requiere un grupo o ruta de destinatario.",
+            "recipient_group_key_invalid_path": "La ruta del campo de destinatario no es válida.",
+            "condition_invalid": "Alguna condición no es válida.",
+            "variable_spec_invalid": "Alguna variable de plantilla no es válida.",
+            "relative_to_booking_requires_booking_event": "La programación relativa solo aplica a eventos de reserva.",
+            "generic": "No fue posible guardar la regla."
+          }
+        }
+      },
+      "recipients": {
+        "empty": "Todavía no hay destinatarios configurados.",
+        "new": "Nuevo destinatario",
+        "columns": {
+          "name": "Nombre",
+          "group": "Grupo",
+          "channel": "Canal",
+          "destination": "Destino",
+          "status": "Estado",
+          "actions": "Acciones"
+        },
+        "status": {
+          "active": "Activo",
+          "inactive": "Inactivo"
+        },
+        "actions": {
+          "edit": "Editar",
+          "activate": "Activar",
+          "deactivate": "Desactivar"
+        },
+        "form": {
+          "createTitle": "Nuevo destinatario",
+          "editTitle": "Editar destinatario",
+          "name": "Nombre",
+          "group": "Clave de grupo",
+          "destination": "Número WhatsApp",
+          "status": "Estado",
+          "save": "Guardar",
+          "cancel": "Cancelar",
+          "errors": {
+            "duplicate_recipient": "Ya existe un destinatario con este grupo, canal y número.",
+            "invalid_destination": "El número de WhatsApp no es válido.",
+            "generic": "No fue posible guardar el destinatario."
+          }
+        }
+      },
+      "deliveries": {
+        "empty": "No hay entregas para los filtros seleccionados.",
+        "columns": {
+          "date": "Fecha",
+          "rule": "Regla",
+          "event": "Evento",
+          "recipient": "Destinatario",
+          "scheduledFor": "Programada para",
+          "attempts": "Intentos",
+          "status": "Estado"
+        },
+        "filters": {
+          "status": "Estado",
+          "eventType": "Tipo de evento",
+          "rule": "Regla",
+          "dateFrom": "Desde",
+          "dateTo": "Hasta",
+          "allStatuses": "Todos los estados",
+          "allEvents": "Todos los eventos",
+          "allRules": "Todas las reglas"
+        },
+        "status": {
+          "pending": "Pendiente",
+          "processing": "Procesando",
+          "sent": "Enviado",
+          "delivered": "Entregado",
+          "read": "Leído",
+          "failed": "Fallido",
+          "skipped": "Omitido",
+          "cancelled": "Cancelado",
+          "dead_letter": "Agotado",
+          "manual_review": "Revisión manual"
+        },
+        "detail": {
+          "title": "Detalle de la entrega",
+          "status": "Estado",
+          "rule": "Regla",
+          "event": "Evento",
+          "template": "Plantilla",
+          "recipient": "Destinatario",
+          "scheduledFor": "Fecha programada",
+          "attempts": "Intentos",
+          "timeline": "Línea de tiempo",
+          "errorCode": "Código de error",
+          "providerMessageId": "Identificador de proveedor",
+          "close": "Cerrar",
+          "timelineEvents": {
+            "created": "Creada",
+            "sent": "Enviada",
+            "delivered": "Entregada",
+            "read": "Leída",
+            "failed": "Falló"
+          }
+        }
+      },
+      "common": {
+        "close": "Cerrar",
+        "loading": "Cargando…",
+        "required": "Obligatorio"
+      }
     }
   }
 }

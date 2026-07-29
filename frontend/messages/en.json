@@ -698,6 +698,7 @@
       "performance": "Performance",
       "voiceMetrics": "Voice metrics",
       "integrations": "Integrations",
+      "notifications": "Automations",
       "leadDetail": "Lead details",
       "pipeline": "Pipeline"
     },
@@ -737,6 +738,200 @@
       "configured": "Configured",
       "error": "Needs attention",
       "notConfigured": "Not configured"
+    },
+    "notifications": {
+      "title": "Automations and notifications",
+      "description": "Configure when, how and to whom your organization's notifications are sent.",
+      "loadError": "Some automation data could not be loaded. You can review the available sections or reload the page.",
+      "newRule": "New rule",
+      "tabs": {
+        "overview": "Overview",
+        "rules": "Rules",
+        "recipients": "Recipients",
+        "deliveries": "Deliveries"
+      },
+      "overview": {
+        "capabilitiesActive": "Active capabilities",
+        "rulesActive": "Active rules",
+        "recipientsActive": "Active recipients",
+        "pending": "Pending",
+        "needsAttention": "Needs attention",
+        "capabilitiesTitle": "Capabilities",
+        "capabilityKeys": {
+          "booking_notifications": "Booking notifications",
+          "call_notifications": "Call notifications"
+        },
+        "capabilityState": {
+          "active": "Active",
+          "inactive": "Inactive",
+          "saving": "Saving…",
+          "error": "Save failed"
+        }
+      },
+      "rules": {
+        "empty": "No rules configured yet.",
+        "emptyAction": "Create your first rule to automate notifications.",
+        "columns": {
+          "name": "Name",
+          "event": "Event",
+          "template": "Template",
+          "recipient": "Recipient",
+          "schedule": "Schedule",
+          "priority": "Priority",
+          "status": "Status",
+          "actions": "Actions"
+        },
+        "status": {
+          "active": "Active",
+          "inactive": "Inactive",
+          "invalid": "Invalid configuration"
+        },
+        "actions": {
+          "edit": "Edit",
+          "activate": "Activate",
+          "deactivate": "Deactivate"
+        },
+        "form": {
+          "createTitle": "New rule",
+          "editTitle": "Edit rule",
+          "name": "Name",
+          "capability": "Capability",
+          "event": "Event",
+          "template": "WhatsApp template",
+          "recipientStrategy": "Recipient strategy",
+          "recipientGroup": "Recipient group or path",
+          "scheduleMode": "Send timing",
+          "scheduleOffset": "Offset in minutes",
+          "priority": "Priority",
+          "enabled": "Rule enabled",
+          "conditions": "Conditions",
+          "addCondition": "Add condition",
+          "removeCondition": "Remove",
+          "variables": "Template variables",
+          "addVariable": "Add variable",
+          "removeVariable": "Remove",
+          "save": "Save",
+          "cancel": "Cancel",
+          "strategies": {
+            "event_customer": "Event customer",
+            "configured_group": "Configured group",
+            "event_field": "Event field"
+          },
+          "scheduleModes": {
+            "immediate": "Immediately",
+            "relative_to_booking": "Relative to booking"
+          },
+          "scheduleHint": "Examples: -1440 = 24 hours before, -120 = 2 hours before, -60 = 1 hour before, -30 = 30 minutes before.",
+          "errors": {
+            "duplicate_name": "A rule with this name already exists.",
+            "unsupported_event_type": "The selected event is not valid.",
+            "unsupported_capability_key": "The selected capability is not valid.",
+            "unsupported_recipient_strategy": "The recipient strategy is not valid.",
+            "recipient_group_key_required": "This strategy requires a recipient group or path.",
+            "recipient_group_key_invalid_path": "The recipient field path is not valid.",
+            "condition_invalid": "One of the conditions is not valid.",
+            "variable_spec_invalid": "One of the template variables is not valid.",
+            "relative_to_booking_requires_booking_event": "Relative scheduling only applies to booking events.",
+            "generic": "The rule could not be saved."
+          }
+        }
+      },
+      "recipients": {
+        "empty": "No recipients configured yet.",
+        "new": "New recipient",
+        "columns": {
+          "name": "Name",
+          "group": "Group",
+          "channel": "Channel",
+          "destination": "Destination",
+          "status": "Status",
+          "actions": "Actions"
+        },
+        "status": {
+          "active": "Active",
+          "inactive": "Inactive"
+        },
+        "actions": {
+          "edit": "Edit",
+          "activate": "Activate",
+          "deactivate": "Deactivate"
+        },
+        "form": {
+          "createTitle": "New recipient",
+          "editTitle": "Edit recipient",
+          "name": "Name",
+          "group": "Group key",
+          "destination": "WhatsApp number",
+          "status": "Status",
+          "save": "Save",
+          "cancel": "Cancel",
+          "errors": {
+            "duplicate_recipient": "A recipient with this group, channel and number already exists.",
+            "invalid_destination": "The WhatsApp number is not valid.",
+            "generic": "The recipient could not be saved."
+          }
+        }
+      },
+      "deliveries": {
+        "empty": "No deliveries match the selected filters.",
+        "columns": {
+          "date": "Date",
+          "rule": "Rule",
+          "event": "Event",
+          "recipient": "Recipient",
+          "scheduledFor": "Scheduled for",
+          "attempts": "Attempts",
+          "status": "Status"
+        },
+        "filters": {
+          "status": "Status",
+          "eventType": "Event type",
+          "rule": "Rule",
+          "dateFrom": "From",
+          "dateTo": "To",
+          "allStatuses": "All statuses",
+          "allEvents": "All events",
+          "allRules": "All rules"
+        },
+        "status": {
+          "pending": "Pending",
+          "processing": "Processing",
+          "sent": "Sent",
+          "delivered": "Delivered",
+          "read": "Read",
+          "failed": "Failed",
+          "skipped": "Skipped",
+          "cancelled": "Cancelled",
+          "dead_letter": "Exhausted",
+          "manual_review": "Manual review"
+        },
+        "detail": {
+          "title": "Delivery detail",
+          "status": "Status",
+          "rule": "Rule",
+          "event": "Event",
+          "template": "Template",
+          "recipient": "Recipient",
+          "scheduledFor": "Scheduled date",
+          "attempts": "Attempts",
+          "timeline": "Timeline",
+          "errorCode": "Error code",
+          "providerMessageId": "Provider message id",
+          "close": "Close",
+          "timelineEvents": {
+            "created": "Created",
+            "sent": "Sent",
+            "delivered": "Delivered",
+            "read": "Read",
+            "failed": "Failed"
+          }
+        }
+      },
+      "common": {
+        "close": "Close",
+        "loading": "Loading…",
+        "required": "Required"
+      }
     }
   }
 }

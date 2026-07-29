@@ -1,0 +1,312 @@
+'use client';
+
+import { useState } from 'react';
+import { useTranslations } from 'next-intl';
+import { Loader2 } from 'lucide-react';
+
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { fetchNotificationDeliveries } from '@/lib/api/notification-admin';
+import type {
+  NotificationCatalogResponse,
+  NotificationDeliveryItem,
+  NotificationDeliveryListResponse,
+  NotificationDeliveryStatus,
+  NotificationRuleItem,
+} from '@/types/notifications';
+import { NotificationStatusBadge } from './NotificationStatusBadge';
+
+const STATUSES: NotificationDeliveryStatus[] = [
+  'pending',
+  'processing',
+  'sent',
+  'delivered',
+  'read',
+  'failed',
+  'skipped',
+  'cancelled',
+  'dead_letter',
+  'manual_review',
+];
+
+type Props = {
+  accessToken: string;
+  initialDeliveries: NotificationDeliveryListResponse | null;
+  rules: NotificationRuleItem[];
+  catalog: NotificationCatalogResponse | null;
+};
+
+export function DeliveriesPanel({ accessToken, initialDeliveries, rules, catalog }: Props) {
+  const t = useTranslations('crm.notifications.deliveries');
+  const [listing, setListing] = useState(initialDeliveries);
+  const [loading, setLoading] = useState(false);
+  const [selected, setSelected] = useState<NotificationDeliveryItem | null>(null);
+  const [filters, setFilters] = useState({
+    status_filter: '',
+    event_type: '',
+    rule_id: '',
+    date_from: '',
+    date_to: '',
+  });
+
+  const applyFilters = async (nextFilters: typeof filters, page = 1) => {
+    setLoading(true);
+    const result = await fetchNotificationDeliveries(accessToken, {
+      page,
+      page_size: listing?.page_size ?? 25,
+      status_filter: nextFilters.status_filter || undefined,
+      event_type: nextFilters.event_type || undefined,
+      rule_id: nextFilters.rule_id || undefined,
+      date_from: nextFilters.date_from ? new Date(nextFilters.date_from).toISOString() : undefined,
+      date_to: nextFilters.date_to ? new Date(nextFilters.date_to).toISOString() : undefined,
+    });
+    setLoading(false);
+    if (result.ok) setListing(result.data);
+  };
+
+  const updateFilter = (key: keyof typeof filters, value: string) => {
+    const next = { ...filters, [key]: value };
+    setFilters(next);
+    applyFilters(next);
+  };
+
+  const changePage = (page: number) => applyFilters(filters, page);
+
+  const items = listing?.items ?? [];
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <label className="space-y-1 text-sm">
+          <span className="text-xs text-muted-foreground">{t('filters.status')}</span>
+          <select
+            className="w-full rounded-md border border-border bg-background px-3 py-2"
+            value={filters.status_filter}
+            onChange={(event) => updateFilter('status_filter', event.target.value)}
+          >
+            <option value="">{t('filters.allStatuses')}</option>
+            {STATUSES.map((status) => (
+              <option key={status} value={status}>
+                {status}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="space-y-1 text-sm">
+          <span className="text-xs text-muted-foreground">{t('filters.eventType')}</span>
+          <select
+            className="w-full rounded-md border border-border bg-background px-3 py-2"
+            value={filters.event_type}
+            onChange={(event) => updateFilter('event_type', event.target.value)}
+          >
+            <option value="">{t('filters.allEvents')}</option>
+            {catalog?.event_types.map((event) => (
+              <option key={event} value={event}>
+                {event}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="space-y-1 text-sm">
+          <span className="text-xs text-muted-foreground">{t('filters.rule')}</span>
+          <select
+            className="w-full rounded-md border border-border bg-background px-3 py-2"
+            value={filters.rule_id}
+            onChange={(event) => updateFilter('rule_id', event.target.value)}
+          >
+            <option value="">{t('filters.allRules')}</option>
+            {rules.map((rule) => (
+              <option key={rule.id} value={rule.id}>
+                {rule.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="space-y-1 text-sm">
+          <span className="text-xs text-muted-foreground">{t('filters.dateFrom')}</span>
+          <input
+            type="date"
+            className="w-full rounded-md border border-border bg-background px-3 py-2"
+            value={filters.date_from}
+            onChange={(event) => updateFilter('date_from', event.target.value)}
+          />
+        </label>
+        <label className="space-y-1 text-sm">
+          <span className="text-xs text-muted-foreground">{t('filters.dateTo')}</span>
+          <input
+            type="date"
+            className="w-full rounded-md border border-border bg-background px-3 py-2"
+            value={filters.date_to}
+            onChange={(event) => updateFilter('date_to', event.target.value)}
+          />
+        </label>
+      </div>
+
+      {loading && (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+          {t('loading') || '...'}
+        </div>
+      )}
+
+      {!loading && items.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
+          {t('empty')}
+        </div>
+      ) : (
+        <>
+          <div className="hidden overflow-x-auto rounded-xl border border-border md:block">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-muted/40 text-xs uppercase tracking-wide text-muted-foreground">
+                <tr>
+                  <th className="px-4 py-3 font-medium">{t('columns.date')}</th>
+                  <th className="px-4 py-3 font-medium">{t('columns.rule')}</th>
+                  <th className="px-4 py-3 font-medium">{t('columns.event')}</th>
+                  <th className="px-4 py-3 font-medium">{t('columns.recipient')}</th>
+                  <th className="px-4 py-3 font-medium">{t('columns.scheduledFor')}</th>
+                  <th className="px-4 py-3 font-medium">{t('columns.attempts')}</th>
+                  <th className="px-4 py-3 font-medium">{t('columns.status')}</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {items.map((item) => (
+                  <tr
+                    key={item.id}
+                    tabIndex={0}
+                    role="button"
+                    onClick={() => setSelected(item)}
+                    onKeyDown={(event) => (event.key === 'Enter' || event.key === ' ') && setSelected(item)}
+                    className="cursor-pointer hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <td className="px-4 py-3 text-muted-foreground">{new Date(item.created_at).toLocaleString()}</td>
+                    <td className="px-4 py-3 text-foreground">{item.rule_name ?? '—'}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{item.event_type ?? '—'}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{item.recipient_masked}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{new Date(item.scheduled_for).toLocaleString()}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{item.attempts}</td>
+                    <td className="px-4 py-3">
+                      <NotificationStatusBadge status={item.status} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <ul className="flex flex-col gap-3 md:hidden">
+            {items.map((item) => (
+              <li key={item.id}>
+                <button
+                  type="button"
+                  onClick={() => setSelected(item)}
+                  className="w-full rounded-xl border border-border bg-card p-4 text-left shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="font-medium text-foreground">{item.rule_name ?? '—'}</p>
+                    <NotificationStatusBadge status={item.status} />
+                  </div>
+                  <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                    <dt>{t('columns.recipient')}</dt>
+                    <dd className="text-right">{item.recipient_masked}</dd>
+                    <dt>{t('columns.scheduledFor')}</dt>
+                    <dd className="text-right">{new Date(item.scheduled_for).toLocaleString()}</dd>
+                  </dl>
+                </button>
+              </li>
+            ))}
+          </ul>
+
+          {listing && listing.pages > 1 && (
+            <div className="flex items-center justify-between text-sm text-muted-foreground">
+              <span>
+                {listing.page} / {listing.pages}
+              </span>
+              <div className="flex gap-2">
+                <Button type="button" variant="outline" size="sm" disabled={listing.page <= 1} onClick={() => changePage(listing.page - 1)}>
+                  ‹
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={listing.page >= listing.pages}
+                  onClick={() => changePage(listing.page + 1)}
+                >
+                  ›
+                </Button>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {selected && <DeliveryDetailDialog delivery={selected} onClose={() => setSelected(null)} />}
+    </div>
+  );
+}
+
+function DeliveryDetailDialog({ delivery, onClose }: { delivery: NotificationDeliveryItem; onClose: () => void }) {
+  const t = useTranslations('crm.notifications.deliveries.detail');
+
+  const timeline = [
+    { key: 'created', at: delivery.created_at },
+    { key: 'sent', at: delivery.sent_at },
+    { key: 'delivered', at: delivery.delivered_at },
+    { key: 'read', at: delivery.read_at },
+    { key: 'failed', at: delivery.failed_at },
+  ].filter((entry) => entry.at) as { key: string; at: string }[];
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>{t('title')}</DialogTitle>
+        </DialogHeader>
+        <dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-sm">
+          <dt className="text-muted-foreground">{t('status')}</dt>
+          <dd>
+            <NotificationStatusBadge status={delivery.status} />
+          </dd>
+          <dt className="text-muted-foreground">{t('rule')}</dt>
+          <dd className="text-foreground">{delivery.rule_name ?? '—'}</dd>
+          <dt className="text-muted-foreground">{t('event')}</dt>
+          <dd className="text-foreground">{delivery.event_type ?? '—'}</dd>
+          <dt className="text-muted-foreground">{t('template')}</dt>
+          <dd className="text-foreground">{delivery.template_key ?? '—'}</dd>
+          <dt className="text-muted-foreground">{t('recipient')}</dt>
+          <dd className="text-foreground">{delivery.recipient_masked}</dd>
+          <dt className="text-muted-foreground">{t('scheduledFor')}</dt>
+          <dd className="text-foreground">{new Date(delivery.scheduled_for).toLocaleString()}</dd>
+          <dt className="text-muted-foreground">{t('attempts')}</dt>
+          <dd className="text-foreground">{delivery.attempts}</dd>
+          {delivery.provider_message_id && (
+            <>
+              <dt className="text-muted-foreground">{t('providerMessageId')}</dt>
+              <dd className="break-all text-foreground">{delivery.provider_message_id}</dd>
+            </>
+          )}
+          {delivery.error_code && (
+            <>
+              <dt className="text-muted-foreground">{t('errorCode')}</dt>
+              <dd className="text-destructive">{delivery.error_code}</dd>
+            </>
+          )}
+        </dl>
+
+        {timeline.length > 0 && (
+          <div className="space-y-2 border-t border-border pt-4">
+            <p className="text-sm font-medium text-foreground">{t('timeline')}</p>
+            <ol className="space-y-1.5 text-sm text-muted-foreground">
+              {timeline.map((entry) => (
+                <li key={entry.key} className="flex items-center justify-between gap-3">
+                  <span>{t(`timelineEvents.${entry.key}`)}</span>
+                  <span>{new Date(entry.at).toLocaleString()}</span>
+                </li>
+              ))}
+            </ol>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}

@@ -36,7 +36,7 @@ export default defineConfig({
     { name: 'auth', testMatch: /auth\.setup\.ts/, use: { viewport: { width: 1440, height: 1024 } } },
     {
       name: 'crm-visual',
-      testMatch: /crm-visual\.spec\.ts/,
+      testMatch: /(crm-visual|crm-notifications)\.spec\.ts/,
       use: { storageState: 'playwright/.auth/user.json', viewport: { width: 1440, height: 1024 } },
     },
   ],

@@ -1,7 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 
-const routes = ['crm', 'crm/dashboard', 'crm/leads', 'crm/tasks', 'crm/settings/integrations', 'dashboard'];
+const routes = ['crm', 'crm/dashboard', 'crm/leads', 'crm/tasks', 'crm/settings/integrations', 'crm/settings/notifications', 'dashboard'];
 const locales = ['es', 'en'] as const;
 const themes = ['light', 'dark'] as const;
 const viewports = [

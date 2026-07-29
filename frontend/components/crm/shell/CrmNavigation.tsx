@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   BarChart3,
+  BellRing,
   CheckSquare2,
   Gauge,
   Settings,
@@ -31,6 +32,7 @@ const GROUPS = [
     label: 'configuration',
     links: [
       { label: 'integrations', path: '/crm/settings/integrations', icon: Settings },
+      { label: 'notifications', path: '/crm/settings/notifications', icon: BellRing },
     ],
   },
 ] as const;

@@ -88,7 +88,7 @@ async function requestIntegrationEndpoint<T>(
   return requestBackendEndpoint<T>(method, 'integrations', endpoint, accessToken, queryParams, body);
 }
 
-async function requestBackendEndpoint<T>(
+export async function requestBackendEndpoint<T>(
   method: 'GET' | 'POST' | 'PATCH' | 'DELETE',
   resource: 'crm' | 'integrations' | 'admin' | 'forms',
   endpoint: string,
