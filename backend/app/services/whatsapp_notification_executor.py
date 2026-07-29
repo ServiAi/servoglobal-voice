@@ -23,6 +23,7 @@ from app.services.whatsapp_template_service import WhatsAppTemplateService
 _RESCHEDULE_SUPERSEDABLE_TYPES = {"booking.created", "booking.rescheduled"}
 _RESCHEDULE_EVENT_TYPES = {"booking.cancelled", "booking.rescheduled"}
 _STALE_CLAIM_RANK = {"sent": 1, "delivered": 2, "read": 3}
+_MANUAL_REVIEW_ERROR_CODE = "whatsapp_provider_message_id_missing"
 
 
 class WhatsAppNotificationExecutionError(RuntimeError):
@@ -139,7 +140,7 @@ class WhatsAppNotificationExecutor:
         try:
             event, rule = self._load_related(tenant_id=tenant_id, delivery=delivery)
         except WhatsAppNotificationExecutionError as exc:
-            self._fail_claimed(tenant_id=tenant_id, delivery_id=delivery_id, now=current_time, code=exc.code)
+            return self._pre_send_failure(tenant_id=tenant_id, delivery_id=delivery_id, claim_token=claim_token, code=exc.code)
 
         cancelled = self._check_cancellation(tenant_id=tenant_id, delivery=delivery, event=event)
         if cancelled is not None:
@@ -165,12 +166,12 @@ class WhatsAppNotificationExecutor:
                 )
             lead_id, contact_id = self._resolve_crm_link(tenant_id=tenant_id, event=event)
         except NotificationVariableConfigurationError as exc:
-            self._fail_claimed(tenant_id=tenant_id, delivery_id=delivery_id, now=current_time, code=exc.code)
+            return self._pre_send_failure(tenant_id=tenant_id, delivery_id=delivery_id, claim_token=claim_token, code=exc.code)
         except NotificationVariableMappingError as exc:
-            self._fail_claimed(tenant_id=tenant_id, delivery_id=delivery_id, now=current_time, code=exc.code)
+            return self._pre_send_failure(tenant_id=tenant_id, delivery_id=delivery_id, claim_token=claim_token, code=exc.code)
         except ValueError:
-            self._fail_claimed(
-                tenant_id=tenant_id, delivery_id=delivery_id, now=current_time, code="template_configuration_invalid"
+            return self._pre_send_failure(
+                tenant_id=tenant_id, delivery_id=delivery_id, claim_token=claim_token, code="template_configuration_invalid"
             )
 
         # Refresh immediately before calling Meta and re-check everything.
@@ -200,24 +201,16 @@ class WhatsAppNotificationExecutor:
                 contact_id=contact_id,
             )
         except ValueError:
-            self._fail_claimed(
+            return self._pre_send_failure(
                 tenant_id=tenant_id,
                 delivery_id=delivery_id,
-                now=current_time,
+                claim_token=claim_token,
                 code="whatsapp_send_precondition_failed",
             )
 
         if result.status == "manual_review":
-            # send_template_notification already parked the delivery in
-            # manual_review itself (Meta answered but gave no usable message
-            # id) — just report what happened, no further mutation here.
-            delivery = self._load_delivery(tenant_id=tenant_id, delivery_id=delivery_id)
-            return WhatsAppNotificationExecutionResult(
-                delivery=delivery,
-                message=result.message,
-                outcome="manual_review",
-                error_code="whatsapp_provider_message_id_missing",
-                retryable=False,
+            return self._finalize_manual_review(
+                tenant_id=tenant_id, delivery_id=delivery_id, claim_token=claim_token, result=result
             )
 
         return self._finalize_after_send(
@@ -242,18 +235,20 @@ class WhatsAppNotificationExecutor:
         current_time: datetime,
         result,
     ) -> WhatsAppNotificationExecutionResult:
-        delivery = self._load_delivery(tenant_id=tenant_id, delivery_id=delivery_id)
-        owns_claim = delivery.status == "processing" and delivery.claim_token == claim_token
+        # Single atomic unit: lock the row, decide, write, commit -- all
+        # inside one transaction so no other writer can interleave between
+        # "check the claim" and "save the state".
+        delivery = self._load_delivery_for_update(tenant_id=tenant_id, delivery_id=delivery_id)
+        owns_claim = delivery is not None and delivery.status == "processing" and delivery.claim_token == claim_token
 
         if not owns_claim:
-            return self._reconcile_stale_claim(tenant_id=tenant_id, delivery_id=delivery_id, result=result)
-
-        metadata_json = dict(delivery.metadata_json or {})
-        if result.message is not None:
-            metadata_json["crm_whatsapp_message_id"] = result.message.id
-        delivery.metadata_json = metadata_json
+            return self._reconcile_stale_claim(tenant_id=tenant_id, delivery=delivery, result=result)
 
         if result.status == "sent":
+            metadata_json = dict(delivery.metadata_json or {})
+            if result.message is not None:
+                metadata_json["crm_whatsapp_message_id"] = result.message.id
+            delivery.metadata_json = metadata_json
             delivery.status = "sent"
             delivery.provider_message_id = result.provider_message_id
             delivery.sent_at = current_time
@@ -267,9 +262,31 @@ class WhatsAppNotificationExecutor:
             self.db.refresh(delivery)
             return WhatsAppNotificationExecutionResult(delivery=delivery, message=result.message, outcome="sent")
 
-        delivery.status = "failed"
-        delivery.failed_at = current_time
-        delivery.error_message = "whatsapp_provider_send_failed"
+        # Provider failure: never finalize here. The retry policy (applied by
+        # the caller with its own claim-token guard, right after this call
+        # returns) decides retry/dead_letter and clears the claim -- a
+        # single writer instead of two competing ones. If the process dies
+        # before that happens, recovery reconciles it once the lease expires.
+        return WhatsAppNotificationExecutionResult(
+            delivery=delivery,
+            message=result.message,
+            outcome="failed",
+            error_code="whatsapp_provider_send_failed",
+            retryable=True,
+        )
+
+    def _finalize_manual_review(
+        self, *, tenant_id: str, delivery_id: str, claim_token: str, result
+    ) -> WhatsAppNotificationExecutionResult:
+        delivery = self._load_delivery_for_update(tenant_id=tenant_id, delivery_id=delivery_id)
+        owns_claim = delivery is not None and delivery.status == "processing" and delivery.claim_token == claim_token
+
+        if not owns_claim:
+            return self._reconcile_stale_claim(tenant_id=tenant_id, delivery=delivery, result=result)
+
+        delivery.status = "manual_review"
+        delivery.error_message = _MANUAL_REVIEW_ERROR_CODE
+        delivery.next_attempt_at = None
         delivery.claim_token = None
         delivery.claimed_at = None
         delivery.claim_expires_at = None
@@ -279,15 +296,18 @@ class WhatsAppNotificationExecutor:
         return WhatsAppNotificationExecutionResult(
             delivery=delivery,
             message=result.message,
-            outcome="failed",
-            error_code="whatsapp_provider_send_failed",
-            retryable=True,
+            outcome="manual_review",
+            error_code=_MANUAL_REVIEW_ERROR_CODE,
+            retryable=False,
         )
 
     def _reconcile_stale_claim(
-        self, *, tenant_id: str, delivery_id: str, result
+        self, *, tenant_id: str, delivery: NotificationDelivery | None, result
     ) -> WhatsAppNotificationExecutionResult:
-        delivery = self._load_delivery(tenant_id=tenant_id, delivery_id=delivery_id)
+        if delivery is None:
+            raise WhatsAppNotificationExecutionError(
+                tenant_id=tenant_id, delivery_id="unknown", code="delivery_not_found"
+            )
 
         if delivery.status in FINAL_NON_RETRYABLE_STATUSES:
             return WhatsAppNotificationExecutionResult(
@@ -298,7 +318,7 @@ class WhatsAppNotificationExecutor:
             select(CrmWhatsAppMessage)
             .where(
                 CrmWhatsAppMessage.tenant_id == tenant_id,
-                CrmWhatsAppMessage.notification_delivery_id == delivery_id,
+                CrmWhatsAppMessage.notification_delivery_id == delivery.id,
             )
             .order_by(CrmWhatsAppMessage.created_at.desc(), CrmWhatsAppMessage.id.desc())
         )
@@ -314,6 +334,10 @@ class WhatsAppNotificationExecutor:
                 delivery=delivery, message=result.message, outcome="stale_claim_ignored"
             )
 
+        # Promote the confirmed outcome, but never touch claim_token /
+        # claimed_at / claim_expires_at: those belong to whichever execution
+        # currently owns them, and clearing them here without an explicit
+        # decision could let two writers race for the same claim.
         delivery.status = message.status
         delivery.provider_message_id = message.provider_message_id
         if message.status in ("sent", "delivered", "read"):
@@ -392,25 +416,31 @@ class WhatsAppNotificationExecutor:
         return WhatsAppNotificationExecutionResult(delivery=delivery, message=None, outcome="cancelled")
 
     # ------------------------------------------------------------------
-    # Failure helper — always raises after leaving the delivery in a safe,
-    # unclaimed `failed` state.
+    # Pre-send failure helper — a configuration/mapping error was hit before
+    # any HTTP call to Meta was made. Unlike a provider failure, there is
+    # nothing ambiguous to protect against, but finalizing (failed/dead_letter,
+    # clearing the claim) is still the retry policy's job alone: this only
+    # reports the outcome so the caller can apply it atomically right after.
     # ------------------------------------------------------------------
-    def _fail_claimed(self, *, tenant_id: str, delivery_id: str, now: datetime, code: str) -> None:
+    def _pre_send_failure(
+        self, *, tenant_id: str, delivery_id: str, claim_token: str, code: str
+    ) -> WhatsAppNotificationExecutionResult:
         self.db.rollback()
-        delivery = self._load_delivery(tenant_id=tenant_id, delivery_id=delivery_id)
-        delivery.status = "failed"
-        delivery.failed_at = now
-        delivery.error_message = code
-        # No provider call was made for these pre-send failures, so there is
-        # no ambiguous in-flight send to protect against — release the claim
-        # immediately instead of waiting out the lease window.
-        delivery.next_attempt_at = None
-        delivery.claim_token = None
-        delivery.claimed_at = None
-        delivery.claim_expires_at = None
-        self.db.add(delivery)
-        self.db.commit()
-        raise WhatsAppNotificationExecutionError(tenant_id=tenant_id, delivery_id=delivery_id, code=code)
+        delivery = self._load_delivery_for_update(tenant_id=tenant_id, delivery_id=delivery_id)
+        if delivery is None:
+            raise WhatsAppNotificationExecutionError(
+                tenant_id=tenant_id, delivery_id=delivery_id, code="delivery_not_found"
+            )
+
+        owns_claim = delivery.status == "processing" and delivery.claim_token == claim_token
+        if not owns_claim:
+            return WhatsAppNotificationExecutionResult(
+                delivery=delivery, message=None, outcome="stale_claim_ignored"
+            )
+
+        return WhatsAppNotificationExecutionResult(
+            delivery=delivery, message=None, outcome="failed", error_code=code, retryable=False
+        )
 
     def _assert_claim_owner(
         self, *, tenant_id: str, delivery: NotificationDelivery, claim_token: str
@@ -435,6 +465,16 @@ class WhatsAppNotificationExecutor:
                 tenant_id=tenant_id, delivery_id=delivery_id, code="delivery_not_found"
             )
         return delivery
+
+    def _load_delivery_for_update(self, *, tenant_id: str, delivery_id: str) -> NotificationDelivery | None:
+        return self.db.scalar(
+            select(NotificationDelivery)
+            .where(
+                NotificationDelivery.tenant_id == tenant_id,
+                NotificationDelivery.id == delivery_id,
+            )
+            .with_for_update()
+        )
 
     def _load_related(
         self, *, tenant_id: str, delivery: NotificationDelivery

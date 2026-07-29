@@ -246,15 +246,19 @@ class WhatsAppMessageService:
         lead_id: str | None = None,
         contact_id: str | None = None,
     ) -> WhatsAppSendResult:
-        delivery: NotificationDelivery | None = None
+        # This method only creates the CrmWhatsAppMessage, calls the provider,
+        # and reports the outcome. It must never mutate NotificationDelivery
+        # (status/claim_token/claimed_at/claim_expires_at/next_attempt_at):
+        # finalizing the delivery is WhatsAppNotificationExecutor's job,
+        # since only it knows and can validate the current claim token.
         if notification_delivery_id:
-            delivery = self.db.scalar(
-                select(NotificationDelivery).where(
+            delivery_exists = self.db.scalar(
+                select(NotificationDelivery.id).where(
                     NotificationDelivery.tenant_id == tenant_id,
                     NotificationDelivery.id == notification_delivery_id,
                 )
             )
-            if delivery is None:
+            if delivery_exists is None:
                 raise ValueError("Notification delivery not found for tenant")
 
         config, client_config = self.configs.get_active_client_config(tenant_id)
@@ -340,22 +344,11 @@ class WhatsAppMessageService:
 
         if not provider_message_id:
             # Meta answered successfully but did not return a usable message
-            # id: we cannot tell whether the send actually happened, so we
-            # must not claim "sent" and must not let the worker retry (that
-            # could double-send). Leave the message queued and park the
-            # delivery for a human to check manually.
+            # id: we cannot tell whether the send actually happened, so the
+            # message stays queued and we report manual_review. The caller
+            # (executor) decides what that means for the delivery.
             self.db.commit()
             self.db.refresh(message)
-            if delivery is not None:
-                delivery.status = "manual_review"
-                delivery.error_message = _MISSING_PROVIDER_MESSAGE_ID_ERROR
-                delivery.next_attempt_at = None
-                delivery.claim_token = None
-                delivery.claimed_at = None
-                delivery.claim_expires_at = None
-                self.db.add(delivery)
-                self.db.commit()
-                self.db.refresh(delivery)
             return WhatsAppSendResult(
                 status="manual_review", message=message, error_message=_MISSING_PROVIDER_MESSAGE_ID_ERROR
             )

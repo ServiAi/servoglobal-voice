@@ -170,6 +170,12 @@ def run_cycle(
             elif result.outcome in ("stale_claim_reconciled", "stale_claim_ignored"):
                 pass
             elif result.outcome == "failed":
+                logger.error(
+                    "notification_worker_send_failed tenant_id=%s delivery_id=%s error_code=%s",
+                    claim.tenant_id,
+                    claim.delivery_id,
+                    result.error_code,
+                )
                 counters["failed"] += 1
                 decision = _make_retry_policy(db, worker_config).apply_failure(
                     tenant_id=claim.tenant_id,

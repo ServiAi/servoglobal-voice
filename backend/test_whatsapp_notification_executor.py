@@ -1,4 +1,5 @@
 import copy
+import inspect
 import os
 import unittest
 from datetime import datetime, timedelta, timezone
@@ -22,10 +23,12 @@ from app.models.integrations import TenantIntegrationEvent, TenantWhatsAppConfig
 from app.models.notifications import DomainEvent, NotificationDelivery, TenantNotificationRule
 from app.services.domain_event_service import DomainEventService
 from app.services.notification_delivery_claim_service import NotificationDeliveryClaimService
+from app.services.notification_retry_policy import NotificationRetryPolicy
 from app.services.notification_variable_mapper import NotificationVariableMapper
 from app.services.secret_manager_service import SecretManager
 from app.services.whatsapp_client import WhatsAppCloudClient, WhatsAppCloudClientError
 from app.services.whatsapp_message_service import WhatsAppMessageService
+from app.services import whatsapp_notification_executor as executor_module
 from app.services.whatsapp_notification_executor import (
     WhatsAppNotificationExecutionError,
     WhatsAppNotificationExecutor,
@@ -529,11 +532,15 @@ class WhatsAppNotificationExecutorTests(_BaseExecutorTestCase):
         ctx_a = self._seed_happy_path()
         ctx_b = self._seed_happy_path()
         delivery = self._create_delivery(ctx_a["tenant_id"], ctx_b["event"], ctx_b["rule"], scheduled_for=PAST_SCHEDULE)
-        with self.assertRaises(WhatsAppNotificationExecutionError) as cm:
-            WhatsAppNotificationExecutor(self.db, client=_FakeWhatsAppClient()).execute(
-                tenant_id=ctx_a["tenant_id"], delivery_id=delivery.id, now=FIXED_NOW
-            )
-        self.assertEqual(cm.exception.code, "delivery_related_records_missing")
+        result = WhatsAppNotificationExecutor(self.db, client=_FakeWhatsAppClient()).execute(
+            tenant_id=ctx_a["tenant_id"], delivery_id=delivery.id, now=FIXED_NOW
+        )
+        self.assertEqual(result.outcome, "failed")
+        self.assertEqual(result.error_code, "delivery_related_records_missing")
+        self.assertFalse(result.retryable)
+        # A pre-send configuration error never finalizes the delivery itself:
+        # it stays claimed so the caller's retry policy can dead-letter it.
+        self.assertEqual(result.delivery.status, "processing")
 
     def test_creates_crm_whatsapp_message(self):
         ctx = self._seed_happy_path()
@@ -590,14 +597,21 @@ class WhatsAppNotificationExecutorTests(_BaseExecutorTestCase):
         self.assertEqual(result.outcome, "sent")
         self.assertIsNone(result.message.lead_id)
 
-    def test_meta_error_leaves_both_failed(self):
+    def test_meta_error_leaves_delivery_claimed_for_the_retry_policy(self):
+        # The executor never finalizes a provider failure itself: it leaves
+        # the delivery processing/claimed and reports outcome="failed" so the
+        # caller can apply NotificationRetryPolicy.apply_failure atomically
+        # right after, with its own claim-token guard.
         ctx = self._seed_happy_path()
         client = _FakeWhatsAppClient(fail=True, error_message="Simulated Meta failure")
         result = WhatsAppNotificationExecutor(self.db, client=client).execute(
             tenant_id=ctx["tenant_id"], delivery_id=ctx["delivery"].id, now=FIXED_NOW
         )
         self.assertEqual(result.outcome, "failed")
-        self.assertEqual(result.delivery.status, "failed")
+        self.assertEqual(result.error_code, "whatsapp_provider_send_failed")
+        self.assertTrue(result.retryable)
+        self.assertEqual(result.delivery.status, "processing")
+        self.assertIsNotNone(result.delivery.claim_token)
         self.assertEqual(result.message.status, "failed")
 
     def test_error_is_sanitized(self):
@@ -608,7 +622,7 @@ class WhatsAppNotificationExecutorTests(_BaseExecutorTestCase):
         result = WhatsAppNotificationExecutor(self.db, client=client).execute(
             tenant_id=ctx["tenant_id"], delivery_id=ctx["delivery"].id, now=FIXED_NOW
         )
-        self.assertNotIn("abcdefghijklmnopqrstuvwx0123456789", result.delivery.error_message)
+        self.assertNotIn("abcdefghijklmnopqrstuvwx0123456789", result.message.error_message)
 
     def test_error_does_not_contain_phone(self):
         ctx = self._seed_happy_path()
@@ -616,66 +630,89 @@ class WhatsAppNotificationExecutorTests(_BaseExecutorTestCase):
         result = WhatsAppNotificationExecutor(self.db, client=client).execute(
             tenant_id=ctx["tenant_id"], delivery_id=ctx["delivery"].id, now=FIXED_NOW
         )
-        self.assertNotIn("573001112233", result.delivery.error_message)
+        self.assertNotIn("573001112233", result.message.error_message)
 
-    def test_missing_variable_leaves_delivery_failed(self):
+    def test_missing_variable_leaves_delivery_claimed_and_not_retryable(self):
         ctx = self._seed_happy_path()
         ctx["event"].payload_json = {**ctx["event"].payload_json, "custom": {}}
         self.db.add(ctx["event"])
         self.db.commit()
         client = _FakeWhatsAppClient()
-        with self.assertRaises(WhatsAppNotificationExecutionError) as cm:
-            WhatsAppNotificationExecutor(self.db, client=client).execute(
-                tenant_id=ctx["tenant_id"], delivery_id=ctx["delivery"].id, now=FIXED_NOW
-            )
-        self.assertEqual(cm.exception.code, "required_field_missing")
+        result = WhatsAppNotificationExecutor(self.db, client=client).execute(
+            tenant_id=ctx["tenant_id"], delivery_id=ctx["delivery"].id, now=FIXED_NOW
+        )
+        self.assertEqual(result.outcome, "failed")
+        self.assertEqual(result.error_code, "required_field_missing")
+        self.assertFalse(result.retryable)
         self.assertEqual(client.send_calls, 0)
         self.db.refresh(ctx["delivery"])
-        self.assertEqual(ctx["delivery"].status, "failed")
+        self.assertEqual(ctx["delivery"].status, "processing")
 
-    def test_invalid_template_leaves_delivery_failed(self):
+    def test_invalid_template_leaves_delivery_claimed_and_not_retryable(self):
         ctx = self._seed_happy_path()
         ctx["template"].status = "inactive"
         self.db.add(ctx["template"])
         self.db.commit()
-        with self.assertRaises(WhatsAppNotificationExecutionError) as cm:
-            WhatsAppNotificationExecutor(self.db, client=_FakeWhatsAppClient()).execute(
-                tenant_id=ctx["tenant_id"], delivery_id=ctx["delivery"].id, now=FIXED_NOW
-            )
-        self.assertEqual(cm.exception.code, "template_configuration_invalid")
+        result = WhatsAppNotificationExecutor(self.db, client=_FakeWhatsAppClient()).execute(
+            tenant_id=ctx["tenant_id"], delivery_id=ctx["delivery"].id, now=FIXED_NOW
+        )
+        self.assertEqual(result.outcome, "failed")
+        self.assertEqual(result.error_code, "template_configuration_invalid")
+        self.assertFalse(result.retryable)
         self.db.refresh(ctx["delivery"])
-        self.assertEqual(ctx["delivery"].status, "failed")
+        self.assertEqual(ctx["delivery"].status, "processing")
 
     def test_session_usable_after_failure(self):
         ctx = self._seed_happy_path()
         ctx["template"].status = "inactive"
         self.db.add(ctx["template"])
         self.db.commit()
-        with self.assertRaises(WhatsAppNotificationExecutionError):
-            WhatsAppNotificationExecutor(self.db, client=_FakeWhatsAppClient()).execute(
-                tenant_id=ctx["tenant_id"], delivery_id=ctx["delivery"].id, now=FIXED_NOW
-            )
+        result = WhatsAppNotificationExecutor(self.db, client=_FakeWhatsAppClient()).execute(
+            tenant_id=ctx["tenant_id"], delivery_id=ctx["delivery"].id, now=FIXED_NOW
+        )
+        self.assertEqual(result.outcome, "failed")
         other_tenant_id = self._create_tenant("post-failure-tenant")
         self.assertIsNotNone(other_tenant_id)
 
-    def test_reexecuting_failed_delivery_increments_attempts(self):
+    def test_reexecuting_after_retry_policy_applied_increments_attempts(self):
+        # Simulates the real pipeline: the executor reports a non-retryable
+        # pre-send failure (never finalizing anything itself), then the
+        # caller applies the retry policy immediately after -- exactly what
+        # the worker does in notification_worker.run_cycle.
         ctx = self._seed_happy_path()
         ctx["template"].status = "inactive"
         self.db.add(ctx["template"])
         self.db.commit()
         executor = WhatsAppNotificationExecutor(self.db, client=_FakeWhatsAppClient())
-        with self.assertRaises(WhatsAppNotificationExecutionError):
-            executor.execute(tenant_id=ctx["tenant_id"], delivery_id=ctx["delivery"].id, now=FIXED_NOW)
+        result = executor.execute(tenant_id=ctx["tenant_id"], delivery_id=ctx["delivery"].id, now=FIXED_NOW)
+        self.assertEqual(result.outcome, "failed")
+        self.assertFalse(result.retryable)
         self.db.refresh(ctx["delivery"])
         self.assertEqual(ctx["delivery"].attempts, 1)
-        self.assertEqual(ctx["delivery"].status, "failed")
+        self.assertEqual(ctx["delivery"].status, "processing")
+        claim_token = ctx["delivery"].claim_token
+        self.assertIsNotNone(claim_token)
 
-        ctx["template"].status = "active"
-        self.db.add(ctx["template"])
-        self.db.commit()
-        result = executor.execute(tenant_id=ctx["tenant_id"], delivery_id=ctx["delivery"].id, now=FIXED_NOW)
-        self.assertEqual(result.outcome, "sent")
-        self.assertEqual(result.delivery.attempts, 2)
+        policy = NotificationRetryPolicy(
+            self.db, base_retry_seconds=1, max_retry_seconds=60, jitter_seconds=0, jitter_fn=lambda: 0
+        )
+        decision = policy.apply_failure(
+            tenant_id=ctx["tenant_id"],
+            delivery_id=ctx["delivery"].id,
+            now=FIXED_NOW,
+            error_code=result.error_code,
+            retryable=result.retryable,
+            max_attempts=5,
+            expected_claim_token=claim_token,
+            allowed_current_statuses={"processing", "failed"},
+        )
+        self.assertEqual(decision.action, "dead_letter")
+        self.db.refresh(ctx["delivery"])
+        # template_configuration_invalid is a non-retryable error code, so the
+        # retry policy dead-letters it immediately -- it must never come back
+        # as a plain "failed" that could be reclaimed and retried forever.
+        self.assertEqual(ctx["delivery"].status, "dead_letter")
+        self.assertIsNone(ctx["delivery"].claim_token)
 
     def test_does_not_create_new_delivery(self):
         ctx = self._seed_happy_path()
@@ -1295,6 +1332,62 @@ class WhatsAppExecuteClaimedTests(_BaseExecutorTestCase):
         self.db.refresh(ctx["delivery"])
         self.assertEqual(ctx["delivery"].status, "read")
 
+    def test_recovery_that_wins_first_is_not_degraded_by_a_late_finalize(self):
+        # Recovery decided this delivery needs a real retry (no CRM evidence
+        # of success yet from *its* point of view) before our own (stale)
+        # executor gets around to finalizing its failed send. Our stale
+        # finalize must leave recovery's decision (status/backoff) alone.
+        ctx = self._seed_happy_path()
+        claim = self._claim(ctx["tenant_id"], ctx["delivery"].id)
+        client = _FakeWhatsAppClient(fail=True, error_message="Simulated Meta failure")
+        executor = WhatsAppNotificationExecutor(self.db, client=client)
+        real_send = executor._message_service.send_template_notification
+
+        def wrapped(*args, **kwargs):
+            result = real_send(*args, **kwargs)
+            # Simulate recovery already having applied the retry policy: the
+            # claim is cleared and a fresh backoff window is scheduled.
+            delivery = (
+                self.db.query(NotificationDelivery).filter(NotificationDelivery.id == ctx["delivery"].id).one()
+            )
+            delivery.status = "failed"
+            delivery.claim_token = None
+            delivery.claimed_at = None
+            delivery.claim_expires_at = None
+            delivery.next_attempt_at = FIXED_NOW + timedelta(seconds=30)
+            delivery.error_message = "whatsapp_provider_send_failed"
+            self.db.add(delivery)
+            self.db.commit()
+            return result
+
+        executor._message_service.send_template_notification = wrapped
+        result = executor.execute_claimed(
+            tenant_id=ctx["tenant_id"], delivery_id=ctx["delivery"].id, claim_token=claim.claim_token, now=FIXED_NOW
+        )
+        self.assertEqual(result.outcome, "stale_claim_ignored")
+        self.db.refresh(ctx["delivery"])
+        self.assertEqual(ctx["delivery"].status, "failed")
+        self.assertIsNotNone(ctx["delivery"].next_attempt_at)
+        self.assertIsNone(ctx["delivery"].claim_token)
+
+    def test_load_delivery_for_update_uses_a_row_lock(self):
+        source = inspect.getsource(executor_module.WhatsAppNotificationExecutor._load_delivery_for_update)
+        self.assertIn("with_for_update", source)
+
+    def test_finalization_helpers_lock_the_row_before_deciding(self):
+        # Structural guard for the atomicity requirement: the finalization
+        # helpers must reload the delivery with FOR UPDATE before deciding
+        # anything, so no other writer can interleave between the claim
+        # check and the write. Real concurrent proof lives in the
+        # PostgreSQL suite (test_notification_worker_postgres.py).
+        for method in (
+            executor_module.WhatsAppNotificationExecutor._finalize_after_send,
+            executor_module.WhatsAppNotificationExecutor._finalize_manual_review,
+            executor_module.WhatsAppNotificationExecutor._pre_send_failure,
+        ):
+            source = inspect.getsource(method)
+            self.assertIn("_load_delivery_for_update", source)
+
 
 # ---------------------------------------------------------------------------
 # Meta responds without a usable provider message id (Fix 5)
@@ -1368,6 +1461,46 @@ class WhatsAppMissingProviderMessageIdTests(_BaseExecutorTestCase):
 
     def test_no_second_send_attempt_is_made(self):
         _, client, _ = self._run({})
+        self.assertEqual(client.send_calls, 1)
+
+    def _run_with_stolen_claim(self, payload):
+        ctx = self._seed_happy_path()
+        claim = self._claim(ctx["tenant_id"], ctx["delivery"].id)
+        client = self._NoIdClient(payload)
+        executor = WhatsAppNotificationExecutor(self.db, client=client)
+        real_send = executor._message_service.send_template_notification
+
+        def wrapped(*args, **kwargs):
+            result = real_send(*args, **kwargs)
+            delivery = (
+                self.db.query(NotificationDelivery).filter(NotificationDelivery.id == ctx["delivery"].id).one()
+            )
+            delivery.status = "processing"
+            delivery.claim_token = "tok-new-owner"
+            self.db.add(delivery)
+            self.db.commit()
+            return result
+
+        executor._message_service.send_template_notification = wrapped
+        result = executor.execute_claimed(
+            tenant_id=ctx["tenant_id"], delivery_id=ctx["delivery"].id, claim_token=claim.claim_token, now=FIXED_NOW
+        )
+        return ctx, client, result
+
+    def test_lost_claim_does_not_modify_the_delivery(self):
+        ctx, _, result = self._run_with_stolen_claim({})
+        self.assertEqual(result.outcome, "stale_claim_ignored")
+        self.db.refresh(ctx["delivery"])
+        self.assertEqual(ctx["delivery"].status, "processing")
+        self.assertIsNone(ctx["delivery"].error_message)
+
+    def test_lost_claim_does_not_clear_the_new_token(self):
+        ctx, _, _ = self._run_with_stolen_claim({})
+        self.db.refresh(ctx["delivery"])
+        self.assertEqual(ctx["delivery"].claim_token, "tok-new-owner")
+
+    def test_lost_claim_does_not_trigger_a_second_send(self):
+        _, client, _ = self._run_with_stolen_claim({})
         self.assertEqual(client.send_calls, 1)
 
 

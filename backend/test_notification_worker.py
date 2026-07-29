@@ -260,6 +260,207 @@ class RunOnceTests(_BaseWorkerTestCase):
         self.assertEqual(delivery.error_message, "worker_claim_expired_before_send")
 
 
+class ProviderFailureBackoffTests(_BaseWorkerTestCase):
+    """The executor never finalizes a provider failure itself (Fix: preserve
+    notification claim through finalization) -- these confirm the worker's
+    immediate call to NotificationRetryPolicy.apply_failure right after is
+    what actually applies backoff, clears the claim, and dead-letters
+    permanent errors."""
+
+    def test_provider_failure_leaves_a_real_backoff_window(self):
+        _, delivery = self._seed_ready_delivery()
+        worker_module.run_cycle(
+            worker_config=self.worker_config,
+            session_factory=SessionLocal,
+            now_fn=lambda: FIXED_NOW,
+            client_factory=lambda: _FakeClient(fail=True),
+        )
+        self.db.refresh(delivery)
+        self.assertEqual(delivery.status, "failed")
+        self.assertIsNotNone(delivery.next_attempt_at)
+        stored = delivery.next_attempt_at
+        if stored.tzinfo is None:
+            stored = stored.replace(tzinfo=timezone.utc)
+        self.assertGreater(stored, FIXED_NOW)
+
+    def test_provider_failure_uses_the_configured_base_backoff(self):
+        _, delivery = self._seed_ready_delivery()
+        worker_module.run_cycle(
+            worker_config=self.worker_config,
+            session_factory=SessionLocal,
+            now_fn=lambda: FIXED_NOW,
+            client_factory=lambda: _FakeClient(fail=True),
+        )
+        self.db.refresh(delivery)
+        stored = delivery.next_attempt_at
+        if stored.tzinfo is None:
+            stored = stored.replace(tzinfo=timezone.utc)
+        expected_max = FIXED_NOW + timedelta(seconds=self.worker_config.base_retry_seconds + self.worker_config.jitter_seconds)
+        self.assertLessEqual(stored, expected_max)
+
+    def test_provider_failure_clears_the_claim_after_the_policy_runs(self):
+        _, delivery = self._seed_ready_delivery()
+        worker_module.run_cycle(
+            worker_config=self.worker_config,
+            session_factory=SessionLocal,
+            now_fn=lambda: FIXED_NOW,
+            client_factory=lambda: _FakeClient(fail=True),
+        )
+        self.db.refresh(delivery)
+        self.assertIsNone(delivery.claim_token)
+        self.assertIsNone(delivery.claimed_at)
+        self.assertIsNone(delivery.claim_expires_at)
+
+    def test_second_provider_failure_increases_the_backoff(self):
+        _, delivery = self._seed_ready_delivery()
+        worker_module.run_cycle(
+            worker_config=self.worker_config,
+            session_factory=SessionLocal,
+            now_fn=lambda: FIXED_NOW,
+            client_factory=lambda: _FakeClient(fail=True),
+        )
+        self.db.refresh(delivery)
+        first_delay = delivery.next_attempt_at - FIXED_NOW.replace(tzinfo=None)
+
+        second_now = FIXED_NOW + timedelta(seconds=1)
+        delivery.next_attempt_at = second_now
+        self.db.add(delivery)
+        self.db.commit()
+        worker_module.run_cycle(
+            worker_config=self.worker_config,
+            session_factory=SessionLocal,
+            now_fn=lambda: second_now,
+            client_factory=lambda: _FakeClient(fail=True),
+        )
+        self.db.refresh(delivery)
+        second_delay = delivery.next_attempt_at - second_now.replace(tzinfo=None)
+        self.assertGreater(second_delay, first_delay)
+
+    def test_max_attempts_produces_dead_letter(self):
+        _, delivery = self._seed_ready_delivery()
+        now = FIXED_NOW
+        for _ in range(self.worker_config.max_attempts):
+            worker_module.run_cycle(
+                worker_config=self.worker_config,
+                session_factory=SessionLocal,
+                now_fn=lambda n=now: n,
+                client_factory=lambda: _FakeClient(fail=True),
+            )
+            self.db.refresh(delivery)
+            if delivery.status == "dead_letter":
+                break
+            delivery.next_attempt_at = now
+            self.db.add(delivery)
+            self.db.commit()
+            now = now + timedelta(seconds=1)
+        self.assertEqual(delivery.status, "dead_letter")
+        # dead_letter is not in CLAIMABLE_STATUSES, so it can never be
+        # reclaimed and retried again by mistake.
+        self.assertIsNone(delivery.claim_token)
+        self.assertIsNone(delivery.next_attempt_at)
+
+    def test_permanent_variable_error_dead_letters_without_calling_meta(self):
+        tenant_id, delivery = self._seed_ready_delivery()
+        event = self.db.query(DomainEvent).filter(DomainEvent.id == delivery.domain_event_id).first()
+        event.payload_json = {**event.payload_json, "custom": {}}
+        self.db.add(event)
+        self.db.commit()
+
+        client = _FakeClient()
+        worker_module.run_cycle(
+            worker_config=self.worker_config,
+            session_factory=SessionLocal,
+            now_fn=lambda: FIXED_NOW,
+            client_factory=lambda: client,
+        )
+        self.db.refresh(delivery)
+        self.assertEqual(delivery.status, "dead_letter")
+        self.assertEqual(client.send_calls, 0)
+        # Never left as a plain "failed" that a later batch could reclaim
+        # and retry against the same permanently-broken configuration.
+        self.assertIsNone(delivery.claim_token)
+
+    def test_permanent_template_error_dead_letters(self):
+        tenant_id, delivery = self._seed_ready_delivery()
+        template = self.db.query(TenantWhatsAppTemplate).filter(TenantWhatsAppTemplate.tenant_id == tenant_id).first()
+        template.status = "inactive"
+        self.db.add(template)
+        self.db.commit()
+
+        worker_module.run_cycle(
+            worker_config=self.worker_config,
+            session_factory=SessionLocal,
+            now_fn=lambda: FIXED_NOW,
+            client_factory=lambda: _FakeClient(),
+        )
+        self.db.refresh(delivery)
+        self.assertEqual(delivery.status, "dead_letter")
+
+    def test_worker_own_failure_is_not_treated_as_stale_owner(self):
+        # The worker applies apply_failure with its own freshly-claimed
+        # token immediately after its own failed attempt -- that must never
+        # be rejected as a stale claim.
+        _, delivery = self._seed_ready_delivery()
+        counters = worker_module.run_cycle(
+            worker_config=self.worker_config,
+            session_factory=SessionLocal,
+            now_fn=lambda: FIXED_NOW,
+            client_factory=lambda: _FakeClient(fail=True),
+        )
+        self.assertEqual(counters["retried"], 1)
+        self.assertEqual(counters["dead_lettered"], 0)
+        self.db.refresh(delivery)
+        # A stale_owner outcome would have left the delivery untouched
+        # (still "processing" with the original claim); it must instead
+        # show the retry policy's real decision.
+        self.assertEqual(delivery.status, "failed")
+        self.assertIsNone(delivery.claim_token)
+
+    def test_provider_failure_increments_retried_counter(self):
+        self._seed_ready_delivery()
+        counters = worker_module.run_cycle(
+            worker_config=self.worker_config,
+            session_factory=SessionLocal,
+            now_fn=lambda: FIXED_NOW,
+            client_factory=lambda: _FakeClient(fail=True),
+        )
+        self.assertEqual(counters["retried"], 1)
+
+    def test_permanent_failure_increments_dead_lettered_counter(self):
+        tenant_id, delivery = self._seed_ready_delivery()
+        event = self.db.query(DomainEvent).filter(DomainEvent.id == delivery.domain_event_id).first()
+        event.payload_json = {**event.payload_json, "custom": {}}
+        self.db.add(event)
+        self.db.commit()
+
+        counters = worker_module.run_cycle(
+            worker_config=self.worker_config,
+            session_factory=SessionLocal,
+            now_fn=lambda: FIXED_NOW,
+            client_factory=lambda: _FakeClient(),
+        )
+        self.assertEqual(counters["dead_lettered"], 1)
+
+    def test_delivery_ends_the_cycle_in_the_expected_state(self):
+        _, ok_delivery = self._seed_ready_delivery()
+        _, failing_delivery = self._seed_ready_delivery()
+        event = self.db.query(DomainEvent).filter(DomainEvent.id == failing_delivery.domain_event_id).first()
+        event.payload_json = {**event.payload_json, "custom": {}}
+        self.db.add(event)
+        self.db.commit()
+
+        worker_module.run_cycle(
+            worker_config=self.worker_config,
+            session_factory=SessionLocal,
+            now_fn=lambda: FIXED_NOW,
+            client_factory=lambda: _FakeClient(),
+        )
+        self.db.refresh(ok_delivery)
+        self.db.refresh(failing_delivery)
+        self.assertEqual(ok_delivery.status, "sent")
+        self.assertEqual(failing_delivery.status, "dead_letter")
+
+
 class RunCycleShutdownTests(_BaseWorkerTestCase):
     def test_stop_requested_mid_batch_still_finishes_the_whole_batch(self):
         # run_cycle no longer accepts (or consults) a should_stop callback:
