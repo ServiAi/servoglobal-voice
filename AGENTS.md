@@ -27,6 +27,37 @@ No recortes: validacion en fronteras de confianza, seguridad, manejo de errores 
 Si el usuario dice "normal mode" o "stop ponytail", deja de aplicar Ponytail en esa conversacion.
 <!-- END PONYTAIL DEFAULT -->
 
+<!-- BEGIN MULTI-TOOL SKILLS -->
+# Skills instaladas - Regla universal para cualquier herramienta agentica
+
+Este proyecto tiene skills instaladas que DEBEN usarse sin importar que herramienta agentica este operando (Claude Code, Codex, Antigravity, OpenCode, Cursor, Gemini CLI, GitHub Copilot, etc). El nombre de la herramienta no cambia la regla: el comportamiento esperado es el mismo en todas.
+
+Reglas obligatorias por tipo de tarea:
+
+1. **Cualquier tarea de codigo** (escribir, editar, refactorizar, corregir bugs): aplica por defecto la skill `ponytail` (ver "Ponytail Default Mode" arriba).
+2. **Cualquier tarea de exploracion** (entender el codebase, buscar simbolos, mapear dependencias): usa `codegraph` / `codegraph_explore` como herramienta principal (ver reglas al inicio de este archivo).
+3. **Tareas de UI/frontend** (componentes, estilos, layout, diseno visual): usa la skill `frontend-design` si esta disponible para la herramienta activa.
+4. Para cualquier otra skill instalada, revisa la carpeta correspondiente antes de asumir que no existe.
+
+## Como localizar las skills segun la herramienta activa
+
+Cada herramienta agentica lee las skills desde una carpeta distinta en la raiz del repo. Antes de decir "no tengo esa skill", el agente debe verificar la carpeta que le corresponde:
+
+| Herramienta agentica | Carpeta de skills a verificar |
+|---|---|
+| Claude Code | `.claude/skills/` (normalmente symlinks hacia `.agents/skills/`) |
+| Antigravity | `.agents/skills/` |
+| Codex | `.agents/skills/` |
+| OpenCode | `.agents/skills/` |
+| Cursor | `.agents/skills/` |
+| Gemini CLI | `.agents/skills/` |
+| GitHub Copilot | `.agents/skills/` |
+
+`.agents/skills/` es la carpeta universal/canonica donde se instalan las skills (via `npx skills add`); `.claude/skills/` normalmente solo contiene symlinks hacia esa carpeta universal para que Claude Code las reconozca. Si una herramienta no encuentra la skill en su carpeta esperada, revisa tambien `.agents/skills/` antes de concluir que la skill no esta disponible.
+
+Skills instaladas actualmente en `.agents/skills/`: `frontend-design`, `ponytail`, `claude-api`, `vercel-react-best-practices`, `web-artifacts-builder`. Esta lista puede crecer; si no reconoces el nombre de una skill que el usuario menciona, lista el contenido de la carpeta correspondiente antes de responder que no existe.
+<!-- END MULTI-TOOL SKILLS -->
+
 # Sprint 3 - Reglas obligatorias para agentes IA
 
 Antes de implementar cualquier tarea del Sprint 3, todo agente debe leer y respetar estos documentos:
