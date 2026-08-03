@@ -86,6 +86,10 @@ export function setNotificationRuleEnabled(accessToken: string, ruleId: string, 
   );
 }
 
+export function deleteNotificationRule(accessToken: string, ruleId: string) {
+  return adminNotifications<null>('DELETE', `rules/${ruleId}`, accessToken);
+}
+
 export function fetchNotificationRecipients(accessToken: string) {
   return adminNotifications<NotificationRecipientItem[]>('GET', 'recipients', accessToken);
 }

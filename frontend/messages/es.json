@@ -790,7 +790,10 @@
           "edit": "Editar",
           "activate": "Activar",
           "deactivate": "Desactivar",
-          "toggleError": "No fue posible actualizar el estado de la regla."
+          "toggleError": "No fue posible actualizar el estado de la regla.",
+          "delete": "Eliminar",
+          "deleteError": "No fue posible eliminar la regla.",
+          "deleteErrorHasDeliveries": "No se puede eliminar: esta regla ya generó notificaciones. Desactívala en su lugar."
         },
         "noApprovedTemplates": "Todavía no hay plantillas de WhatsApp aprobadas por Meta. Sincroniza WhatsApp para poder crear reglas.",
         "confirmDisable": {
@@ -798,6 +801,12 @@
           "description": "Esta regla dejará de generar nuevas notificaciones. Las entregas ya creadas conservarán su estado.",
           "cancel": "Cancelar",
           "confirm": "Desactivar"
+        },
+        "confirmDelete": {
+          "title": "Eliminar regla",
+          "description": "Esta acción no se puede deshacer. La regla se eliminará de forma permanente.",
+          "cancel": "Cancelar",
+          "confirm": "Eliminar"
         },
         "form": {
           "createTitle": "Nueva regla",

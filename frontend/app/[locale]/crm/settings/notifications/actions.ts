@@ -5,6 +5,7 @@ import type { FetchResult } from '@/lib/api/crm';
 import {
   createNotificationRecipient,
   createNotificationRule,
+  deleteNotificationRule,
   fetchNotificationDeliveries,
   fetchNotificationDelivery,
   setNotificationRuleEnabled,
@@ -59,6 +60,10 @@ export async function setNotificationRuleEnabledAction(
   enabled: boolean
 ): Promise<FetchResult<NotificationRuleItem>> {
   return withAccessToken((accessToken) => setNotificationRuleEnabled(accessToken, ruleId, enabled));
+}
+
+export async function deleteNotificationRuleAction(ruleId: string): Promise<FetchResult<null>> {
+  return withAccessToken((accessToken) => deleteNotificationRule(accessToken, ruleId));
 }
 
 export async function createNotificationRecipientAction(

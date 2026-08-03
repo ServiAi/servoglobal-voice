@@ -2,12 +2,13 @@
 
 import { FormEvent, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { Loader2, Pencil, Plus } from 'lucide-react';
+import { Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   createNotificationRuleAction,
+  deleteNotificationRuleAction,
   setNotificationRuleEnabledAction,
   updateNotificationRuleAction,
 } from '@/app/[locale]/crm/settings/notifications/actions';
@@ -118,6 +119,9 @@ export function RulesPanel({ canEdit, catalog, initialRules, whatsappTemplates }
   const [busyRuleId, setBusyRuleId] = useState<string | null>(null);
   const [toggleErrorId, setToggleErrorId] = useState<string | null>(null);
   const [confirmDisable, setConfirmDisable] = useState<NotificationRuleItem | null>(null);
+  const [deleteErrorId, setDeleteErrorId] = useState<string | null>(null);
+  const [deleteErrorCode, setDeleteErrorCode] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<NotificationRuleItem | null>(null);
 
   const approvedTemplates = whatsappTemplates.filter(isApprovedTemplate);
   const hasApprovedTemplates = approvedTemplates.length > 0;
@@ -155,6 +159,19 @@ export function RulesPanel({ canEdit, catalog, initialRules, whatsappTemplates }
       return;
     }
     applyToggle(rule, true);
+  };
+
+  const applyDelete = async (rule: NotificationRuleItem) => {
+    setBusyRuleId(rule.id);
+    setDeleteErrorId(null);
+    const result = await deleteNotificationRuleAction(rule.id);
+    setBusyRuleId(null);
+    if (!result.ok) {
+      setDeleteErrorId(rule.id);
+      setDeleteErrorCode(result.detail);
+      return;
+    }
+    setRules((current) => current.filter((item) => item.id !== rule.id));
   };
 
   return (
@@ -227,10 +244,28 @@ export function RulesPanel({ canEdit, catalog, initialRules, whatsappTemplates }
                               {busyRuleId === rule.id && <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />}
                               {rule.enabled ? t('actions.deactivate') : t('actions.activate')}
                             </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="text-destructive hover:text-destructive"
+                              disabled={busyRuleId === rule.id}
+                              onClick={() => setConfirmDelete(rule)}
+                            >
+                              <Trash2 className="size-3.5" aria-hidden="true" />
+                              <span className="sr-only sm:not-sr-only sm:ml-1.5">{t('actions.delete')}</span>
+                            </Button>
                           </div>
                           {toggleErrorId === rule.id && (
                             <p role="alert" className="text-xs text-destructive">
                               {t('actions.toggleError')}
+                            </p>
+                          )}
+                          {deleteErrorId === rule.id && (
+                            <p role="alert" className="text-xs text-destructive">
+                              {deleteErrorCode === 'rule_has_deliveries'
+                                ? t('actions.deleteErrorHasDeliveries')
+                                : t('actions.deleteError')}
                             </p>
                           )}
                         </div>
@@ -273,10 +308,27 @@ export function RulesPanel({ canEdit, catalog, initialRules, whatsappTemplates }
                       >
                         {rule.enabled ? t('actions.deactivate') : t('actions.activate')}
                       </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="flex-1 text-destructive hover:text-destructive"
+                        disabled={busyRuleId === rule.id}
+                        onClick={() => setConfirmDelete(rule)}
+                      >
+                        {t('actions.delete')}
+                      </Button>
                     </div>
                     {toggleErrorId === rule.id && (
                       <p role="alert" className="text-xs text-destructive">
                         {t('actions.toggleError')}
+                      </p>
+                    )}
+                    {deleteErrorId === rule.id && (
+                      <p role="alert" className="text-xs text-destructive">
+                        {deleteErrorCode === 'rule_has_deliveries'
+                          ? t('actions.deleteErrorHasDeliveries')
+                          : t('actions.deleteError')}
                       </p>
                     )}
                   </div>
@@ -295,6 +347,18 @@ export function RulesPanel({ canEdit, catalog, initialRules, whatsappTemplates }
             const rule = confirmDisable;
             await applyToggle(rule, false);
             setConfirmDisable(null);
+          }}
+        />
+      )}
+
+      {confirmDelete && (
+        <ConfirmDeleteRuleDialog
+          busy={busyRuleId === confirmDelete.id}
+          onCancel={() => setConfirmDelete(null)}
+          onConfirm={async () => {
+            const rule = confirmDelete;
+            await applyDelete(rule);
+            setConfirmDelete(null);
           }}
         />
       )}
@@ -344,6 +408,37 @@ function ConfirmDisableRuleDialog({
   onConfirm: () => void;
 }) {
   const t = useTranslations('crm.notifications.rules.confirmDisable');
+  return (
+    <Dialog open onOpenChange={(open) => !open && onCancel()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>{t('title')}</DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-muted-foreground">{t('description')}</p>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={onCancel} disabled={busy}>
+            {t('cancel')}
+          </Button>
+          <Button type="button" variant="destructive" onClick={onConfirm} disabled={busy} className="gap-2">
+            {busy && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+            {t('confirm')}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ConfirmDeleteRuleDialog({
+  busy,
+  onCancel,
+  onConfirm,
+}: {
+  busy: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const t = useTranslations('crm.notifications.rules.confirmDelete');
   return (
     <Dialog open onOpenChange={(open) => !open && onCancel()}>
       <DialogContent className="max-w-md">

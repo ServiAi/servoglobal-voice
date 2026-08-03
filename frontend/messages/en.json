@@ -790,7 +790,10 @@
           "edit": "Edit",
           "activate": "Activate",
           "deactivate": "Deactivate",
-          "toggleError": "The rule status could not be updated."
+          "toggleError": "The rule status could not be updated.",
+          "delete": "Delete",
+          "deleteError": "The rule could not be deleted.",
+          "deleteErrorHasDeliveries": "Can't delete: this rule already generated notifications. Disable it instead."
         },
         "noApprovedTemplates": "There are no Meta-approved WhatsApp templates yet. Sync WhatsApp to be able to create rules.",
         "confirmDisable": {
@@ -798,6 +801,12 @@
           "description": "This rule will stop generating new notifications. Deliveries already created will keep their status.",
           "cancel": "Cancel",
           "confirm": "Disable"
+        },
+        "confirmDelete": {
+          "title": "Delete rule",
+          "description": "This action cannot be undone. The rule will be permanently deleted.",
+          "cancel": "Cancel",
+          "confirm": "Delete"
         },
         "form": {
           "createTitle": "New rule",
