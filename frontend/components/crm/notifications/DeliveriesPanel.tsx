@@ -2,9 +2,9 @@
 
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { Loader2 } from 'lucide-react';
+import { CalendarRange, Loader2, Search } from 'lucide-react';
 
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import {
   fetchNotificationDeliveriesAction,
@@ -38,6 +38,11 @@ type Props = {
   rules: NotificationRuleItem[];
   catalog: NotificationCatalogResponse | null;
 };
+
+const FIELD_CLASS =
+  'min-h-10 w-full rounded-md border border-border bg-background px-3 py-2 text-sm shadow-xs outline-none transition focus:border-primary/60 focus:ring-2 focus:ring-primary/15 disabled:cursor-not-allowed disabled:opacity-60';
+const TABLE_WRAP_CLASS = 'hidden overflow-x-auto rounded-lg border border-border bg-card shadow-xs md:block';
+const TABLE_HEAD_CLASS = 'bg-muted/60 text-xs uppercase tracking-wide text-muted-foreground';
 
 export function DeliveriesPanel({ initialDeliveries, rules, catalog }: Props) {
   const t = useTranslations('crm.notifications.deliveries');
@@ -101,19 +106,24 @@ export function DeliveriesPanel({ initialDeliveries, rules, catalog }: Props) {
   const items = listing?.items ?? [];
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+    <div className="flex flex-col gap-5">
+      <div className="rounded-lg border border-border bg-card p-4 shadow-xs">
+        <div className="mb-4 flex items-center gap-2 text-sm font-medium text-foreground">
+          <CalendarRange className="size-4 text-muted-foreground" aria-hidden="true" />
+          {t('filters.apply')}
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <label className="space-y-1 text-sm">
           <span className="text-xs text-muted-foreground">{t('filters.status')}</span>
           <select
-            className="w-full rounded-md border border-border bg-background px-3 py-2"
+            className={FIELD_CLASS}
             value={filters.status_filter}
             onChange={(event) => updateFilter('status_filter', event.target.value)}
           >
             <option value="">{t('filters.allStatuses')}</option>
             {STATUSES.map((status) => (
               <option key={status} value={status}>
-                {status}
+                {t(`status.${status}`)}
               </option>
             ))}
           </select>
@@ -121,7 +131,7 @@ export function DeliveriesPanel({ initialDeliveries, rules, catalog }: Props) {
         <label className="space-y-1 text-sm">
           <span className="text-xs text-muted-foreground">{t('filters.eventType')}</span>
           <select
-            className="w-full rounded-md border border-border bg-background px-3 py-2"
+            className={FIELD_CLASS}
             value={filters.event_type}
             onChange={(event) => updateFilter('event_type', event.target.value)}
           >
@@ -136,7 +146,7 @@ export function DeliveriesPanel({ initialDeliveries, rules, catalog }: Props) {
         <label className="space-y-1 text-sm">
           <span className="text-xs text-muted-foreground">{t('filters.rule')}</span>
           <select
-            className="w-full rounded-md border border-border bg-background px-3 py-2"
+            className={FIELD_CLASS}
             value={filters.rule_id}
             onChange={(event) => updateFilter('rule_id', event.target.value)}
           >
@@ -152,7 +162,7 @@ export function DeliveriesPanel({ initialDeliveries, rules, catalog }: Props) {
           <span className="text-xs text-muted-foreground">{t('filters.dateFrom')}</span>
           <input
             type="date"
-            className="w-full rounded-md border border-border bg-background px-3 py-2"
+            className={FIELD_CLASS}
             value={filters.date_from}
             onChange={(event) => updateFilter('date_from', event.target.value)}
           />
@@ -161,18 +171,20 @@ export function DeliveriesPanel({ initialDeliveries, rules, catalog }: Props) {
           <span className="text-xs text-muted-foreground">{t('filters.dateTo')}</span>
           <input
             type="date"
-            className="w-full rounded-md border border-border bg-background px-3 py-2"
+            className={FIELD_CLASS}
             value={filters.date_to}
             onChange={(event) => updateFilter('date_to', event.target.value)}
           />
         </label>
       </div>
 
-      <div className="flex justify-end">
-        <Button type="button" variant="outline" size="sm" disabled={loading} onClick={submitFilters}>
-          {loading && <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />}
-          {t('filters.apply')}
-        </Button>
+        <div className="mt-4 flex justify-end">
+          <Button type="button" variant="outline" size="sm" disabled={loading} onClick={submitFilters} className="gap-2">
+            <Search className="size-3.5" aria-hidden="true" />
+            {loading && <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />}
+            {t('filters.apply')}
+          </Button>
+        </div>
       </div>
 
       {loadError && (
@@ -194,9 +206,9 @@ export function DeliveriesPanel({ initialDeliveries, rules, catalog }: Props) {
         </div>
       ) : (
         <>
-          <div className="hidden overflow-x-auto rounded-xl border border-border md:block">
+          <div className={TABLE_WRAP_CLASS}>
             <table className="w-full text-left text-sm">
-              <thead className="bg-muted/40 text-xs uppercase tracking-wide text-muted-foreground">
+              <thead className={TABLE_HEAD_CLASS}>
                 <tr>
                   <th className="px-4 py-3 font-medium">{t('columns.date')}</th>
                   <th className="px-4 py-3 font-medium">{t('columns.rule')}</th>
@@ -215,7 +227,7 @@ export function DeliveriesPanel({ initialDeliveries, rules, catalog }: Props) {
                     role="button"
                     onClick={() => openDetail(item)}
                     onKeyDown={(event) => (event.key === 'Enter' || event.key === ' ') && openDetail(item)}
-                    className="cursor-pointer hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="cursor-pointer transition-colors hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <td className="px-4 py-3 text-muted-foreground">{new Date(item.created_at).toLocaleString()}</td>
                     <td className="px-4 py-3 text-foreground">{item.rule_name ?? '—'}</td>
@@ -238,13 +250,13 @@ export function DeliveriesPanel({ initialDeliveries, rules, catalog }: Props) {
                 <button
                   type="button"
                   onClick={() => openDetail(item)}
-                  className="w-full rounded-xl border border-border bg-card p-4 text-left shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="w-full rounded-lg border border-border bg-card p-4 text-left shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <div className="flex items-start justify-between gap-2">
                     <p className="font-medium text-foreground">{item.rule_name ?? '—'}</p>
                     <NotificationStatusBadge status={item.status} />
                   </div>
-                  <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                  <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 rounded-md bg-muted/30 p-3 text-xs text-muted-foreground">
                     <dt>{t('columns.recipient')}</dt>
                     <dd className="text-right">{item.recipient_masked}</dd>
                     <dt>{t('columns.scheduledFor')}</dt>
@@ -307,16 +319,18 @@ function DeliveryDetailDialog({
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
+      <DialogContent className="max-w-2xl gap-0 p-0">
+        <DialogHeader className="border-b border-border bg-muted/30 p-5 pr-12">
           <DialogTitle>{t('title')}</DialogTitle>
+          <DialogDescription>{delivery.recipient_masked}</DialogDescription>
         </DialogHeader>
+        <div className="space-y-5 p-5">
         {staleData && (
-          <p role="alert" className="rounded-md border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
+          <p role="alert" className="rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
             {t('staleData')}
           </p>
         )}
-        <dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-sm">
+        <dl className="grid grid-cols-1 gap-3 rounded-lg border border-border bg-card p-4 text-sm sm:grid-cols-2">
           <dt className="text-muted-foreground">{t('status')}</dt>
           <dd>
             <NotificationStatusBadge status={delivery.status} />
@@ -348,11 +362,11 @@ function DeliveryDetailDialog({
         </dl>
 
         {timeline.length > 0 && (
-          <div className="space-y-2 border-t border-border pt-4">
+          <div className="space-y-3 rounded-lg border border-border bg-muted/20 p-4">
             <p className="text-sm font-medium text-foreground">{t('timeline')}</p>
             <ol className="space-y-1.5 text-sm text-muted-foreground">
               {timeline.map((entry) => (
-                <li key={entry.key} className="flex items-center justify-between gap-3">
+                <li key={entry.key} className="flex items-center justify-between gap-3 rounded-md bg-background px-3 py-2">
                   <span>{t(`timelineEvents.${entry.key}`)}</span>
                   <span>{new Date(entry.at).toLocaleString()}</span>
                 </li>
@@ -360,6 +374,7 @@ function DeliveryDetailDialog({
             </ol>
           </div>
         )}
+        </div>
       </DialogContent>
     </Dialog>
   );

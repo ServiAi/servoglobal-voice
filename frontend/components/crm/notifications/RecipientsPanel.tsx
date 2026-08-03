@@ -2,10 +2,10 @@
 
 import { FormEvent, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { Loader2, Pencil, Plus } from 'lucide-react';
+import { Loader2, Pencil, Plus, UserRoundCheck, UsersRound } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   createNotificationRecipientAction,
   updateNotificationRecipientAction,
@@ -20,6 +20,11 @@ type Props = {
   initialRecipients: NotificationRecipientItem[];
 };
 
+const FIELD_CLASS =
+  'min-h-10 w-full rounded-md border border-border bg-background px-3 py-2 text-sm shadow-xs outline-none transition focus:border-primary/60 focus:ring-2 focus:ring-primary/15 disabled:cursor-not-allowed disabled:opacity-60';
+const TABLE_WRAP_CLASS = 'hidden overflow-x-auto rounded-lg border border-border bg-card shadow-xs md:block';
+const TABLE_HEAD_CLASS = 'bg-muted/60 text-xs uppercase tracking-wide text-muted-foreground';
+const TABLE_ROW_CLASS = 'transition-colors hover:bg-muted/30';
 const KNOWN_RECIPIENT_ERROR_CODES = new Set(['duplicate_recipient', 'invalid_destination']);
 
 export function RecipientsPanel({ canEdit, initialRecipients }: Props) {
@@ -29,6 +34,7 @@ export function RecipientsPanel({ canEdit, initialRecipients }: Props) {
   const [creating, setCreating] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [toggleErrorId, setToggleErrorId] = useState<string | null>(null);
+  const activeRecipients = recipients.filter((recipient) => recipient.status === 'active').length;
 
   const drawerOpen = creating || editing !== null;
   const closeDrawer = () => {
@@ -58,25 +64,30 @@ export function RecipientsPanel({ canEdit, initialRecipients }: Props) {
   };
 
   return (
-    <div className="flex flex-col gap-4">
-      {canEdit && (
-        <div className="flex justify-end">
-          <Button type="button" className="gap-2" onClick={() => setCreating(true)}>
-            <Plus className="size-4" aria-hidden="true" />
-            {t('new')}
-          </Button>
+    <div className="flex flex-col gap-5">
+      <div className="rounded-lg border border-border bg-card shadow-xs">
+        <div className="flex flex-col gap-4 border-b border-border p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="grid gap-2 sm:grid-cols-2">
+            <RecipientCountBadge icon={UserRoundCheck} label={t('status.active')} value={activeRecipients} tone="success" />
+            <RecipientCountBadge icon={UsersRound} label={t('status.inactive')} value={recipients.length - activeRecipients} />
+          </div>
+          {canEdit && (
+            <Button type="button" className="gap-2 self-start sm:self-auto" onClick={() => setCreating(true)}>
+              <Plus className="size-4" aria-hidden="true" />
+              {t('new')}
+            </Button>
+          )}
         </div>
-      )}
 
-      {recipients.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
-          {t('empty')}
-        </div>
-      ) : (
-        <>
-          <div className="hidden overflow-x-auto rounded-xl border border-border md:block">
+        {recipients.length === 0 ? (
+          <div className="m-4 rounded-lg border border-dashed border-border bg-muted/20 p-8 text-center text-sm text-muted-foreground">
+            {t('empty')}
+          </div>
+        ) : (
+          <div className="p-4">
+            <div className={TABLE_WRAP_CLASS}>
             <table className="w-full text-left text-sm">
-              <thead className="bg-muted/40 text-xs uppercase tracking-wide text-muted-foreground">
+              <thead className={TABLE_HEAD_CLASS}>
                 <tr>
                   <th className="px-4 py-3 font-medium">{t('columns.name')}</th>
                   <th className="px-4 py-3 font-medium">{t('columns.group')}</th>
@@ -88,8 +99,11 @@ export function RecipientsPanel({ canEdit, initialRecipients }: Props) {
               </thead>
               <tbody className="divide-y divide-border">
                 {recipients.map((recipient) => (
-                  <tr key={recipient.id}>
-                    <td className="px-4 py-3 font-medium text-foreground">{recipient.name}</td>
+                  <tr key={recipient.id} className={TABLE_ROW_CLASS}>
+                    <td className="px-4 py-3">
+                      <p className="font-medium text-foreground">{recipient.name}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">{recipient.group_key}</p>
+                    </td>
                     <td className="px-4 py-3 text-muted-foreground">{recipient.group_key}</td>
                     <td className="px-4 py-3 text-muted-foreground">{recipient.channel}</td>
                     <td className="px-4 py-3 text-muted-foreground">{recipient.destination_masked}</td>
@@ -129,14 +143,14 @@ export function RecipientsPanel({ canEdit, initialRecipients }: Props) {
             </table>
           </div>
 
-          <ul className="flex flex-col gap-3 md:hidden">
+          <ul className="mt-3 flex flex-col gap-3 md:hidden">
             {recipients.map((recipient) => (
-              <li key={recipient.id} className="rounded-xl border border-border bg-card p-4 shadow-xs">
+              <li key={recipient.id} className="rounded-lg border border-border bg-background p-4 shadow-xs">
                 <div className="flex items-start justify-between gap-2">
                   <p className="font-medium text-foreground">{recipient.name}</p>
                   <RecipientStatusBadge status={recipient.status} />
                 </div>
-                <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 rounded-md bg-muted/30 p-3 text-xs text-muted-foreground">
                   <dt>{t('columns.group')}</dt>
                   <dd className="text-right">{recipient.group_key}</dd>
                   <dt>{t('columns.destination')}</dt>
@@ -169,12 +183,40 @@ export function RecipientsPanel({ canEdit, initialRecipients }: Props) {
               </li>
             ))}
           </ul>
-        </>
-      )}
+          </div>
+        )}
+      </div>
 
       {drawerOpen && (
         <RecipientFormDialog recipient={editing} onClose={closeDrawer} onSaved={handleSaved} />
       )}
+    </div>
+  );
+}
+
+function RecipientCountBadge({
+  icon: Icon,
+  label,
+  value,
+  tone = 'neutral',
+}: {
+  icon: typeof UsersRound;
+  label: string;
+  value: number;
+  tone?: 'neutral' | 'success';
+}) {
+  const styles = {
+    neutral: 'border-border bg-background text-muted-foreground',
+    success: 'border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
+  };
+
+  return (
+    <div className={`flex min-h-12 items-center gap-3 rounded-md border px-3 py-2 ${styles[tone]}`}>
+      <Icon className="size-4 shrink-0" aria-hidden="true" />
+      <div>
+        <p className="text-base font-semibold leading-none text-foreground">{value}</p>
+        <p className="mt-1 text-xs">{label}</p>
+      </div>
     </div>
   );
 }
@@ -243,21 +285,22 @@ function RecipientFormDialog({
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
+      <DialogContent className="max-w-lg gap-0 p-0">
+        <DialogHeader className="border-b border-border bg-muted/30 p-5 pr-12">
           <DialogTitle>{recipient ? t('editTitle') : t('createTitle')}</DialogTitle>
+          <DialogDescription>{t('destination')}</DialogDescription>
         </DialogHeader>
-        <form onSubmit={submit} className="space-y-4">
+        <form onSubmit={submit} className="space-y-4 p-5">
           {errorCode && (
-            <p role="alert" className="rounded-md border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
+            <p role="alert" className="rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
               {t(`errors.${errorMessageKey}`)}
             </p>
           )}
 
           <label className="space-y-1 text-sm">
-            <span>{t('name')}</span>
+            <span className="font-medium text-foreground">{t('name')}</span>
             <input
-              className="w-full rounded-md border border-border bg-background px-3 py-2"
+              className={FIELD_CLASS}
               value={name}
               onChange={(event) => setName(event.target.value)}
               required
@@ -266,9 +309,9 @@ function RecipientFormDialog({
           </label>
 
           <label className="space-y-1 text-sm">
-            <span>{t('group')}</span>
+            <span className="font-medium text-foreground">{t('group')}</span>
             <input
-              className="w-full rounded-md border border-border bg-background px-3 py-2"
+              className={FIELD_CLASS}
               value={groupKey}
               onChange={(event) => setGroupKey(event.target.value)}
               required
@@ -277,9 +320,9 @@ function RecipientFormDialog({
           </label>
 
           <label className="space-y-1 text-sm">
-            <span>{t('destination')}</span>
+            <span className="font-medium text-foreground">{t('destination')}</span>
             <input
-              className="w-full rounded-md border border-border bg-background px-3 py-2"
+              className={FIELD_CLASS}
               value={destination}
               onChange={(event) => setDestination(event.target.value)}
               placeholder={recipient ? recipient.destination_masked : '+573001112233'}
@@ -290,9 +333,9 @@ function RecipientFormDialog({
           </label>
 
           <label className="space-y-1 text-sm">
-            <span>{t('status')}</span>
+            <span className="font-medium text-foreground">{t('status')}</span>
             <select
-              className="w-full rounded-md border border-border bg-background px-3 py-2"
+              className={FIELD_CLASS}
               value={status}
               onChange={(event) => setStatus(event.target.value as 'active' | 'inactive')}
             >
@@ -301,7 +344,7 @@ function RecipientFormDialog({
             </select>
           </label>
 
-          <DialogFooter>
+          <DialogFooter className="border-t border-border pt-4">
             <Button type="button" variant="outline" onClick={onClose}>
               {t('cancel')}
             </Button>

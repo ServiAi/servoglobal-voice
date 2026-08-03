@@ -2,10 +2,10 @@
 
 import { FormEvent, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Clock3, Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   createNotificationRuleAction,
   deleteNotificationRuleAction,
@@ -56,6 +56,15 @@ const KNOWN_RULE_ERROR_CODES = new Set([
 type VariableEntry = { key: string; spec: NotificationVariableSpec };
 
 type TemplateParameter = { key: string; label?: string };
+
+const FIELD_CLASS =
+  'min-h-10 w-full rounded-md border border-border bg-background px-3 py-2 text-sm shadow-xs outline-none transition focus:border-primary/60 focus:ring-2 focus:ring-primary/15 disabled:cursor-not-allowed disabled:opacity-60';
+const SMALL_FIELD_CLASS =
+  'min-h-9 w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-sm shadow-xs outline-none transition focus:border-primary/60 focus:ring-2 focus:ring-primary/15 disabled:cursor-not-allowed disabled:opacity-60';
+const FORM_SECTION_CLASS = 'rounded-lg border border-border bg-muted/20 p-4';
+const TABLE_WRAP_CLASS = 'hidden overflow-x-auto rounded-lg border border-border bg-card shadow-xs md:block';
+const TABLE_HEAD_CLASS = 'bg-muted/60 text-xs uppercase tracking-wide text-muted-foreground';
+const TABLE_ROW_CLASS = 'transition-colors hover:bg-muted/30';
 
 function approvedTemplateParameters(template: WhatsAppTemplateResponse): TemplateParameter[] | null {
   const variables = template.variables as {
@@ -125,6 +134,8 @@ export function RulesPanel({ canEdit, catalog, initialRules, whatsappTemplates }
 
   const approvedTemplates = whatsappTemplates.filter(isApprovedTemplate);
   const hasApprovedTemplates = approvedTemplates.length > 0;
+  const activeRules = rules.filter((rule) => rule.enabled && !rule.configuration_error).length;
+  const invalidRules = rules.filter((rule) => rule.configuration_error).length;
 
   const drawerOpen = creating || editing !== null;
 
@@ -175,32 +186,38 @@ export function RulesPanel({ canEdit, catalog, initialRules, whatsappTemplates }
   };
 
   return (
-    <div className="flex flex-col gap-4">
-      {canEdit && hasApprovedTemplates && (
-        <div className="flex justify-end">
-          <Button type="button" className="gap-2" onClick={() => setCreating(true)}>
-            <Plus className="size-4" aria-hidden="true" />
-            {t('form.createTitle')}
-          </Button>
+    <div className="flex flex-col gap-5">
+      <div className="rounded-lg border border-border bg-card shadow-xs">
+        <div className="flex flex-col gap-4 border-b border-border p-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="grid gap-2 sm:grid-cols-3">
+            <RuleCountBadge icon={CheckCircle2} label={t('status.active')} value={activeRules} tone="success" />
+            <RuleCountBadge icon={Clock3} label={t('status.inactive')} value={Math.max(rules.length - activeRules - invalidRules, 0)} />
+            <RuleCountBadge icon={AlertTriangle} label={t('status.invalid')} value={invalidRules} tone="danger" />
+          </div>
+          {canEdit && hasApprovedTemplates && (
+            <Button type="button" className="gap-2 self-start lg:self-auto" onClick={() => setCreating(true)}>
+              <Plus className="size-4" aria-hidden="true" />
+              {t('form.createTitle')}
+            </Button>
+          )}
         </div>
-      )}
 
-      {canEdit && !hasApprovedTemplates && (
-        <div role="status" className="rounded-lg border border-border bg-muted/40 p-4 text-sm text-muted-foreground">
-          {t('noApprovedTemplates')}
-        </div>
-      )}
+        {canEdit && !hasApprovedTemplates && (
+          <div role="status" className="m-4 rounded-lg border border-amber-500/25 bg-amber-500/10 p-4 text-sm text-amber-800 dark:text-amber-200">
+            {t('noApprovedTemplates')}
+          </div>
+        )}
 
-      {rules.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
-          <p>{t('empty')}</p>
-          {canEdit && <p>{t('emptyAction')}</p>}
-        </div>
-      ) : (
-        <>
-          <div className="hidden overflow-x-auto rounded-xl border border-border md:block">
+        {rules.length === 0 ? (
+          <div className="m-4 rounded-lg border border-dashed border-border bg-muted/20 p-8 text-center text-sm text-muted-foreground">
+            <p className="font-medium text-foreground">{t('empty')}</p>
+            {canEdit && <p className="mt-1">{t('emptyAction')}</p>}
+          </div>
+        ) : (
+          <div className="p-4">
+            <div className={TABLE_WRAP_CLASS}>
             <table className="w-full text-left text-sm">
-              <thead className="bg-muted/40 text-xs uppercase tracking-wide text-muted-foreground">
+              <thead className={TABLE_HEAD_CLASS}>
                 <tr>
                   <th className="px-4 py-3 font-medium">{t('columns.name')}</th>
                   <th className="px-4 py-3 font-medium">{t('columns.event')}</th>
@@ -214,8 +231,13 @@ export function RulesPanel({ canEdit, catalog, initialRules, whatsappTemplates }
               </thead>
               <tbody className="divide-y divide-border">
                 {rules.map((rule) => (
-                  <tr key={rule.id}>
-                    <td className="px-4 py-3 font-medium text-foreground">{rule.name}</td>
+                  <tr key={rule.id} className={TABLE_ROW_CLASS}>
+                    <td className="px-4 py-3">
+                      <div className="max-w-[260px]">
+                        <p className="font-medium text-foreground">{rule.name}</p>
+                        <p className="mt-1 truncate text-xs text-muted-foreground">{rule.capability_key}</p>
+                      </div>
+                    </td>
                     <td className="px-4 py-3 text-muted-foreground">{rule.event_type}</td>
                     <td className="px-4 py-3 text-muted-foreground">{rule.template_key || '—'}</td>
                     <td className="px-4 py-3 text-muted-foreground">{t(`form.strategies.${rule.recipient_strategy}`)}</td>
@@ -277,14 +299,17 @@ export function RulesPanel({ canEdit, catalog, initialRules, whatsappTemplates }
             </table>
           </div>
 
-          <ul className="flex flex-col gap-3 md:hidden">
+          <ul className="mt-3 flex flex-col gap-3 md:hidden">
             {rules.map((rule) => (
-              <li key={rule.id} className="rounded-xl border border-border bg-card p-4 shadow-xs">
+              <li key={rule.id} className="rounded-lg border border-border bg-background p-4 shadow-xs">
                 <div className="flex items-start justify-between gap-2">
-                  <p className="font-medium text-foreground">{rule.name}</p>
+                  <div>
+                    <p className="font-medium text-foreground">{rule.name}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{rule.capability_key}</p>
+                  </div>
                   <RuleStatusBadge rule={rule} />
                 </div>
-                <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 rounded-md bg-muted/30 p-3 text-xs text-muted-foreground">
                   <dt>{t('columns.event')}</dt>
                   <dd className="text-right">{rule.event_type}</dd>
                   <dt>{t('columns.template')}</dt>
@@ -336,8 +361,9 @@ export function RulesPanel({ canEdit, catalog, initialRules, whatsappTemplates }
               </li>
             ))}
           </ul>
-        </>
-      )}
+          </div>
+        )}
+      </div>
 
       {confirmDisable && (
         <ConfirmDisableRuleDialog
@@ -398,6 +424,34 @@ function RuleStatusBadge({ rule }: { rule: NotificationRuleItem }) {
   );
 }
 
+function RuleCountBadge({
+  icon: Icon,
+  label,
+  value,
+  tone = 'neutral',
+}: {
+  icon: typeof CheckCircle2;
+  label: string;
+  value: number;
+  tone?: 'neutral' | 'success' | 'danger';
+}) {
+  const styles = {
+    neutral: 'border-border bg-background text-muted-foreground',
+    success: 'border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
+    danger: 'border-destructive/25 bg-destructive/10 text-destructive',
+  };
+
+  return (
+    <div className={`flex min-h-12 items-center gap-3 rounded-md border px-3 py-2 ${styles[tone]}`}>
+      <Icon className="size-4 shrink-0" aria-hidden="true" />
+      <div>
+        <p className="text-base font-semibold leading-none text-foreground">{value}</p>
+        <p className="mt-1 text-xs">{label}</p>
+      </div>
+    </div>
+  );
+}
+
 function ConfirmDisableRuleDialog({
   busy,
   onCancel,
@@ -410,12 +464,15 @@ function ConfirmDisableRuleDialog({
   const t = useTranslations('crm.notifications.rules.confirmDisable');
   return (
     <Dialog open onOpenChange={(open) => !open && onCancel()}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
+      <DialogContent className="max-w-md border-amber-500/20 p-0">
+        <DialogHeader className="border-b border-border bg-amber-500/10 p-5 pr-12">
+          <div className="mb-2 flex size-10 items-center justify-center rounded-full border border-amber-500/25 bg-background text-amber-700 dark:text-amber-300">
+            <Clock3 className="size-5" aria-hidden="true" />
+          </div>
           <DialogTitle>{t('title')}</DialogTitle>
+          <DialogDescription>{t('description')}</DialogDescription>
         </DialogHeader>
-        <p className="text-sm text-muted-foreground">{t('description')}</p>
-        <DialogFooter>
+        <DialogFooter className="p-5">
           <Button type="button" variant="outline" onClick={onCancel} disabled={busy}>
             {t('cancel')}
           </Button>
@@ -441,12 +498,15 @@ function ConfirmDeleteRuleDialog({
   const t = useTranslations('crm.notifications.rules.confirmDelete');
   return (
     <Dialog open onOpenChange={(open) => !open && onCancel()}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
+      <DialogContent className="max-w-md border-destructive/20 p-0">
+        <DialogHeader className="border-b border-border bg-destructive/10 p-5 pr-12">
+          <div className="mb-2 flex size-10 items-center justify-center rounded-full border border-destructive/25 bg-background text-destructive">
+            <Trash2 className="size-5" aria-hidden="true" />
+          </div>
           <DialogTitle>{t('title')}</DialogTitle>
+          <DialogDescription>{t('description')}</DialogDescription>
         </DialogHeader>
-        <p className="text-sm text-muted-foreground">{t('description')}</p>
-        <DialogFooter>
+        <DialogFooter className="p-5">
           <Button type="button" variant="outline" onClick={onCancel} disabled={busy}>
             {t('cancel')}
           </Button>
@@ -551,22 +611,23 @@ function RuleFormDialog({
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-2xl">
-        <DialogHeader>
+      <DialogContent className="max-w-4xl gap-0 p-0">
+        <DialogHeader className="border-b border-border bg-muted/30 p-5 pr-12">
           <DialogTitle>{rule ? t('editTitle') : t('createTitle')}</DialogTitle>
+          <DialogDescription>{t('template')}</DialogDescription>
         </DialogHeader>
-        <form onSubmit={submit} className="space-y-4">
+        <form onSubmit={submit} className="space-y-5 p-5">
           {errorCode && (
-            <p role="alert" className="rounded-md border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
+            <p role="alert" className="rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
               {t(`errors.${errorMessageKey}`)}
             </p>
           )}
 
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className={`${FORM_SECTION_CLASS} grid gap-3 sm:grid-cols-2`}>
             <label className="space-y-1 text-sm sm:col-span-2">
-              <span>{t('name')}</span>
+              <span className="font-medium text-foreground">{t('name')}</span>
               <input
-                className="w-full rounded-md border border-border bg-background px-3 py-2"
+                className={FIELD_CLASS}
                 value={form.name}
                 onChange={(event) => set('name', event.target.value)}
                 required
@@ -575,9 +636,9 @@ function RuleFormDialog({
             </label>
 
             <label className="space-y-1 text-sm">
-              <span>{t('capability')}</span>
+              <span className="font-medium text-foreground">{t('capability')}</span>
               <select
-                className="w-full rounded-md border border-border bg-background px-3 py-2"
+                className={FIELD_CLASS}
                 value={form.capability_key}
                 onChange={(event) => set('capability_key', event.target.value)}
                 required
@@ -592,9 +653,9 @@ function RuleFormDialog({
             </label>
 
             <label className="space-y-1 text-sm">
-              <span>{t('event')}</span>
+              <span className="font-medium text-foreground">{t('event')}</span>
               <select
-                className="w-full rounded-md border border-border bg-background px-3 py-2"
+                className={FIELD_CLASS}
                 value={form.event_type}
                 onChange={(event) => set('event_type', event.target.value)}
                 required
@@ -609,9 +670,9 @@ function RuleFormDialog({
             </label>
 
             <label className="space-y-1 text-sm sm:col-span-2">
-              <span>{t('template')}</span>
+              <span className="font-medium text-foreground">{t('template')}</span>
               <select
-                className="w-full rounded-md border border-border bg-background px-3 py-2"
+                className={FIELD_CLASS}
                 value={form.template_key}
                 onChange={(event) => selectTemplate(event.target.value)}
                 required
@@ -637,9 +698,9 @@ function RuleFormDialog({
             </label>
 
             <label className="space-y-1 text-sm">
-              <span>{t('recipientStrategy')}</span>
+              <span className="font-medium text-foreground">{t('recipientStrategy')}</span>
               <select
-                className="w-full rounded-md border border-border bg-background px-3 py-2"
+                className={FIELD_CLASS}
                 value={form.recipient_strategy}
                 onChange={(event) => set('recipient_strategy', event.target.value)}
                 required
@@ -654,9 +715,9 @@ function RuleFormDialog({
 
             {form.recipient_strategy !== 'event_customer' && (
               <label className="space-y-1 text-sm">
-                <span>{t('recipientGroup')}</span>
+                <span className="font-medium text-foreground">{t('recipientGroup')}</span>
                 <input
-                  className="w-full rounded-md border border-border bg-background px-3 py-2"
+                  className={FIELD_CLASS}
                   value={form.recipient_group_key ?? ''}
                   onChange={(event) => set('recipient_group_key', event.target.value)}
                   required
@@ -666,9 +727,9 @@ function RuleFormDialog({
             )}
 
             <label className="space-y-1 text-sm">
-              <span>{t('scheduleMode')}</span>
+              <span className="font-medium text-foreground">{t('scheduleMode')}</span>
               <select
-                className="w-full rounded-md border border-border bg-background px-3 py-2"
+                className={FIELD_CLASS}
                 value={form.schedule_mode}
                 onChange={(event) => set('schedule_mode', event.target.value)}
               >
@@ -682,10 +743,10 @@ function RuleFormDialog({
 
             {form.schedule_mode === 'relative_to_booking' && (
               <label className="space-y-1 text-sm">
-                <span>{t('scheduleOffset')}</span>
+                <span className="font-medium text-foreground">{t('scheduleOffset')}</span>
                 <input
                   type="number"
-                  className="w-full rounded-md border border-border bg-background px-3 py-2"
+                  className={FIELD_CLASS}
                   value={form.schedule_offset_minutes}
                   onChange={(event) => set('schedule_offset_minutes', Number(event.target.value))}
                 />
@@ -694,10 +755,10 @@ function RuleFormDialog({
             )}
 
             <label className="space-y-1 text-sm">
-              <span>{t('priority')}</span>
+              <span className="font-medium text-foreground">{t('priority')}</span>
               <input
                 type="number"
-                className="w-full rounded-md border border-border bg-background px-3 py-2"
+                className={FIELD_CLASS}
                 value={form.priority}
                 onChange={(event) => set('priority', Number(event.target.value))}
               />
@@ -728,16 +789,16 @@ function RuleFormDialog({
           />
 
           {missingRequiredParameters.length > 0 && (
-            <p className="text-xs text-destructive">
+            <p role="alert" className="rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-xs text-destructive">
               {t('missingRequiredParameters', { params: missingRequiredParameters.map((param) => param.key).join(', ') })}
             </p>
           )}
 
           {hasInvalidNumericCondition && (
-            <p className="text-xs text-destructive">{t('errors.condition_numeric_value_required')}</p>
+            <p role="alert" className="rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-xs text-destructive">{t('errors.condition_numeric_value_required')}</p>
           )}
 
-          <DialogFooter>
+          <DialogFooter className="border-t border-border pt-4">
             <Button type="button" variant="outline" onClick={onClose}>
               {t('cancel')}
             </Button>
@@ -790,20 +851,20 @@ function ConditionsBuilder({
   };
 
   return (
-    <fieldset className="space-y-2 border-t border-border pt-4">
+    <fieldset className={`${FORM_SECTION_CLASS} space-y-3`}>
       <legend className="text-sm font-medium text-foreground">{t('conditions')}</legend>
       {conditions.map((condition, index) => (
-        <div key={index} className="grid gap-2 sm:grid-cols-[1fr_1fr_1fr_auto] sm:items-center">
+        <div key={index} className="grid gap-2 rounded-md border border-border bg-background/70 p-3 sm:grid-cols-[1fr_1fr_1fr_auto] sm:items-center">
           <input
             aria-label="field"
-            className="rounded-md border border-border bg-background px-2 py-1.5 text-sm"
+            className={SMALL_FIELD_CLASS}
             value={condition.field}
             onChange={(event) => update(index, { field: event.target.value })}
             placeholder="booking.status"
           />
           <select
             aria-label="operator"
-            className="rounded-md border border-border bg-background px-2 py-1.5 text-sm"
+            className={SMALL_FIELD_CLASS}
             value={condition.operator}
             onChange={(event) => changeOperator(index, event.target.value as NotificationConditionOperator)}
           >
@@ -817,7 +878,7 @@ function ConditionsBuilder({
             <input
               aria-label="value"
               type="number"
-              className="rounded-md border border-border bg-background px-2 py-1.5 text-sm"
+              className={SMALL_FIELD_CLASS}
               value={typeof condition.value === 'number' && Number.isFinite(condition.value) ? condition.value : ''}
               onChange={(event) => {
                 const raw = event.target.value;
@@ -827,7 +888,7 @@ function ConditionsBuilder({
           ) : (
             <input
               aria-label="value"
-              className="rounded-md border border-border bg-background px-2 py-1.5 text-sm"
+              className={SMALL_FIELD_CLASS}
               value={LIST_OPERATORS.has(condition.operator) && Array.isArray(condition.value) ? condition.value.join(',') : (condition.value as string) ?? ''}
               onChange={(event) =>
                 update(index, {
@@ -920,20 +981,20 @@ function VariablesBuilder({
   };
 
   return (
-    <fieldset className="space-y-2 border-t border-border pt-4">
+    <fieldset className={`${FORM_SECTION_CLASS} space-y-3`}>
       <legend className="text-sm font-medium text-foreground">{t('variables')}</legend>
       {variables.map((entry, index) => (
-        <div key={index} className="grid gap-2 rounded-md border border-border p-3 sm:grid-cols-2">
+        <div key={index} className="grid gap-2 rounded-md border border-border bg-background/70 p-3 sm:grid-cols-2">
           <input
             aria-label="variable key"
-            className="rounded-md border border-border bg-background px-2 py-1.5 text-sm"
+            className={SMALL_FIELD_CLASS}
             value={entry.key}
             placeholder="customer_name"
             onChange={(event) => update(index, { key: event.target.value })}
           />
           <select
             aria-label="source"
-            className="rounded-md border border-border bg-background px-2 py-1.5 text-sm"
+            className={SMALL_FIELD_CLASS}
             value={entry.spec.source}
             onChange={(event) => updateSource(index, event.target.value as NotificationVariableSpec['source'])}
           >
@@ -946,7 +1007,7 @@ function VariablesBuilder({
           {entry.spec.source === 'literal' ? (
             <input
               aria-label="value"
-              className="rounded-md border border-border bg-background px-2 py-1.5 text-sm"
+              className={SMALL_FIELD_CLASS}
               value={(entry.spec.value as string) ?? ''}
               onChange={(event) => update(index, { value: event.target.value })}
               placeholder="value"
@@ -954,7 +1015,7 @@ function VariablesBuilder({
           ) : (
             <input
               aria-label="path"
-              className="rounded-md border border-border bg-background px-2 py-1.5 text-sm"
+              className={SMALL_FIELD_CLASS}
               value={entry.spec.path ?? ''}
               onChange={(event) => update(index, { path: event.target.value })}
               placeholder="booking.start_at"
@@ -962,7 +1023,7 @@ function VariablesBuilder({
           )}
           <select
             aria-label="format"
-            className="rounded-md border border-border bg-background px-2 py-1.5 text-sm"
+            className={SMALL_FIELD_CLASS}
             value={entry.spec.format ?? 'string'}
             onChange={(event) => update(index, { format: event.target.value as NotificationVariableSpec['format'] })}
           >
@@ -974,7 +1035,7 @@ function VariablesBuilder({
           </select>
           <input
             aria-label="timezone"
-            className="rounded-md border border-border bg-background px-2 py-1.5 text-sm disabled:opacity-50"
+            className={SMALL_FIELD_CLASS}
             value={entry.spec.timezone ?? ''}
             onChange={(event) => updateTimezone(index, event.target.value)}
             disabled={Boolean(entry.spec.timezone_path)}
@@ -982,7 +1043,7 @@ function VariablesBuilder({
           />
           <input
             aria-label="timezone path"
-            className="rounded-md border border-border bg-background px-2 py-1.5 text-sm disabled:opacity-50"
+            className={SMALL_FIELD_CLASS}
             value={entry.spec.timezone_path ?? ''}
             onChange={(event) => updateTimezonePath(index, event.target.value)}
             disabled={Boolean(entry.spec.timezone)}
@@ -990,7 +1051,7 @@ function VariablesBuilder({
           />
           <input
             aria-label="default"
-            className="rounded-md border border-border bg-background px-2 py-1.5 text-sm"
+            className={SMALL_FIELD_CLASS}
             value={(entry.spec.default as string) ?? ''}
             onChange={(event) => update(index, { default: event.target.value || null })}
             placeholder={tCommon('defaultValue')}
