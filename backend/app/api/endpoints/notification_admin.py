@@ -176,6 +176,21 @@ def update_rule_enabled(
     return _rule_item(service, rule)
 
 
+@router.delete("/rules/{rule_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_rule(
+    rule_id: str,
+    context: AuthContext = Depends(require_roles(_WRITE_ROLES)),
+    db: Session = Depends(get_db),
+) -> None:
+    service = NotificationAdminService(db)
+    try:
+        deleted = service.delete_rule(tenant_id=context.tenant.id, rule_id=rule_id)
+    except NotificationAdminError as exc:
+        _raise_admin_error(exc)
+    if not deleted:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="rule_not_found")
+
+
 @router.get("/recipients", response_model=list[NotificationRecipientItem])
 def list_recipients(
     context: AuthContext = Depends(require_roles(_READ_ROLES)),

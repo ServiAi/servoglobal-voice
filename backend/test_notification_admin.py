@@ -411,11 +411,25 @@ class NotificationAdminTests(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 422)
 
-    def test_rules_endpoint_has_no_delete(self):
+    def test_delete_rule_without_deliveries_succeeds(self):
         rule = self._create_rule()
         self._as("tenant_admin")
         response = self.client.delete(f"{_BASE}/rules/{rule['id']}")
-        self.assertEqual(response.status_code, 405)
+        self.assertEqual(response.status_code, 204)
+        self.assertEqual(self.client.get(f"{_BASE}/rules").json(), [])
+
+    def test_delete_rule_with_deliveries_returns_409(self):
+        rule = self._create_rule()
+        self._seed_delivery(tenant_id=self.tenant_id, rule_id=rule["id"])
+        self._as("tenant_admin")
+        response = self.client.delete(f"{_BASE}/rules/{rule['id']}")
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.json()["detail"], "rule_has_deliveries")
+
+    def test_delete_nonexistent_rule_returns_404(self):
+        self._as("tenant_admin")
+        response = self.client.delete(f"{_BASE}/rules/does-not-exist")
+        self.assertEqual(response.status_code, 404)
 
     # ------------------------------------------------------ whatsapp templates (11)
     def test_create_rule_nonexistent_template_returns_422(self):

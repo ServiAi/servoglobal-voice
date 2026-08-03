@@ -282,6 +282,23 @@ class NotificationAdminService:
         self.db.refresh(rule)
         return rule
 
+    def delete_rule(self, *, tenant_id: str, rule_id: str) -> bool:
+        rule = self.get_rule(tenant_id=tenant_id, rule_id=rule_id)
+        if rule is None:
+            return False
+
+        has_deliveries = self.db.scalar(
+            select(NotificationDelivery.id)
+            .where(NotificationDelivery.notification_rule_id == rule_id)
+            .limit(1)
+        )
+        if has_deliveries is not None:
+            raise NotificationAdminError(code="rule_has_deliveries", kind="conflict")
+
+        self.db.delete(rule)
+        self.db.commit()
+        return True
+
     def set_rule_enabled(self, *, tenant_id: str, rule_id: str, enabled: bool) -> Optional[TenantNotificationRule]:
         rule = self.get_rule(tenant_id=tenant_id, rule_id=rule_id)
         if rule is None:
