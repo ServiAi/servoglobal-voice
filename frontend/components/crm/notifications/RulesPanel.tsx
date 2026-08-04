@@ -62,7 +62,7 @@ const FIELD_CLASS =
 const SMALL_FIELD_CLASS =
   'min-h-9 w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-sm shadow-xs outline-none transition focus:border-primary/60 focus:ring-2 focus:ring-primary/15 disabled:cursor-not-allowed disabled:opacity-60';
 const FORM_SECTION_CLASS = 'rounded-lg border border-border bg-muted/20 p-4';
-const TABLE_WRAP_CLASS = 'hidden overflow-x-auto rounded-lg border border-border bg-card shadow-xs md:block';
+const TABLE_WRAP_CLASS = 'hidden';
 const TABLE_HEAD_CLASS = 'bg-muted/60 text-xs uppercase tracking-wide text-muted-foreground';
 const TABLE_ROW_CLASS = 'transition-colors hover:bg-muted/30';
 
@@ -299,48 +299,57 @@ export function RulesPanel({ canEdit, catalog, initialRules, whatsappTemplates }
             </table>
           </div>
 
-          <ul className="mt-3 flex flex-col gap-3 md:hidden">
+          <ul className="grid gap-3 lg:grid-cols-2">
             {rules.map((rule) => (
-              <li key={rule.id} className="rounded-lg border border-border bg-background p-4 shadow-xs">
+              <li key={rule.id} className="min-w-0 rounded-lg border border-border bg-background p-4 shadow-xs transition-colors hover:border-primary/25">
                 <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <p className="font-medium text-foreground">{rule.name}</p>
-                    <p className="mt-1 text-xs text-muted-foreground">{rule.capability_key}</p>
+                  <div className="min-w-0">
+                    <p className="truncate font-semibold text-foreground">{rule.name}</p>
+                    <p className="mt-1 truncate text-xs text-muted-foreground">{rule.capability_key}</p>
                   </div>
                   <RuleStatusBadge rule={rule} />
                 </div>
-                <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 rounded-md bg-muted/30 p-3 text-xs text-muted-foreground">
+                <dl className="mt-4 grid grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] gap-x-3 gap-y-2 border-y border-border py-3 text-xs text-muted-foreground">
                   <dt>{t('columns.event')}</dt>
-                  <dd className="text-right">{rule.event_type}</dd>
+                  <dd className="truncate text-right font-medium text-foreground">{rule.event_type}</dd>
                   <dt>{t('columns.template')}</dt>
-                  <dd className="text-right">{rule.template_key || '—'}</dd>
+                  <dd className="truncate text-right font-medium text-foreground">{rule.template_key || '—'}</dd>
+                  <dt>{t('columns.recipient')}</dt>
+                  <dd className="truncate text-right font-medium text-foreground">{t(`form.strategies.${rule.recipient_strategy}`)}</dd>
+                  <dt>{t('columns.schedule')}</dt>
+                  <dd className="text-right font-medium text-foreground">
+                    {rule.schedule_mode === 'immediate' ? t('form.scheduleModes.immediate') : `${rule.schedule_offset_minutes} min`}
+                  </dd>
                   <dt>{t('columns.priority')}</dt>
-                  <dd className="text-right">{rule.priority}</dd>
+                  <dd className="text-right font-medium text-foreground">{rule.priority}</dd>
                 </dl>
                 {canEdit && (
-                  <div className="mt-3 flex flex-col gap-1">
-                    <div className="flex gap-2">
-                      <Button type="button" variant="outline" size="sm" className="flex-1" onClick={() => setEditing(rule)}>
+                  <div className="mt-3 flex flex-col gap-2">
+                    <div className="flex flex-wrap items-center justify-end gap-2">
+                      <Button type="button" variant="outline" size="sm" className="gap-2" onClick={() => setEditing(rule)}>
+                        <Pencil className="size-3.5" aria-hidden="true" />
                         {t('actions.edit')}
                       </Button>
                       <Button
                         type="button"
                         variant="outline"
                         size="sm"
-                        className="flex-1"
+                        className="gap-2"
                         disabled={busyRuleId === rule.id}
                         onClick={() => requestToggle(rule)}
                       >
+                        {busyRuleId === rule.id && <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />}
                         {rule.enabled ? t('actions.deactivate') : t('actions.activate')}
                       </Button>
                       <Button
                         type="button"
                         variant="outline"
                         size="sm"
-                        className="flex-1 text-destructive hover:text-destructive"
+                        className="gap-2 text-destructive hover:text-destructive"
                         disabled={busyRuleId === rule.id}
                         onClick={() => setConfirmDelete(rule)}
                       >
+                        <Trash2 className="size-3.5" aria-hidden="true" />
                         {t('actions.delete')}
                       </Button>
                     </div>
@@ -611,12 +620,12 @@ function RuleFormDialog({
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-4xl gap-0 p-0">
+      <DialogContent className="max-h-[calc(100dvh-2rem)] max-w-4xl gap-0 overflow-hidden p-0">
         <DialogHeader className="border-b border-border bg-muted/30 p-5 pr-12">
           <DialogTitle>{rule ? t('editTitle') : t('createTitle')}</DialogTitle>
           <DialogDescription>{t('template')}</DialogDescription>
         </DialogHeader>
-        <form onSubmit={submit} className="space-y-5 p-5">
+        <form onSubmit={submit} className="min-h-0 space-y-5 overflow-y-auto p-5">
           {errorCode && (
             <p role="alert" className="rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
               {t(`errors.${errorMessageKey}`)}

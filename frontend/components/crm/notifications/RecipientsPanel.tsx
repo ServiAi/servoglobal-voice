@@ -22,7 +22,7 @@ type Props = {
 
 const FIELD_CLASS =
   'min-h-10 w-full rounded-md border border-border bg-background px-3 py-2 text-sm shadow-xs outline-none transition focus:border-primary/60 focus:ring-2 focus:ring-primary/15 disabled:cursor-not-allowed disabled:opacity-60';
-const TABLE_WRAP_CLASS = 'hidden overflow-x-auto rounded-lg border border-border bg-card shadow-xs md:block';
+const TABLE_WRAP_CLASS = 'hidden';
 const TABLE_HEAD_CLASS = 'bg-muted/60 text-xs uppercase tracking-wide text-muted-foreground';
 const TABLE_ROW_CLASS = 'transition-colors hover:bg-muted/30';
 const KNOWN_RECIPIENT_ERROR_CODES = new Set(['duplicate_recipient', 'invalid_destination']);
@@ -143,33 +143,40 @@ export function RecipientsPanel({ canEdit, initialRecipients }: Props) {
             </table>
           </div>
 
-          <ul className="mt-3 flex flex-col gap-3 md:hidden">
+          <ul className="grid gap-3 lg:grid-cols-2">
             {recipients.map((recipient) => (
-              <li key={recipient.id} className="rounded-lg border border-border bg-background p-4 shadow-xs">
+              <li key={recipient.id} className="min-w-0 rounded-lg border border-border bg-background p-4 shadow-xs transition-colors hover:border-primary/25">
                 <div className="flex items-start justify-between gap-2">
-                  <p className="font-medium text-foreground">{recipient.name}</p>
+                  <div className="min-w-0">
+                    <p className="truncate font-semibold text-foreground">{recipient.name}</p>
+                    <p className="mt-1 truncate text-xs text-muted-foreground">{recipient.destination_masked}</p>
+                  </div>
                   <RecipientStatusBadge status={recipient.status} />
                 </div>
-                <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 rounded-md bg-muted/30 p-3 text-xs text-muted-foreground">
+                <dl className="mt-4 grid grid-cols-2 gap-x-3 gap-y-2 border-y border-border py-3 text-xs text-muted-foreground">
                   <dt>{t('columns.group')}</dt>
-                  <dd className="text-right">{recipient.group_key}</dd>
+                  <dd className="truncate text-right font-medium text-foreground">{recipient.group_key}</dd>
+                  <dt>{t('columns.channel')}</dt>
+                  <dd className="text-right font-medium capitalize text-foreground">{recipient.channel}</dd>
                   <dt>{t('columns.destination')}</dt>
-                  <dd className="text-right">{recipient.destination_masked}</dd>
+                  <dd className="truncate text-right font-medium text-foreground">{recipient.destination_masked}</dd>
                 </dl>
                 {canEdit && (
-                  <div className="mt-3 flex flex-col gap-1">
-                    <div className="flex gap-2">
-                      <Button type="button" variant="outline" size="sm" className="flex-1" onClick={() => setEditing(recipient)}>
+                  <div className="mt-3 flex flex-col gap-2">
+                    <div className="flex flex-wrap items-center justify-end gap-2">
+                      <Button type="button" variant="outline" size="sm" className="gap-2" onClick={() => setEditing(recipient)}>
+                        <Pencil className="size-3.5" aria-hidden="true" />
                         {t('actions.edit')}
                       </Button>
                       <Button
                         type="button"
                         variant="outline"
                         size="sm"
-                        className="flex-1"
+                        className="gap-2"
                         disabled={busyId === recipient.id}
                         onClick={() => toggleStatus(recipient)}
                       >
+                        {busyId === recipient.id && <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />}
                         {recipient.status === 'active' ? t('actions.deactivate') : t('actions.activate')}
                       </Button>
                     </div>
@@ -246,6 +253,7 @@ function RecipientFormDialog({
   onSaved: (recipient: NotificationRecipientItem) => void;
 }) {
   const t = useTranslations('crm.notifications.recipients.form');
+  const statusT = useTranslations('crm.notifications.recipients.status');
   const [groupKey, setGroupKey] = useState(recipient?.group_key ?? '');
   const [name, setName] = useState(recipient?.name ?? '');
   const [destination, setDestination] = useState('');
@@ -285,12 +293,15 @@ function RecipientFormDialog({
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-lg gap-0 p-0">
+      <DialogContent className="max-h-[calc(100dvh-2rem)] max-w-lg gap-0 overflow-hidden p-0">
         <DialogHeader className="border-b border-border bg-muted/30 p-5 pr-12">
+          <div className="mb-2 flex size-10 items-center justify-center rounded-md border border-border bg-background text-muted-foreground">
+            <UsersRound className="size-5" aria-hidden="true" />
+          </div>
           <DialogTitle>{recipient ? t('editTitle') : t('createTitle')}</DialogTitle>
           <DialogDescription>{t('destination')}</DialogDescription>
         </DialogHeader>
-        <form onSubmit={submit} className="space-y-4 p-5">
+        <form onSubmit={submit} className="min-h-0 space-y-4 overflow-y-auto p-5">
           {errorCode && (
             <p role="alert" className="rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
               {t(`errors.${errorMessageKey}`)}
@@ -339,8 +350,8 @@ function RecipientFormDialog({
               value={status}
               onChange={(event) => setStatus(event.target.value as 'active' | 'inactive')}
             >
-              <option value="active">active</option>
-              <option value="inactive">inactive</option>
+              <option value="active">{statusT('active')}</option>
+              <option value="inactive">{statusT('inactive')}</option>
             </select>
           </label>
 

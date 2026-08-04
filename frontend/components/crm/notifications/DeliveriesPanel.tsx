@@ -41,7 +41,7 @@ type Props = {
 
 const FIELD_CLASS =
   'min-h-10 w-full rounded-md border border-border bg-background px-3 py-2 text-sm shadow-xs outline-none transition focus:border-primary/60 focus:ring-2 focus:ring-primary/15 disabled:cursor-not-allowed disabled:opacity-60';
-const TABLE_WRAP_CLASS = 'hidden overflow-x-auto rounded-lg border border-border bg-card shadow-xs md:block';
+const TABLE_WRAP_CLASS = 'hidden';
 const TABLE_HEAD_CLASS = 'bg-muted/60 text-xs uppercase tracking-wide text-muted-foreground';
 
 export function DeliveriesPanel({ initialDeliveries, rules, catalog }: Props) {
@@ -201,7 +201,7 @@ export function DeliveriesPanel({ initialDeliveries, rules, catalog }: Props) {
       )}
 
       {!loading && items.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
+        <div className="rounded-lg border border-dashed border-border bg-muted/20 p-8 text-center text-sm text-muted-foreground">
           {t('empty')}
         </div>
       ) : (
@@ -244,23 +244,30 @@ export function DeliveriesPanel({ initialDeliveries, rules, catalog }: Props) {
             </table>
           </div>
 
-          <ul className="flex flex-col gap-3 md:hidden">
+          <ul className="grid gap-3 lg:grid-cols-2">
             {items.map((item) => (
               <li key={item.id}>
                 <button
                   type="button"
                   onClick={() => openDetail(item)}
-                  className="w-full rounded-lg border border-border bg-card p-4 text-left shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="w-full rounded-lg border border-border bg-card p-4 text-left shadow-xs transition-colors hover:border-primary/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <div className="flex items-start justify-between gap-2">
-                    <p className="font-medium text-foreground">{item.rule_name ?? '—'}</p>
+                    <div className="min-w-0">
+                      <p className="truncate font-semibold text-foreground">{item.rule_name ?? '—'}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">{new Date(item.created_at).toLocaleString()}</p>
+                    </div>
                     <NotificationStatusBadge status={item.status} />
                   </div>
-                  <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 rounded-md bg-muted/30 p-3 text-xs text-muted-foreground">
+                  <dl className="mt-4 grid grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] gap-x-3 gap-y-2 border-y border-border py-3 text-xs text-muted-foreground">
+                    <dt>{t('columns.event')}</dt>
+                    <dd className="truncate text-right font-medium text-foreground">{item.event_type ?? '—'}</dd>
                     <dt>{t('columns.recipient')}</dt>
-                    <dd className="text-right">{item.recipient_masked}</dd>
+                    <dd className="truncate text-right font-medium text-foreground">{item.recipient_masked}</dd>
                     <dt>{t('columns.scheduledFor')}</dt>
-                    <dd className="text-right">{new Date(item.scheduled_for).toLocaleString()}</dd>
+                    <dd className="text-right font-medium text-foreground">{new Date(item.scheduled_for).toLocaleString()}</dd>
+                    <dt>{t('columns.attempts')}</dt>
+                    <dd className="text-right font-medium text-foreground">{item.attempts}</dd>
                   </dl>
                 </button>
               </li>
@@ -319,12 +326,12 @@ function DeliveryDetailDialog({
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-2xl gap-0 p-0">
+      <DialogContent className="max-h-[calc(100dvh-2rem)] max-w-2xl gap-0 overflow-hidden p-0">
         <DialogHeader className="border-b border-border bg-muted/30 p-5 pr-12">
           <DialogTitle>{t('title')}</DialogTitle>
           <DialogDescription>{delivery.recipient_masked}</DialogDescription>
         </DialogHeader>
-        <div className="space-y-5 p-5">
+        <div className="min-h-0 space-y-5 overflow-y-auto p-5">
         {staleData && (
           <p role="alert" className="rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
             {t('staleData')}
