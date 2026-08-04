@@ -620,12 +620,12 @@ function RuleFormDialog({
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-h-[calc(100dvh-2rem)] max-w-4xl gap-0 overflow-hidden p-0">
-        <DialogHeader className="border-b border-border bg-muted/30 p-5 pr-12">
+      <DialogContent className="h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] max-w-4xl grid-rows-[auto_minmax(0,1fr)] gap-0 overflow-hidden p-0 sm:h-[calc(100dvh-2rem)] sm:w-full lg:max-h-[900px]">
+        <DialogHeader className="border-b border-border bg-muted/30 p-4 pr-12 sm:p-5 sm:pr-12">
           <DialogTitle>{rule ? t('editTitle') : t('createTitle')}</DialogTitle>
           <DialogDescription>{t('template')}</DialogDescription>
         </DialogHeader>
-        <form onSubmit={submit} className="min-h-0 space-y-5 overflow-y-auto p-5">
+        <form onSubmit={submit} className="min-h-0 space-y-5 overflow-y-auto overscroll-contain p-4 sm:p-5">
           {errorCode && (
             <p role="alert" className="rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
               {t(`errors.${errorMessageKey}`)}
@@ -807,7 +807,7 @@ function RuleFormDialog({
             <p role="alert" className="rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-xs text-destructive">{t('errors.condition_numeric_value_required')}</p>
           )}
 
-          <DialogFooter className="border-t border-border pt-4">
+          <DialogFooter className="sticky bottom-0 z-10 -mx-4 -mb-4 border-t border-border bg-background px-4 py-4 shadow-[0_-8px_16px_-16px_rgba(0,0,0,0.35)] sm:-mx-5 sm:-mb-5 sm:px-5">
             <Button type="button" variant="outline" onClick={onClose}>
               {t('cancel')}
             </Button>

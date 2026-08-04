@@ -326,12 +326,12 @@ function DeliveryDetailDialog({
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-h-[calc(100dvh-2rem)] max-w-2xl gap-0 overflow-hidden p-0">
-        <DialogHeader className="border-b border-border bg-muted/30 p-5 pr-12">
+      <DialogContent className="max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] max-w-2xl grid-rows-[auto_minmax(0,1fr)] gap-0 overflow-hidden p-0 sm:max-h-[calc(100dvh-2rem)] sm:w-full">
+        <DialogHeader className="border-b border-border bg-muted/30 p-4 pr-12 sm:p-5 sm:pr-12">
           <DialogTitle>{t('title')}</DialogTitle>
           <DialogDescription>{delivery.recipient_masked}</DialogDescription>
         </DialogHeader>
-        <div className="min-h-0 space-y-5 overflow-y-auto p-5">
+        <div className="min-h-0 space-y-5 overflow-y-auto overscroll-contain p-4 sm:p-5">
         {staleData && (
           <p role="alert" className="rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
             {t('staleData')}
