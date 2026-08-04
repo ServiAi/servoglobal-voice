@@ -301,7 +301,8 @@ function RecipientFormDialog({
           <DialogTitle>{recipient ? t('editTitle') : t('createTitle')}</DialogTitle>
           <DialogDescription>{t('destination')}</DialogDescription>
         </DialogHeader>
-        <form onSubmit={submit} className="min-h-0 space-y-4 overflow-y-auto overscroll-contain p-4 sm:p-5">
+        <form onSubmit={submit} className="grid min-h-0 grid-rows-[minmax(0,1fr)_auto]">
+          <div className="min-h-0 space-y-4 overflow-y-auto overscroll-contain p-4 sm:p-5">
           {errorCode && (
             <p role="alert" className="rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
               {t(`errors.${errorMessageKey}`)}
@@ -354,8 +355,9 @@ function RecipientFormDialog({
               <option value="inactive">{statusT('inactive')}</option>
             </select>
           </label>
+          </div>
 
-          <DialogFooter className="sticky bottom-0 z-10 -mx-4 -mb-4 border-t border-border bg-background px-4 py-4 shadow-[0_-8px_16px_-16px_rgba(0,0,0,0.35)] sm:-mx-5 sm:-mb-5 sm:px-5">
+          <DialogFooter className="border-t border-border bg-background p-4 sm:px-5">
             <Button type="button" variant="outline" onClick={onClose}>
               {t('cancel')}
             </Button>
