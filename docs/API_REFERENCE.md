@@ -81,7 +81,7 @@ Validaciones relevantes:
 
 ## Administración de funcionalidades tenant
 
-Los endpoints requieren un usuario interno de plataforma o el rol `platform_admin`, y validan que el tenant objetivo exista.
+Los endpoints requieren `context.user.is_internal == true`; ningún rol de membresía tenant, incluido `platform_admin`, concede acceso. Además validan que el tenant objetivo exista.
 
 | Método y ruta | Propósito |
 | --- | --- |

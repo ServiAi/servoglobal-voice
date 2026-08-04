@@ -32,7 +32,7 @@ Payload del `PUT`:
 
 ## Seguridad
 
-Los endpoints aceptan solamente usuarios internos de plataforma o usuarios con rol `platform_admin`. El tenant objetivo proviene del path administrativo y se valida contra la base de datos. No existe endpoint tenant ni se exponen `tenant_id`, `enabled_by_user_id`, credenciales o datos personales en la respuesta.
+Los endpoints exigen `context.user.is_internal == true`. Ningún rol de membresía tenant, incluido `platform_admin`, concede acceso por sí solo. El tenant objetivo proviene del path administrativo y se valida contra la base de datos. No existe endpoint tenant ni se exponen `tenant_id`, `enabled_by_user_id`, credenciales o datos personales en la respuesta.
 
 ## Tests
 
