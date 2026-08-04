@@ -75,17 +75,32 @@ export default async function CrmIntegrationsPage({ params }: Props) {
     enabledProviders.has('voice') && (!voiceConfigResult.ok || !voiceAgentsResult.ok),
     enabledProviders.has('whatsapp') && (!whatsappConfigResult.ok || !whatsappTemplatesResult.ok),
   ].filter(Boolean).length;
+  const activeIntegrations = summaries.filter((item) => item.status === 'active').length;
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">Integraciones CRM</h1>
-        <p className="text-sm text-muted-foreground">Conecta y supervisa los canales comerciales de tu organización.</p>
+    <div className="mx-auto flex max-w-7xl flex-col gap-8">
+      <div className="flex flex-col gap-4 border-l-4 border-primary pl-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Integraciones CRM</h1>
+          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">Conecta y supervisa los canales comerciales de tu organización.</p>
+        </div>
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <span aria-hidden="true" className="size-2 rounded-full bg-emerald-500" />
+          <span><strong className="font-semibold text-foreground">{activeIntegrations}</strong> de {summaries.length} activas</span>
+        </div>
       </div>
       <section aria-label="Estado de integraciones" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-        {summaries.map((item) => (
-          <div key={item.name} className="flex min-h-24 flex-col justify-between gap-3 rounded-xl border border-border bg-card p-4 shadow-xs">
-            <p className="text-sm font-semibold text-foreground">{item.name}</p>
+        {summaries.map((item, index) => (
+          <div
+            key={item.name}
+            className={`flex min-h-28 flex-col justify-between gap-4 rounded-lg border p-4 shadow-xs ${
+              item.status === 'active' ? 'border-emerald-500/25 bg-emerald-500/5' : 'border-border bg-card'
+            }`}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <p className="text-sm font-semibold text-foreground">{item.name}</p>
+              <span className="text-xs font-semibold tabular-nums text-muted-foreground">{String(index + 1).padStart(2, '0')}</span>
+            </div>
             <CrmIntegrationStatusBadge status={item.status} />
           </div>
         ))}
@@ -96,7 +111,10 @@ export default async function CrmIntegrationsPage({ params }: Props) {
         </div>
       )}
       <section className="flex flex-col gap-4" aria-labelledby="communication-integrations">
-      <h2 id="communication-integrations" className="text-lg font-semibold text-foreground">Comunicación</h2>
+      <div className="flex items-center justify-between border-b border-border pb-3">
+        <h2 id="communication-integrations" className="text-lg font-semibold text-foreground">Comunicación</h2>
+        <span className="text-xs font-medium text-muted-foreground">Email, voz y mensajería</span>
+      </div>
       {enabledProviders.has('resend') && <ResendIntegrationCard accessToken={accessToken} initialConfig={resendConfig} />}
       {enabledProviders.has('voice') && (
         <VoiceIntegrationCard
@@ -114,7 +132,10 @@ export default async function CrmIntegrationsPage({ params }: Props) {
       )}
       </section>
       <section className="flex flex-col gap-4" aria-labelledby="scheduling-integrations">
-      <h2 id="scheduling-integrations" className="text-lg font-semibold text-foreground">Agenda y reservas</h2>
+      <div className="flex items-center justify-between border-b border-border pb-3">
+        <h2 id="scheduling-integrations" className="text-lg font-semibold text-foreground">Agenda y reservas</h2>
+        <span className="text-xs font-medium text-muted-foreground">Reservas y calendarios conectados</span>
+      </div>
       {enabledProviders.has('calcom') && <CalComIntegrationCard accessToken={accessToken} initialConfig={bookingConfigResult.ok ? bookingConfigResult.data : undefined} />}
       {enabledProviders.has('google_calendar') && (
         <GoogleCalendarIntegrationCard

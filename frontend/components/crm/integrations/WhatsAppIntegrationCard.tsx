@@ -25,24 +25,24 @@ export function WhatsAppIntegrationCard({ accessToken, initialConfig, templates 
   };
 
   return (
-    <section className="rounded-xl border border-border bg-card p-6 shadow-xs">
-      <div className="mb-5 flex flex-col gap-3 border-b border-border pb-4 md:flex-row md:items-center md:justify-between">
+    <section className="overflow-hidden rounded-lg border border-border bg-card shadow-xs" aria-labelledby="whatsapp-integration-title">
+      <div className="flex flex-col gap-3 border-b border-border bg-muted/20 p-5 md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-3">
           <span className="inline-flex h-10 w-10 items-center justify-center rounded-md bg-emerald-500/10 text-emerald-500">
             <MessageSquare className="h-5 w-5" />
           </span>
           <div>
-            <h2 className="text-lg font-semibold text-foreground">WhatsApp Cloud</h2>
+            <h2 id="whatsapp-integration-title" className="text-lg font-semibold text-foreground">WhatsApp Cloud</h2>
             <p className="text-sm text-muted-foreground">Mensajes CRM multitenant</p>
           </div>
         </div>
-        <span className={`inline-flex items-center gap-2 rounded-md border px-3 py-1 text-xs font-semibold ${isActive ? 'border-emerald-500/30 text-emerald-500' : 'border-amber-500/30 text-amber-500'}`}>
+        <span className={`inline-flex items-center gap-2 self-start rounded-md border px-3 py-1.5 text-xs font-semibold md:self-auto ${isActive ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300'}`}>
           {isActive ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
-          {isActive ? 'active' : config?.status ?? 'no configurado'}
+          {isActive ? 'Activa' : config?.status ?? 'Sin configurar'}
         </span>
       </div>
 
-      <div className="space-y-6">
+      <div className="space-y-6 p-5">
         <section className="space-y-3">
           <div>
             <h3 className="font-medium text-foreground">Configuración</h3>
@@ -60,7 +60,7 @@ export function WhatsAppIntegrationCard({ accessToken, initialConfig, templates 
             onError={(text) => notify('error', text)}
           />
         </section>
-        <div className="border-t border-border pt-4">
+        <div className="border-t border-border pt-5">
           <WhatsAppTestForm
             accessToken={accessToken}
             templates={templates}
@@ -74,12 +74,12 @@ export function WhatsAppIntegrationCard({ accessToken, initialConfig, templates 
       </div>
 
       {config?.last_error_message && (
-        <div className="mt-4 rounded-md border border-amber-500/20 bg-amber-500/10 p-3 text-sm text-amber-500">
+        <div role="alert" className="mx-5 mb-5 rounded-md border border-amber-500/20 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-300">
           {config.last_error_message}
         </div>
       )}
       {message && (
-        <div className={`mt-4 rounded-md border p-3 text-sm ${message.type === 'success' ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-500' : 'border-red-500/20 bg-red-500/10 text-red-500'}`}>
+        <div role="status" className={`mx-5 mb-5 rounded-md border p-3 text-sm ${message.type === 'success' ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'border-destructive/20 bg-destructive/10 text-destructive'}`}>
           {message.text}
         </div>
       )}

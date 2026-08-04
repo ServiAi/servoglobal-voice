@@ -107,7 +107,7 @@ export function WhatsAppTestForm({ accessToken, templates: initialTemplates, dis
 
   return (
     <div className="space-y-6">
-      <section className="space-y-3">
+      <section className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
         <div>
           <h3 className="font-medium text-foreground">Validar conexión</h3>
           <p className="text-sm text-muted-foreground">Esta prueba valida el token y el Phone Number ID. No envía mensajes.</p>
@@ -140,14 +140,14 @@ export function WhatsAppTestForm({ accessToken, templates: initialTemplates, dis
           <div className="grid gap-3 md:grid-cols-2">
             <label className="space-y-1 text-sm">
               <span className="flex items-center gap-1">Plantilla aprobada <FieldHelp label="Plantilla aprobada" required>Primero sincroniza las plantillas que Meta muestra con estado APPROVED y selecciona una de la lista.</FieldHelp></span>
-              <select className="w-full rounded-md border border-border bg-background px-3 py-2" value={templateKey} onChange={(event) => { setTemplateKey(event.target.value); setVariables({}); }} required>
+              <select className="min-h-10 w-full rounded-md border border-border bg-background px-3 py-2 outline-none transition focus:border-primary/60 focus:ring-2 focus:ring-primary/15" value={templateKey} onChange={(event) => { setTemplateKey(event.target.value); setVariables({}); }} required>
                 <option value="">Selecciona una plantilla</option>
                 {approvedTemplates.map((template) => <option key={template.id} value={template.template_key}>{template.name} ({template.language})</option>)}
               </select>
             </label>
             <label className="space-y-1 text-sm">
               <span className="flex items-center gap-1">Número destino <FieldHelp label="Número destino" required>Escribe el número que recibirá la prueba en formato internacional, por ejemplo +573001112233.</FieldHelp></span>
-              <input className="w-full rounded-md border border-border bg-background px-3 py-2" value={toPhone} onChange={(event) => setToPhone(event.target.value)} placeholder="+573001112233" minLength={8} maxLength={32} required />
+              <input className="min-h-10 w-full rounded-md border border-border bg-background px-3 py-2 outline-none transition focus:border-primary/60 focus:ring-2 focus:ring-primary/15" value={toPhone} onChange={(event) => setToPhone(event.target.value)} placeholder="+573001112233" minLength={8} maxLength={32} required />
             </label>
           </div>
           {parameters.length > 0 && (
@@ -158,7 +158,7 @@ export function WhatsAppTestForm({ accessToken, templates: initialTemplates, dis
                     {parameter.label || `Variable ${parameter.key}`}
                     <FieldHelp label={parameter.label || `Variable ${parameter.key}`} required>Escribe el valor que reemplazará esta variable de la plantilla aprobada en Meta.</FieldHelp>
                   </span>
-                  <input className="w-full rounded-md border border-border bg-background px-3 py-2" value={variables[parameter.key] || ''} onChange={(event) => setVariables((current) => ({ ...current, [parameter.key]: event.target.value }))} required />
+                  <input className="min-h-10 w-full rounded-md border border-border bg-background px-3 py-2 outline-none transition focus:border-primary/60 focus:ring-2 focus:ring-primary/15" value={variables[parameter.key] || ''} onChange={(event) => setVariables((current) => ({ ...current, [parameter.key]: event.target.value }))} required />
                 </label>
               ))}
             </div>
@@ -167,7 +167,7 @@ export function WhatsAppTestForm({ accessToken, templates: initialTemplates, dis
             {busy === 'message' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
             Enviar mensaje de prueba
           </Button>
-          {messageResult && <p className="rounded-md border border-emerald-500/20 bg-emerald-500/10 p-3 text-sm text-emerald-500">{messageResult}</p>}
+          {messageResult && <p role="status" className="rounded-md border border-emerald-500/20 bg-emerald-500/10 p-3 text-sm text-emerald-700 dark:text-emerald-300">{messageResult}</p>}
         </form>
       </section>
     </div>

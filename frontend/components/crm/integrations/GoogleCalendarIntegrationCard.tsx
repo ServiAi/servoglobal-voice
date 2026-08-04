@@ -44,14 +44,14 @@ export function GoogleCalendarIntegrationCard({ accessToken, connections }: Prop
   };
 
   return (
-    <section className="rounded-xl border border-border bg-card p-6 shadow-xs">
-      <div className="mb-5 flex flex-col gap-3 border-b border-border pb-4 md:flex-row md:items-center md:justify-between">
+    <section className="overflow-hidden rounded-lg border border-border bg-card shadow-xs" aria-labelledby="google-calendar-integration-title">
+      <div className="flex flex-col gap-3 border-b border-border bg-muted/20 p-5 md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-3">
           <span className="inline-flex h-10 w-10 items-center justify-center rounded-md bg-sky-500/10 text-sky-500">
             <CalendarDays className="h-5 w-5" />
           </span>
           <div>
-            <h2 className="text-lg font-semibold text-foreground">Google Calendar</h2>
+            <h2 id="google-calendar-integration-title" className="text-lg font-semibold text-foreground">Google Calendar</h2>
             <p className="text-sm text-muted-foreground">Foundation OAuth, sin events.insert por defecto</p>
           </div>
         </div>
@@ -59,15 +59,17 @@ export function GoogleCalendarIntegrationCard({ accessToken, connections }: Prop
           <div className="flex items-center gap-2">
             <Button type="button" variant="outline" onClick={connect} disabled={loading}>
               {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CalendarDays className="mr-2 h-4 w-4" />}
-              Conectar
+              Conectar cuenta
             </Button>
             <FieldHelp align="right" label="Conectar Google Calendar" required={false}>No requiere copiar credenciales. Haz clic en Conectar, elige tu cuenta de Google y autoriza el acceso solicitado.</FieldHelp>
           </div>
         )}
       </div>
-      <GoogleCalendarConnectionList connections={items} onDisconnect={accessToken ? disconnect : undefined} />
+      <div className="p-5">
+        <GoogleCalendarConnectionList connections={items} onDisconnect={accessToken ? disconnect : undefined} />
+      </div>
       {message && (
-        <div className="mt-4 rounded-md border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-500">
+        <div role="alert" className="mx-5 mb-5 rounded-md border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
           {message}
         </div>
       )}

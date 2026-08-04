@@ -24,24 +24,24 @@ export function ResendIntegrationCard({ accessToken, initialConfig, mode = 'tena
   };
 
   return (
-    <section className="rounded-xl border border-border bg-card p-6 shadow-xs">
-      <div className="mb-5 flex flex-col gap-3 border-b border-border pb-4 md:flex-row md:items-center md:justify-between">
+    <section className="overflow-hidden rounded-lg border border-border bg-card shadow-xs" aria-labelledby="resend-integration-title">
+      <div className="flex flex-col gap-3 border-b border-border bg-muted/20 p-5 md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-3">
           <span className="inline-flex h-10 w-10 items-center justify-center rounded-md bg-amber-500/10 text-amber-500">
             <Mail className="h-5 w-5" />
           </span>
           <div>
-            <h2 className="text-lg font-semibold text-foreground">Resend</h2>
+            <h2 id="resend-integration-title" className="text-lg font-semibold text-foreground">Resend</h2>
             <p className="text-sm text-muted-foreground">Email transaccional por tenant</p>
           </div>
         </div>
-        <span className={`inline-flex items-center gap-2 rounded-md border px-3 py-1 text-xs font-semibold ${isActive ? 'border-emerald-500/30 text-emerald-500' : 'border-amber-500/30 text-amber-500'}`}>
+        <span className={`inline-flex items-center gap-2 self-start rounded-md border px-3 py-1.5 text-xs font-semibold md:self-auto ${isActive ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300'}`}>
           {isActive ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
-          {isActive ? 'active' : config?.status ?? 'no configurado'}
+          {isActive ? 'Activa' : config?.status ?? 'Sin configurar'}
         </span>
       </div>
 
-      <div className="space-y-6">
+      <div className="space-y-6 p-5">
         <ResendConfigForm
           accessToken={accessToken}
           config={config}
@@ -53,7 +53,7 @@ export function ResendIntegrationCard({ accessToken, initialConfig, mode = 'tena
           }}
           onError={(text) => notify('error', text)}
         />
-        <div className="border-t border-border pt-4">
+        <div className="border-t border-border pt-5">
           <ResendTestEmailForm
             accessToken={accessToken}
             mode={mode}
@@ -66,7 +66,7 @@ export function ResendIntegrationCard({ accessToken, initialConfig, mode = 'tena
       </div>
 
       {message && (
-        <div className={`mt-4 rounded-md border p-3 text-sm ${message.type === 'success' ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-500' : 'border-red-500/20 bg-red-500/10 text-red-500'}`}>
+        <div role="status" className={`mx-5 mb-5 rounded-md border p-3 text-sm ${message.type === 'success' ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'border-destructive/20 bg-destructive/10 text-destructive'}`}>
           {message.text}
         </div>
       )}

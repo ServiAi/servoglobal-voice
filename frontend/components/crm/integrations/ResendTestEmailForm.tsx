@@ -43,7 +43,7 @@ export function ResendTestEmailForm({ accessToken, disabled, mode = 'tenant', te
         <input
           required
           type="email"
-          className="rounded-md border border-border bg-background px-3 py-2 text-sm"
+          className="min-h-10 rounded-md border border-border bg-background px-3 py-2 text-sm outline-none transition focus:border-primary/60 focus:ring-2 focus:ring-primary/15"
           value={toEmail}
           onChange={(e) => setToEmail(e.target.value)}
           placeholder="destino@empresa.com"

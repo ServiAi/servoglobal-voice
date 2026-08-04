@@ -11,13 +11,11 @@ import type {
   VoiceAgentConfigResponse,
 } from '@/types/crm';
 import {
-  fetchVoiceConfig,
   configureVoice,
   testVoiceConnection,
   fetchVoiceAgents,
   createVoiceAgent,
   updateVoiceAgent,
-  fetchAdminTenantVoiceConfig,
   configureAdminTenantVoice,
   testAdminTenantVoice,
   fetchAdminTenantVoiceAgents,
@@ -32,6 +30,8 @@ type Props = {
   mode?: 'tenant' | 'admin';
   tenantId?: string;
 };
+
+const FIELD_CLASS = 'min-h-10 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/60 focus:ring-2 focus:ring-primary/15 disabled:cursor-not-allowed disabled:opacity-60';
 
 export function VoiceIntegrationCard({
   accessToken,
@@ -83,6 +83,8 @@ export function VoiceIntegrationCard({
 
   // Load agents on mount if not provided or empty
   useEffect(() => {
+    if (initialAgents.length > 0) return;
+
     async function load() {
       setLoadingAgents(true);
       const res =
@@ -95,7 +97,7 @@ export function VoiceIntegrationCard({
       }
     }
     load();
-  }, [accessToken, mode, tenantId]);
+  }, [accessToken, initialAgents.length, mode, tenantId]);
 
   const updateConfigField = (key: keyof VoiceProviderConfigRequest, value: string) => {
     setConfigForm((curr) => ({ ...curr, [key]: value }));
@@ -214,14 +216,14 @@ export function VoiceIntegrationCard({
   };
 
   return (
-    <section className="rounded-xl border border-border bg-card p-6 shadow-xs">
-      <div className="mb-5 flex flex-col gap-3 border-b border-border pb-4 md:flex-row md:items-center md:justify-between">
+    <section className="overflow-hidden rounded-lg border border-border bg-card shadow-xs" aria-labelledby="voice-integration-title">
+      <div className="flex flex-col gap-3 border-b border-border bg-muted/20 p-5 md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-3">
           <span className="inline-flex h-10 w-10 items-center justify-center rounded-md bg-indigo-500/10 text-indigo-500">
             <Phone className="h-5 w-5" />
           </span>
           <div>
-            <h2 className="text-lg font-semibold text-foreground">Agentes de Voz AI</h2>
+            <h2 id="voice-integration-title" className="text-lg font-semibold text-foreground">Agentes de Voz AI</h2>
             <p className="text-sm text-muted-foreground">
               Configuración de telefonía y agentes virtuales (Ultravox / PBX)
             </p>
@@ -229,20 +231,20 @@ export function VoiceIntegrationCard({
         </div>
         <div className="flex items-center gap-2">
           <span
-            className={`inline-flex items-center gap-2 rounded-md border px-3 py-1 text-xs font-semibold ${
-              isActive ? 'border-emerald-500/30 text-emerald-500' : 'border-amber-500/30 text-amber-500'
+            className={`inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs font-semibold ${
+              isActive ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300'
             }`}
           >
             {isActive ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
-            {isActive ? 'activo' : config?.status ?? 'no configurado'}
+            {isActive ? 'Activa' : config?.status ?? 'Sin configurar'}
           </span>
         </div>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-3">
+      <div className="grid gap-6 p-5 lg:grid-cols-[minmax(280px,0.9fr)_minmax(0,2fr)]">
         {/* Left Side: Provider Credentials Config */}
-        <div className="md:col-span-1 space-y-4 border-r border-border pr-0 md:pr-6">
-          <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider">
+        <div className="space-y-4 border-b border-border pb-6 lg:border-b-0 lg:border-r lg:pb-0 lg:pr-6">
+          <h3 className="text-sm font-semibold text-foreground">
             Proveedor e Integración
           </h3>
           <div className="space-y-3">
@@ -250,7 +252,7 @@ export function VoiceIntegrationCard({
               <span className="flex items-center gap-1">Nombre descriptivo <FieldHelp label="Nombre descriptivo de voz" required={false}>Es un nombre interno para reconocer esta configuración; no se obtiene del proveedor.</FieldHelp></span>
               <input
                 type="text"
-                className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-hidden focus:ring-1 focus:ring-ring"
+                className={FIELD_CLASS}
                 value={configForm.display_name ?? ''}
                 onChange={(e) => updateConfigField('display_name', e.target.value)}
               />
@@ -261,7 +263,7 @@ export function VoiceIntegrationCard({
               <input
                 type="password"
                 placeholder={config?.has_secret ? '••••••••••••••••••••' : 'uvx_api_...'}
-                className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-hidden focus:ring-1 focus:ring-ring"
+                className={FIELD_CLASS}
                 onChange={(e) => updateConfigField('api_key', e.target.value)}
               />
             </label>
@@ -271,7 +273,7 @@ export function VoiceIntegrationCard({
               <input
                 type="password"
                 placeholder={config?.has_webhook_secret ? '••••••••••••••••••••' : 'Secreto opcional'}
-                className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-hidden focus:ring-1 focus:ring-ring"
+                className={FIELD_CLASS}
                 onChange={(e) => updateConfigField('webhook_secret', e.target.value)}
               />
             </label>
@@ -280,19 +282,19 @@ export function VoiceIntegrationCard({
               <span className="flex items-center gap-1">Base URL Proveedor <FieldHelp label="Base URL Proveedor" required>Usa la URL base oficial del proveedor; para Ultravox es https://api.ultravox.ai.</FieldHelp></span>
               <input
                 type="text"
-                className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-hidden focus:ring-1 focus:ring-ring"
+                className={FIELD_CLASS}
                 value={configForm.base_url ?? ''}
                 onChange={(e) => updateConfigField('base_url', e.target.value)}
               />
             </label>
 
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid gap-3 sm:grid-cols-2">
               <label className="grid gap-1 text-xs font-medium text-muted-foreground">
                 <span className="flex items-center gap-1">Default Agent ID <FieldHelp label="Default Agent ID" required={false}>Copia el ID del agente predeterminado desde el panel de Ultravox. Puede quedar vacío si se selecciona por otra regla.</FieldHelp></span>
                 <input
                   type="text"
                   placeholder="ID de agente por defecto"
-                  className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-hidden focus:ring-1 focus:ring-ring"
+                  className={FIELD_CLASS}
                   value={configForm.default_voice_agent_id ?? ''}
                   onChange={(e) => updateConfigField('default_voice_agent_id', e.target.value)}
                 />
@@ -303,18 +305,18 @@ export function VoiceIntegrationCard({
                 <input
                   type="text"
                   placeholder="+57..."
-                  className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-hidden focus:ring-1 focus:ring-ring"
+                  className={FIELD_CLASS}
                   value={configForm.default_from_number ?? ''}
                   onChange={(e) => updateConfigField('default_from_number', e.target.value)}
                 />
               </label>
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid gap-3 sm:grid-cols-2">
               <label className="grid gap-1 text-xs font-medium text-muted-foreground">
                 <span className="flex items-center gap-1">Idioma <FieldHelp label="Idioma predeterminado de voz" required>Selecciona el idioma principal que usará la integración.</FieldHelp></span>
                 <select
-                  className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-hidden focus:ring-1 focus:ring-ring"
+                  className={FIELD_CLASS}
                   value={configForm.default_language}
                   onChange={(e) => updateConfigField('default_language', e.target.value)}
                 >
@@ -327,7 +329,7 @@ export function VoiceIntegrationCard({
                 <span className="flex items-center gap-1">Zona horaria <FieldHelp label="Zona horaria de voz" required>Usa una zona IANA como America/Bogota para interpretar horarios correctamente.</FieldHelp></span>
                 <input
                   type="text"
-                  className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-hidden focus:ring-1 focus:ring-ring"
+                  className={FIELD_CLASS}
                   value={configForm.default_timezone}
                   onChange={(e) => updateConfigField('default_timezone', e.target.value)}
                 />
@@ -337,7 +339,7 @@ export function VoiceIntegrationCard({
             <label className="grid gap-1 text-xs font-medium text-muted-foreground">
               <span className="flex items-center gap-1">Estado de Integración <FieldHelp label="Estado de integración de voz" required>Activa la integración solo cuando las credenciales y la conexión estén listas.</FieldHelp></span>
               <select
-                className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-hidden focus:ring-1 focus:ring-ring"
+                className={FIELD_CLASS}
                 value={configForm.status}
                 onChange={(e) => updateConfigField('status', e.target.value)}
               >
@@ -346,7 +348,7 @@ export function VoiceIntegrationCard({
               </select>
             </label>
 
-            <div className="flex gap-2 pt-2">
+            <div className="flex flex-col gap-2 border-t border-border pt-4 sm:flex-row">
               <Button
                 type="button"
                 onClick={handleSaveConfig}
@@ -370,9 +372,9 @@ export function VoiceIntegrationCard({
         </div>
 
         {/* Right Side: Agents Management list */}
-        <div className="md:col-span-2 space-y-4">
+        <div className="min-w-0 space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider">
+            <h3 className="text-sm font-semibold text-foreground">
               Agentes Configurados
             </h3>
             {!showAgentForm && (
@@ -380,7 +382,7 @@ export function VoiceIntegrationCard({
                 type="button"
                 size="sm"
                 onClick={handleAddAgentClick}
-                className="h-8 text-xs flex items-center gap-1"
+                className="h-8 gap-1 text-xs"
               >
                 <Plus className="h-3.5 w-3.5" /> Agregar Agente
               </Button>
@@ -388,8 +390,8 @@ export function VoiceIntegrationCard({
           </div>
 
           {showAgentForm ? (
-            <div className="rounded-lg border border-border bg-muted/40 p-4 space-y-3">
-              <h4 className="text-xs font-semibold text-foreground uppercase">
+            <div className="space-y-4 rounded-lg border border-border bg-muted/30 p-4">
+              <h4 className="text-sm font-semibold text-foreground">
                 {editingAgent ? 'Editar Agente de Voz' : 'Nuevo Agente de Voz'}
               </h4>
               <div className="grid gap-3 sm:grid-cols-2">
@@ -398,7 +400,7 @@ export function VoiceIntegrationCard({
                   <input
                     type="text"
                     placeholder="wk-xxxx..."
-                    className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground"
+                    className={FIELD_CLASS}
                     value={agentForm.provider_agent_id}
                     onChange={(e) => setAgentForm((curr) => ({ ...curr, provider_agent_id: e.target.value }))}
                   />
@@ -409,7 +411,7 @@ export function VoiceIntegrationCard({
                   <input
                     type="text"
                     placeholder="Ej. Agente Comercial"
-                    className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground"
+                    className={FIELD_CLASS}
                     value={agentForm.display_name}
                     onChange={(e) => setAgentForm((curr) => ({ ...curr, display_name: e.target.value }))}
                   />
@@ -420,7 +422,7 @@ export function VoiceIntegrationCard({
                   <input
                     type="text"
                     placeholder="Objetivo principal del agente virtual"
-                    className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground"
+                    className={FIELD_CLASS}
                     value={agentForm.description ?? ''}
                     onChange={(e) => setAgentForm((curr) => ({ ...curr, description: e.target.value }))}
                   />
@@ -429,7 +431,7 @@ export function VoiceIntegrationCard({
                 <label className="grid gap-1 text-xs font-medium text-muted-foreground">
                   <span className="flex items-center gap-1">Caso de Uso / Propósito <FieldHelp label="Caso de uso del agente" required>Selecciona la función comercial principal que cumplirá el agente.</FieldHelp></span>
                   <select
-                    className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground"
+                    className={FIELD_CLASS}
                     value={agentForm.purpose}
                     onChange={(e) => setAgentForm((curr) => ({ ...curr, purpose: e.target.value }))}
                   >
@@ -448,17 +450,17 @@ export function VoiceIntegrationCard({
                   <input
                     type="text"
                     placeholder="Ej. standard-female"
-                    className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground"
+                    className={FIELD_CLASS}
                     value={agentForm.default_voice ?? ''}
                     onChange={(e) => setAgentForm((curr) => ({ ...curr, default_voice: e.target.value }))}
                   />
                 </label>
 
-                <div className="grid grid-cols-2 gap-2 sm:col-span-2">
+                <div className="grid gap-3 sm:grid-cols-2 sm:col-span-2">
                   <label className="grid gap-1 text-xs font-medium text-muted-foreground">
                     <span className="flex items-center gap-1">Idioma <FieldHelp label="Idioma del agente" required>Selecciona el idioma principal del agente.</FieldHelp></span>
                     <select
-                      className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground"
+                      className={FIELD_CLASS}
                       value={agentForm.default_language}
                       onChange={(e) => setAgentForm((curr) => ({ ...curr, default_language: e.target.value }))}
                     >
@@ -470,7 +472,7 @@ export function VoiceIntegrationCard({
                   <label className="grid gap-1 text-xs font-medium text-muted-foreground">
                     <span className="flex items-center gap-1">Estado agente <FieldHelp label="Estado del agente" required>Selecciona Activo cuando el agente esté listo para usarse.</FieldHelp></span>
                     <select
-                      className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground"
+                      className={FIELD_CLASS}
                       value={agentForm.status}
                       onChange={(e) => setAgentForm((curr) => ({ ...curr, status: e.target.value }))}
                     >
@@ -513,8 +515,8 @@ export function VoiceIntegrationCard({
                   No hay agentes de voz registrados para este tenant.
                 </div>
               ) : (
-                <div className="border border-border rounded-lg overflow-hidden">
-                  <table className="w-full text-left text-xs border-collapse">
+                <div className="overflow-x-auto rounded-lg border border-border">
+                  <table className="min-w-[720px] w-full border-collapse text-left text-xs">
                     <thead>
                       <tr className="bg-muted border-b border-border font-medium text-muted-foreground">
                         <th className="p-3">Nombre</th>
@@ -557,6 +559,7 @@ export function VoiceIntegrationCard({
                               size="icon"
                               className="h-7 w-7"
                               onClick={() => handleEditAgentClick(agent)}
+                              aria-label={`Editar ${agent.display_name}`}
                             >
                               <Edit2 className="h-3 w-3" />
                             </Button>
@@ -573,17 +576,18 @@ export function VoiceIntegrationCard({
       </div>
 
       {config?.last_error_message && (
-        <div className="mt-4 rounded-md border border-amber-500/20 bg-amber-500/10 p-3 text-sm text-amber-500">
+        <div role="alert" className="mx-5 mb-5 rounded-md border border-amber-500/20 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-300">
           <strong>Último error de conexión:</strong> {config.last_error_message}
         </div>
       )}
 
       {message && (
         <div
-          className={`mt-4 rounded-md border p-3 text-sm ${
+          role="status"
+          className={`mx-5 mb-5 rounded-md border p-3 text-sm ${
             message.type === 'success'
-              ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-500'
-              : 'border-red-500/20 bg-red-500/10 text-red-500'
+              ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+              : 'border-destructive/20 bg-destructive/10 text-destructive'
           }`}
         >
           {message.text}
