@@ -1,3 +1,6 @@
+'use client';
+
+import { useEffect, useRef, useState } from 'react';
 import { HelpCircle } from 'lucide-react';
 
 type Props = {
@@ -8,8 +11,23 @@ type Props = {
 };
 
 export function FieldHelp({ align = 'left', label, required, children }: Props) {
+  const detailsRef = useRef<HTMLDetailsElement>(null);
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const closeOnOutsideClick = (event: PointerEvent) => {
+      const details = detailsRef.current;
+      if (details && !details.contains(event.target as Node)) details.open = false;
+    };
+
+    document.addEventListener('pointerdown', closeOnOutsideClick);
+    return () => document.removeEventListener('pointerdown', closeOnOutsideClick);
+  }, [open]);
+
   return (
-    <details className="group relative inline-flex">
+    <details ref={detailsRef} className="group relative inline-flex" onToggle={(event) => setOpen(event.currentTarget.open)}>
       <summary
         className="inline-flex cursor-pointer list-none items-center text-muted-foreground hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden"
         aria-label={`Ayuda para ${label}`}

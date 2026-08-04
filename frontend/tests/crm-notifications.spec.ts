@@ -143,6 +143,8 @@ test.describe('Automatizaciones y notificaciones', () => {
     await expect(nameHelp).toBeVisible();
     await nameHelp.click();
     await expect(page.getByText(/nombre interno, claro y único/i)).toBeVisible();
+    await page.getByRole('heading', { name: /Nueva regla|Editar regla/i }).click();
+    await expect(page.getByText(/nombre interno, claro y único/i)).toBeHidden();
   });
 
   test('aplicar filtros de entregas no genera errores', async ({ page }) => {
