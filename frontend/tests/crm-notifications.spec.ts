@@ -125,6 +125,26 @@ test.describe('Automatizaciones y notificaciones', () => {
     await expect(page.locator('input[aria-label="value"]')).toHaveCount(0);
   });
 
+  test('los campos de la regla muestran ayuda contextual al hacer clic', async ({ page }) => {
+    await page.goto(PATH, { waitUntil: 'networkidle' });
+    await page.getByRole('tab', { name: /Reglas/i }).click();
+
+    const newRuleButton = page.getByRole('button', { name: /Nueva regla/i });
+    const editButton = page.getByRole('button', { name: /^Editar$/i }).first();
+    if (await newRuleButton.isVisible().catch(() => false)) {
+      await newRuleButton.click();
+    } else if (await editButton.isVisible().catch(() => false)) {
+      await editButton.click();
+    } else {
+      test.skip(true, 'La sesión de QA no puede abrir el formulario de reglas.');
+    }
+
+    const nameHelp = page.getByLabel(/Ayuda para Nombre/i);
+    await expect(nameHelp).toBeVisible();
+    await nameHelp.click();
+    await expect(page.getByText(/nombre interno, claro y único/i)).toBeVisible();
+  });
+
   test('aplicar filtros de entregas no genera errores', async ({ page }) => {
     await page.goto(PATH, { waitUntil: 'networkidle' });
     await page.getByRole('tab', { name: /Entregas/i }).click();

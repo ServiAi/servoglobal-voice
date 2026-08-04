@@ -6,6 +6,7 @@ import { AlertTriangle, CheckCircle2, Clock3, Loader2, Pencil, Plus, Trash2 } fr
 
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { FieldHelp } from '@/components/crm/integrations/FieldHelp';
 import {
   createNotificationRuleAction,
   deleteNotificationRuleAction,
@@ -65,6 +66,15 @@ const FORM_SECTION_CLASS = 'rounded-lg border border-border bg-muted/20 p-4';
 const TABLE_WRAP_CLASS = 'hidden';
 const TABLE_HEAD_CLASS = 'bg-muted/60 text-xs uppercase tracking-wide text-muted-foreground';
 const TABLE_ROW_CLASS = 'transition-colors hover:bg-muted/30';
+
+function HelpLabel({ label, help, required = false }: { label: string; help: string; required?: boolean }) {
+  return (
+    <span className="flex items-center gap-1 font-medium text-foreground">
+      {label}
+      <FieldHelp label={label} required={required}>{help}</FieldHelp>
+    </span>
+  );
+}
 
 function approvedTemplateParameters(template: WhatsAppTemplateResponse): TemplateParameter[] | null {
   const variables = template.variables as {
@@ -635,7 +645,7 @@ function RuleFormDialog({
 
           <div className={`${FORM_SECTION_CLASS} grid gap-3 sm:grid-cols-2`}>
             <label className="space-y-1 text-sm sm:col-span-2">
-              <span className="font-medium text-foreground">{t('name')}</span>
+              <HelpLabel label={t('name')} help={t('help.name')} required />
               <input
                 className={FIELD_CLASS}
                 value={form.name}
@@ -646,7 +656,7 @@ function RuleFormDialog({
             </label>
 
             <label className="space-y-1 text-sm">
-              <span className="font-medium text-foreground">{t('capability')}</span>
+              <HelpLabel label={t('capability')} help={t('help.capability')} required />
               <select
                 className={FIELD_CLASS}
                 value={form.capability_key}
@@ -663,7 +673,7 @@ function RuleFormDialog({
             </label>
 
             <label className="space-y-1 text-sm">
-              <span className="font-medium text-foreground">{t('event')}</span>
+              <HelpLabel label={t('event')} help={t('help.event')} required />
               <select
                 className={FIELD_CLASS}
                 value={form.event_type}
@@ -680,7 +690,7 @@ function RuleFormDialog({
             </label>
 
             <label className="space-y-1 text-sm sm:col-span-2">
-              <span className="font-medium text-foreground">{t('template')}</span>
+              <HelpLabel label={t('template')} help={t('help.template')} required />
               <select
                 className={FIELD_CLASS}
                 value={form.template_key}
@@ -708,7 +718,7 @@ function RuleFormDialog({
             </label>
 
             <label className="space-y-1 text-sm">
-              <span className="font-medium text-foreground">{t('recipientStrategy')}</span>
+              <HelpLabel label={t('recipientStrategy')} help={t('help.recipientStrategy')} required />
               <select
                 className={FIELD_CLASS}
                 value={form.recipient_strategy}
@@ -725,7 +735,7 @@ function RuleFormDialog({
 
             {form.recipient_strategy !== 'event_customer' && (
               <label className="space-y-1 text-sm">
-                <span className="font-medium text-foreground">{t('recipientGroup')}</span>
+                <HelpLabel label={t('recipientGroup')} help={t('help.recipientGroup')} required />
                 <input
                   className={FIELD_CLASS}
                   value={form.recipient_group_key ?? ''}
@@ -737,7 +747,7 @@ function RuleFormDialog({
             )}
 
             <label className="space-y-1 text-sm">
-              <span className="font-medium text-foreground">{t('scheduleMode')}</span>
+              <HelpLabel label={t('scheduleMode')} help={t('help.scheduleMode')} required />
               <select
                 className={FIELD_CLASS}
                 value={form.schedule_mode}
@@ -753,7 +763,7 @@ function RuleFormDialog({
 
             {form.schedule_mode === 'relative_to_booking' && (
               <label className="space-y-1 text-sm">
-                <span className="font-medium text-foreground">{t('scheduleOffset')}</span>
+                <HelpLabel label={t('scheduleOffset')} help={t('help.scheduleOffset')} required />
                 <input
                   type="number"
                   className={FIELD_CLASS}
@@ -765,7 +775,7 @@ function RuleFormDialog({
             )}
 
             <label className="space-y-1 text-sm">
-              <span className="font-medium text-foreground">{t('priority')}</span>
+              <HelpLabel label={t('priority')} help={t('help.priority')} />
               <input
                 type="number"
                 className={FIELD_CLASS}
@@ -774,15 +784,17 @@ function RuleFormDialog({
               />
             </label>
 
-            <label className="flex items-center gap-2 text-sm">
+            <div className="flex items-center gap-2 text-sm">
               <input
+                id="notification-rule-enabled"
                 type="checkbox"
                 className="size-4 rounded border-border"
                 checked={form.enabled}
                 onChange={(event) => set('enabled', event.target.checked)}
               />
-              <span>{t('enabled')}</span>
-            </label>
+              <label htmlFor="notification-rule-enabled">{t('enabled')}</label>
+              <FieldHelp label={t('enabled')} required={false}>{t('help.enabled')}</FieldHelp>
+            </div>
           </div>
 
           <ConditionsBuilder
@@ -866,51 +878,63 @@ function ConditionsBuilder({
       <legend className="text-sm font-medium text-foreground">{t('conditions')}</legend>
       {conditions.map((condition, index) => (
         <div key={index} className="grid gap-2 rounded-md border border-border bg-background/70 p-3 sm:grid-cols-[1fr_1fr_1fr_auto] sm:items-center">
-          <input
-            aria-label="field"
-            className={SMALL_FIELD_CLASS}
-            value={condition.field}
-            onChange={(event) => update(index, { field: event.target.value })}
-            placeholder="booking.status"
-          />
-          <select
-            aria-label="operator"
-            className={SMALL_FIELD_CLASS}
-            value={condition.operator}
-            onChange={(event) => changeOperator(index, event.target.value as NotificationConditionOperator)}
-          >
-            {operators.map((operator) => (
-              <option key={operator} value={operator}>
-                {operator}
-              </option>
-            ))}
-          </select>
+          <label className="space-y-1 text-xs">
+            <HelpLabel label={t('conditionField')} help={t('help.conditionField')} required />
+            <input
+              aria-label="field"
+              className={SMALL_FIELD_CLASS}
+              value={condition.field}
+              onChange={(event) => update(index, { field: event.target.value })}
+              placeholder="booking.status"
+            />
+          </label>
+          <label className="space-y-1 text-xs">
+            <HelpLabel label={t('conditionOperator')} help={t('help.conditionOperator')} required />
+            <select
+              aria-label="operator"
+              className={SMALL_FIELD_CLASS}
+              value={condition.operator}
+              onChange={(event) => changeOperator(index, event.target.value as NotificationConditionOperator)}
+            >
+              {operators.map((operator) => (
+                <option key={operator} value={operator}>
+                  {operator}
+                </option>
+              ))}
+            </select>
+          </label>
           {NO_VALUE_OPERATORS.has(condition.operator) ? null : NUMERIC_OPERATORS.has(condition.operator) ? (
-            <input
-              aria-label="value"
-              type="number"
-              className={SMALL_FIELD_CLASS}
-              value={typeof condition.value === 'number' && Number.isFinite(condition.value) ? condition.value : ''}
-              onChange={(event) => {
-                const raw = event.target.value;
-                update(index, { value: raw === '' ? undefined : Number(raw) });
-              }}
-            />
+            <label className="space-y-1 text-xs">
+              <HelpLabel label={t('conditionValue')} help={t('help.conditionValue')} required />
+              <input
+                aria-label="value"
+                type="number"
+                className={SMALL_FIELD_CLASS}
+                value={typeof condition.value === 'number' && Number.isFinite(condition.value) ? condition.value : ''}
+                onChange={(event) => {
+                  const raw = event.target.value;
+                  update(index, { value: raw === '' ? undefined : Number(raw) });
+                }}
+              />
+            </label>
           ) : (
-            <input
-              aria-label="value"
-              className={SMALL_FIELD_CLASS}
-              value={LIST_OPERATORS.has(condition.operator) && Array.isArray(condition.value) ? condition.value.join(',') : (condition.value as string) ?? ''}
-              onChange={(event) =>
-                update(index, {
-                  value: LIST_OPERATORS.has(condition.operator)
-                    ? event.target.value.split(',').map((item) => item.trim()).filter(Boolean)
-                    : event.target.value,
-                })
-              }
-            />
+            <label className="space-y-1 text-xs">
+              <HelpLabel label={t('conditionValue')} help={t('help.conditionValue')} required />
+              <input
+                aria-label="value"
+                className={SMALL_FIELD_CLASS}
+                value={LIST_OPERATORS.has(condition.operator) && Array.isArray(condition.value) ? condition.value.join(',') : (condition.value as string) ?? ''}
+                onChange={(event) =>
+                  update(index, {
+                    value: LIST_OPERATORS.has(condition.operator)
+                      ? event.target.value.split(',').map((item) => item.trim()).filter(Boolean)
+                      : event.target.value,
+                  })
+                }
+              />
+            </label>
           )}
-          <Button type="button" variant="ghost" size="sm" onClick={() => onChange(conditions.filter((_, i) => i !== index))}>
+          <Button type="button" variant="ghost" size="sm" className="sm:self-end" onClick={() => onChange(conditions.filter((_, i) => i !== index))}>
             {t('removeCondition')}
           </Button>
         </div>
@@ -996,86 +1020,112 @@ function VariablesBuilder({
       <legend className="text-sm font-medium text-foreground">{t('variables')}</legend>
       {variables.map((entry, index) => (
         <div key={index} className="grid gap-2 rounded-md border border-border bg-background/70 p-3 sm:grid-cols-2">
-          <input
-            aria-label="variable key"
-            className={SMALL_FIELD_CLASS}
-            value={entry.key}
-            placeholder="customer_name"
-            onChange={(event) => update(index, { key: event.target.value })}
-          />
-          <select
-            aria-label="source"
-            className={SMALL_FIELD_CLASS}
-            value={entry.spec.source}
-            onChange={(event) => updateSource(index, event.target.value as NotificationVariableSpec['source'])}
-          >
-            {sources.map((source) => (
-              <option key={source} value={source}>
-                {source}
-              </option>
-            ))}
-          </select>
+          <label className="space-y-1 text-xs">
+            <HelpLabel label={t('variableKey')} help={t('help.variableKey')} required />
+            <input
+              aria-label="variable key"
+              className={SMALL_FIELD_CLASS}
+              value={entry.key}
+              placeholder="customer_name"
+              onChange={(event) => update(index, { key: event.target.value })}
+            />
+          </label>
+          <label className="space-y-1 text-xs">
+            <HelpLabel label={t('variableSource')} help={t('help.variableSource')} required />
+            <select
+              aria-label="source"
+              className={SMALL_FIELD_CLASS}
+              value={entry.spec.source}
+              onChange={(event) => updateSource(index, event.target.value as NotificationVariableSpec['source'])}
+            >
+              {sources.map((source) => (
+                <option key={source} value={source}>
+                  {source}
+                </option>
+              ))}
+            </select>
+          </label>
           {entry.spec.source === 'literal' ? (
-            <input
-              aria-label="value"
-              className={SMALL_FIELD_CLASS}
-              value={(entry.spec.value as string) ?? ''}
-              onChange={(event) => update(index, { value: event.target.value })}
-              placeholder="value"
-            />
+            <label className="space-y-1 text-xs">
+              <HelpLabel label={t('variableValue')} help={t('help.variableValue')} required />
+              <input
+                aria-label="value"
+                className={SMALL_FIELD_CLASS}
+                value={(entry.spec.value as string) ?? ''}
+                onChange={(event) => update(index, { value: event.target.value })}
+                placeholder="value"
+              />
+            </label>
           ) : (
-            <input
-              aria-label="path"
-              className={SMALL_FIELD_CLASS}
-              value={entry.spec.path ?? ''}
-              onChange={(event) => update(index, { path: event.target.value })}
-              placeholder="booking.start_at"
-            />
+            <label className="space-y-1 text-xs">
+              <HelpLabel label={t('variablePath')} help={t('help.variablePath')} required />
+              <input
+                aria-label="path"
+                className={SMALL_FIELD_CLASS}
+                value={entry.spec.path ?? ''}
+                onChange={(event) => update(index, { path: event.target.value })}
+                placeholder="booking.start_at"
+              />
+            </label>
           )}
-          <select
-            aria-label="format"
-            className={SMALL_FIELD_CLASS}
-            value={entry.spec.format ?? 'string'}
-            onChange={(event) => update(index, { format: event.target.value as NotificationVariableSpec['format'] })}
-          >
-            {formats.map((format) => (
-              <option key={format} value={format}>
-                {format}
-              </option>
-            ))}
-          </select>
-          <input
-            aria-label="timezone"
-            className={SMALL_FIELD_CLASS}
-            value={entry.spec.timezone ?? ''}
-            onChange={(event) => updateTimezone(index, event.target.value)}
-            disabled={Boolean(entry.spec.timezone_path)}
-            placeholder={tCommon('timezoneSuggestion')}
-          />
-          <input
-            aria-label="timezone path"
-            className={SMALL_FIELD_CLASS}
-            value={entry.spec.timezone_path ?? ''}
-            onChange={(event) => updateTimezonePath(index, event.target.value)}
-            disabled={Boolean(entry.spec.timezone)}
-            placeholder="booking.timezone"
-          />
-          <input
-            aria-label="default"
-            className={SMALL_FIELD_CLASS}
-            value={(entry.spec.default as string) ?? ''}
-            onChange={(event) => update(index, { default: event.target.value || null })}
-            placeholder={tCommon('defaultValue')}
-          />
-          <label className="flex items-center gap-2 text-xs text-muted-foreground">
+          <label className="space-y-1 text-xs">
+            <HelpLabel label={t('variableFormat')} help={t('help.variableFormat')} />
+            <select
+              aria-label="format"
+              className={SMALL_FIELD_CLASS}
+              value={entry.spec.format ?? 'string'}
+              onChange={(event) => update(index, { format: event.target.value as NotificationVariableSpec['format'] })}
+            >
+              {formats.map((format) => (
+                <option key={format} value={format}>
+                  {format}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="space-y-1 text-xs">
+            <HelpLabel label={t('variableTimezone')} help={t('help.variableTimezone')} />
             <input
+              aria-label="timezone"
+              className={SMALL_FIELD_CLASS}
+              value={entry.spec.timezone ?? ''}
+              onChange={(event) => updateTimezone(index, event.target.value)}
+              disabled={Boolean(entry.spec.timezone_path)}
+              placeholder={tCommon('timezoneSuggestion')}
+            />
+          </label>
+          <label className="space-y-1 text-xs">
+            <HelpLabel label={t('variableTimezonePath')} help={t('help.variableTimezonePath')} />
+            <input
+              aria-label="timezone path"
+              className={SMALL_FIELD_CLASS}
+              value={entry.spec.timezone_path ?? ''}
+              onChange={(event) => updateTimezonePath(index, event.target.value)}
+              disabled={Boolean(entry.spec.timezone)}
+              placeholder="booking.timezone"
+            />
+          </label>
+          <label className="space-y-1 text-xs">
+            <HelpLabel label={t('variableDefault')} help={t('help.variableDefault')} />
+            <input
+              aria-label="default"
+              className={SMALL_FIELD_CLASS}
+              value={(entry.spec.default as string) ?? ''}
+              onChange={(event) => update(index, { default: event.target.value || null })}
+              placeholder={tCommon('defaultValue')}
+            />
+          </label>
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <input
+              id={`notification-variable-required-${index}`}
               type="checkbox"
               className="size-4 rounded border-border"
               checked={entry.spec.required ?? true}
               onChange={(event) => update(index, { required: event.target.checked })}
             />
-            {tCommon('required')}
-          </label>
+            <label htmlFor={`notification-variable-required-${index}`}>{tCommon('required')}</label>
+            <FieldHelp label={tCommon('required')} required={false}>{t('help.variableRequired')}</FieldHelp>
+          </div>
           <div className="sm:col-span-2">
             <Button
               type="button"
