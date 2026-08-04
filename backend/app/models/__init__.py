@@ -31,6 +31,7 @@ from app.models.notifications import (
     TenantNotificationRecipient,
     TenantNotificationRule,
 )
+from app.models.tenant_features import TenantFeatureGrant
 
 __all__ = [
     "AccessAuditLog",
@@ -47,6 +48,7 @@ __all__ = [
     "TenantEmailTemplate",
     "TenantIntegration",
     "TenantIntegrationEvent",
+    "TenantFeatureGrant",
     "TenantVoiceProviderConfig",
     "TenantVoiceAgentConfig",
     "TenantWhatsAppConfig",

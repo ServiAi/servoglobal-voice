@@ -21,6 +21,7 @@ La especificación ejecutable completa está disponible en `/docs` y `/openapi.j
 | `/api/v1/public/forms` | Lectura y envío público mediante token opaco. |
 | `/api/v1/admin` | Tenants, planes, uso, membresías, agentes e integraciones administradas. |
 | `/api/v1/admin/notifications` | Administración tenant de capacidades, reglas, destinatarios y entregas. El tenant se deriva del contexto autenticado. |
+| `/api/v1/admin/tenants/{tenant_id}/features` | Grants de funcionalidades por tenant para administradores de plataforma. |
 | `/api/v1/voice` | Inicio de llamadas y operación de voz. |
 | `/api/v1/voice/tools` | Disponibilidad y booking para agentes internos protegidos. |
 | `/api/v1/webhook/whatsapp` | Verificación y eventos Meta. |
@@ -77,6 +78,17 @@ Validaciones relevantes:
 - Una plantilla WhatsApp debe estar activa, sincronizada desde Meta y `APPROVED`.
 - Todos los parámetros requeridos por la plantilla deben tener un mapeo efectivo.
 - Una regla con entregas asociadas no se elimina; el servicio devuelve `rule_has_deliveries`.
+
+## Administración de funcionalidades tenant
+
+Los endpoints requieren un usuario interno de plataforma o el rol `platform_admin`, y validan que el tenant objetivo exista.
+
+| Método y ruta | Propósito |
+| --- | --- |
+| `GET /api/v1/admin/tenants/{tenant_id}/features` | Lista grants persistidos del tenant. |
+| `PUT /api/v1/admin/tenants/{tenant_id}/features/voice-experiences` | Crea o actualiza `voice_experiences` con `enabled`, `max_experiences` y `max_context_fields`. |
+
+La respuesta omite el identificador del tenant, el usuario que realizó el cambio y cualquier dato sensible. No existe todavía una API tenant para esta funcionalidad.
 
 ## Convenciones
 
