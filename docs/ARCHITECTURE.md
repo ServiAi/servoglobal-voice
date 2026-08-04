@@ -4,21 +4,26 @@
 
 ### Frontend
 
-Next.js 15 con App Router, React 18, TypeScript, Tailwind y `next-intl`. Se divide en landing pública, dashboard tenant, CRM, configuración de integraciones y administración de plataforma. Las llamadas privadas pasan por utilidades de autenticación Auth0 y clientes tipados en `frontend/lib/api/`.
+Next.js 15 con App Router, React 18, TypeScript, Tailwind y `next-intl`. Se divide en landing pública, dashboard tenant, CRM, configuración de integraciones, automatizaciones/notificaciones y administración de plataforma. Las llamadas privadas pasan por utilidades de autenticación Auth0 y clientes tipados en `frontend/lib/api/`.
+
+La UI de notificaciones se compone de `NotificationsWorkspace`, `RulesPanel`, `RecipientsPanel` y `DeliveriesPanel`. Las mutaciones se ejecutan mediante Server Actions para que el bearer token no viaje al cliente. `FieldHelp` es el componente compartido para ayudas contextuales de formularios; usa `<details>`, mantiene interacción por teclado y cierra con un clic externo.
 
 ### Backend
 
 FastAPI organiza routers en `backend/app/api/endpoints/`, reglas de negocio en `backend/app/services/`, contratos en `schemas/` y persistencia SQLAlchemy en `models/`. `backend/app/main.py` ensambla middleware, CORS y routers.
 
+El subsistema de notificaciones separa administración (`notification_admin_service.py`), creación segura de eventos (`notification_event_pipeline.py`), planificación (`notification_orchestrator.py`), condiciones/destinatarios/variables, claims, reintentos, recuperación y ejecución WhatsApp. `backend/app/workers/notification_worker.py` procesa entregas vencidas fuera del proceso web y requiere PostgreSQL.
+
 ### Datos
 
-PostgreSQL es la base principal. Alembic administra el esquema. Los dominios persistentes son identidad/tenant, llamadas/analítica, CRM, billing/uso e integraciones. Los binarios de email se almacenan mediante `StorageService` en disco local o S3 compatible; la DB guarda metadata.
+PostgreSQL es la base principal. Alembic administra el esquema. Los dominios persistentes son identidad/tenant, llamadas/analítica, CRM, billing/uso, integraciones y notificaciones. Notificaciones usa `tenant_capabilities`, `tenant_notification_rules`, `tenant_notification_recipients`, `domain_events` y `notification_deliveries`. Los binarios de email se almacenan mediante `StorageService` en disco local o S3 compatible; la DB guarda metadata.
 
 ## Límites de confianza
 
 - Auth0 autentica la aplicación privada; el backend resuelve usuario, membresía, rol y tenant.
 - Las rutas tenant derivan `tenant_id` del contexto autenticado.
 - Las rutas `/api/v1/admin/...` requieren autorización de plataforma y pueden seleccionar tenant explícitamente.
+- La familia `/api/v1/admin/notifications` es una excepción nominal: también admite roles tenant. Toda operación sobre recursos deriva el tenant de `AuthContext`; el catálogo común sigue autenticado y ningún endpoint acepta `tenant_id` del body o query.
 - Webhooks verifican firma o secreto cuando el proveedor lo soporta.
 - Herramientas internas de voz usan secreto compartido y nunca aceptan un tenant arbitrario sin resolver contexto seguro.
 - Los secretos por tenant se cifran; las respuestas sólo indican presencia mediante campos como `has_secret`.
@@ -50,6 +55,23 @@ PostgreSQL es la base principal. Alembic administra el esquema. Los dominios per
 ### WhatsApp y voz
 
 Cada canal conserva configuración, cliente, servicio de negocio, persistencia, endpoints y pruebas propios. Comparten identidad tenant, timeline CRM y eventos de integración, sin compartir secretos ni payloads completos.
+
+### Automatizaciones y notificaciones
+
+1. Un cambio de reserva o llamada entra a `NotificationEventPipeline`, que crea o reutiliza un `DomainEvent` con identidad idempotente y payload seguro.
+2. `NotificationOrchestrator` selecciona capacidades y reglas activas, evalúa condiciones, resuelve destinatarios y calcula `scheduled_for`.
+3. Se crea o reconcilia una `NotificationDelivery` mediante una clave idempotente por evento, regla, canal y destinatario.
+4. El worker reclama lotes vencidos con lease. `WhatsAppNotificationExecutor` vuelve a comprobar cancelaciones, ownership del claim y vigencia del evento antes de enviar.
+5. El resultado actualiza entrega y mensaje CRM. Los errores transitorios siguen la política de reintentos; entregas antiguas o inconsistentes pasan por recuperación, `manual_review` o estado terminal.
+6. La UI tenant consulta resumen, reglas, destinatarios y entregas con destinos enmascarados; nunca recibe claim tokens, payloads internos ni secretos.
+
+### Invariantes de la UI de notificaciones
+
+- Una regla WhatsApp ejecutable necesita una plantilla Meta sincronizada, activa y `APPROVED`, además de todos sus parámetros obligatorios mapeados.
+- Los operadores numéricos requieren valores numéricos; los operadores de existencia no conservan un valor residual.
+- Los diálogos largos usan encabezado fijo en su fila, cuerpo con `overflow-y-auto` y `DialogFooter` en una fila separada.
+- Cada campo del formulario de reglas conserva una ayuda contextual traducida. El contenido se abre desde el ícono y se oculta con cualquier clic externo.
+- Destinos y destinatarios se muestran enmascarados. Los cambios no deben introducir `tenant_id` en payloads del frontend.
 
 ## Principios de cambio
 

@@ -76,7 +76,7 @@ Si el agente trabaja en Voz, tambien debe leer:
 
 ## Reglas criticas Sprint 3
 
-- No trabajar directamente sobre `develop`.
+- No trabajar directamente sobre `develop`, salvo autorización explícita del usuario para la tarea actual. Verifique la rama y el estado antes de editar.
 - No modificar `.env`.
 - No modificar `opencode.jsonc`.
 - No modificar secretos.
@@ -93,3 +93,61 @@ Si el agente trabaja en Voz, tambien debe leer:
 - No permitir `tenant_id` arbitrario desde endpoints internos.
 - No loguear tokens, API keys, Authorization headers, payloads completos ni PII sensible.
 - Antes de entregar cambios, ejecutar tests, lint, typecheck, build y `git diff --check`.
+
+# Documentación canónica y continuidad
+
+- La documentación vigente está en `docs/README.md`, `docs/PROJECT_STATUS.md`, `docs/ARCHITECTURE.md`, `docs/API_REFERENCE.md` y `docs/OPERATIONS.md`.
+- `docs-local/` conserva evidencia histórica. Si contradice al código o a `docs/`, prevalecen el código actual y `docs/`.
+- Al terminar una funcionalidad, actualice `PROJECT_STATUS.md`; actualice también API, arquitectura u operaciones sólo cuando cambien contratos, flujos, infraestructura o comandos.
+- No documente secretos, credenciales, IDs reales, teléfonos, correos, payloads completos ni datos de clientes.
+
+# Estado actual: automatizaciones y notificaciones
+
+Base revisada en `develop`: `dbcdc8e` (2026-08-04).
+
+## Mapa del frontend
+
+- Ruta: `frontend/app/[locale]/crm/settings/notifications/page.tsx`.
+- Contenedor: `frontend/components/crm/notifications/NotificationsWorkspace.tsx`.
+- Paneles: `RulesPanel.tsx`, `RecipientsPanel.tsx` y `DeliveriesPanel.tsx`.
+- Cliente tipado: `frontend/lib/api/notification-admin.ts`.
+- Mutaciones: Server Actions en `frontend/app/[locale]/crm/settings/notifications/actions.ts`; no vuelva a enviar el bearer token desde componentes cliente.
+- Traducciones: mantener paridad entre `frontend/messages/es.json` y `frontend/messages/en.json`.
+
+## Invariantes de UI
+
+- La creación de reglas requiere una plantilla WhatsApp activa, sincronizada desde Meta y `APPROVED`; no reintroducir `template_key` libre.
+- Cada campo del formulario de reglas debe conservar su ayuda contextual mediante `FieldHelp`; no crear otro tooltip ni añadir una dependencia.
+- Una ayuda se abre desde el ícono, se cierra al pulsarlo nuevamente y se cierra con cualquier clic externo. Mantener teclado, foco y `aria-label`.
+- Los diálogos largos usan encabezado, cuerpo desplazable y footer en filas separadas. No colocar un footer sticky dentro del cuerpo ni quitar `minmax(0,1fr)`/`min-h-0`.
+- Condiciones numéricas usan inputs numéricos; operadores sin valor eliminan `condition.value`.
+- Destinos y destinatarios siempre se muestran enmascarados.
+
+## Invariantes backend
+
+- Router: `/api/v1/admin/notifications`; pese al nombre, toda operación sobre recursos deriva el tenant de `AuthContext`. El catálogo común también exige autenticación y ningún endpoint acepta `tenant_id` del frontend.
+- Lectura: `platform_admin`, `tenant_admin`, `tenant_analyst`, `tenant_viewer`. Escritura: `platform_admin`, `tenant_admin`.
+- Persistencia: `tenant_capabilities`, `tenant_notification_rules`, `tenant_notification_recipients`, `domain_events`, `notification_deliveries`.
+- El worker `python -m app.workers.notification_worker` requiere PostgreSQL y procesa claims con lease, reintentos y recuperación. FastAPI por sí solo no drena la cola.
+- No exponer en UI o API segura payloads internos, claim tokens, secretos ni destinos completos.
+
+## Validación mínima para continuar
+
+```powershell
+cd backend
+python -m unittest test_notification_admin test_notification_models test_notification_orchestrator test_notification_event_pipeline test_notification_delivery_claim_service test_notification_delivery_recovery test_notification_retry_policy test_notification_schedule_reconciliation test_notification_worker test_whatsapp_notification_executor
+python -m compileall app
+
+cd ..\frontend
+npm.cmd run lint
+npx.cmd tsc --noEmit --incremental false
+npm.cmd run build
+npx.cmd playwright test tests/crm-notifications.spec.ts --project=crm-visual
+
+cd ..
+git diff --check
+```
+
+Playwright requiere `frontend/playwright/.auth/user.json`. Si redirige al login, renueve la sesión con `npm.cmd run qa:auth`; no cambie Auth0 para hacer pasar la prueba.
+
+`test_notification_worker_postgres` es una prueba de integración separada: ejecútela sólo con `DATABASE_URL` apuntando a una instancia PostgreSQL de pruebas disponible.

@@ -12,6 +12,7 @@ Variables base:
 - Backend: `DATABASE_URL`, `PORT`, Auth0, Ultravox y `INTEGRATIONS_ENCRYPTION_KEY`.
 - Frontend: `NEXT_PUBLIC_API_URL`, Auth0 y Turnstile cuando se use la demo pública.
 - Integraciones opcionales: Cal.com, Google Calendar, Resend/storage, WhatsApp, Chatwoot y secretos de webhooks/herramientas internas.
+- Worker de notificaciones: `NOTIFICATION_WORKER_BATCH_SIZE`, `NOTIFICATION_WORKER_POLL_SECONDS`, `NOTIFICATION_WORKER_LEASE_SECONDS`, `NOTIFICATION_WORKER_MAX_ATTEMPTS`, tiempos de retry/jitter y parámetros de recuperación. Los defaults y rangos válidos están en `backend/app/core/config.py`.
 
 Los nombres vigentes y placeholders están en los archivos `.env.example`. Nunca copie valores reales a documentación, logs o commits.
 
@@ -25,6 +26,35 @@ alembic current
 ```
 
 Debe existir una sola head. No ejecute migraciones contra producción desde una sesión local sin autorización explícita y respaldo operativo.
+
+Las migraciones de notificaciones son:
+
+- `202607240001_add_tenant_notification_foundation.py`.
+- `202607270001_add_notification_worker_state.py`.
+
+## Worker de notificaciones
+
+El worker requiere PostgreSQL y debe ejecutarse como un proceso separado del servidor FastAPI:
+
+```powershell
+cd backend
+
+# Procesar todos los lotes actualmente vencidos y salir
+python -m app.workers.notification_worker --once
+
+# Operación persistente
+python -m app.workers.notification_worker
+```
+
+Antes de habilitarlo en un entorno:
+
+1. Ejecute `alembic upgrade head` y confirme una sola head.
+2. Verifique que la configuración WhatsApp del tenant esté activa y que existan plantillas Meta aprobadas.
+3. Confirme capacidades y reglas desde `/crm/settings/notifications`.
+4. Arranque al menos un worker persistente y compruebe que reclama entregas vencidas.
+5. Revise sólo metadata y códigos sanitizados; no registre teléfonos, mensajes, tokens, payloads o claim tokens.
+
+El worker procesa cada lote reclamado hasta terminar y sólo atiende la señal de apagado antes de reclamar el siguiente. Los claims vencidos se recuperan según el lease y la política de recuperación configurada.
 
 ## Pruebas y calidad
 
@@ -43,6 +73,20 @@ cd ..
 git diff --check
 ```
 
+Para validar únicamente automatizaciones y notificaciones:
+
+```powershell
+cd backend
+python -m unittest test_notification_admin test_notification_models test_notification_orchestrator test_notification_event_pipeline test_notification_delivery_claim_service test_notification_delivery_recovery test_notification_retry_policy test_notification_schedule_reconciliation test_notification_worker test_whatsapp_notification_executor
+
+cd ..\frontend
+npx.cmd playwright test tests/crm-notifications.spec.ts --project=crm-visual
+```
+
+Playwright usa `frontend/playwright/.auth/user.json`. Si la prueba abre "Te damos la bienvenida" o espera indefinidamente la pestaña Reglas, renueve la sesión con `npm.cmd run qa:auth` y vuelva a ejecutar el proyecto `crm-visual`.
+
+`test_notification_worker_postgres` valida claims concurrentes contra una base real. Ejecútela por separado y sólo con `DATABASE_URL` configurada hacia PostgreSQL de pruebas; no use una base compartida ni de producción.
+
 Ejecute pruebas focalizadas durante el desarrollo y la suite completa antes de merge. Playwright requiere el entorno definido en su configuración y, según el proyecto, sesión Auth0 preparada.
 
 ## Despliegue
@@ -54,6 +98,7 @@ El repositorio contiene Dockerfiles separados para frontend y backend. El despli
 3. Ejecute migraciones una sola vez desde un job controlado.
 4. Verifique health/API, login, dashboard y un flujo representativo del canal modificado.
 5. Confirme firmas y URLs públicas de webhooks.
+6. Si el entorno usa automatizaciones, despliegue y supervise también el proceso `app.workers.notification_worker`; desplegar sólo FastAPI no procesa la cola pendiente.
 
 `NEXT_PUBLIC_API_URL` es build-time: cambiarla exige reconstruir el frontend.
 
@@ -70,5 +115,7 @@ El repositorio contiene Dockerfiles separados para frontend y backend. El despli
 - CORS: comprobar origen exacto, regex/configuración backend y reconstrucción del frontend si cambió su API pública.
 - DB: comprobar `DATABASE_URL`, disponibilidad, `alembic current` y `alembic heads`.
 - Integración: usar primero el endpoint de test del tenant y revisar sólo el error sanitizado.
+- Notificaciones: comprobar capacidad y regla activas, plantilla Meta `APPROVED`, mapeo completo, `scheduled_for`, estado de la entrega y actividad del worker.
+- Playwright de notificaciones: si aparece el login, el `storageState` expiró; regenérelo con `npm.cmd run qa:auth`.
 - Webhook: validar URL pública, secreto/firma, status HTTP e idempotencia.
 - Assets: comprobar driver, bucket/ruta, permisos y límites de tamaño; el bucket no debe ser público.

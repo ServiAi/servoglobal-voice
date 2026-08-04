@@ -13,6 +13,12 @@
 
 `docs-local/fase-2/` documenta los sprints del CRM y `docs-local/fase-3/` los sprints de integraciones. Son evidencia histórica: si difieren del código o de los documentos canónicos, prevalecen el código actual y `docs/`.
 
+## Punto de continuidad actual
+
+La administración tenant de automatizaciones y notificaciones está disponible en `/[locale]/crm/settings/notifications`. Su estado funcional, arquitectura, endpoints y operación se documentan respectivamente en `PROJECT_STATUS.md`, `ARCHITECTURE.md`, `API_REFERENCE.md` y `OPERATIONS.md`.
+
+Los últimos cambios de UI añadieron ayuda contextual a todos los campos de reglas y cierre automático al hacer clic fuera de la ayuda. El comportamiento compartido vive en `frontend/components/crm/integrations/FieldHelp.tsx`; no debe duplicarse dentro de cada formulario.
+
 ## Guías especializadas
 
 - [../backend/WHATSAPP_CHATWOOT_ARCHITECTURE.md](../backend/WHATSAPP_CHATWOOT_ARCHITECTURE.md)
@@ -21,4 +27,4 @@
 
 ## Mantenimiento
 
-Al cerrar una funcionalidad, actualice primero `PROJECT_STATUS.md`; si cambia una ruta o contrato, actualice `API_REFERENCE.md`; si cambia infraestructura o variables, actualice `OPERATIONS.md`. No copie secretos, IDs reales ni datos de clientes a la documentación.
+Al cerrar una funcionalidad, actualice primero `PROJECT_STATUS.md`; si cambia una ruta o contrato, actualice `API_REFERENCE.md`; si cambia infraestructura o variables, actualice `OPERATIONS.md`; y si cambia un invariante para agentes, actualice `AGENTS.md`. No copie secretos, IDs reales ni datos de clientes a la documentación.
