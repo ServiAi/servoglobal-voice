@@ -12,6 +12,21 @@ from app.schemas.tenant_features import VoiceExperienceLimits
 VOICE_EXPERIENCES = "voice_experiences"
 SUPPORTED_FEATURES = frozenset({VOICE_EXPERIENCES})
 
+_UNIQUE_CONSTRAINT_NAME = "uq_tenant_feature_grants_tenant_feature_key"
+
+
+def _is_feature_grant_unique_violation(exc: IntegrityError) -> bool:
+    diag = getattr(getattr(exc, "orig", None), "diag", None)
+    constraint_name = getattr(diag, "constraint_name", None)
+    if constraint_name is not None:
+        return constraint_name == _UNIQUE_CONSTRAINT_NAME
+    message = str(exc.orig) if exc.orig is not None else str(exc)
+    return (
+        "UNIQUE constraint failed" in message
+        and "tenant_feature_grants.tenant_id" in message
+        and "tenant_feature_grants.feature_key" in message
+    )
+
 
 class UnknownTenantFeatureError(ValueError):
     pass
@@ -68,7 +83,8 @@ class TenantFeatureService:
                 TenantFeatureGrant.feature_key == feature_key,
             )
         )
-        if grant is None:
+        is_new = grant is None
+        if is_new:
             grant = TenantFeatureGrant(
                 tenant_id=tenant_id,
                 feature_key=feature_key,
@@ -79,8 +95,10 @@ class TenantFeatureService:
         grant.enabled_by_user_id = enabled_by_user_id
         try:
             self.db.commit()
-        except IntegrityError:
+        except IntegrityError as exc:
             self.db.rollback()
+            if not is_new or not _is_feature_grant_unique_violation(exc):
+                raise
             grant = self.db.scalar(
                 select(TenantFeatureGrant).where(
                     TenantFeatureGrant.tenant_id == tenant_id,

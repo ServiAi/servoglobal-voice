@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from types import SimpleNamespace
 import unittest
+from unittest.mock import patch
 
 os.environ.setdefault("ULTRAVOX_API_KEY", "test_ultravox_key")
 os.environ.setdefault("AUTH0_DOMAIN", "example.auth0.com")
@@ -14,6 +16,7 @@ os.environ["DATABASE_URL"] = f"sqlite:///./{TEST_DB_PATH.as_posix()}"
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
 from app.api.auth.deps import AuthContext, get_current_auth_context
 from app.db.base import Base
@@ -26,6 +29,8 @@ from app.services.tenant_feature_service import (
     TenantFeatureDisabledError,
     UnknownTenantFeatureError,
     VOICE_EXPERIENCES,
+    _UNIQUE_CONSTRAINT_NAME,
+    _is_feature_grant_unique_violation,
 )
 
 
@@ -39,10 +44,17 @@ class TenantFeatureTests(unittest.TestCase):
         Base.metadata.drop_all(bind=engine)
         Base.metadata.create_all(bind=engine)
         app.dependency_overrides.clear()
-        self.tenant_a_id, self.tenant_b_id, self.platform_user_id, self.tenant_user_id = (
-            self._seed_data()
-        )
-        self.current_user_id = self.platform_user_id
+        ids = self._seed_data()
+        self.tenant_a_id = ids["tenant_a_id"]
+        self.tenant_b_id = ids["tenant_b_id"]
+        self.internal_user_id = ids["internal_user_id"]
+        self.platform_admin_user_id = ids["platform_admin_user_id"]
+        self.tenant_admin_user_id = ids["tenant_admin_user_id"]
+        self.tenant_analyst_user_id = ids["tenant_analyst_user_id"]
+        self.tenant_viewer_user_id = ids["tenant_viewer_user_id"]
+        # Default actor is the internal platform user: most tests exercise the
+        # happy path, only the dedicated authorization tests switch actors.
+        self.current_user_id = self.internal_user_id
         app.dependency_overrides[get_current_auth_context] = self._auth_context_override
         self.client = TestClient(app)
 
@@ -50,42 +62,99 @@ class TenantFeatureTests(unittest.TestCase):
         app.dependency_overrides.clear()
         Base.metadata.drop_all(bind=engine)
 
-    def _seed_data(self) -> tuple[str, str, str, str]:
+    def _seed_data(self) -> dict:
         with SessionLocal() as db:
             tenant_a = Tenant(name="Tenant A", slug="tenant-a")
             tenant_b = Tenant(name="Tenant B", slug="tenant-b")
-            platform_user = User(
+            internal_user = User(
+                email="internal@example.com",
+                name="Internal Staff",
+                status="active",
+                is_internal=True,
+            )
+            platform_admin_user = User(
                 email="platform@example.com",
                 name="Platform Admin",
                 status="active",
                 is_internal=False,
             )
-            tenant_user = User(
-                email="tenant@example.com",
+            tenant_admin_user = User(
+                email="tenant-admin@example.com",
                 name="Tenant Admin",
                 status="active",
                 is_internal=False,
             )
-            db.add_all([tenant_a, tenant_b, platform_user, tenant_user])
+            tenant_analyst_user = User(
+                email="tenant-analyst@example.com",
+                name="Tenant Analyst",
+                status="active",
+                is_internal=False,
+            )
+            tenant_viewer_user = User(
+                email="tenant-viewer@example.com",
+                name="Tenant Viewer",
+                status="active",
+                is_internal=False,
+            )
+            db.add_all(
+                [
+                    tenant_a,
+                    tenant_b,
+                    internal_user,
+                    platform_admin_user,
+                    tenant_admin_user,
+                    tenant_analyst_user,
+                    tenant_viewer_user,
+                ]
+            )
             db.flush()
+            # All actors hold their membership on tenant_a. Internal-user tests
+            # then operate on tenant_b on purpose, to prove authorization does
+            # not depend on the context tenant matching the path tenant_id.
             db.add_all(
                 [
                     TenantMembership(
                         tenant_id=tenant_a.id,
-                        user_id=platform_user.id,
+                        user_id=internal_user.id,
                         role="platform_admin",
                         status="active",
                     ),
                     TenantMembership(
                         tenant_id=tenant_a.id,
-                        user_id=tenant_user.id,
+                        user_id=platform_admin_user.id,
+                        role="platform_admin",
+                        status="active",
+                    ),
+                    TenantMembership(
+                        tenant_id=tenant_a.id,
+                        user_id=tenant_admin_user.id,
                         role="tenant_admin",
+                        status="active",
+                    ),
+                    TenantMembership(
+                        tenant_id=tenant_a.id,
+                        user_id=tenant_analyst_user.id,
+                        role="tenant_analyst",
+                        status="active",
+                    ),
+                    TenantMembership(
+                        tenant_id=tenant_a.id,
+                        user_id=tenant_viewer_user.id,
+                        role="tenant_viewer",
                         status="active",
                     ),
                 ]
             )
             db.commit()
-            return tenant_a.id, tenant_b.id, platform_user.id, tenant_user.id
+            return {
+                "tenant_a_id": tenant_a.id,
+                "tenant_b_id": tenant_b.id,
+                "internal_user_id": internal_user.id,
+                "platform_admin_user_id": platform_admin_user.id,
+                "tenant_admin_user_id": tenant_admin_user.id,
+                "tenant_analyst_user_id": tenant_analyst_user.id,
+                "tenant_viewer_user_id": tenant_viewer_user.id,
+            }
 
     async def _auth_context_override(self) -> AuthContext:
         with SessionLocal() as db:
@@ -109,40 +178,71 @@ class TenantFeatureTests(unittest.TestCase):
             "limits": {"max_experiences": 5, "max_context_fields": 20},
         }
 
+    def _get(self, tenant_id: str):
+        return self.client.get(f"/api/v1/admin/tenants/{tenant_id}/features")
+
     def _put(self, tenant_id: str, payload: dict | None = None):
         return self.client.put(
             f"/api/v1/admin/tenants/{tenant_id}/features/voice-experiences",
             json=payload or self._payload(),
         )
 
-    def test_platform_admin_can_create_enabled_feature(self) -> None:
-        response = self._put(self.tenant_a_id)
+    # ---- P1: authorization -------------------------------------------------
+
+    def test_internal_user_can_list_features_for_any_tenant(self) -> None:
+        # internal_user's own membership is on tenant_a; tenant_b is a
+        # different tenant, proving the check does not compare tenants.
+        response = self._get(self.tenant_b_id)
+        self.assertEqual(response.status_code, 200)
+
+    def test_internal_user_can_configure_features_for_any_tenant(self) -> None:
+        response = self._put(self.tenant_b_id)
 
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.json()["enabled"])
         with SessionLocal() as db:
             grant = db.scalar(
                 select(TenantFeatureGrant).where(
-                    TenantFeatureGrant.tenant_id == self.tenant_a_id
+                    TenantFeatureGrant.tenant_id == self.tenant_b_id
                 )
             )
             self.assertEqual(grant.feature_key, VOICE_EXPERIENCES)
             self.assertTrue(grant.enabled)
-            self.assertEqual(grant.enabled_by_user_id, self.platform_user_id)
+            self.assertEqual(grant.enabled_by_user_id, self.internal_user_id)
 
-    def test_internal_platform_user_can_configure_feature(self) -> None:
-        with SessionLocal() as db:
-            user = db.get(User, self.platform_user_id)
-            membership = db.scalar(
-                select(TenantMembership).where(
-                    TenantMembership.user_id == self.platform_user_id
-                )
-            )
-            user.is_internal = True
-            membership.role = "tenant_admin"
-            db.commit()
+    def test_authorization_does_not_depend_on_context_tenant_matching_path(self) -> None:
+        # Same actor as above (context.tenant == tenant_a) succeeding against
+        # tenant_b is the explicit regression check for the old tenant-match
+        # fallback that used to gate access.
+        self.current_user_id = self.internal_user_id
+        self.assertEqual(self._get(self.tenant_b_id).status_code, 200)
+        self.assertEqual(self._put(self.tenant_b_id).status_code, 200)
 
-        self.assertEqual(self._put(self.tenant_a_id).status_code, 200)
+    def test_non_internal_platform_admin_role_is_forbidden_on_own_tenant(self) -> None:
+        self.current_user_id = self.platform_admin_user_id
+        self.assertEqual(self._get(self.tenant_a_id).status_code, 403)
+        self.assertEqual(self._put(self.tenant_a_id).status_code, 403)
+
+    def test_tenant_admin_is_forbidden(self) -> None:
+        self.current_user_id = self.tenant_admin_user_id
+        self.assertEqual(self._get(self.tenant_a_id).status_code, 403)
+        self.assertEqual(self._put(self.tenant_a_id).status_code, 403)
+
+    def test_tenant_analyst_is_forbidden(self) -> None:
+        self.current_user_id = self.tenant_analyst_user_id
+        self.assertEqual(self._get(self.tenant_a_id).status_code, 403)
+        self.assertEqual(self._put(self.tenant_a_id).status_code, 403)
+
+    def test_tenant_viewer_is_forbidden(self) -> None:
+        self.current_user_id = self.tenant_viewer_user_id
+        self.assertEqual(self._get(self.tenant_a_id).status_code, 403)
+        self.assertEqual(self._put(self.tenant_a_id).status_code, 403)
+
+    def test_unknown_tenant_is_rejected_for_internal_user(self) -> None:
+        self.assertEqual(self._get("missing-tenant").status_code, 404)
+        self.assertEqual(self._put("missing-tenant").status_code, 404)
+
+    # ---- Functional behavior (unaffected by P1, kept under the internal actor) --
 
     def test_update_existing_feature_without_duplicate(self) -> None:
         self.assertEqual(self._put(self.tenant_a_id).status_code, 200)
@@ -161,53 +261,6 @@ class TenantFeatureTests(unittest.TestCase):
             self.assertEqual(count, 1)
             self.assertEqual(grant.limits_json["max_experiences"], 8)
 
-    def test_concurrent_create_retries_the_unique_constraint_winner(self) -> None:
-        with SessionLocal() as db:
-            original_commit = db.commit
-            original_rollback = db.rollback
-            first_commit = True
-
-            def commit_with_race() -> None:
-                nonlocal first_commit
-                if first_commit:
-                    first_commit = False
-                    raise IntegrityError("insert tenant feature", {}, Exception("unique"))
-                original_commit()
-
-            def rollback_with_concurrent_winner() -> None:
-                original_rollback()
-                with SessionLocal() as concurrent_db:
-                    concurrent_db.add(
-                        TenantFeatureGrant(
-                            tenant_id=self.tenant_a_id,
-                            feature_key=VOICE_EXPERIENCES,
-                            enabled=False,
-                            limits_json={
-                                "max_experiences": 1,
-                                "max_context_fields": 1,
-                            },
-                            enabled_by_user_id=self.platform_user_id,
-                        )
-                    )
-                    concurrent_db.commit()
-
-            db.commit = commit_with_race
-            db.rollback = rollback_with_concurrent_winner
-            grant = TenantFeatureService(db).set_feature(
-                self.tenant_a_id,
-                VOICE_EXPERIENCES,
-                True,
-                self._payload()["limits"],
-                self.platform_user_id,
-            )
-
-            self.assertTrue(grant.enabled)
-            self.assertEqual(grant.limits_json, self._payload()["limits"])
-
-        with SessionLocal() as db:
-            count = db.scalar(select(func.count()).select_from(TenantFeatureGrant))
-            self.assertEqual(count, 1)
-
     def test_disabled_feature_is_not_enabled_or_allowed(self) -> None:
         self.assertEqual(self._put(self.tenant_a_id, self._payload(False)).status_code, 200)
         with SessionLocal() as db:
@@ -224,58 +277,17 @@ class TenantFeatureTests(unittest.TestCase):
                     "unknown_feature",
                     True,
                     self._payload()["limits"],
-                    self.platform_user_id,
+                    self.internal_user_id,
                 )
 
-    def test_unknown_tenant_is_rejected(self) -> None:
-        with SessionLocal() as db:
-            db.get(User, self.platform_user_id).is_internal = True
-            db.commit()
-
-        list_response = self.client.get(
-            "/api/v1/admin/tenants/missing-tenant/features"
-        )
-        put_response = self._put("missing-tenant")
-
-        self.assertEqual(list_response.status_code, 404)
-        self.assertEqual(put_response.status_code, 404)
-
     def test_features_are_isolated_between_tenants(self) -> None:
-        with SessionLocal() as db:
-            db.get(User, self.platform_user_id).is_internal = True
-            db.commit()
-
         self.assertEqual(self._put(self.tenant_a_id).status_code, 200)
         self.assertEqual(self._put(self.tenant_b_id, self._payload(False)).status_code, 200)
 
-        tenant_a = self.client.get(
-            f"/api/v1/admin/tenants/{self.tenant_a_id}/features"
-        ).json()
-        tenant_b = self.client.get(
-            f"/api/v1/admin/tenants/{self.tenant_b_id}/features"
-        ).json()
+        tenant_a = self._get(self.tenant_a_id).json()
+        tenant_b = self._get(self.tenant_b_id).json()
         self.assertTrue(tenant_a[0]["enabled"])
         self.assertFalse(tenant_b[0]["enabled"])
-
-    def test_non_internal_platform_admin_cannot_access_another_tenant(self) -> None:
-        get_response = self.client.get(
-            f"/api/v1/admin/tenants/{self.tenant_b_id}/features"
-        )
-        put_response = self._put(self.tenant_b_id)
-
-        self.assertEqual(get_response.status_code, 403)
-        self.assertEqual(put_response.status_code, 403)
-
-    def test_tenant_user_cannot_use_admin_feature_endpoints(self) -> None:
-        self.current_user_id = self.tenant_user_id
-
-        self.assertEqual(
-            self.client.get(
-                f"/api/v1/admin/tenants/{self.tenant_a_id}/features"
-            ).status_code,
-            403,
-        )
-        self.assertEqual(self._put(self.tenant_a_id).status_code, 403)
 
     def test_limits_are_validated_and_persisted(self) -> None:
         invalid = self._put(
@@ -304,8 +316,131 @@ class TenantFeatureTests(unittest.TestCase):
             set(payload),
             {"feature_key", "enabled", "limits", "created_at", "updated_at"},
         )
-        self.assertNotIn(self.platform_user_id, response.text)
-        self.assertNotIn("platform@example.com", response.text)
+        self.assertNotIn(self.internal_user_id, response.text)
+        self.assertNotIn("internal@example.com", response.text)
+
+    # ---- P2: IntegrityError handling ---------------------------------------
+
+    def test_concurrent_create_recovers_via_real_unique_violation(self) -> None:
+        original_commit = Session.commit
+        injected = False
+
+        def racing_commit(session_self, *args, **kwargs):
+            nonlocal injected
+            if not injected:
+                injected = True
+                with SessionLocal() as other:
+                    other.add(
+                        TenantFeatureGrant(
+                            tenant_id=self.tenant_a_id,
+                            feature_key=VOICE_EXPERIENCES,
+                            enabled=False,
+                            limits_json={"max_experiences": 1, "max_context_fields": 1},
+                        )
+                    )
+                    other.commit()
+            return original_commit(session_self, *args, **kwargs)
+
+        with patch.object(Session, "commit", racing_commit):
+            with SessionLocal() as db:
+                service = TenantFeatureService(db)
+                grant = service.set_feature(
+                    self.tenant_a_id,
+                    VOICE_EXPERIENCES,
+                    True,
+                    self._payload()["limits"],
+                    self.internal_user_id,
+                )
+                # the session must remain usable right after recovering
+                recount = db.scalar(select(func.count()).select_from(TenantFeatureGrant))
+                self.assertEqual(recount, 1)
+
+        self.assertTrue(grant.enabled)
+        self.assertEqual(grant.limits_json, self._payload()["limits"])
+        self.assertEqual(grant.enabled_by_user_id, self.internal_user_id)
+        with SessionLocal() as db:
+            count = db.scalar(select(func.count()).select_from(TenantFeatureGrant))
+            self.assertEqual(count, 1)
+
+    def test_other_integrity_error_is_reraised_on_create(self) -> None:
+        fake_orig = SimpleNamespace(diag=SimpleNamespace(constraint_name="some_other_fk"))
+        fake_error = IntegrityError("INSERT", {}, fake_orig)
+        with SessionLocal() as db:
+            with patch.object(Session, "commit", side_effect=fake_error):
+                with self.assertRaises(IntegrityError):
+                    TenantFeatureService(db).set_feature(
+                        self.tenant_a_id,
+                        VOICE_EXPERIENCES,
+                        True,
+                        self._payload()["limits"],
+                        self.internal_user_id,
+                    )
+
+    def test_foreign_key_violation_is_not_hidden(self) -> None:
+        fake_error = IntegrityError("INSERT", {}, Exception("FOREIGN KEY constraint failed"))
+        with SessionLocal() as db:
+            with patch.object(Session, "commit", side_effect=fake_error):
+                with self.assertRaises(IntegrityError):
+                    TenantFeatureService(db).set_feature(
+                        self.tenant_a_id,
+                        VOICE_EXPERIENCES,
+                        True,
+                        self._payload()["limits"],
+                        self.internal_user_id,
+                    )
+
+    def test_integrity_error_on_update_is_reraised_even_for_matching_constraint(self) -> None:
+        with SessionLocal() as db:
+            TenantFeatureService(db).set_feature(
+                self.tenant_a_id,
+                VOICE_EXPERIENCES,
+                True,
+                self._payload()["limits"],
+                self.internal_user_id,
+            )
+
+        fake_orig = SimpleNamespace(diag=SimpleNamespace(constraint_name=_UNIQUE_CONSTRAINT_NAME))
+        fake_error = IntegrityError("UPDATE", {}, fake_orig)
+        with SessionLocal() as db:
+            with patch.object(Session, "commit", side_effect=fake_error):
+                with self.assertRaises(IntegrityError):
+                    TenantFeatureService(db).set_feature(
+                        self.tenant_a_id,
+                        VOICE_EXPERIENCES,
+                        False,
+                        self._payload()["limits"],
+                        self.internal_user_id,
+                    )
+
+
+class FeatureGrantUniqueViolationDetectionTests(unittest.TestCase):
+    def test_detects_postgres_constraint_name(self) -> None:
+        orig = SimpleNamespace(diag=SimpleNamespace(constraint_name=_UNIQUE_CONSTRAINT_NAME))
+        exc = IntegrityError("INSERT", {}, orig)
+        self.assertTrue(_is_feature_grant_unique_violation(exc))
+
+    def test_rejects_different_postgres_constraint_name(self) -> None:
+        orig = SimpleNamespace(diag=SimpleNamespace(constraint_name="some_other_fk"))
+        exc = IntegrityError("INSERT", {}, orig)
+        self.assertFalse(_is_feature_grant_unique_violation(exc))
+
+    def test_detects_sqlite_message_with_exact_columns(self) -> None:
+        orig = Exception(
+            "UNIQUE constraint failed: tenant_feature_grants.tenant_id, "
+            "tenant_feature_grants.feature_key"
+        )
+        exc = IntegrityError("INSERT", {}, orig)
+        self.assertTrue(_is_feature_grant_unique_violation(exc))
+
+    def test_rejects_sqlite_message_for_different_table(self) -> None:
+        orig = Exception("UNIQUE constraint failed: tenant_notification_rules.id")
+        exc = IntegrityError("INSERT", {}, orig)
+        self.assertFalse(_is_feature_grant_unique_violation(exc))
+
+    def test_rejects_generic_unique_keyword_without_matching_columns(self) -> None:
+        orig = Exception("UNIQUE constraint failed")
+        exc = IntegrityError("INSERT", {}, orig)
+        self.assertFalse(_is_feature_grant_unique_violation(exc))
 
 
 if __name__ == "__main__":
