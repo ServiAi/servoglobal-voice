@@ -2,7 +2,7 @@ import os
 import sys
 import json
 
-os.environ['DATABASE_URL'] = 'postgresql+psycopg://serviai_user:Pancracio810129%2A%2B@127.0.0.1:15432/serviai_staging'
+os.environ['DATABASE_URL'] = os.environ['STAGING_DATABASE_URL']
 
 from fastapi.testclient import TestClient
 from app.main import app
