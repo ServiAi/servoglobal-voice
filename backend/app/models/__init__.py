@@ -32,6 +32,7 @@ from app.models.notifications import (
     TenantNotificationRule,
 )
 from app.models.tenant_features import TenantFeatureGrant
+from app.models.voice_context import TenantVoiceContextField, TenantVoiceContextSchema
 
 __all__ = [
     "AccessAuditLog",
@@ -51,6 +52,8 @@ __all__ = [
     "TenantFeatureGrant",
     "TenantVoiceProviderConfig",
     "TenantVoiceAgentConfig",
+    "TenantVoiceContextField",
+    "TenantVoiceContextSchema",
     "TenantWhatsAppConfig",
     "TenantWhatsAppTemplate",
     "TenantMembership",

@@ -22,7 +22,7 @@ La especificación ejecutable completa está disponible en `/docs` y `/openapi.j
 | `/api/v1/admin` | Tenants, planes, uso, membresías, agentes e integraciones administradas. |
 | `/api/v1/admin/notifications` | Administración tenant de capacidades, reglas, destinatarios y entregas. El tenant se deriva del contexto autenticado. |
 | `/api/v1/admin/tenants/{tenant_id}/features` | Grants de funcionalidades por tenant para administradores de plataforma. |
-| `/api/v1/voice` | Inicio de llamadas y operación de voz. |
+| `/api/v1/voice` | Inicio de llamadas, operación de voz y context schemas privados por agente. |
 | `/api/v1/voice/tools` | Disponibilidad y booking para agentes internos protegidos. |
 | `/api/v1/webhook/whatsapp` | Verificación y eventos Meta. |
 | `/api/v1/calcom/webhook` | Reconciliación Cal.com. |
@@ -88,7 +88,22 @@ Los endpoints requieren `context.user.is_internal == true`; ningún rol de membr
 | `GET /api/v1/admin/tenants/{tenant_id}/features` | Lista grants persistidos del tenant. |
 | `PUT /api/v1/admin/tenants/{tenant_id}/features/voice-experiences` | Crea o actualiza `voice_experiences` con `enabled`, `max_experiences` y `max_context_fields`. |
 
-La respuesta omite el identificador del tenant, el usuario que realizó el cambio y cualquier dato sensible. No existe todavía una API tenant para esta funcionalidad.
+La respuesta omite el identificador del tenant, el usuario que realizó el cambio y cualquier dato sensible.
+
+## Voice Context Experiences
+
+| Método y ruta | Uso |
+| --- | --- |
+| `GET/POST /api/v1/voice/agents/{agent_config_id}/context-schemas` | Lista lineages o crea un draft para el agente autenticado. |
+| `GET /api/v1/voice/agents/{agent_config_id}/context-schemas/{schema_key}/versions` | Consulta el historial completo del lineage. |
+| `GET/PUT /api/v1/voice/context-schemas/{schema_id}` | Consulta o edita metadata draft. |
+| `POST /api/v1/voice/context-schemas/{schema_id}/fields` | Agrega un campo a un draft. |
+| `PUT/DELETE /api/v1/voice/context-schemas/{schema_id}/fields/{field_id}` | Edita o elimina un campo draft. |
+| `POST /api/v1/voice/context-schemas/{schema_id}/activate` | Activa el draft y archiva la active anterior del lineage. |
+| `POST /api/v1/voice/context-schemas/{schema_id}/archive` | Archiva un draft o active. |
+| `POST /api/v1/voice/context-schemas/{schema_id}/new-version` | Clona una versión inmutable a un nuevo draft. |
+
+El tenant se deriva de `AuthContext`; los bodies rechazan `tenant_id`. Lectura: plataforma interna y roles tenant de lectura. Escritura: plataforma interna y `tenant_admin`. La feature `voice_experiences` debe estar habilitada; en context schemas sólo se aplica `max_context_fields`. `max_experiences` queda reservado para futuras entidades `TenantVoiceExperience`.
 
 ## Convenciones
 
