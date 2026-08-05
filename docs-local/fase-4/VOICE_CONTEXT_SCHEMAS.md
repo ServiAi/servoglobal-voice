@@ -34,7 +34,7 @@ Los cuerpos usan `extra="forbid"`: no aceptan `tenant_id`, `agent_config_id` ni 
 ## Límites y transiciones
 
 - `max_context_fields` limita los campos de cada schema.
-- `max_experiences` no limita context schemas; se aplicará posteriormente sobre `TenantVoiceExperience`.
+- `max_experiences` ya se aplica sobre `TenantVoiceExperience` (ver `VOICE_EXPERIENCE_MANAGEMENT.md`): cuenta experiencias no archivadas, no context schemas ni sus versiones.
 - Los campos `select` exigen opciones tipadas con values únicos; los demás tipos no admiten opciones.
 - Transiciones: `draft -> active -> archived` y `draft -> archived`.
 - Un schema active o archived sólo puede evolucionar mediante `new-version`.
