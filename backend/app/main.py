@@ -50,6 +50,7 @@ from app.api.endpoints import crm_voice
 from app.api.endpoints import voice_webhook
 from app.api.endpoints import notification_admin
 from app.api.endpoints import voice_context_schemas
+from app.api.endpoints import voice_experiences
 
 app.include_router(notifications.router)
 app.include_router(chatwoot_webhook.router)
@@ -72,6 +73,7 @@ app.include_router(crm_voice.router)
 app.include_router(voice_webhook.router)
 app.include_router(notification_admin.router)
 app.include_router(voice_context_schemas.router)
+app.include_router(voice_experiences.router)
 
 @app.get("/health")
 def health_check():
