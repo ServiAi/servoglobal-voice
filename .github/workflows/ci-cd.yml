@@ -73,13 +73,3 @@ jobs:
         run: npx tsc --noEmit --incremental false
       - working-directory: frontend
         run: npm run build
-
-  deploy:
-    needs: [backend-tests, frontend-checks]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Deploy Frontend
-        run: curl -sf -X POST "${{ secrets.DOKPLOY_FRONTEND_WEBHOOK }}"
-      - name: Deploy Backend
-        run: curl -sf -X POST "${{ secrets.DOKPLOY_BACKEND_WEBHOOK }}"
