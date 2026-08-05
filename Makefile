@@ -1,4 +1,4 @@
-.PHONY: infra-up infra-down migrate backend worker frontend dev lint lint-backend lint-frontend
+.PHONY: infra-up infra-down migrate migrate-heads migrate-current backend worker frontend dev lint lint-backend lint-frontend
 
 infra-up:
 	docker compose up -d
@@ -8,6 +8,12 @@ infra-down:
 
 migrate:
 	unset DATABASE_URL && cd backend && alembic upgrade head
+
+migrate-heads:
+	unset DATABASE_URL && cd backend && alembic heads
+
+migrate-current:
+	unset DATABASE_URL && cd backend && alembic current
 
 backend:
 	unset DATABASE_URL && cd backend && uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
