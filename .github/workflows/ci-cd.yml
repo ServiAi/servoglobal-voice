@@ -33,7 +33,14 @@ jobs:
         working-directory: backend
         run: |
           modules=$(ls test_*.py | grep -v -e test_endpoints.py -e test_kpis.py -e test_db.py -e test_db_user.py -e test_db_validation.py | sed 's/\.py$//')
-          python -m unittest $modules
+          status=0
+          for module in $modules; do
+            # Most test modules pin DATABASE_URL to their own sqlite file at import time,
+            # but app.db.session builds its engine once per process, so batching modules
+            # into a single unittest run makes them silently share (and corrupt) one DB.
+            python -m unittest "$module" || status=1
+          done
+          exit $status
       - name: Compile check
         working-directory: backend
         run: python -m compileall app
