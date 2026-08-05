@@ -33,6 +33,25 @@ class VoiceContextConflictError(PermissionError):
     pass
 
 
+FIELD_KEY_CONSTRAINT = "uq_tenant_voice_context_fields_schema_key"
+FIELD_POSITION_CONSTRAINT = "uq_tenant_voice_context_fields_schema_position"
+ACTIVE_LINEAGE_INDEX = "uq_tenant_voice_context_schemas_active_lineage"
+DRAFT_LINEAGE_INDEX = "uq_tenant_voice_context_schemas_draft_lineage"
+
+
+def _constraint_name(exc: IntegrityError) -> str | None:
+    return getattr(getattr(exc.orig, "diag", None), "constraint_name", None)
+
+
+def _matches_constraint(
+    exc: IntegrityError, name: str, sqlite_columns: tuple[str, ...]
+) -> bool:
+    if _constraint_name(exc) is not None:
+        return _constraint_name(exc) == name
+    message = str(exc.orig) if exc.orig is not None else str(exc)
+    return message == "UNIQUE constraint failed: " + ", ".join(sqlite_columns)
+
+
 class VoiceContextService:
     def __init__(self, db: Session) -> None:
         self.db = db
@@ -101,7 +120,7 @@ class VoiceContextService:
         body: VoiceContextSchemaCreateRequest,
         user_id: str | None,
     ) -> TenantVoiceContextSchema:
-        grant, agent = self._require_feature_and_agent(tenant_id, agent_config_id)
+        _, agent = self._require_feature_and_agent(tenant_id, agent_config_id)
         existing = self.db.scalar(
             select(TenantVoiceContextSchema.id).where(
                 TenantVoiceContextSchema.tenant_id == tenant_id,
@@ -111,7 +130,6 @@ class VoiceContextService:
         )
         if existing:
             raise VoiceContextValidationError("Schema key already exists for this voice agent.")
-        self._ensure_experience_capacity(tenant_id, self._limits(grant))
         schema = TenantVoiceContextSchema(
             tenant_id=tenant_id,
             agent_config_id=agent_config_id,
@@ -123,8 +141,16 @@ class VoiceContextService:
             created_by_user_id=user_id,
         )
         self.db.add(schema)
-        self.db.flush()
-        self._record_event(schema, agent.provider, "context_schema_created")
+        try:
+            self.db.flush()
+            self._record_event(schema, agent.provider, "context_schema_created")
+        except IntegrityError as exc:
+            self.db.rollback()
+            if self._is_lineage_status_violation(exc, DRAFT_LINEAGE_INDEX):
+                raise VoiceContextConflictError(
+                    "A draft schema already exists for this lineage."
+                ) from exc
+            raise
         self.db.refresh(schema)
         return schema
 
@@ -224,10 +250,22 @@ class VoiceContextService:
         for active in active_schemas:
             active.status = "archived"
             active.archived_at = now
-        schema.status = "active"
-        schema.activated_at = now
-        schema.archived_at = None
-        self._record_event(schema, agent.provider, "context_schema_activated", user_id)
+        try:
+            if active_schemas:
+                self.db.flush()
+            schema.status = "active"
+            schema.activated_at = now
+            schema.archived_at = None
+            self._record_event(
+                schema, agent.provider, "context_schema_activated", user_id
+            )
+        except IntegrityError as exc:
+            self.db.rollback()
+            if self._is_lineage_status_violation(exc, ACTIVE_LINEAGE_INDEX):
+                raise VoiceContextConflictError(
+                    "An active schema already exists for this lineage."
+                ) from exc
+            raise
         self.db.refresh(schema)
         return schema
 
@@ -250,17 +288,19 @@ class VoiceContextService:
         source = self.get_schema(tenant_id, schema_id)
         if source.status == "draft":
             raise VoiceContextConflictError("Draft schemas must be edited directly.")
-        grant, agent = self._require_feature_and_agent(tenant_id, source.agent_config_id)
-        consumes_new_lineage = not self.db.scalar(
+        _, agent = self._require_feature_and_agent(tenant_id, source.agent_config_id)
+        existing_draft = self.db.scalar(
             select(TenantVoiceContextSchema.id).where(
                 TenantVoiceContextSchema.tenant_id == tenant_id,
                 TenantVoiceContextSchema.agent_config_id == source.agent_config_id,
                 TenantVoiceContextSchema.schema_key == source.schema_key,
-                TenantVoiceContextSchema.status != "archived",
+                TenantVoiceContextSchema.status == "draft",
             )
         )
-        if consumes_new_lineage:
-            self._ensure_experience_capacity(tenant_id, self._limits(grant))
+        if existing_draft:
+            raise VoiceContextConflictError(
+                "A draft schema already exists for this lineage."
+            )
         next_version = (self.db.scalar(
             select(func.max(TenantVoiceContextSchema.version)).where(
                 TenantVoiceContextSchema.tenant_id == tenant_id,
@@ -283,6 +323,7 @@ class VoiceContextService:
                 tenant_id=tenant_id,
                 key=field.key,
                 label=field.label,
+                description=field.description,
                 field_type=field.field_type,
                 collection_mode=field.collection_mode,
                 required=field.required,
@@ -294,8 +335,16 @@ class VoiceContextService:
             for field in source.fields
         ]
         self.db.add(schema)
-        self.db.flush()
-        self._record_event(schema, agent.provider, "context_schema_created")
+        try:
+            self.db.flush()
+            self._record_event(schema, agent.provider, "context_schema_created")
+        except IntegrityError as exc:
+            self.db.rollback()
+            if self._is_lineage_status_violation(exc, DRAFT_LINEAGE_INDEX):
+                raise VoiceContextConflictError(
+                    "A draft schema already exists for this lineage."
+                ) from exc
+            raise
         self.db.refresh(schema)
         return schema
 
@@ -305,6 +354,7 @@ class VoiceContextService:
             id=field.id,
             key=field.key,
             label=field.label,
+            description=field.description,
             field_type=field.field_type,
             collection_mode=field.collection_mode,
             required=field.required,
@@ -381,21 +431,6 @@ class VoiceContextService:
         self._require_agent(tenant_id, schema.agent_config_id)
         return schema
 
-    def _ensure_experience_capacity(self, tenant_id: str, limits: VoiceExperienceLimits) -> None:
-        lineages = self.db.execute(
-            select(
-                TenantVoiceContextSchema.agent_config_id,
-                TenantVoiceContextSchema.schema_key,
-            )
-            .where(
-                TenantVoiceContextSchema.tenant_id == tenant_id,
-                TenantVoiceContextSchema.status != "archived",
-            )
-            .distinct()
-        ).all()
-        if len(lineages) >= limits.max_experiences:
-            raise VoiceContextValidationError("Maximum voice experiences limit reached.")
-
     @staticmethod
     def _limits(grant) -> VoiceExperienceLimits:
         return VoiceExperienceLimits.model_validate(grant.limits_json)
@@ -405,8 +440,42 @@ class VoiceContextService:
             self.db.commit()
         except IntegrityError as exc:
             self.db.rollback()
-            raise VoiceContextValidationError("Field key already exists in this schema.") from exc
+            if _matches_constraint(
+                exc,
+                FIELD_KEY_CONSTRAINT,
+                (
+                    "tenant_voice_context_fields.schema_id",
+                    "tenant_voice_context_fields.key",
+                ),
+            ):
+                raise VoiceContextValidationError(
+                    "Field key already exists in this schema."
+                ) from exc
+            if _matches_constraint(
+                exc,
+                FIELD_POSITION_CONSTRAINT,
+                (
+                    "tenant_voice_context_fields.schema_id",
+                    "tenant_voice_context_fields.position",
+                ),
+            ):
+                raise VoiceContextValidationError(
+                    "Field position already exists in this schema."
+                ) from exc
+            raise
         self.db.refresh(field)
+
+    @staticmethod
+    def _is_lineage_status_violation(exc: IntegrityError, name: str) -> bool:
+        return _matches_constraint(
+            exc,
+            name,
+            (
+                "tenant_voice_context_schemas.tenant_id",
+                "tenant_voice_context_schemas.agent_config_id",
+                "tenant_voice_context_schemas.schema_key",
+            ),
+        )
 
     def _record_event(
         self,

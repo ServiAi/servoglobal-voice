@@ -23,6 +23,24 @@ class TenantVoiceContextSchema(Base, TimestampMixin):
         Index("ix_tenant_voice_context_schemas_tenant_agent", "tenant_id", "agent_config_id"),
         Index("ix_tenant_voice_context_schemas_tenant_key", "tenant_id", "schema_key"),
         Index("ix_tenant_voice_context_schemas_tenant_status", "tenant_id", "status"),
+        Index(
+            "uq_tenant_voice_context_schemas_active_lineage",
+            "tenant_id",
+            "agent_config_id",
+            "schema_key",
+            unique=True,
+            postgresql_where=sa.text("status = 'active'"),
+            sqlite_where=sa.text("status = 'active'"),
+        ),
+        Index(
+            "uq_tenant_voice_context_schemas_draft_lineage",
+            "tenant_id",
+            "agent_config_id",
+            "schema_key",
+            unique=True,
+            postgresql_where=sa.text("status = 'draft'"),
+            sqlite_where=sa.text("status = 'draft'"),
+        ),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
@@ -61,8 +79,12 @@ class TenantVoiceContextField(Base, TimestampMixin):
             "key",
             name="uq_tenant_voice_context_fields_schema_key",
         ),
+        UniqueConstraint(
+            "schema_id",
+            "position",
+            name="uq_tenant_voice_context_fields_schema_position",
+        ),
         Index("ix_tenant_voice_context_fields_tenant_schema", "tenant_id", "schema_id"),
-        Index("ix_tenant_voice_context_fields_schema_position", "schema_id", "position"),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
@@ -74,6 +96,7 @@ class TenantVoiceContextField(Base, TimestampMixin):
     )
     key: Mapped[str] = mapped_column(String(80), nullable=False)
     label: Mapped[str] = mapped_column(String(160), nullable=False)
+    description: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     field_type: Mapped[str] = mapped_column(String(20), nullable=False)
     collection_mode: Mapped[str] = mapped_column(String(24), nullable=False)
     required: Mapped[bool] = mapped_column(sa.Boolean, nullable=False, default=False)

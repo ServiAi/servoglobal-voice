@@ -103,7 +103,7 @@ La respuesta omite el identificador del tenant, el usuario que realizó el cambi
 | `POST /api/v1/voice/context-schemas/{schema_id}/archive` | Archiva un draft o active. |
 | `POST /api/v1/voice/context-schemas/{schema_id}/new-version` | Clona una versión inmutable a un nuevo draft. |
 
-El tenant se deriva de `AuthContext`; los bodies rechazan `tenant_id`. Lectura: plataforma interna y roles tenant de lectura. Escritura: plataforma interna y `tenant_admin`. La feature `voice_experiences` debe estar habilitada y sus límites se aplican en el servicio.
+El tenant se deriva de `AuthContext`; los bodies rechazan `tenant_id`. Lectura: plataforma interna y roles tenant de lectura. Escritura: plataforma interna y `tenant_admin`. La feature `voice_experiences` debe estar habilitada; en context schemas sólo se aplica `max_context_fields`. `max_experiences` queda reservado para futuras entidades `TenantVoiceExperience`.
 
 ## Convenciones
 

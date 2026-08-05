@@ -6,11 +6,11 @@ Este incremento agrega configuración privada, versionada y tenant-scoped de esq
 
 ## Persistencia
 
-- `tenant_voice_context_schemas`: identifica cada experiencia por `(agent_config_id, schema_key)` y conserva versiones `draft`, `active` y `archived`.
-- `tenant_voice_context_fields`: define campos ordenados con tipo, modo de recolección, sensibilidad, validación y opciones.
+- `tenant_voice_context_schemas`: identifica cada schema lineage por `(agent_config_id, schema_key)` y conserva versiones `draft`, `active` y `archived`.
+- `tenant_voice_context_fields`: define campos con posición única, descripción, tipo, modo de recolección, sensibilidad, validación y opciones tipadas.
 - Migración: `202608050001_voice_context_schemas`, descendiente directa de `202608040001`.
 
-Los schemas activos o archivados son inmutables. `new-version` clona metadata y campos a un draft con `version + 1`. Activar una versión archiva, en la misma transacción, la versión activa anterior del mismo lineage.
+Los schemas activos o archivados son inmutables. `new-version` clona metadata y campos a un draft con `version + 1`. Cada lineage admite como máximo una versión active y una draft; la base de datos lo protege con índices únicos parciales.
 
 ## API privada tenant
 
@@ -33,8 +33,9 @@ Los cuerpos usan `extra="forbid"`: no aceptan `tenant_id`, `agent_config_id` ni 
 
 ## Límites y transiciones
 
-- `max_experiences` cuenta lineages con al menos una versión draft o active en todo el tenant.
 - `max_context_fields` limita los campos de cada schema.
+- `max_experiences` no limita context schemas; se aplicará posteriormente sobre `TenantVoiceExperience`.
+- Los campos `select` exigen opciones tipadas con values únicos; los demás tipos no admiten opciones.
 - Transiciones: `draft -> active -> archived` y `draft -> archived`.
 - Un schema active o archived sólo puede evolucionar mediante `new-version`.
 

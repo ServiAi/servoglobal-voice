@@ -16,7 +16,7 @@ Actualizado: 2026-08-04. Fuente: código, migraciones y pruebas presentes en `de
 | WhatsApp Cloud | Operativa | Configuración, plantillas, envío CRM, mensajes, estados y webhook. |
 | Automatizaciones y notificaciones | Operativa en código | Resumen, capacidades, reglas, destinatarios, entregas, planificación, reintentos, recuperación y worker PostgreSQL. El despliegue del proceso worker debe verificarse por entorno. |
 | Voz CRM | Operativa | Configuración de proveedor/agentes, llamadas desde leads, webhook y booking tools. |
-| Voice Context Experiences | Incremento 2 operativo en código | Feature flag y límites por tenant, context schemas versionados por agente, campos configurables, activación/archivo y API tenant privada. No incluye UI ni consumo durante llamadas. |
+| Voice Context Experiences | Incremento 2 operativo en código | Feature flag, límite de campos, context schemas versionados por agente, campos configurables, activación/archivo y API tenant privada. `max_experiences` queda reservado para experiencias publicadas futuras. |
 | Planes y consumo | Operativa | Límites, alertas, resumen administrativo y comparación de ahorro. |
 | Chatwoot | Legado/compatible | Webhook y acciones existentes; conservar compatibilidad al modificar CRM/mensajería. |
 

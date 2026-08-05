@@ -59,6 +59,22 @@ def upgrade() -> None:
         "tenant_voice_context_schemas",
         ["tenant_id", "status"],
     )
+    op.create_index(
+        "uq_tenant_voice_context_schemas_active_lineage",
+        "tenant_voice_context_schemas",
+        ["tenant_id", "agent_config_id", "schema_key"],
+        unique=True,
+        postgresql_where=sa.text("status = 'active'"),
+        sqlite_where=sa.text("status = 'active'"),
+    )
+    op.create_index(
+        "uq_tenant_voice_context_schemas_draft_lineage",
+        "tenant_voice_context_schemas",
+        ["tenant_id", "agent_config_id", "schema_key"],
+        unique=True,
+        postgresql_where=sa.text("status = 'draft'"),
+        sqlite_where=sa.text("status = 'draft'"),
+    )
 
     op.create_table(
         "tenant_voice_context_fields",
@@ -67,6 +83,7 @@ def upgrade() -> None:
         sa.Column("schema_id", sa.String(length=36), nullable=False),
         sa.Column("key", sa.String(length=80), nullable=False),
         sa.Column("label", sa.String(length=160), nullable=False),
+        sa.Column("description", sa.String(length=1000), nullable=True),
         sa.Column("field_type", sa.String(length=20), nullable=False),
         sa.Column("collection_mode", sa.String(length=24), nullable=False),
         sa.Column("required", sa.Boolean(), nullable=False, server_default=sa.false()),
@@ -84,29 +101,33 @@ def upgrade() -> None:
         sa.UniqueConstraint(
             "schema_id", "key", name="uq_tenant_voice_context_fields_schema_key"
         ),
+        sa.UniqueConstraint(
+            "schema_id",
+            "position",
+            name="uq_tenant_voice_context_fields_schema_position",
+        ),
     )
     op.create_index(
         "ix_tenant_voice_context_fields_tenant_schema",
         "tenant_voice_context_fields",
         ["tenant_id", "schema_id"],
     )
-    op.create_index(
-        "ix_tenant_voice_context_fields_schema_position",
-        "tenant_voice_context_fields",
-        ["schema_id", "position"],
-    )
 
 
 def downgrade() -> None:
-    op.drop_index(
-        "ix_tenant_voice_context_fields_schema_position",
-        table_name="tenant_voice_context_fields",
-    )
     op.drop_index(
         "ix_tenant_voice_context_fields_tenant_schema",
         table_name="tenant_voice_context_fields",
     )
     op.drop_table("tenant_voice_context_fields")
+    op.drop_index(
+        "uq_tenant_voice_context_schemas_draft_lineage",
+        table_name="tenant_voice_context_schemas",
+    )
+    op.drop_index(
+        "uq_tenant_voice_context_schemas_active_lineage",
+        table_name="tenant_voice_context_schemas",
+    )
     op.drop_index(
         "ix_tenant_voice_context_schemas_tenant_status",
         table_name="tenant_voice_context_schemas",

@@ -1,15 +1,24 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+from unittest.mock import patch
+
 from alembic.config import Config
 from alembic.script import ScriptDirectory
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from _integrations_2a_test_base import Integration2ATestCase
 from app.db.session import SessionLocal
 from app.models.identity import TenantMembership, User
 from app.models.integrations import TenantVoiceAgentConfig
-from app.models.voice_context import TenantVoiceContextSchema
+from app.models.voice_context import TenantVoiceContextField, TenantVoiceContextSchema
+from app.services.integration_event_service import IntegrationEventService
 from app.services.tenant_feature_service import TenantFeatureService, VOICE_EXPERIENCES
+from app.services.voice_context_service import (
+    ACTIVE_LINEAGE_INDEX,
+    VoiceContextService,
+)
 
 
 class VoiceContextSchemaTests(Integration2ATestCase):
@@ -71,17 +80,22 @@ class VoiceContextSchemaTests(Integration2ATestCase):
         position: int = 0,
         field_type: str = "email",
         collection_mode: str = "ask_if_missing",
+        description: str | None = "Collected during qualification",
+        options_json: list[dict] | None = None,
     ) -> dict:
         return {
             "key": key,
             "label": key.replace("_", " ").title(),
+            "description": description,
             "field_type": field_type,
             "collection_mode": collection_mode,
             "required": True,
             "position": position,
             "sensitivity": "sensitive" if field_type in {"email", "phone"} else "standard",
             "validation_json": {},
-            "options_json": [{"value": "one", "label": "One"}] if field_type == "select" else [],
+            "options_json": options_json
+            if options_json is not None
+            else ([{"value": "one", "label": "One"}] if field_type == "select" else []),
         }
 
     def _add_field(self, schema_id: str, **overrides):
@@ -178,6 +192,108 @@ class VoiceContextSchemaTests(Integration2ATestCase):
         detail = self.client.get(f"/api/v1/voice/context-schemas/{schema_id}")
         self.assertEqual(len(detail.json()["fields"]), 1)
 
+    def test_duplicate_field_position_has_specific_error_and_does_not_persist(self) -> None:
+        self._enable_feature()
+        schema_id = self._create_schema().json()["id"]
+        self.assertEqual(self._add_field(schema_id).status_code, 201)
+        duplicate = self._add_field(
+            schema_id, key="customer_phone", position=0, field_type="phone"
+        )
+        self.assertEqual(duplicate.status_code, 422)
+        self.assertEqual(
+            duplicate.json()["detail"],
+            "Field position already exists in this schema.",
+        )
+        detail = self.client.get(f"/api/v1/voice/context-schemas/{schema_id}")
+        self.assertEqual(len(detail.json()["fields"]), 1)
+
+    def test_select_requires_options(self) -> None:
+        self._enable_feature()
+        schema_id = self._create_schema().json()["id"]
+        response = self._add_field(
+            schema_id, field_type="select", options_json=[]
+        )
+        self.assertEqual(response.status_code, 422)
+
+    def test_select_accepts_typed_options_and_returns_description(self) -> None:
+        self._enable_feature()
+        schema_id = self._create_schema().json()["id"]
+        response = self._add_field(
+            schema_id,
+            field_type="select",
+            description="Preferred contact channel",
+            options_json=[
+                {"value": "email", "label": "Email"},
+                {"value": "phone", "label": "Phone"},
+            ],
+        )
+        self.assertEqual(response.status_code, 201, response.text)
+        self.assertEqual(response.json()["description"], "Preferred contact channel")
+        self.assertEqual(len(response.json()["options_json"]), 2)
+
+    def test_select_rejects_duplicate_option_values(self) -> None:
+        self._enable_feature()
+        schema_id = self._create_schema().json()["id"]
+        response = self._add_field(
+            schema_id,
+            field_type="select",
+            options_json=[
+                {"value": "same", "label": "One"},
+                {"value": "same", "label": "Two"},
+            ],
+        )
+        self.assertEqual(response.status_code, 422)
+
+    def test_email_rejects_options(self) -> None:
+        self._enable_feature()
+        schema_id = self._create_schema().json()["id"]
+        response = self._add_field(
+            schema_id,
+            field_type="email",
+            options_json=[{"value": "one", "label": "One"}],
+        )
+        self.assertEqual(response.status_code, 422)
+
+    def test_text_rejects_options(self) -> None:
+        self._enable_feature()
+        schema_id = self._create_schema().json()["id"]
+        response = self._add_field(
+            schema_id,
+            field_type="text",
+            options_json=[{"value": "one", "label": "One"}],
+        )
+        self.assertEqual(response.status_code, 422)
+
+    def test_option_requires_value(self) -> None:
+        self._enable_feature()
+        schema_id = self._create_schema().json()["id"]
+        response = self._add_field(
+            schema_id,
+            field_type="select",
+            options_json=[{"label": "One"}],
+        )
+        self.assertEqual(response.status_code, 422)
+
+    def test_option_requires_label(self) -> None:
+        self._enable_feature()
+        schema_id = self._create_schema().json()["id"]
+        response = self._add_field(
+            schema_id,
+            field_type="select",
+            options_json=[{"value": "one"}],
+        )
+        self.assertEqual(response.status_code, 422)
+
+    def test_option_forbids_additional_fields(self) -> None:
+        self._enable_feature()
+        schema_id = self._create_schema().json()["id"]
+        response = self._add_field(
+            schema_id,
+            field_type="select",
+            options_json=[{"value": "one", "label": "One", "secret": "no"}],
+        )
+        self.assertEqual(response.status_code, 422)
+
     def test_max_context_fields_is_enforced(self) -> None:
         self._enable_feature(max_context_fields=1)
         schema_id = self._create_schema().json()["id"]
@@ -185,17 +301,18 @@ class VoiceContextSchemaTests(Integration2ATestCase):
         response = self._add_field(schema_id, key="second_field", position=1)
         self.assertEqual(response.status_code, 422)
 
-    def test_max_experiences_counts_non_archived_lineages_per_tenant(self) -> None:
+    def test_max_experiences_does_not_limit_context_schemas_or_other_lineages(self) -> None:
         self._enable_feature(max_experiences=1)
-        first = self._create_schema(schema_key="first")
-        second = self._create_schema(schema_key="second")
-        self.assertEqual(first.status_code, 201)
-        self.assertEqual(second.status_code, 422)
-        archived = self.client.post(
-            f"/api/v1/voice/context-schemas/{first.json()['id']}/archive"
+        first_id = self._create_ready_schema(schema_key="first")
+        second_id = self._create_ready_schema(schema_key="second")
+        first = self.client.post(
+            f"/api/v1/voice/context-schemas/{first_id}/activate"
         )
-        self.assertEqual(archived.status_code, 200)
-        self.assertEqual(self._create_schema(schema_key="second").status_code, 201)
+        second = self.client.post(
+            f"/api/v1/voice/context-schemas/{second_id}/activate"
+        )
+        self.assertEqual(first.status_code, 200, first.text)
+        self.assertEqual(second.status_code, 200, second.text)
 
     def test_activation_archives_prior_active_version_and_versions_are_unique(self) -> None:
         self._enable_feature()
@@ -210,6 +327,10 @@ class VoiceContextSchemaTests(Integration2ATestCase):
         )
         self.assertEqual(fork.status_code, 201, fork.text)
         self.assertEqual(fork.json()["version"], 2)
+        self.assertEqual(
+            fork.json()["fields"][0]["description"],
+            "Collected during qualification",
+        )
         second_id = fork.json()["id"]
         second_active = self.client.post(
             f"/api/v1/voice/context-schemas/{second_id}/activate"
@@ -226,6 +347,119 @@ class VoiceContextSchemaTests(Integration2ATestCase):
             )
             self.assertEqual([item.version for item in versions], [1, 2])
             self.assertEqual([item.status for item in versions], ["archived", "active"])
+
+    def test_database_allows_only_one_active_per_lineage(self) -> None:
+        with SessionLocal() as db:
+            db.add_all(
+                [
+                    TenantVoiceContextSchema(
+                        tenant_id=self.tenant.id,
+                        agent_config_id=self.agent_id,
+                        schema_key="single_active",
+                        version=1,
+                        status="active",
+                        name="Version 1",
+                    ),
+                    TenantVoiceContextSchema(
+                        tenant_id=self.tenant.id,
+                        agent_config_id=self.agent_id,
+                        schema_key="single_active",
+                        version=2,
+                        status="active",
+                        name="Version 2",
+                    ),
+                ]
+            )
+            with self.assertRaises(IntegrityError):
+                db.commit()
+
+    def test_database_allows_only_one_draft_per_lineage(self) -> None:
+        with SessionLocal() as db:
+            db.add_all(
+                [
+                    TenantVoiceContextSchema(
+                        tenant_id=self.tenant.id,
+                        agent_config_id=self.agent_id,
+                        schema_key="single_draft",
+                        version=1,
+                        status="draft",
+                        name="Version 1",
+                    ),
+                    TenantVoiceContextSchema(
+                        tenant_id=self.tenant.id,
+                        agent_config_id=self.agent_id,
+                        schema_key="single_draft",
+                        version=2,
+                        status="draft",
+                        name="Version 2",
+                    ),
+                ]
+            )
+            with self.assertRaises(IntegrityError):
+                db.commit()
+
+    def test_fork_rejects_when_lineage_already_has_a_draft(self) -> None:
+        self._enable_feature()
+        active_id = self._create_ready_schema(schema_key="versioned")
+        self.assertEqual(
+            self.client.post(
+                f"/api/v1/voice/context-schemas/{active_id}/activate"
+            ).status_code,
+            200,
+        )
+        first_fork = self.client.post(
+            f"/api/v1/voice/context-schemas/{active_id}/new-version"
+        )
+        second_fork = self.client.post(
+            f"/api/v1/voice/context-schemas/{active_id}/new-version"
+        )
+        self.assertEqual(first_fork.status_code, 201, first_fork.text)
+        self.assertEqual(second_fork.status_code, 409)
+        self.assertEqual(
+            second_fork.json()["detail"],
+            "A draft schema already exists for this lineage.",
+        )
+
+    def test_concurrent_activation_conflict_is_mapped_and_rolled_back(self) -> None:
+        self._enable_feature()
+        schema_id = self._create_ready_schema(schema_key="concurrent")
+        with patch.object(
+            IntegrationEventService,
+            "record_event",
+            side_effect=self._integrity_error(ACTIVE_LINEAGE_INDEX),
+        ):
+            response = self.client.post(
+                f"/api/v1/voice/context-schemas/{schema_id}/activate"
+            )
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(
+            response.json()["detail"],
+            "An active schema already exists for this lineage.",
+        )
+        with SessionLocal() as db:
+            self.assertEqual(db.get(TenantVoiceContextSchema, schema_id).status, "draft")
+
+    def test_unknown_field_integrity_error_is_rolled_back_and_reraised(self) -> None:
+        error = self._integrity_error("unknown_constraint")
+        with SessionLocal() as db:
+            service = VoiceContextService(db)
+            field = TenantVoiceContextField(
+                tenant_id=self.tenant.id,
+                schema_id="schema-id",
+                key="field_key",
+                label="Field",
+                field_type="text",
+                collection_mode="ask_if_missing",
+                position=0,
+            )
+            with (
+                patch.object(db, "commit", side_effect=error),
+                patch.object(db, "rollback") as rollback,
+            ):
+                with self.assertRaises(IntegrityError) as raised:
+                    service._commit_field(field)
+                self.assertIs(raised.exception, error)
+                rollback.assert_called_once_with()
 
     def test_active_and_archived_schemas_are_immutable(self) -> None:
         self._enable_feature()
@@ -355,6 +589,12 @@ class VoiceContextSchemaTests(Integration2ATestCase):
         self.tenant = tenant_b
         response = self._create_schema(agent_id=agent_b, schema_key="tenant_b_schema")
         self.assertEqual(response.status_code, 201, response.text)
+
+    @staticmethod
+    def _integrity_error(constraint_name: str) -> IntegrityError:
+        original = Exception("duplicate")
+        original.diag = SimpleNamespace(constraint_name=constraint_name)
+        return IntegrityError("statement", {}, original)
 
     def test_alembic_has_single_expected_head(self) -> None:
         heads = ScriptDirectory.from_config(Config("alembic.ini")).get_heads()
