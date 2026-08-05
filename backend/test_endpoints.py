@@ -2,7 +2,7 @@ import os
 import sys
 import json
 
-os.environ['DATABASE_URL'] = os.environ['STAGING_DATABASE_URL']
+os.environ.setdefault('DATABASE_URL', 'postgresql+psycopg://serviai:serviai@localhost:5432/serviai')
 
 from fastapi.testclient import TestClient
 from app.main import app

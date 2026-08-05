@@ -2,7 +2,7 @@ import os
 import sys
 from sqlalchemy import create_engine, text
 
-engine = create_engine(os.environ['STAGING_DATABASE_URL'])
+engine = create_engine(os.environ.get('DATABASE_URL', 'postgresql+psycopg://serviai:serviai@localhost:5432/serviai'))
 
 queries = {
     '1. Agents count': 'SELECT COUNT(*) FROM agents',
