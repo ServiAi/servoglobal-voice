@@ -3,6 +3,7 @@ from __future__ import annotations
 import secrets
 from copy import deepcopy
 from datetime import datetime, timezone
+from typing import Any
 
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
@@ -19,6 +20,7 @@ from app.schemas.voice_experiences import (
     VoiceExperienceVersionResponse,
     VoiceExperienceWriteRequest,
 )
+from app.services.integration_event_service import IntegrationEventService
 from app.services.tenant_feature_service import VOICE_EXPERIENCES, TenantFeatureService
 from app.services.voice_agent_service import VoiceAgentService
 
@@ -53,6 +55,7 @@ class VoiceExperienceService:
     def __init__(self, db: Session) -> None:
         self.db = db
         self.feature_service = TenantFeatureService(db)
+        self.event_service = IntegrationEventService(db)
         self.agent_service = VoiceAgentService(db)
 
     def list_experiences(self, tenant_id: str) -> list[VoiceExperienceResponse]:
@@ -83,7 +86,9 @@ class VoiceExperienceService:
         user_id: str | None,
     ) -> TenantVoiceExperience:
         grant = self.feature_service.require_enabled(tenant_id, VOICE_EXPERIENCES)
-        self._require_relations(tenant_id, body.agent_config_id, body.context_schema_id)
+        agent, _ = self._require_relations(
+            tenant_id, body.agent_config_id, body.context_schema_id
+        )
         count = self.db.scalar(
             select(func.count(TenantVoiceExperience.id)).where(
                 TenantVoiceExperience.tenant_id == tenant_id,
@@ -108,6 +113,9 @@ class VoiceExperienceService:
             if _matches_constraint(exc, SLUG_CONSTRAINT, "tenant_voice_experiences.slug"):
                 raise VoiceExperienceConflictError("Could not allocate a unique experience slug.") from exc
             raise
+        self._record_event(
+            experience, agent.provider, "voice_experience_created", user_id
+        )
         self.db.refresh(experience)
         return experience
 
@@ -133,7 +141,7 @@ class VoiceExperienceService:
         self._ensure_mutable(experience)
         if experience.status == "published":
             raise VoiceExperienceConflictError("Voice experience is already published.")
-        _, schema = self._require_relations(
+        agent, schema = self._require_relations(
             tenant_id, experience.agent_config_id, experience.context_schema_id
         )
         if schema.status != "active":
@@ -179,27 +187,43 @@ class VoiceExperienceService:
             ):
                 raise VoiceExperienceConflictError("A concurrent publication already won.") from exc
             raise
+        self._record_event(
+            experience,
+            agent.provider,
+            "voice_experience_published",
+            user_id,
+            {"version": next_version},
+        )
         self.db.refresh(experience)
         return experience
 
     def unpublish_experience(
-        self, tenant_id: str, experience_id: str
+        self, tenant_id: str, experience_id: str, user_id: str | None = None
     ) -> TenantVoiceExperience:
         experience = self._locked_experience(tenant_id, experience_id)
         self._ensure_mutable(experience)
+        agent, _ = self._require_relations(
+            tenant_id, experience.agent_config_id, experience.context_schema_id
+        )
         if experience.status != "published":
             raise VoiceExperienceConflictError("Only a published experience can be unpublished.")
         experience.status = "unpublished"
         experience.published_version_id = None
         self.db.commit()
+        self._record_event(
+            experience, agent.provider, "voice_experience_unpublished", user_id
+        )
         self.db.refresh(experience)
         return experience
 
     def archive_experience(
-        self, tenant_id: str, experience_id: str
+        self, tenant_id: str, experience_id: str, user_id: str | None = None
     ) -> TenantVoiceExperience:
         experience = self._locked_experience(tenant_id, experience_id)
         self._ensure_mutable(experience)
+        agent, _ = self._require_relations(
+            tenant_id, experience.agent_config_id, experience.context_schema_id
+        )
         if experience.status == "published":
             raise VoiceExperienceConflictError(
                 "A published experience must be unpublished before archiving."
@@ -208,6 +232,9 @@ class VoiceExperienceService:
         experience.archived_at = datetime.now(timezone.utc)
         experience.published_version_id = None
         self.db.commit()
+        self._record_event(
+            experience, agent.provider, "voice_experience_archived", user_id
+        )
         self.db.refresh(experience)
         return experience
 
@@ -224,6 +251,45 @@ class VoiceExperienceService:
             .order_by(TenantVoiceExperienceVersion.version.desc())
         ).all()
         return [self.version_response(item) for item in versions]
+
+    def get_current_published_version(
+        self, tenant_id: str, experience_id: str
+    ) -> TenantVoiceExperienceVersion | None:
+        self.get_experience(tenant_id, experience_id)
+        return self.db.scalar(
+            select(TenantVoiceExperienceVersion)
+            .where(
+                TenantVoiceExperienceVersion.experience_id == experience_id,
+                TenantVoiceExperienceVersion.tenant_id == tenant_id,
+            )
+            .order_by(TenantVoiceExperienceVersion.version.desc())
+            .limit(1)
+        )
+
+    def _record_event(
+        self,
+        experience: TenantVoiceExperience,
+        provider: str,
+        event_type: str,
+        user_id: str | None,
+        extra_metadata: dict[str, Any] | None = None,
+    ) -> None:
+        metadata = {
+            "actor_user_id": user_id,
+            "status": experience.status,
+            "content_json": experience.content_json,
+            "theme_json": experience.theme_json,
+        }
+        metadata.update(extra_metadata or {})
+        self.event_service.record_event(
+            tenant_id=experience.tenant_id,
+            provider=provider,
+            event_type=event_type,
+            status="success",
+            resource_type="voice_experience",
+            resource_id=experience.id,
+            metadata=metadata,
+        )
 
     def _locked_experience(
         self, tenant_id: str, experience_id: str

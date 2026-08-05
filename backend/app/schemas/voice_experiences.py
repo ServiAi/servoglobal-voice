@@ -3,7 +3,14 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field, field_validator
+from pydantic import (
+    AnyHttpUrl,
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_validator,
+    model_validator,
+)
 
 
 class _StrictModel(BaseModel):
@@ -33,8 +40,14 @@ class VoiceExperienceTheme(_StrictModel):
 
 class VoiceExperienceConsent(_StrictModel):
     required: bool
-    label: str = Field(min_length=1, max_length=1000)
+    label: str | None = Field(default=None, max_length=1000)
     privacy_url: AnyHttpUrl | None = None
+
+    @model_validator(mode="after")
+    def require_label_when_required(self) -> VoiceExperienceConsent:
+        if self.required and not (self.label and self.label.strip()):
+            raise ValueError("label is required when consent is required")
+        return self
 
     @field_validator("privacy_url")
     @classmethod

@@ -132,7 +132,9 @@ def unpublish_voice_experience(
     service = VoiceExperienceService(db)
     try:
         return service.response(
-            service.unpublish_experience(context.tenant.id, experience_id)
+            service.unpublish_experience(
+                context.tenant.id, experience_id, context.user.id
+            )
         )
     except SERVICE_ERRORS as exc:
         _raise_service_error(exc)
@@ -146,7 +148,11 @@ def archive_voice_experience(
 ) -> Any:
     service = VoiceExperienceService(db)
     try:
-        return service.response(service.archive_experience(context.tenant.id, experience_id))
+        return service.response(
+            service.archive_experience(
+                context.tenant.id, experience_id, context.user.id
+            )
+        )
     except SERVICE_ERRORS as exc:
         _raise_service_error(exc)
 

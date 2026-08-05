@@ -10,9 +10,12 @@ from sqlalchemy.exc import IntegrityError
 from _integrations_2a_test_base import Integration2ATestCase
 from app.db.session import SessionLocal
 from app.models.identity import TenantMembership, User
-from app.models.integrations import TenantVoiceAgentConfig
+from app.models.integrations import TenantIntegrationEvent, TenantVoiceAgentConfig
 from app.models.voice_context import TenantVoiceContextSchema
-from app.models.voice_experiences import TenantVoiceExperienceVersion
+from app.models.voice_experiences import (
+    TenantVoiceExperience,
+    TenantVoiceExperienceVersion,
+)
 from app.schemas.voice_experiences import VoiceExperienceWriteRequest
 from app.services.tenant_feature_service import VOICE_EXPERIENCES, TenantFeatureService
 from app.services.voice_experience_service import (
@@ -119,6 +122,22 @@ class VoiceExperienceTests(Integration2ATestCase):
         return self.client.post(
             "/api/v1/voice/experiences", json=self._payload(**payload_overrides)
         )
+
+    def _assert_safe_event(self, event_type: str, experience_id: str) -> None:
+        with SessionLocal() as db:
+            event = db.scalar(
+                select(TenantIntegrationEvent)
+                .where(
+                    TenantIntegrationEvent.tenant_id == self.tenant.id,
+                    TenantIntegrationEvent.event_type == event_type,
+                    TenantIntegrationEvent.resource_id == experience_id,
+                )
+                .order_by(TenantIntegrationEvent.created_at.desc())
+            )
+            self.assertIsNotNone(event)
+            self.assertEqual(event.resource_type, "voice_experience")
+            self.assertEqual(event.metadata_json["content_json"], "[omitted]")
+            self.assertEqual(event.metadata_json["theme_json"], "[omitted]")
 
     def _set_actor(self, role: str, *, is_internal: bool = True) -> None:
         with SessionLocal() as db:
@@ -360,6 +379,82 @@ class VoiceExperienceTests(Integration2ATestCase):
             self.client.get(f"/api/v1/voice/experiences/{other_id}").status_code, 404
         )
         self.assertEqual(self.client.get("/api/v1/voice/experiences").json(), [])
+
+    def test_create_records_safe_integration_event(self) -> None:
+        self._enable_feature()
+        created = self._create()
+        self.assertEqual(created.status_code, 201, created.text)
+        self._assert_safe_event("voice_experience_created", created.json()["id"])
+
+    def test_publish_records_safe_integration_event(self) -> None:
+        self._enable_feature()
+        experience_id = self._create().json()["id"]
+        published = self.client.post(
+            f"/api/v1/voice/experiences/{experience_id}/publish"
+        )
+        self.assertEqual(published.status_code, 200, published.text)
+        self._assert_safe_event("voice_experience_published", experience_id)
+
+    def test_unpublish_records_safe_integration_event(self) -> None:
+        self._enable_feature()
+        experience_id = self._create().json()["id"]
+        self.client.post(f"/api/v1/voice/experiences/{experience_id}/publish")
+        unpublished = self.client.post(
+            f"/api/v1/voice/experiences/{experience_id}/unpublish"
+        )
+        self.assertEqual(unpublished.status_code, 200, unpublished.text)
+        self._assert_safe_event("voice_experience_unpublished", experience_id)
+
+    def test_archive_records_safe_integration_event(self) -> None:
+        self._enable_feature()
+        experience_id = self._create().json()["id"]
+        archived = self.client.post(
+            f"/api/v1/voice/experiences/{experience_id}/archive"
+        )
+        self.assertEqual(archived.status_code, 200, archived.text)
+        self._assert_safe_event("voice_experience_archived", experience_id)
+
+    def test_get_current_published_version_returns_latest_after_unpublish(self) -> None:
+        self._enable_feature()
+        experience_id = self._create().json()["id"]
+        self.client.post(f"/api/v1/voice/experiences/{experience_id}/publish")
+        self.client.post(f"/api/v1/voice/experiences/{experience_id}/unpublish")
+
+        with SessionLocal() as db:
+            version = VoiceExperienceService(db).get_current_published_version(
+                self.tenant.id, experience_id
+            )
+            self.assertIsNotNone(version)
+            self.assertEqual(version.version, 1)
+
+    def test_consent_label_is_optional_when_consent_is_not_required(self) -> None:
+        self._enable_feature()
+        payload = self._payload()
+        payload["consent"]["required"] = False
+        payload["consent"]["label"] = None
+        created = self.client.post("/api/v1/voice/experiences", json=payload)
+        self.assertEqual(created.status_code, 201, created.text)
+        self.assertIsNone(created.json()["consent"]["label"])
+
+    def test_slug_collision_maps_to_conflict(self) -> None:
+        self._enable_feature()
+        collision = IntegrityError(
+            "INSERT",
+            {},
+            Exception("UNIQUE constraint failed: tenant_voice_experiences.slug"),
+        )
+        real_flush = SessionLocal.class_.flush
+
+        def collide_only_for_experience(db, *args, **kwargs):
+            if any(isinstance(item, TenantVoiceExperience) for item in db.new):
+                raise collision
+            return real_flush(db, *args, **kwargs)
+
+        with patch.object(
+            SessionLocal.class_, "flush", new=collide_only_for_experience
+        ):
+            response = self._create()
+        self.assertEqual(response.status_code, 409, response.text)
 
     def test_concurrent_publish_collision_cannot_create_duplicate_version(self) -> None:
         self._enable_feature()
