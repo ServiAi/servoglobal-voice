@@ -29,10 +29,10 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install -r backend/requirements.txt
-      - name: Backend test suite (excludes test_endpoints.py / test_kpis.py - hardcoded staging DB creds, no network to staging from CI)
+      - name: Backend test suite (excludes test_endpoints.py / test_kpis.py / test_db.py / test_db_user.py / test_db_validation.py - hardcoded staging DB creds, no network to staging from CI)
         working-directory: backend
         run: |
-          modules=$(ls test_*.py | grep -v -e test_endpoints.py -e test_kpis.py | sed 's/\.py$//')
+          modules=$(ls test_*.py | grep -v -e test_endpoints.py -e test_kpis.py -e test_db.py -e test_db_user.py -e test_db_validation.py | sed 's/\.py$//')
           python -m unittest $modules
       - name: Compile check
         working-directory: backend
