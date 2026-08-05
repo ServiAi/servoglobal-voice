@@ -22,7 +22,7 @@ La especificación ejecutable completa está disponible en `/docs` y `/openapi.j
 | `/api/v1/admin` | Tenants, planes, uso, membresías, agentes e integraciones administradas. |
 | `/api/v1/admin/notifications` | Administración tenant de capacidades, reglas, destinatarios y entregas. El tenant se deriva del contexto autenticado. |
 | `/api/v1/admin/tenants/{tenant_id}/features` | Grants de funcionalidades por tenant para administradores de plataforma. |
-| `/api/v1/voice` | Inicio de llamadas, operación de voz y context schemas privados por agente. |
+| `/api/v1/voice` | Inicio de llamadas, operación de voz, context schemas y administración privada de Voice Experiences. |
 | `/api/v1/voice/tools` | Disponibilidad y booking para agentes internos protegidos. |
 | `/api/v1/webhook/whatsapp` | Verificación y eventos Meta. |
 | `/api/v1/calcom/webhook` | Reconciliación Cal.com. |
@@ -102,8 +102,16 @@ La respuesta omite el identificador del tenant, el usuario que realizó el cambi
 | `POST /api/v1/voice/context-schemas/{schema_id}/activate` | Activa el draft y archiva la active anterior del lineage. |
 | `POST /api/v1/voice/context-schemas/{schema_id}/archive` | Archiva un draft o active. |
 | `POST /api/v1/voice/context-schemas/{schema_id}/new-version` | Clona una versión inmutable a un nuevo draft. |
+| `GET/POST /api/v1/voice/experiences` | Lista las experiencias del tenant o crea un draft. |
+| `GET/PUT /api/v1/voice/experiences/{experience_id}` | Consulta o reemplaza el draft mutable sin alterar snapshots publicados. |
+| `POST /api/v1/voice/experiences/{experience_id}/publish` | Publica un snapshot inmutable nuevo; exige schema `active`. |
+| `POST /api/v1/voice/experiences/{experience_id}/unpublish` | Despublica la experiencia sin eliminar su historial. |
+| `POST /api/v1/voice/experiences/{experience_id}/archive` | Archiva una experiencia no publicada y libera capacidad. |
+| `GET /api/v1/voice/experiences/{experience_id}/versions` | Lista snapshots publicados inmutables. |
 
-El tenant se deriva de `AuthContext`; los bodies rechazan `tenant_id`. Lectura: plataforma interna y roles tenant de lectura. Escritura: plataforma interna y `tenant_admin`. La feature `voice_experiences` debe estar habilitada; en context schemas sólo se aplica `max_context_fields`. `max_experiences` queda reservado para futuras entidades `TenantVoiceExperience`.
+El tenant se deriva de `AuthContext`; los bodies rechazan `tenant_id`. Lectura: plataforma interna y roles tenant de lectura. Escritura: plataforma interna y `tenant_admin`. La feature `voice_experiences` debe estar habilitada. `max_context_fields` sólo limita campos de schemas; `max_experiences` cuenta experiencias cuyo estado no sea `archived`. Los slugs se generan en servidor y las respuestas no exponen prompts, tools, secretos de proveedor, credenciales SIP ni PII interna.
+
+Estos endpoints son exclusivamente autenticados. Todavía no existen página o formulario público, tokens públicos, context submission ni runtime WebRTC para Voice Experiences.
 
 ## Convenciones
 
