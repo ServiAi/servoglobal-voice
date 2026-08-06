@@ -172,6 +172,10 @@ export function archiveVoiceContextSchema(accessToken: string, schemaId: string)
   );
 }
 
+export function deleteVoiceContextSchema(accessToken: string, schemaId: string) {
+  return requestVoiceEndpoint<null>('DELETE', `context-schemas/${schemaId}`, accessToken);
+}
+
 export function forkVoiceContextSchemaVersion(accessToken: string, schemaId: string) {
   return requestVoiceEndpoint<VoiceContextSchemaResponse>(
     'POST',

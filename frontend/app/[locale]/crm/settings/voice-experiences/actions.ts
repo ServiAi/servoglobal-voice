@@ -10,6 +10,7 @@ import {
   createVoiceContextSchema,
   createVoiceExperience,
   deleteVoiceContextField,
+  deleteVoiceContextSchema,
   deleteVoiceExperience,
   fetchVoiceContextSchema,
   fetchVoiceContextSchemas,
@@ -217,6 +218,17 @@ export async function archiveVoiceContextSchemaAction(
 ): Promise<FetchResult<VoiceContextSchemaResponse>> {
   const result = await withAccessToken((token) =>
     archiveVoiceContextSchema(token, schemaId)
+  );
+  if (result.ok) revalidateVoiceExperiences(locale);
+  return result;
+}
+
+export async function deleteVoiceContextSchemaAction(
+  locale: string,
+  schemaId: string
+): Promise<FetchResult<null>> {
+  const result = await withAccessToken((token) =>
+    deleteVoiceContextSchema(token, schemaId)
   );
   if (result.ok) revalidateVoiceExperiences(locale);
   return result;

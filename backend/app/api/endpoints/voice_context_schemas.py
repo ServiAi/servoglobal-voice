@@ -230,6 +230,22 @@ def archive_context_schema(
         _raise_service_error(exc)
 
 
+@router.delete(
+    "/context-schemas/{schema_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def delete_context_schema(
+    schema_id: str,
+    context: AuthContext = Depends(require_context_write),
+    db: Session = Depends(get_db),
+) -> Response:
+    try:
+        VoiceContextService(db).delete_schema(context.tenant.id, schema_id, context.user.id)
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+    except Exception as exc:
+        _raise_service_error(exc)
+
+
 @router.post(
     "/context-schemas/{schema_id}/new-version",
     response_model=VoiceContextSchemaResponse,

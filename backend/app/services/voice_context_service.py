@@ -7,6 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.voice_context import TenantVoiceContextField, TenantVoiceContextSchema
+from app.models.voice_experiences import TenantVoiceExperience
 from app.schemas.tenant_features import VoiceExperienceLimits
 from app.schemas.voice_context import (
     VoiceContextFieldRequest,
@@ -281,6 +282,59 @@ class VoiceContextService:
         self._record_event(schema, agent.provider, "context_schema_archived", user_id)
         self.db.refresh(schema)
         return schema
+
+    def delete_schema(
+        self, tenant_id: str, schema_id: str, user_id: str | None = None
+    ) -> None:
+        schema = self._locked_schema(tenant_id, schema_id)
+        if schema.status != "archived":
+            raise VoiceContextConflictError(
+                "Only archived voice context schemas can be deleted."
+            )
+        agent = self._require_agent(tenant_id, schema.agent_config_id)
+        schema_key = schema.schema_key
+        schema_version = schema.version
+
+        dependent_experiences = list(
+            self.db.scalars(
+                select(TenantVoiceExperience)
+                .where(
+                    TenantVoiceExperience.tenant_id == tenant_id,
+                    TenantVoiceExperience.context_schema_id == schema.id,
+                )
+                .with_for_update()
+            ).all()
+        )
+        experience_ids = [experience.id for experience in dependent_experiences]
+        for experience in dependent_experiences:
+            self.db.delete(experience)
+        self.db.delete(schema)
+        self.db.commit()
+
+        for experience_id in experience_ids:
+            self.event_service.record_event(
+                tenant_id=tenant_id,
+                provider=agent.provider,
+                event_type="voice_experience_deleted",
+                status="success",
+                resource_type="voice_experience",
+                resource_id=experience_id,
+                metadata={"actor_user_id": user_id, "cascade_from": "context_schema"},
+            )
+        self.event_service.record_event(
+            tenant_id=tenant_id,
+            provider=agent.provider,
+            event_type="context_schema_deleted",
+            status="success",
+            resource_type="voice_context_schema",
+            resource_id=schema_id,
+            metadata={
+                "actor_user_id": user_id,
+                "schema_key": schema_key,
+                "version": schema_version,
+                "cascaded_experience_ids": experience_ids,
+            },
+        )
 
     def fork_new_version(
         self, tenant_id: str, schema_id: str, user_id: str | None

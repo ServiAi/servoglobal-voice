@@ -19,6 +19,7 @@ import {
   archiveVoiceContextSchemaAction,
   createVoiceContextSchemaAction,
   deleteVoiceContextFieldAction,
+  deleteVoiceContextSchemaAction,
   fetchVoiceContextSchemaAction,
   fetchVoiceContextSchemasAction,
   fetchVoiceContextSchemaVersionsAction,
@@ -261,6 +262,26 @@ export function ContextSchemaManager({
         item.id === detail.id ? { ...item, field_count: next.fields.length } : item
       )
     );
+  };
+
+  const deleteSchema = async () => {
+    if (!detail) return;
+    const result = await deleteVoiceContextSchemaAction(locale, detail.id);
+    if (!result.ok) {
+      showResultError(result.status, result.detail);
+      return;
+    }
+    const deletedId = detail.id;
+    setDetail(null);
+    setMeta({ name: '', description: '' });
+    setVersions([]);
+    onSchemaDetailChange(null);
+    setSchemas((current) => {
+      const next = current.filter((item) => item.id !== deletedId);
+      onSchemasChange?.(next);
+      return next;
+    });
+    setMessage({ type: 'success', text: t('contextSchemas.deleted') });
   };
 
   const replaceDetail = async (
@@ -539,6 +560,27 @@ export function ContextSchemaManager({
                         )
                       )
                     }
+                  />
+                ) : null}
+                {canEdit && detail.status === 'archived' ? (
+                  <ActionDialog
+                    trigger={
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        aria-label={t('contextSchemas.delete')}
+                      >
+                        <Trash2 className="size-4" aria-hidden="true" />
+                      </Button>
+                    }
+                    title={t('contextSchemas.confirmDelete.title')}
+                    description={t('contextSchemas.confirmDelete.description')}
+                    confirmLabel={t('contextSchemas.delete')}
+                    cancelLabel={t('common.cancel')}
+                    destructive
+                    busy={isPending}
+                    onConfirm={() => startTransition(() => void deleteSchema())}
                   />
                 ) : null}
               </div>
