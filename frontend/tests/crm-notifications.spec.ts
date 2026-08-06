@@ -24,7 +24,7 @@ test.describe('helpers de rango de fechas', () => {
 
 test.describe('Automatizaciones y notificaciones', () => {
   test('vista desktop carga sin errores de accesibilidad críticos', async ({ page }) => {
-    test.use({ viewport: { width: 1440, height: 1024 } });
+    await page.setViewportSize({ width: 1440, height: 1024 });
     await page.goto(PATH, { waitUntil: 'networkidle' });
     await expect(page.getByRole('heading', { name: /Automatizaciones y notificaciones/i })).toBeVisible();
     const accessibility = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze();
@@ -32,7 +32,7 @@ test.describe('Automatizaciones y notificaciones', () => {
   });
 
   test('vista móvil no genera overflow horizontal', async ({ page }) => {
-    test.use({ viewport: { width: 390, height: 844 } });
+    await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(PATH, { waitUntil: 'networkidle' });
     await expect(page.getByRole('heading', { name: /Automatizaciones y notificaciones/i })).toBeVisible();
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
