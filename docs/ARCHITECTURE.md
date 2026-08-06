@@ -8,6 +8,8 @@ Next.js 15 con App Router, React 18, TypeScript, Tailwind y `next-intl`. Se divi
 
 La UI de notificaciones se compone de `NotificationsWorkspace`, `RulesPanel`, `RecipientsPanel` y `DeliveriesPanel`. Las mutaciones se ejecutan mediante Server Actions para que el bearer token no viaje al cliente. `FieldHelp` es el componente compartido para ayudas contextuales de formularios; usa `<details>`, mantiene interacción por teclado y cierra con un clic externo.
 
+Voice Experiences usa Server Components para resolver autenticación, permisos y datos iniciales. Sus clientes tipados son `server-only` y las mutaciones pasan por Server Actions; ningún bearer token llega a componentes cliente. El builder comparte un formulario controlado entre wizard y editor, administra schemas versionados y genera una vista previa React local que no usa micrófono, WebRTC ni endpoints de ejecución.
+
 ### Backend
 
 FastAPI organiza routers en `backend/app/api/endpoints/`, reglas de negocio en `backend/app/services/`, contratos en `schemas/` y persistencia SQLAlchemy en `models/`. `backend/app/main.py` ensambla middleware, CORS y routers.
