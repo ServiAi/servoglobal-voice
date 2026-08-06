@@ -68,7 +68,7 @@ Cada canal conserva configuración, cliente, servicio de negocio, persistencia, 
 6. La UI tenant consulta resumen, reglas, destinatarios y entregas con destinos enmascarados; nunca recibe claim tokens, payloads internos ni secretos.
 7. `notification_event_schemas.py` es la fuente única de metadata para UI, validación administrativa y runtime: relaciona capacidad/evento con versión, campos tipados, operadores, formatos, rutas de destinatario y un ejemplo sintético seguro.
 
-El evaluador admite composición `all`/`any` y rutas seguras sobre diccionarios; no usa `eval`. El endpoint de dry-run reutiliza el validador, evaluador, mapper y resolver de destinatarios de producción, pero no publica eventos, no crea entregas y no invoca WhatsApp.
+El evaluador admite composición `all`/`any` y rutas seguras sobre diccionarios; no usa `eval`. El endpoint de dry-run reutiliza el validador, evaluador, mapper y resolver de destinatarios de producción, pero no publica eventos, no crea entregas y no invoca WhatsApp. Las mutaciones y pruebas de reglas generan auditoría técnica sin payloads, variables, previews ni destinatarios.
 
 ### Invariantes de la UI de notificaciones
 

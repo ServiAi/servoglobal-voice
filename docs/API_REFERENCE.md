@@ -84,6 +84,7 @@ Validaciones relevantes:
 - Todos los parámetros requeridos por la plantilla deben tener un mapeo efectivo.
 - Una regla con entregas asociadas no se elimina; el servicio devuelve `rule_has_deliveries`.
 - El dry-run sólo acepta payloads conformes al contrato del evento y nunca persiste `DomainEvent` o `NotificationDelivery`.
+- Crear, actualizar, activar, desactivar, eliminar o probar una regla genera un `AccessAuditLog` con acción y referencia técnica; no guarda el payload, variables, preview ni destinatarios.
 
 ## Administración de funcionalidades tenant
 

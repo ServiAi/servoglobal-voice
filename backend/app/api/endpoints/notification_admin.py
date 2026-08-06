@@ -26,6 +26,7 @@ from app.schemas.notification_admin import (
     NotificationRuleUpdateRequest,
 )
 from app.services.notification_admin_service import NotificationAdminError, NotificationAdminService
+from app.services.identity_service import IdentityService
 
 router = APIRouter(prefix="/api/v1/admin/notifications", tags=["Notification Administration"])
 
@@ -39,6 +40,15 @@ def _raise_admin_error(exc: NotificationAdminError) -> None:
         "unprocessable": status.HTTP_422_UNPROCESSABLE_ENTITY,
     }.get(exc.kind, status.HTTP_422_UNPROCESSABLE_ENTITY)
     raise HTTPException(status_code=status_code, detail=exc.code) from exc
+
+
+def _audit_rule_action(*, context: AuthContext, db: Session, action: str, resource: str) -> None:
+    IdentityService(db).audit_access(
+        user_id=context.user.id,
+        tenant_id=context.tenant.id,
+        action=action,
+        resource=resource,
+    )
 
 
 def _rule_item(service: NotificationAdminService, rule) -> NotificationRuleItem:
@@ -187,6 +197,12 @@ def create_rule(
         rule = service.create_rule(tenant_id=context.tenant.id, payload=body)
     except NotificationAdminError as exc:
         _raise_admin_error(exc)
+    _audit_rule_action(
+        context=context,
+        db=db,
+        action="notification_rule.created",
+        resource=f"notification_rule:{rule.id}",
+    )
     return _rule_item(service, rule)
 
 
@@ -197,9 +213,16 @@ def test_rule(
     db: Session = Depends(get_db),
 ) -> Any:
     try:
-        return NotificationAdminService(db).test_rule(tenant_id=context.tenant.id, payload=body)
+        result = NotificationAdminService(db).test_rule(tenant_id=context.tenant.id, payload=body)
     except NotificationAdminError as exc:
         _raise_admin_error(exc)
+    _audit_rule_action(
+        context=context,
+        db=db,
+        action="notification_rule.tested",
+        resource=f"notification_rule_test:{body.capability_key}:{body.event_type}",
+    )
+    return result
 
 
 @router.patch("/rules/{rule_id}", response_model=NotificationRuleItem)
@@ -216,6 +239,12 @@ def update_rule(
         _raise_admin_error(exc)
     if rule is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="rule_not_found")
+    _audit_rule_action(
+        context=context,
+        db=db,
+        action="notification_rule.updated",
+        resource=f"notification_rule:{rule.id}",
+    )
     return _rule_item(service, rule)
 
 
@@ -233,6 +262,12 @@ def update_rule_enabled(
         _raise_admin_error(exc)
     if rule is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="rule_not_found")
+    _audit_rule_action(
+        context=context,
+        db=db,
+        action="notification_rule.enabled" if body.enabled else "notification_rule.disabled",
+        resource=f"notification_rule:{rule.id}",
+    )
     return _rule_item(service, rule)
 
 
@@ -249,6 +284,12 @@ def delete_rule(
         _raise_admin_error(exc)
     if not deleted:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="rule_not_found")
+    _audit_rule_action(
+        context=context,
+        db=db,
+        action="notification_rule.deleted",
+        resource=f"notification_rule:{rule_id}",
+    )
 
 
 @router.get("/recipients", response_model=list[NotificationRecipientItem])

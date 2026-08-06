@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+from datetime import datetime
 from typing import Any
 
 
@@ -294,5 +295,12 @@ def _validate_condition_value(field: NotificationEventField, operator: str, valu
             raise NotificationEventSchemaError("condition_value_invalid_for_field")
         if field.data_type in {"string", "enum", "datetime"} and not isinstance(item, str):
             raise NotificationEventSchemaError("condition_value_invalid_for_field")
+        if field.data_type == "datetime":
+            try:
+                parsed = datetime.fromisoformat(item)
+            except ValueError:
+                raise NotificationEventSchemaError("condition_value_invalid_for_field") from None
+            if parsed.tzinfo is None or parsed.tzinfo.utcoffset(parsed) is None:
+                raise NotificationEventSchemaError("condition_value_invalid_for_field")
         if field.enum_values and item not in field.enum_values:
             raise NotificationEventSchemaError("condition_value_not_in_enum")

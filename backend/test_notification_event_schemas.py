@@ -47,6 +47,23 @@ class NotificationEventSchemaTests(unittest.TestCase):
         self.assertFalse(service.matches(conditions=conditions, payload=payload, mode="all"))
         self.assertTrue(service.matches(conditions=conditions, payload=payload, mode="any"))
 
+    def test_datetime_condition_requires_timezone_aware_iso_value(self):
+        rule = SimpleNamespace(
+            capability_key="booking_notifications",
+            event_type="booking.created",
+            conditions_mode="all",
+            variable_mapping_json={},
+            recipient_strategy="event_customer",
+            recipient_group_key=None,
+        )
+        condition = NotificationCondition(
+            field="booking.start_at",
+            operator=NotificationConditionOperator.GREATER_THAN,
+            value="2026-08-12T15:00:00",
+        )
+        with self.assertRaisesRegex(NotificationEventSchemaError, "condition_value_invalid_for_field"):
+            validate_rule_event_schema(rule, [condition])
+
     def test_empty_condition_list_matches_in_both_modes(self):
         service = NotificationConditionService()
         self.assertTrue(service.matches(conditions=[], payload={}, mode="all"))

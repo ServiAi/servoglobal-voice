@@ -19,7 +19,7 @@ from app.api.auth.deps import AuthContext, get_current_auth_context
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.main import app
-from app.models.identity import Tenant, TenantMembership, User
+from app.models.identity import AccessAuditLog, Tenant, TenantMembership, User
 from app.models.integrations import TenantWhatsAppTemplate
 from app.models.notifications import DomainEvent, NotificationDelivery, TenantNotificationRule
 
@@ -890,6 +890,14 @@ class NotificationAdminTests(unittest.TestCase):
         self.assertIn("Reserva confirmada", result["preview"])
         with SessionLocal() as db:
             self.assertEqual(db.query(NotificationDelivery).count(), 0)
+            audit = db.scalar(
+                select(AccessAuditLog).where(
+                    AccessAuditLog.tenant_id == self.tenant_id,
+                    AccessAuditLog.action == "notification_rule.tested",
+                )
+            )
+            self.assertIsNotNone(audit)
+            self.assertNotIn("+573001112233", audit.resource)
 
     def test_dry_run_requires_write_role(self):
         self._as("tenant_analyst")
