@@ -55,11 +55,15 @@ Aunque el prefijo contiene `admin`, las lecturas admiten `platform_admin`, `tena
 | Método y ruta | Propósito |
 | --- | --- |
 | `GET /overview` | Conteos de capacidades, reglas, destinatarios y entregas por estado. |
-| `GET /catalog` | Eventos, capacidades, estrategias, operadores, fuentes, formatos y modos permitidos. |
+| `GET /catalog` | Catálogo completo: capacidades, contratos versionados de eventos, campos tipados, operadores, ejemplos, estrategias y formatos. |
+| `GET /catalog/capabilities` | Metadata de capacidades y sus eventos disponibles. |
+| `GET /catalog/capabilities/{capability_key}/events` | Contratos de eventos de una capacidad. |
+| `GET /catalog/capabilities/{capability_key}/events/{event_type}` | Contrato versionado, campos y payload de ejemplo de un evento. |
 | `GET /capabilities` | Lista capacidades del tenant. |
 | `PATCH /capabilities/{capability_key}` | Activa o desactiva una capacidad. |
 | `GET /rules` | Lista reglas y su posible `configuration_error`. |
 | `POST /rules` | Crea una regla validada. |
+| `POST /rules/test` | Evalúa condiciones, variables, destinatarios enmascarados y preview con un payload de prueba; no crea entregas ni envía mensajes. |
 | `PATCH /rules/{rule_id}` | Actualiza una regla del tenant. |
 | `PATCH /rules/{rule_id}/enabled` | Activa o desactiva una regla. |
 | `DELETE /rules/{rule_id}` | Elimina una regla sin entregas asociadas; responde `204`. |
@@ -74,10 +78,12 @@ Aunque el prefijo contiene `admin`, las lecturas admiten `platform_admin`, `tena
 Validaciones relevantes:
 
 - Nombres de reglas duplicados producen conflicto.
-- Evento, capacidad, estrategia, condiciones, destinatario y variables deben pertenecer al catálogo permitido.
+- Capacidad y evento deben formar una pareja registrada; las rutas, operadores, valores y formatos se validan contra el mismo contrato que consume el runtime.
+- `conditions_mode` admite `all` y `any`. Una regla sin condiciones coincide en ambos modos.
 - Una plantilla WhatsApp debe estar activa, sincronizada desde Meta y `APPROVED`.
 - Todos los parámetros requeridos por la plantilla deben tener un mapeo efectivo.
 - Una regla con entregas asociadas no se elimina; el servicio devuelve `rule_has_deliveries`.
+- El dry-run sólo acepta payloads conformes al contrato del evento y nunca persiste `DomainEvent` o `NotificationDelivery`.
 
 ## Administración de funcionalidades tenant
 

@@ -66,11 +66,16 @@ Cada canal conserva configuración, cliente, servicio de negocio, persistencia, 
 4. El worker reclama lotes vencidos con lease. `WhatsAppNotificationExecutor` vuelve a comprobar cancelaciones, ownership del claim y vigencia del evento antes de enviar.
 5. El resultado actualiza entrega y mensaje CRM. Los errores transitorios siguen la política de reintentos; entregas antiguas o inconsistentes pasan por recuperación, `manual_review` o estado terminal.
 6. La UI tenant consulta resumen, reglas, destinatarios y entregas con destinos enmascarados; nunca recibe claim tokens, payloads internos ni secretos.
+7. `notification_event_schemas.py` es la fuente única de metadata para UI, validación administrativa y runtime: relaciona capacidad/evento con versión, campos tipados, operadores, formatos, rutas de destinatario y un ejemplo sintético seguro.
+
+El evaluador admite composición `all`/`any` y rutas seguras sobre diccionarios; no usa `eval`. El endpoint de dry-run reutiliza el validador, evaluador, mapper y resolver de destinatarios de producción, pero no publica eventos, no crea entregas y no invoca WhatsApp.
 
 ### Invariantes de la UI de notificaciones
 
 - Una regla WhatsApp ejecutable necesita una plantilla Meta sincronizada, activa y `APPROVED`, además de todos sus parámetros obligatorios mapeados.
-- Los operadores numéricos requieren valores numéricos; los operadores de existencia no conservan un valor residual.
+- Campos y operadores se seleccionan desde el contrato del evento. Números, booleanos, enums y fechas usan controles tipados; los operadores de existencia no conservan un valor residual.
+- Cambiar la capacidad limpia el evento dependiente. Las reglas antiguas con rutas fuera del contrato quedan visibles como configuración obsoleta y no se guardan hasta corregirlas.
+- Las variables de plantilla se generan desde los parámetros Meta y las rutas del evento; el preview y la prueba muestran sólo datos sintéticos o introducidos por el administrador y destinatarios enmascarados.
 - Los diálogos largos usan encabezado fijo en su fila, cuerpo con `overflow-y-auto` y `DialogFooter` en una fila separada.
 - Cada campo del formulario de reglas conserva una ayuda contextual traducida. El contenido se abre desde el ícono y se oculta con cualquier clic externo.
 - Destinos y destinatarios se muestran enmascarados. Los cambios no deben introducir `tenant_id` en payloads del frontend.

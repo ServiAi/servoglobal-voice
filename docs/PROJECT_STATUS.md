@@ -14,7 +14,7 @@ Actualizado: 2026-08-05. Fuente: código, migraciones y pruebas del repositorio.
 | Cal.com | Operativa | Slots, booking, cancelación, reprogramación y webhook. |
 | Google Calendar | Parcial | OAuth foundation, listado y desconexión; creación directa de eventos deshabilitada. |
 | WhatsApp Cloud | Operativa | Configuración, plantillas, envío CRM, mensajes, estados y webhook. |
-| Automatizaciones y notificaciones | Operativa en código | Resumen, capacidades, reglas, destinatarios, entregas, planificación, reintentos, recuperación y worker PostgreSQL. El despliegue del proceso worker debe verificarse por entorno. |
+| Automatizaciones y notificaciones | Operativa en código | Contratos versionados de eventos, builder dinámico, dry-run sin envío, reglas, destinatarios, entregas, planificación, reintentos, recuperación y worker PostgreSQL. El despliegue del proceso worker debe verificarse por entorno. |
 | Voz CRM | Operativa | Configuración de proveedor/agentes, llamadas desde leads, webhook y booking tools. |
 | Voice Context Experiences | Builder privado operativo en código | Feature flag, context schemas versionados, administración tenant y UI bilingüe para inventario, wizard, edición, preview local, estados y versiones. Sin endpoints públicos, captura pública ni runtime WebRTC. |
 | Planes y consumo | Operativa | Límites, alertas, resumen administrativo y comparación de ahorro. |
@@ -22,13 +22,14 @@ Actualizado: 2026-08-05. Fuente: código, migraciones y pruebas del repositorio.
 
 ## Persistencia
 
-Las migraciones cubren identidad, analítica, riesgo Auth0, planes/uso, CRM base y contexto de llamadas, Resend/email/formularios, Cal.com/Google Calendar, WhatsApp, voz, disponibilidad de integraciones, notificaciones y grants de funcionalidades tenant. La migración más reciente es `202608050002_voice_experience_management.py` y la cadena debe conservar una única head.
+Las migraciones cubren identidad, analítica, riesgo Auth0, planes/uso, CRM base y contexto de llamadas, Resend/email/formularios, Cal.com/Google Calendar, WhatsApp, voz, disponibilidad de integraciones, notificaciones y grants de funcionalidades tenant. La migración más reciente es `202608050003_notification_rule_event_schemas.py` y la cadena debe conservar una única head.
 
 ## Continuidad: automatizaciones y notificaciones
 
 - La página tenant es `frontend/app/[locale]/crm/settings/notifications/page.tsx` y carga resumen, catálogo, capacidades, reglas, destinatarios, entregas y plantillas WhatsApp en paralelo.
 - `NotificationsWorkspace` organiza cuatro pestañas: resumen, reglas, destinatarios y entregas. Los roles `platform_admin` y `tenant_admin` pueden escribir; analistas y viewers sólo consultan.
-- Las reglas WhatsApp sólo pueden crearse con plantillas activas sincronizadas desde Meta con estado `APPROVED`. Se validan condiciones numéricas y el mapeo de parámetros obligatorios.
+- Las reglas WhatsApp sólo pueden crearse con plantillas activas sincronizadas desde Meta con estado `APPROVED`. El registro central relaciona capacidad/evento con campos tipados, operadores, formatos, rutas de destinatario, ejemplo seguro y versión.
+- El modal carga eventos según capacidad, genera condiciones y variables desde el contrato, conserva `all`/`any`, detecta rutas obsoletas y ofrece un dry-run que no crea entregas ni envía WhatsApp.
 - Todos los campos del formulario de reglas tienen ayuda contextual bilingüe. `FieldHelp` abre desde el ícono de ayuda y cierra tanto al pulsarlo nuevamente como al hacer clic fuera.
 - Los diálogos largos conservan tres zonas: encabezado, cuerpo desplazable y footer separado; no volver a introducir footers sticky dentro del área desplazable.
 - El backend persiste `tenant_capabilities`, `tenant_notification_rules`, `tenant_notification_recipients`, `domain_events` y `notification_deliveries`. La planificación es idempotente y el worker usa claims con lease, reintentos, recuperación y estados terminales.
@@ -48,4 +49,4 @@ Las migraciones cubren identidad, analítica, riesgo Auth0, planes/uso, CRM base
 
 ## Evidencia de pruebas
 
-El repositorio contiene cobertura backend específica para identidad, analítica, CRM, dashboard, Resend, assets, formularios, Cal.com, Google Calendar foundation, WhatsApp, voz, context schemas, Voice Experiences y snapshots publicados, webhooks, límites de uso y el pipeline de notificaciones. Este último incluye pruebas de modelos, administración, orquestación, condiciones, variables, claims, reintentos, recuperación, reconciliación, worker y ejecutor WhatsApp. El frontend incluye lint, typecheck, build, `frontend/tests/crm-notifications.spec.ts` y `frontend/tests/voice-experiences.spec.ts`; las pruebas visuales requieren una sesión Auth0 válida. Los resultados históricos están en `docs-local/` y deben ejecutarse nuevamente antes de cada entrega.
+El repositorio contiene cobertura backend específica para identidad, analítica, CRM, dashboard, Resend, assets, formularios, Cal.com, Google Calendar foundation, WhatsApp, voz, context schemas, Voice Experiences y snapshots publicados, webhooks, límites de uso y el pipeline de notificaciones. Este último incluye `test_notification_event_schemas`, modelos, administración, orquestación, condiciones, variables, dry-run, claims, reintentos, recuperación, reconciliación, worker y ejecutor WhatsApp. El frontend incluye lint, typecheck, build, `frontend/tests/crm-notifications.spec.ts` y `frontend/tests/voice-experiences.spec.ts`; las pruebas visuales requieren una sesión Auth0 válida. Los resultados históricos están en `docs-local/` y deben ejecutarse nuevamente antes de cada entrega.

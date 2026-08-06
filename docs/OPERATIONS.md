@@ -31,6 +31,7 @@ Las migraciones de notificaciones son:
 
 - `202607240001_add_tenant_notification_foundation.py`.
 - `202607270001_add_notification_worker_state.py`.
+- `202608050003_notification_rule_event_schemas.py` (modo de condiciones y versión del contrato en reglas).
 
 ## Worker de notificaciones
 
@@ -77,7 +78,7 @@ Para validar únicamente automatizaciones y notificaciones:
 
 ```powershell
 cd backend
-python -m unittest test_notification_admin test_notification_models test_notification_orchestrator test_notification_event_pipeline test_notification_delivery_claim_service test_notification_delivery_recovery test_notification_retry_policy test_notification_schedule_reconciliation test_notification_worker test_whatsapp_notification_executor
+python -m unittest test_notification_event_schemas test_notification_admin test_notification_models test_notification_orchestrator test_notification_event_pipeline test_notification_delivery_claim_service test_notification_delivery_recovery test_notification_retry_policy test_notification_schedule_reconciliation test_notification_worker test_whatsapp_notification_executor
 
 cd ..\frontend
 npx.cmd playwright test tests/crm-notifications.spec.ts --project=crm-visual
