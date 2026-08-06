@@ -51,6 +51,10 @@ export function archiveVoiceExperience(accessToken: string, experienceId: string
   return requestVoiceEndpoint<VoiceExperienceResponse>('POST', `experiences/${experienceId}/archive`, accessToken);
 }
 
+export function deleteVoiceExperience(accessToken: string, experienceId: string) {
+  return requestVoiceEndpoint<null>('DELETE', `experiences/${experienceId}`, accessToken);
+}
+
 export function fetchVoiceExperienceVersions(accessToken: string, experienceId: string) {
   return requestVoiceEndpoint<VoiceExperienceVersionResponse[]>(
     'GET',
