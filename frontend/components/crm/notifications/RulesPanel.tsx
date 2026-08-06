@@ -1,8 +1,8 @@
 'use client';
 
 import { FormEvent, useState } from 'react';
-import { useTranslations } from 'next-intl';
-import { AlertTriangle, CheckCircle2, Clock3, Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
+import { AlertTriangle, CheckCircle2, Clock3, Copy, FlaskConical, Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -11,14 +11,17 @@ import {
   createNotificationRuleAction,
   deleteNotificationRuleAction,
   setNotificationRuleEnabledAction,
+  testNotificationRuleAction,
   updateNotificationRuleAction,
 } from '@/app/[locale]/crm/settings/notifications/actions';
 import type {
   NotificationCatalogResponse,
   NotificationCondition,
   NotificationConditionOperator,
+  NotificationEventField,
   NotificationRuleCreateRequest,
   NotificationRuleItem,
+  NotificationRuleTestResponse,
   NotificationVariableSpec,
 } from '@/types/notifications';
 import type { WhatsAppTemplateResponse } from '@/types/crm';
@@ -31,7 +34,7 @@ type Props = {
 };
 
 const LIST_OPERATORS = new Set(['in', 'not_in']);
-const NO_VALUE_OPERATORS = new Set(['exists', 'not_exists', 'not_empty']);
+const NO_VALUE_OPERATORS = new Set(['exists', 'not_exists', 'is_empty', 'not_empty']);
 const NUMERIC_OPERATORS = new Set([
   'greater_than',
   'greater_than_or_equal',
@@ -52,11 +55,25 @@ const KNOWN_RULE_ERROR_CODES = new Set([
   'whatsapp_template_not_approved',
   'template_variable_mapping_missing',
   'template_variables_malformed',
+  'unsupported_capability_event_pair',
+  'unsupported_conditions_mode',
+  'condition_field_not_in_event_schema',
+  'condition_operator_not_allowed_for_field',
+  'condition_value_invalid_for_field',
+  'condition_value_not_in_enum',
+  'variable_path_not_in_event_schema',
+  'variable_timezone_path_not_in_event_schema',
+  'recipient_path_not_allowed_for_event',
+  'event_payload_invalid',
 ]);
 
 type VariableEntry = { key: string; spec: NotificationVariableSpec };
 
 type TemplateParameter = { key: string; label?: string };
+
+function localized(value: { es: string; en: string }, locale: string): string {
+  return locale.startsWith('es') ? value.es : value.en;
+}
 
 const FIELD_CLASS =
   'min-h-10 w-full rounded-md border border-border bg-background px-3 py-2 text-sm shadow-xs outline-none transition focus:border-primary/60 focus:ring-2 focus:ring-primary/15 disabled:cursor-not-allowed disabled:opacity-60';
@@ -105,6 +122,7 @@ function emptyFormState(): NotificationRuleCreateRequest {
     recipient_strategy: 'event_customer',
     recipient_group_key: '',
     conditions_json: [],
+    conditions_mode: 'all',
     variable_mapping_json: {},
     schedule_mode: 'immediate',
     schedule_offset_minutes: 0,
@@ -122,6 +140,7 @@ function ruleToFormState(rule: NotificationRuleItem): NotificationRuleCreateRequ
     recipient_strategy: rule.recipient_strategy,
     recipient_group_key: rule.recipient_group_key ?? '',
     conditions_json: rule.conditions_json,
+    conditions_mode: rule.conditions_mode,
     variable_mapping_json: rule.variable_mapping_json,
     schedule_mode: rule.schedule_mode,
     schedule_offset_minutes: rule.schedule_offset_minutes,
@@ -553,9 +572,20 @@ function RuleFormDialog({
   onSaved: (rule: NotificationRuleItem) => void;
 }) {
   const t = useTranslations('crm.notifications.rules.form');
-  const [form, setForm] = useState<NotificationRuleCreateRequest>(rule ? ruleToFormState(rule) : emptyFormState());
+  const locale = useLocale();
+  const initialForm = rule ? ruleToFormState(rule) : emptyFormState();
+  const initialSchema = catalog?.event_schemas.find(
+    (schema) => schema.capability_key === initialForm.capability_key && schema.event_type === initialForm.event_type
+  );
+  const [form, setForm] = useState<NotificationRuleCreateRequest>(initialForm);
   const [busy, setBusy] = useState(false);
   const [errorCode, setErrorCode] = useState<string | null>(null);
+  const [samplePayload, setSamplePayload] = useState(
+    initialSchema ? JSON.stringify(initialSchema.example_payload, null, 2) : ''
+  );
+  const [testBusy, setTestBusy] = useState(false);
+  const [testError, setTestError] = useState<string | null>(null);
+  const [testResult, setTestResult] = useState<NotificationRuleTestResponse | null>(null);
 
   const set = <K extends keyof NotificationRuleCreateRequest>(key: K, value: NotificationRuleCreateRequest[K]) => {
     setForm((current) => ({ ...current, [key]: value }));
@@ -563,6 +593,11 @@ function RuleFormDialog({
 
   const conditions = form.conditions_json ?? [];
   const variables = Object.entries(form.variable_mapping_json ?? {}).map(([key, spec]) => ({ key, spec }));
+  const selectedSchema = catalog?.event_schemas.find(
+    (schema) => schema.capability_key === form.capability_key && schema.event_type === form.event_type
+  ) ?? null;
+  const capabilityOptions = catalog?.capabilities_metadata ?? [];
+  const eventOptions = catalog?.event_schemas.filter((schema) => schema.capability_key === form.capability_key) ?? [];
 
   const selectedTemplate = whatsappTemplates.find((template) => template.template_key === form.template_key) ?? null;
   const requiredParameters = selectedTemplate ? approvedTemplateParameters(selectedTemplate) ?? [] : [];
@@ -584,6 +619,43 @@ function RuleFormDialog({
       NUMERIC_OPERATORS.has(condition.operator) &&
       (typeof condition.value !== 'number' || !Number.isFinite(condition.value))
   );
+  const staleConditions = conditions.filter((condition) => !selectedSchema?.fields.some((field) => field.path === condition.field));
+  const staleVariables = variables.filter(
+    (entry) => entry.spec.source === 'event_field' && !selectedSchema?.fields.some((field) => field.path === entry.spec.path)
+  );
+  const hasStaleConfiguration = Boolean(selectedSchema) && (staleConditions.length > 0 || staleVariables.length > 0);
+
+  const selectCapability = (capabilityKey: string) => {
+    setForm((current) => ({
+      ...current,
+      capability_key: capabilityKey,
+      event_type: '',
+      conditions_json: [],
+      recipient_group_key: current.recipient_strategy === 'event_field' ? '' : current.recipient_group_key,
+      variable_mapping_json: Object.fromEntries(
+        Object.entries(current.variable_mapping_json ?? {}).filter(([, spec]) => spec.source === 'literal')
+      ),
+    }));
+    setSamplePayload('');
+    setTestResult(null);
+  };
+
+  const selectEvent = (eventType: string) => {
+    const schema = catalog?.event_schemas.find(
+      (item) => item.capability_key === form.capability_key && item.event_type === eventType
+    );
+    setForm((current) => ({
+      ...current,
+      event_type: eventType,
+      conditions_json: [],
+      recipient_group_key: current.recipient_strategy === 'event_field' ? '' : current.recipient_group_key,
+      variable_mapping_json: Object.fromEntries(
+        Object.entries(current.variable_mapping_json ?? {}).filter(([, spec]) => spec.source === 'literal')
+      ),
+    }));
+    setSamplePayload(schema ? JSON.stringify(schema.example_payload, null, 2) : '');
+    setTestResult(null);
+  };
 
   const selectTemplate = (templateKey: string) => {
     const template = whatsappTemplates.find((item) => item.template_key === templateKey) ?? null;
@@ -604,6 +676,30 @@ function RuleFormDialog({
       if (entry.key) mapping[entry.key] = entry.spec;
     });
     set('variable_mapping_json', mapping);
+  };
+
+  const runTest = async () => {
+    setTestError(null);
+    setTestResult(null);
+    let eventPayload: Record<string, unknown>;
+    try {
+      eventPayload = JSON.parse(samplePayload) as Record<string, unknown>;
+    } catch {
+      setTestError('event_payload_invalid');
+      return;
+    }
+    setTestBusy(true);
+    const result = await testNotificationRuleAction({
+      ...form,
+      recipient_group_key: form.recipient_group_key || null,
+      event_payload: eventPayload,
+    });
+    setTestBusy(false);
+    if (!result.ok) {
+      setTestError(result.detail);
+      return;
+    }
+    setTestResult(result.data);
   };
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
@@ -660,13 +756,13 @@ function RuleFormDialog({
               <select
                 className={FIELD_CLASS}
                 value={form.capability_key}
-                onChange={(event) => set('capability_key', event.target.value)}
+                onChange={(event) => selectCapability(event.target.value)}
                 required
               >
                 <option value="">—</option>
-                {catalog?.capability_keys.map((key) => (
-                  <option key={key} value={key}>
-                    {key}
+                {capabilityOptions.map((capability) => (
+                  <option key={capability.key} value={capability.key}>
+                    {localized(capability.label, locale)}
                   </option>
                 ))}
               </select>
@@ -677,13 +773,14 @@ function RuleFormDialog({
               <select
                 className={FIELD_CLASS}
                 value={form.event_type}
-                onChange={(event) => set('event_type', event.target.value)}
+                onChange={(event) => selectEvent(event.target.value)}
+                disabled={!form.capability_key}
                 required
               >
                 <option value="">—</option>
-                {catalog?.event_types.map((key) => (
-                  <option key={key} value={key}>
-                    {key}
+                {eventOptions.map((schema) => (
+                  <option key={schema.event_type} value={schema.event_type}>
+                    {localized(schema.label, locale)}
                   </option>
                 ))}
               </select>
@@ -736,13 +833,28 @@ function RuleFormDialog({
             {form.recipient_strategy !== 'event_customer' && (
               <label className="space-y-1 text-sm">
                 <HelpLabel label={t('recipientGroup')} help={t('help.recipientGroup')} required />
-                <input
-                  className={FIELD_CLASS}
-                  value={form.recipient_group_key ?? ''}
-                  onChange={(event) => set('recipient_group_key', event.target.value)}
-                  required
-                  maxLength={80}
-                />
+                {form.recipient_strategy === 'event_field' ? (
+                  <select
+                    className={FIELD_CLASS}
+                    value={form.recipient_group_key ?? ''}
+                    onChange={(event) => set('recipient_group_key', event.target.value)}
+                    required
+                    disabled={!selectedSchema}
+                  >
+                    <option value="">—</option>
+                    {selectedSchema?.fields.filter((field) => field.recipient_eligible).map((field) => (
+                      <option key={field.path} value={field.path}>{localized(field.label, locale)}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    className={FIELD_CLASS}
+                    value={form.recipient_group_key ?? ''}
+                    onChange={(event) => set('recipient_group_key', event.target.value)}
+                    required
+                    maxLength={80}
+                  />
+                )}
               </label>
             )}
 
@@ -799,16 +911,60 @@ function RuleFormDialog({
 
           <ConditionsBuilder
             conditions={conditions}
-            operators={catalog?.condition_operators ?? []}
+            fields={selectedSchema?.fields ?? []}
+            mode={form.conditions_mode ?? 'all'}
+            locale={locale}
+            onModeChange={(mode) => set('conditions_mode', mode)}
             onChange={updateConditions}
           />
 
           <VariablesBuilder
             variables={variables}
             sources={catalog?.variable_sources ?? []}
-            formats={catalog?.variable_formats ?? []}
+            fields={selectedSchema?.fields ?? []}
+            locale={locale}
             onChange={updateVariables}
           />
+
+          {selectedSchema && (
+            <fieldset className={`${FORM_SECTION_CLASS} space-y-3`}>
+              <legend className="text-sm font-medium text-foreground">{t('eventData')}</legend>
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-xs text-muted-foreground">{t('eventDataDescription', { version: selectedSchema.version })}</p>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="gap-2"
+                  onClick={() => navigator.clipboard.writeText(samplePayload)}
+                >
+                  <Copy className="size-4" aria-hidden="true" />
+                  {t('copyData')}
+                </Button>
+              </div>
+              <textarea
+                aria-label={t('eventData')}
+                className="min-h-56 w-full rounded-md border border-border bg-background p-3 font-mono text-xs leading-5 outline-none focus:border-primary/60 focus:ring-2 focus:ring-primary/15"
+                value={samplePayload}
+                onChange={(event) => setSamplePayload(event.target.value)}
+                spellCheck={false}
+              />
+            </fieldset>
+          )}
+
+          {hasStaleConfiguration && (
+            <p role="alert" className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-200">
+              {t('staleConfiguration')}
+            </p>
+          )}
+
+          {testError && (
+            <p role="alert" className="rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-xs text-destructive">
+              {t(`errors.${KNOWN_RULE_ERROR_CODES.has(testError) ? testError : 'genericTest'}`)}
+            </p>
+          )}
+
+          {testResult && <RuleTestResult result={testResult} />}
 
           {missingRequiredParameters.length > 0 && (
             <p role="alert" className="rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-xs text-destructive">
@@ -822,12 +978,22 @@ function RuleFormDialog({
           </div>
 
           <DialogFooter className="border-t border-border bg-background p-4 sm:px-5">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={runTest}
+              disabled={testBusy || busy || !selectedSchema || missingRequiredParameters.length > 0 || hasInvalidNumericCondition || hasStaleConfiguration}
+              className="gap-2"
+            >
+              {testBusy ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <FlaskConical className="size-4" aria-hidden="true" />}
+              {t('testRule')}
+            </Button>
             <Button type="button" variant="outline" onClick={onClose}>
               {t('cancel')}
             </Button>
             <Button
               type="submit"
-              disabled={busy || missingRequiredParameters.length > 0 || hasInvalidNumericCondition}
+              disabled={busy || testBusy || !selectedSchema || missingRequiredParameters.length > 0 || hasInvalidNumericCondition || hasStaleConfiguration}
               className="gap-2"
             >
               {busy && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
@@ -840,19 +1006,66 @@ function RuleFormDialog({
   );
 }
 
+function RuleTestResult({ result }: { result: NotificationRuleTestResponse }) {
+  const t = useTranslations('crm.notifications.rules.form');
+  return (
+    <section className={`${FORM_SECTION_CLASS} space-y-3`} aria-live="polite">
+      <div className="flex items-center gap-2">
+        {result.matches ? (
+          <CheckCircle2 className="size-5 text-emerald-600" aria-hidden="true" />
+        ) : (
+          <AlertTriangle className="size-5 text-amber-600" aria-hidden="true" />
+        )}
+        <h3 className="text-sm font-semibold">{result.matches ? t('testMatched') : t('testNotMatched')}</h3>
+      </div>
+      <div className="grid gap-3 text-xs sm:grid-cols-2">
+        <div>
+          <p className="font-medium text-foreground">{t('testRecipients')}</p>
+          <p className="mt-1 text-muted-foreground">{result.recipients_masked.join(', ') || t('testNoRecipients')}</p>
+        </div>
+        <div>
+          <p className="font-medium text-foreground">{t('testVariables')}</p>
+          <pre className="mt-1 overflow-x-auto whitespace-pre-wrap text-muted-foreground">{JSON.stringify(result.variables, null, 2)}</pre>
+        </div>
+      </div>
+      <div>
+        <p className="text-xs font-medium text-foreground">{t('testPreview')}</p>
+        <p className="mt-1 whitespace-pre-wrap rounded-md border border-border bg-background p-3 text-sm">{result.preview}</p>
+      </div>
+    </section>
+  );
+}
+
 function ConditionsBuilder({
   conditions,
-  operators,
+  fields,
+  mode,
+  locale,
+  onModeChange,
   onChange,
 }: {
   conditions: NotificationCondition[];
-  operators: string[];
+  fields: NotificationEventField[];
+  mode: 'all' | 'any';
+  locale: string;
+  onModeChange: (mode: 'all' | 'any') => void;
   onChange: (next: NotificationCondition[]) => void;
 }) {
   const t = useTranslations('crm.notifications.rules.form');
+  const groups = Array.from(new Set(fields.map((field) => localized(field.group, locale))));
 
   const update = (index: number, patch: Partial<NotificationCondition>) => {
     onChange(conditions.map((condition, i) => (i === index ? { ...condition, ...patch } : condition)));
+  };
+
+  const changeField = (index: number, path: string) => {
+    const field = fields.find((item) => item.path === path);
+    const operator = field?.operators[0] ?? 'equals';
+    update(index, {
+      field: path,
+      operator,
+      value: field?.data_type === 'boolean' ? true : LIST_OPERATORS.has(operator) ? [] : '',
+    });
   };
 
   const changeOperator = (index: number, operator: NotificationConditionOperator) => {
@@ -876,17 +1089,36 @@ function ConditionsBuilder({
   return (
     <fieldset className={`${FORM_SECTION_CLASS} space-y-3`}>
       <legend className="text-sm font-medium text-foreground">{t('conditions')}</legend>
-      {conditions.map((condition, index) => (
+      <label className="block max-w-xs space-y-1 text-xs">
+        <HelpLabel label={t('conditionsMode')} help={t('help.conditionsMode')} required />
+        <select className={SMALL_FIELD_CLASS} value={mode} onChange={(event) => onModeChange(event.target.value as 'all' | 'any')}>
+          <option value="all">{t('conditionsModes.all')}</option>
+          <option value="any">{t('conditionsModes.any')}</option>
+        </select>
+      </label>
+      {conditions.map((condition, index) => {
+        const field = fields.find((item) => item.path === condition.field);
+        const operators = field?.operators ?? [condition.operator];
+        return (
         <div key={index} className="grid gap-2 rounded-md border border-border bg-background/70 p-3 sm:grid-cols-[1fr_1fr_1fr_auto] sm:items-center">
           <label className="space-y-1 text-xs">
             <HelpLabel label={t('conditionField')} help={t('help.conditionField')} required />
-            <input
+            <select
               aria-label="field"
               className={SMALL_FIELD_CLASS}
               value={condition.field}
-              onChange={(event) => update(index, { field: event.target.value })}
-              placeholder="booking.status"
-            />
+              onChange={(event) => changeField(index, event.target.value)}
+            >
+              <option value="">—</option>
+              {!field && condition.field && <option value={condition.field}>{t('staleField', { field: condition.field })}</option>}
+              {groups.map((group) => (
+                <optgroup key={group} label={group}>
+                  {fields.filter((item) => localized(item.group, locale) === group).map((item) => (
+                    <option key={item.path} value={item.path}>{localized(item.label, locale)}</option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
           </label>
           <label className="space-y-1 text-xs">
             <HelpLabel label={t('conditionOperator')} help={t('help.conditionOperator')} required />
@@ -898,52 +1130,27 @@ function ConditionsBuilder({
             >
               {operators.map((operator) => (
                 <option key={operator} value={operator}>
-                  {operator}
+                  {t(`operators.${operator}`)}
                 </option>
               ))}
             </select>
           </label>
-          {NO_VALUE_OPERATORS.has(condition.operator) ? null : NUMERIC_OPERATORS.has(condition.operator) ? (
-            <label className="space-y-1 text-xs">
-              <HelpLabel label={t('conditionValue')} help={t('help.conditionValue')} required />
-              <input
-                aria-label="value"
-                type="number"
-                className={SMALL_FIELD_CLASS}
-                value={typeof condition.value === 'number' && Number.isFinite(condition.value) ? condition.value : ''}
-                onChange={(event) => {
-                  const raw = event.target.value;
-                  update(index, { value: raw === '' ? undefined : Number(raw) });
-                }}
-              />
-            </label>
-          ) : (
-            <label className="space-y-1 text-xs">
-              <HelpLabel label={t('conditionValue')} help={t('help.conditionValue')} required />
-              <input
-                aria-label="value"
-                className={SMALL_FIELD_CLASS}
-                value={LIST_OPERATORS.has(condition.operator) && Array.isArray(condition.value) ? condition.value.join(',') : (condition.value as string) ?? ''}
-                onChange={(event) =>
-                  update(index, {
-                    value: LIST_OPERATORS.has(condition.operator)
-                      ? event.target.value.split(',').map((item) => item.trim()).filter(Boolean)
-                      : event.target.value,
-                  })
-                }
-              />
-            </label>
-          )}
+          <ConditionValueInput condition={condition} field={field} onChange={(value) => update(index, { value })} />
           <Button type="button" variant="ghost" size="sm" className="sm:self-end" onClick={() => onChange(conditions.filter((_, i) => i !== index))}>
             {t('removeCondition')}
           </Button>
         </div>
-      ))}
+        );
+      })}
       <Button
         type="button"
         variant="outline"
         size="sm"
-        onClick={() => onChange([...conditions, { field: '', operator: 'equals', value: '' }])}
+        disabled={fields.length === 0}
+        onClick={() => {
+          const field = fields[0];
+          onChange([...conditions, { field: field.path, operator: field.operators[0], value: '' }]);
+        }}
       >
         {t('addCondition')}
       </Button>
@@ -951,19 +1158,55 @@ function ConditionsBuilder({
   );
 }
 
+function ConditionValueInput({
+  condition,
+  field,
+  onChange,
+}: {
+  condition: NotificationCondition;
+  field?: NotificationEventField;
+  onChange: (value: unknown) => void;
+}) {
+  const t = useTranslations('crm.notifications.rules.form');
+  if (NO_VALUE_OPERATORS.has(condition.operator)) return <span />;
+  const label = <HelpLabel label={t('conditionValue')} help={t('help.conditionValue')} required />;
+  if (field?.data_type === 'boolean') {
+    return <label className="space-y-1 text-xs">{label}<select aria-label="value" className={SMALL_FIELD_CLASS} value={String(condition.value ?? true)} onChange={(event) => onChange(event.target.value === 'true')}><option value="true">{t('boolean.true')}</option><option value="false">{t('boolean.false')}</option></select></label>;
+  }
+  if (field?.enum_values.length) {
+    if (LIST_OPERATORS.has(condition.operator)) {
+      const selected = Array.isArray(condition.value) ? condition.value.map(String) : [];
+      return <label className="space-y-1 text-xs">{label}<select multiple aria-label="value" className={`${SMALL_FIELD_CLASS} min-h-24`} value={selected} onChange={(event) => onChange(Array.from(event.currentTarget.selectedOptions, (option) => option.value))}>{field.enum_values.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>;
+    }
+    return <label className="space-y-1 text-xs">{label}<select aria-label="value" className={SMALL_FIELD_CLASS} value={String(condition.value ?? '')} onChange={(event) => onChange(event.target.value)}><option value="">—</option>{field.enum_values.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>;
+  }
+  if (field?.data_type === 'number') {
+    return <label className="space-y-1 text-xs">{label}<input aria-label="value" type="number" className={SMALL_FIELD_CLASS} value={typeof condition.value === 'number' ? condition.value : ''} onChange={(event) => onChange(event.target.value === '' ? undefined : Number(event.target.value))} /></label>;
+  }
+  if (field?.data_type === 'datetime') {
+    const value = typeof condition.value === 'string' ? condition.value.slice(0, 16) : '';
+    return <label className="space-y-1 text-xs">{label}<input aria-label="value" type="datetime-local" className={SMALL_FIELD_CLASS} value={value} onChange={(event) => onChange(event.target.value ? new Date(event.target.value).toISOString() : undefined)} /></label>;
+  }
+  return <label className="space-y-1 text-xs">{label}<input aria-label="value" className={SMALL_FIELD_CLASS} value={LIST_OPERATORS.has(condition.operator) && Array.isArray(condition.value) ? condition.value.join(',') : String(condition.value ?? '')} onChange={(event) => onChange(LIST_OPERATORS.has(condition.operator) ? event.target.value.split(',').map((item) => item.trim()).filter(Boolean) : event.target.value)} /></label>;
+}
+
 function VariablesBuilder({
   variables,
   sources,
-  formats,
+  fields,
+  locale,
   onChange,
 }: {
   variables: VariableEntry[];
   sources: string[];
-  formats: string[];
+  fields: NotificationEventField[];
+  locale: string;
   onChange: (next: VariableEntry[]) => void;
 }) {
   const t = useTranslations('crm.notifications.rules.form');
   const tCommon = useTranslations('crm.notifications.common');
+  const groups = Array.from(new Set(fields.map((field) => localized(field.group, locale))));
+  const formatsFor = (path?: string | null) => fields.find((field) => field.path === path)?.formats ?? ['string'];
 
   const update = (index: number, patch: Partial<VariableEntry> | Partial<NotificationVariableSpec>) => {
     onChange(
@@ -1026,8 +1269,7 @@ function VariablesBuilder({
               aria-label="variable key"
               className={SMALL_FIELD_CLASS}
               value={entry.key}
-              placeholder="customer_name"
-              onChange={(event) => update(index, { key: event.target.value })}
+              readOnly
             />
           </label>
           <label className="space-y-1 text-xs">
@@ -1059,13 +1301,24 @@ function VariablesBuilder({
           ) : (
             <label className="space-y-1 text-xs">
               <HelpLabel label={t('variablePath')} help={t('help.variablePath')} required />
-              <input
+              <select
                 aria-label="path"
                 className={SMALL_FIELD_CLASS}
                 value={entry.spec.path ?? ''}
-                onChange={(event) => update(index, { path: event.target.value })}
-                placeholder="booking.start_at"
-              />
+                onChange={(event) => update(index, { path: event.target.value, format: 'string' })}
+              >
+                <option value="">—</option>
+                {!fields.some((field) => field.path === entry.spec.path) && entry.spec.path && (
+                  <option value={entry.spec.path}>{t('staleField', { field: entry.spec.path })}</option>
+                )}
+                {groups.map((group) => (
+                  <optgroup key={group} label={group}>
+                    {fields.filter((field) => localized(field.group, locale) === group).map((field) => (
+                      <option key={field.path} value={field.path}>{localized(field.label, locale)}</option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
             </label>
           )}
           <label className="space-y-1 text-xs">
@@ -1076,7 +1329,7 @@ function VariablesBuilder({
               value={entry.spec.format ?? 'string'}
               onChange={(event) => update(index, { format: event.target.value as NotificationVariableSpec['format'] })}
             >
-              {formats.map((format) => (
+              {formatsFor(entry.spec.path).map((format) => (
                 <option key={format} value={format}>
                   {format}
                 </option>
@@ -1096,14 +1349,16 @@ function VariablesBuilder({
           </label>
           <label className="space-y-1 text-xs">
             <HelpLabel label={t('variableTimezonePath')} help={t('help.variableTimezonePath')} />
-            <input
+            <select
               aria-label="timezone path"
               className={SMALL_FIELD_CLASS}
               value={entry.spec.timezone_path ?? ''}
               onChange={(event) => updateTimezonePath(index, event.target.value)}
               disabled={Boolean(entry.spec.timezone)}
-              placeholder="booking.timezone"
-            />
+            >
+              <option value="">—</option>
+              {fields.map((field) => <option key={field.path} value={field.path}>{localized(field.label, locale)}</option>)}
+            </select>
           </label>
           <label className="space-y-1 text-xs">
             <HelpLabel label={t('variableDefault')} help={t('help.variableDefault')} />
@@ -1138,16 +1393,7 @@ function VariablesBuilder({
           </div>
         </div>
       ))}
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        onClick={() =>
-          onChange([...variables, { key: '', spec: { source: 'event_field', path: '', format: 'string', required: true } }])
-        }
-      >
-        {t('addVariable')}
-      </Button>
+      {variables.length === 0 && <p className="text-xs text-muted-foreground">{t('selectTemplateForVariables')}</p>}
     </fieldset>
   );
 }

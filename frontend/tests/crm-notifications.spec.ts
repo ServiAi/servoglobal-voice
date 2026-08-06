@@ -105,7 +105,12 @@ test.describe('Automatizaciones y notificaciones', () => {
     test.skip(!canCreate, 'No hay plantillas aprobadas o permisos de escritura en este entorno de QA.');
 
     await newRuleButton.click();
+    await page.getByLabel(/^Capacidad$/i).selectOption('call_notifications');
+    await page.getByLabel(/^Evento$/i).selectOption('call.completed');
     await page.getByRole('button', { name: /Agregar condición/i }).click();
+
+    const fieldSelect = page.locator('select[aria-label="field"]').first();
+    await fieldSelect.selectOption('call.duration_seconds');
 
     const operatorSelect = page.locator('select[aria-label="operator"]').first();
     const valueInput = page.locator('input[aria-label="value"]').first();
@@ -116,13 +121,35 @@ test.describe('Automatizaciones y notificaciones', () => {
     await valueInput.fill('60');
     await expect(valueInput).toHaveValue('60');
 
-    // Cambiar a un operador textual conserva el input, pero deja de ser numérico.
+    // El control lo determina el tipo del campo, no el operador.
     await operatorSelect.selectOption('equals');
-    await expect(valueInput).not.toHaveAttribute('type', 'number');
+    await expect(valueInput).toHaveAttribute('type', 'number');
 
     // Cambiar a un operador sin valor lo elimina del formulario.
     await operatorSelect.selectOption('exists');
     await expect(page.locator('input[aria-label="value"]')).toHaveCount(0);
+  });
+
+  test('capacidad y evento cargan el contrato y los datos de prueba dependientes', async ({ page }) => {
+    await page.goto(PATH, { waitUntil: 'networkidle' });
+    await page.getByRole('tab', { name: /Reglas/i }).click();
+    const newRuleButton = page.getByRole('button', { name: /Nueva regla/i });
+    const canCreate = await newRuleButton.isVisible().catch(() => false);
+    test.skip(!canCreate, 'No hay plantillas aprobadas o permisos de escritura en este entorno de QA.');
+
+    await newRuleButton.click();
+    const eventSelect = page.getByLabel(/^Evento$/i);
+    await expect(eventSelect).toBeDisabled();
+    await page.getByLabel(/^Capacidad$/i).selectOption('booking_notifications');
+    await expect(eventSelect.locator('option[value="booking.created"]')).toHaveCount(1);
+    await eventSelect.selectOption('booking.created');
+    await expect(page.getByLabel(/Datos del evento para la prueba/i)).toHaveValue(/booking-demo-001/);
+
+    await page.getByRole('button', { name: /Agregar condición/i }).click();
+    const fieldSelect = page.locator('select[aria-label="field"]').first();
+    await expect(fieldSelect.locator('option[value="booking.status"]')).toHaveCount(1);
+    await fieldSelect.selectOption('booking.status');
+    await expect(page.locator('select[aria-label="value"]').first()).toBeVisible();
   });
 
   test('los campos de la regla muestran ayuda contextual al hacer clic', async ({ page }) => {

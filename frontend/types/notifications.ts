@@ -25,6 +25,41 @@ export type NotificationCatalogResponse = {
   condition_operators: string[];
   variable_sources: string[];
   variable_formats: string[];
+  capabilities_metadata: NotificationCapabilityMetadata[];
+  event_schemas: NotificationEventSchema[];
+};
+
+export type NotificationLocalizedText = { es: string; en: string };
+
+export type NotificationCapabilityMetadata = {
+  key: string;
+  label: NotificationLocalizedText;
+  events: string[];
+};
+
+export type NotificationEventField = {
+  path: string;
+  label: NotificationLocalizedText;
+  group: NotificationLocalizedText;
+  description: NotificationLocalizedText;
+  data_type: 'string' | 'enum' | 'number' | 'boolean' | 'datetime';
+  example: unknown;
+  operators: NotificationConditionOperator[];
+  formats: NonNullable<NotificationVariableSpec['format']>[];
+  nullable: boolean;
+  enum_values: string[];
+  recipient_eligible: boolean;
+};
+
+export type NotificationEventSchema = {
+  capability_key: string;
+  event_type: string;
+  label: NotificationLocalizedText;
+  description: NotificationLocalizedText;
+  version: number;
+  fields: NotificationEventField[];
+  recipient_paths: string[];
+  example_payload: Record<string, unknown>;
 };
 
 export type NotificationCapabilityItem = {
@@ -45,6 +80,10 @@ export type NotificationConditionOperator =
   | 'exists'
   | 'not_exists'
   | 'not_empty'
+  | 'is_empty'
+  | 'contains'
+  | 'starts_with'
+  | 'ends_with'
   | 'greater_than'
   | 'greater_than_or_equal'
   | 'less_than'
@@ -78,7 +117,9 @@ export type NotificationRuleItem = {
   recipient_strategy: string;
   recipient_group_key: string | null;
   conditions_json: NotificationCondition[];
+  conditions_mode: 'all' | 'any';
   variable_mapping_json: Record<string, NotificationVariableSpec>;
+  event_schema_version: number;
   schedule_mode: string;
   schedule_offset_minutes: number;
   priority: number;
@@ -96,6 +137,7 @@ export type NotificationRuleCreateRequest = {
   recipient_strategy: string;
   recipient_group_key?: string | null;
   conditions_json?: NotificationCondition[];
+  conditions_mode?: 'all' | 'any';
   variable_mapping_json?: Record<string, NotificationVariableSpec>;
   schedule_mode?: string;
   schedule_offset_minutes?: number;
@@ -104,6 +146,18 @@ export type NotificationRuleCreateRequest = {
 };
 
 export type NotificationRuleUpdateRequest = Partial<NotificationRuleCreateRequest>;
+
+export type NotificationRuleTestRequest = NotificationRuleCreateRequest & {
+  event_payload: Record<string, unknown>;
+};
+
+export type NotificationRuleTestResponse = {
+  matches: boolean;
+  condition_results: Array<{ field: string; operator: string; matched: boolean }>;
+  variables: Record<string, string>;
+  recipients_masked: string[];
+  preview: string;
+};
 
 export type NotificationRecipientItem = {
   id: string;

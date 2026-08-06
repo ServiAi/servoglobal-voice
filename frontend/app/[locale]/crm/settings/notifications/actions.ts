@@ -9,6 +9,7 @@ import {
   fetchNotificationDeliveries,
   fetchNotificationDelivery,
   setNotificationRuleEnabled,
+  testNotificationRule,
   updateNotificationCapability,
   updateNotificationRecipient,
   updateNotificationRule,
@@ -24,6 +25,8 @@ import type {
   NotificationRecipientUpdateRequest,
   NotificationRuleCreateRequest,
   NotificationRuleItem,
+  NotificationRuleTestRequest,
+  NotificationRuleTestResponse,
   NotificationRuleUpdateRequest,
 } from '@/types/notifications';
 
@@ -53,6 +56,12 @@ export async function updateNotificationRuleAction(
   payload: NotificationRuleUpdateRequest
 ): Promise<FetchResult<NotificationRuleItem>> {
   return withAccessToken((accessToken) => updateNotificationRule(accessToken, ruleId, payload));
+}
+
+export async function testNotificationRuleAction(
+  payload: NotificationRuleTestRequest
+): Promise<FetchResult<NotificationRuleTestResponse>> {
+  return withAccessToken((accessToken) => testNotificationRule(accessToken, payload));
 }
 
 export async function setNotificationRuleEnabledAction(

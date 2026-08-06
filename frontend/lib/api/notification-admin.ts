@@ -14,6 +14,8 @@ import type {
   NotificationRecipientUpdateRequest,
   NotificationRuleCreateRequest,
   NotificationRuleItem,
+  NotificationRuleTestRequest,
+  NotificationRuleTestResponse,
   NotificationRuleUpdateRequest,
 } from '@/types/notifications';
 
@@ -66,6 +68,10 @@ export function fetchNotificationRules(accessToken: string) {
 
 export function createNotificationRule(accessToken: string, payload: NotificationRuleCreateRequest) {
   return adminNotifications<NotificationRuleItem>('POST', 'rules', accessToken, undefined, payload);
+}
+
+export function testNotificationRule(accessToken: string, payload: NotificationRuleTestRequest) {
+  return adminNotifications<NotificationRuleTestResponse>('POST', 'rules/test', accessToken, undefined, payload);
 }
 
 export function updateNotificationRule(
