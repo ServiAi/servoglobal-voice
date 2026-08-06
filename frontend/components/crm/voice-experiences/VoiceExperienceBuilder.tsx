@@ -32,6 +32,7 @@ import {
 import { ActionDialog } from './ActionDialog';
 import { VoiceExperienceStatusBadge } from './VoiceExperienceStatusBadge';
 import { ContextSchemaManager } from './context-schemas/ContextSchemaManager';
+import { FieldHelp } from '@/components/crm/integrations/FieldHelp';
 import { UnsavedChangesGuard } from './editor/UnsavedChangesGuard';
 import { VersionHistoryPanel } from './editor/VersionHistoryPanel';
 import { VoiceExperiencePreview } from './preview/VoiceExperiencePreview';
@@ -297,7 +298,10 @@ export function VoiceExperienceBuilder({
         </p>
       ) : null}
       <label className="grid gap-2 text-sm font-semibold text-foreground">
-        {t('form.agent.label')}
+        <span className="flex items-center gap-1.5">
+          {t('form.agent.label')}
+          <FieldHelp label={t('form.agent.label')} required>{t('help.agent')}</FieldHelp>
+        </span>
         <select
           className={FIELD_CLASS}
           value={form.agent_config_id}
@@ -326,7 +330,10 @@ export function VoiceExperienceBuilder({
   const renderContext = () => (
     <div className="space-y-5">
       <div>
-        <h3 className="text-lg font-bold text-foreground">{t('form.context.title')}</h3>
+        <h3 className="flex items-center gap-1.5 text-lg font-bold text-foreground">
+          {t('form.context.title')}
+          <FieldHelp label={t('form.context.title')} required>{t('help.contextSchema')}</FieldHelp>
+        </h3>
         <p className="mt-1 text-sm text-muted-foreground">{t('form.context.description')}</p>
       </div>
       {validationMessage('context_schema_id')}
@@ -355,7 +362,10 @@ export function VoiceExperienceBuilder({
       </div>
       <div className="grid gap-4 sm:grid-cols-[1fr_160px]">
         <label className="grid gap-2 text-sm font-semibold text-foreground">
-          {t('form.basic.name')}
+          <span className="flex items-center gap-1.5">
+            {t('form.basic.name')}
+            <FieldHelp label={t('form.basic.name')} required>{t('help.basic.name')}</FieldHelp>
+          </span>
           <input
             className={FIELD_CLASS}
             value={form.name}
@@ -369,7 +379,10 @@ export function VoiceExperienceBuilder({
           </span>
         </label>
         <label className="grid gap-2 text-sm font-semibold text-foreground">
-          {t('form.basic.locale')}
+          <span className="flex items-center gap-1.5">
+            {t('form.basic.locale')}
+            <FieldHelp align="right" label={t('form.basic.locale')} required>{t('help.basic.locale')}</FieldHelp>
+          </span>
           <select
             className={FIELD_CLASS}
             value={form.default_locale}
@@ -407,7 +420,16 @@ export function VoiceExperienceBuilder({
                 index === 1 || index === 4 ? 'sm:col-span-2' : ''
               }`}
             >
-              {t(`form.content.fields.${key}`)}
+              <span className="flex items-center gap-1.5">
+                {t(`form.content.fields.${key}`)}
+                <FieldHelp
+                  align={index % 2 ? 'right' : 'left'}
+                  label={t(`form.content.fields.${key}`)}
+                  required
+                >
+                  {t(`help.content.${key}`)}
+                </FieldHelp>
+              </span>
               {index === 1 || index === 4 ? (
                 <textarea
                   className={FIELD_CLASS}
@@ -450,7 +472,10 @@ export function VoiceExperienceBuilder({
         <p className="mt-1 text-sm text-muted-foreground">{t('form.appearance.description')}</p>
       </div>
       <label className="grid gap-2 text-sm font-semibold text-foreground">
-        {t('form.appearance.logoUrl')}
+        <span className="flex items-center gap-1.5">
+          {t('form.appearance.logoUrl')}
+          <FieldHelp label={t('form.appearance.logoUrl')} required={false}>{t('help.appearance.logoUrl')}</FieldHelp>
+        </span>
         <input
           type="url"
           className={FIELD_CLASS}
@@ -465,7 +490,10 @@ export function VoiceExperienceBuilder({
       </label>
       <div className="grid gap-4 sm:grid-cols-[auto_1fr] sm:items-end">
         <label className="grid gap-2 text-sm font-semibold text-foreground">
-          {t('form.appearance.color')}
+          <span className="flex items-center gap-1.5">
+            {t('form.appearance.color')}
+            <FieldHelp label={t('form.appearance.color')} required={false}>{t('help.appearance.color')}</FieldHelp>
+          </span>
           <input
             type="color"
             className="h-11 w-20 cursor-pointer rounded-md border border-input bg-background p-1 disabled:cursor-not-allowed"
@@ -477,7 +505,10 @@ export function VoiceExperienceBuilder({
           />
         </label>
         <label className="grid gap-2 text-sm font-semibold text-foreground">
-          {t('form.appearance.colorHex')}
+          <span className="flex items-center gap-1.5">
+            {t('form.appearance.colorHex')}
+            <FieldHelp align="right" label={t('form.appearance.colorHex')} required={false}>{t('help.appearance.colorHex')}</FieldHelp>
+          </span>
           <input
             className={FIELD_CLASS}
             value={form.theme.primary_color ?? ''}
@@ -491,7 +522,10 @@ export function VoiceExperienceBuilder({
         </label>
       </div>
       <fieldset disabled={!editable}>
-        <legend className="text-sm font-semibold text-foreground">{t('form.appearance.layout')}</legend>
+        <legend className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
+          {t('form.appearance.layout')}
+          <FieldHelp label={t('form.appearance.layout')} required>{t('help.appearance.layout')}</FieldHelp>
+        </legend>
         <div className="mt-3 grid gap-3 sm:grid-cols-3">
           {(['centered', 'split', 'card'] as const).map((layout) => (
             <label
@@ -535,12 +569,18 @@ export function VoiceExperienceBuilder({
           }
         />
         <span>
-          <span className="block font-semibold">{t('form.consent.required')}</span>
+          <span className="flex items-center gap-1.5 font-semibold">
+            {t('form.consent.required')}
+            <FieldHelp label={t('form.consent.required')} required={false}>{t('help.consent.required')}</FieldHelp>
+          </span>
           <span className="mt-1 block text-xs text-muted-foreground">{t('form.consent.requiredHint')}</span>
         </span>
       </label>
       <label className="grid gap-2 text-sm font-semibold text-foreground">
-        {t('form.consent.label')}
+        <span className="flex items-center gap-1.5">
+          {t('form.consent.label')}
+          <FieldHelp label={t('form.consent.label')} required={form.consent.required}>{t('help.consent.label')}</FieldHelp>
+        </span>
         <textarea
           className={FIELD_CLASS}
           rows={3}
@@ -554,7 +594,10 @@ export function VoiceExperienceBuilder({
         {validationMessage('consent.label')}
       </label>
       <label className="grid gap-2 text-sm font-semibold text-foreground">
-        {t('form.consent.privacyUrl')}
+        <span className="flex items-center gap-1.5">
+          {t('form.consent.privacyUrl')}
+          <FieldHelp label={t('form.consent.privacyUrl')} required={false}>{t('help.consent.privacyUrl')}</FieldHelp>
+        </span>
         <input
           type="url"
           className={FIELD_CLASS}
@@ -577,7 +620,10 @@ export function VoiceExperienceBuilder({
         <p className="mt-1 text-sm text-muted-foreground">{t('form.behavior.description')}</p>
       </div>
       <label className="grid gap-2 text-sm font-semibold text-foreground">
-        {t('form.behavior.language')}
+        <span className="flex items-center gap-1.5">
+          {t('form.behavior.language')}
+          <FieldHelp label={t('form.behavior.language')} required>{t('help.behavior.language')}</FieldHelp>
+        </span>
         <select
           className={FIELD_CLASS}
           value={form.call_settings.language}
@@ -606,7 +652,12 @@ export function VoiceExperienceBuilder({
               }
             />
             <span>
-              <span className="block font-semibold">{t(`form.behavior.${key}`)}</span>
+              <span className="flex items-center gap-1.5 font-semibold">
+                {t(`form.behavior.${key}`)}
+                <FieldHelp label={t(`form.behavior.${key}`)} required={false}>
+                  {t(`help.behavior.${key}`)}
+                </FieldHelp>
+              </span>
               <span className="mt-1 block text-xs text-muted-foreground">
                 {t(`form.behavior.${key}Hint`)}
               </span>

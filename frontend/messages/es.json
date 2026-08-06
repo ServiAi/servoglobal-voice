@@ -1054,6 +1054,53 @@
       },
       "errors": { "loadTitle": "No pudimos cargar las experiencias", "generic": "Ocurrió un error controlado. Intenta nuevamente.", "conflict": "La operación entra en conflicto con el estado actual.", "validation": "Revisa los campos marcados.", "accessDenied": "No tienes permiso para realizar esta acción.", "notFound": "El recurso ya no está disponible.", "schemaMustBeActiveToPublish": "Puedes guardar el borrador, pero debes activar el esquema antes de publicar.", "backend": { "maximumReached": "Alcanzaste el máximo de experiencias de voz.", "slugConflict": "No se pudo asignar un identificador único. Intenta nuevamente.", "alreadyPublished": "La experiencia ya está publicada.", "activeSchemaRequired": "Sólo puedes publicar con un esquema de contexto activo.", "concurrentPublication": "Otra publicación simultánea terminó primero. Actualiza e intenta nuevamente.", "publishedRequired": "Sólo puedes despublicar una experiencia publicada.", "unpublishBeforeArchive": "Despublica la experiencia antes de archivarla.", "schemaAgentMismatch": "El esquema de contexto no pertenece al agente seleccionado.", "archivedImmutable": "Las experiencias archivadas no se pueden modificar.", "deleteRequiresArchived": "Solo puedes eliminar experiencias archivadas." } },
       "validation": { "required": "Este campo es obligatorio.", "invalid": "El valor no es válido.", "tooLong": "El valor supera la longitud permitida.", "duplicate": "El valor está duplicado." },
+      "help": {
+        "agent": "Selecciona el agente de voz que ejecutará esta experiencia. El esquema de contexto debe pertenecer al mismo agente.",
+        "contextSchema": "Elige el esquema que define los datos que se mostrarán, precargarán o recopilarán antes y durante la llamada.",
+        "basic": {
+          "name": "Escribe un nombre interno claro para identificar esta experiencia en el panel. No se muestra al cliente final.",
+          "locale": "Define el idioma predeterminado de los textos y de la experiencia que verá el cliente."
+        },
+        "content": {
+          "title": "Escribe el encabezado principal que verá el cliente al abrir la experiencia.",
+          "description": "Explica brevemente qué hará el cliente y por qué se solicitan estos datos antes de la llamada.",
+          "submit_label": "Texto del botón que confirma y envía los datos del formulario.",
+          "call_label": "Texto del botón que indica al cliente que continuará hacia la llamada.",
+          "success_message": "Mensaje que verá el cliente cuando sus datos se hayan registrado correctamente."
+        },
+        "appearance": {
+          "logoUrl": "Pega una URL pública HTTPS del logo que quieres mostrar. Déjalo vacío para usar la presentación predeterminada.",
+          "color": "Escoge visualmente el color principal de botones y acentos.",
+          "colorHex": "Escribe el mismo color en formato hexadecimal de seis dígitos, por ejemplo #0891B2.",
+          "layout": "Selecciona cómo se organizarán el contenido y el formulario en la pantalla del cliente."
+        },
+        "consent": {
+          "required": "Actívalo si el cliente debe aceptar expresamente el texto legal antes de continuar.",
+          "label": "Redacta el texto que acompañará la casilla de consentimiento. Es obligatorio únicamente cuando se exige consentimiento.",
+          "privacyUrl": "Pega una URL pública HTTPS a la política de privacidad aplicable."
+        },
+        "behavior": {
+          "language": "Selecciona el idioma que utilizará el agente durante la llamada.",
+          "auto_start": "Actívalo para indicar que la llamada debe iniciar al completar el contexto.",
+          "show_microphone_help": "Actívalo para mostrar al cliente una indicación sobre el permiso del micrófono."
+        },
+        "contextSchemaFields": {
+          "schemaKey": "Escribe una clave técnica estable en minúsculas, sin espacios; usa letras, números y guion bajo, por ejemplo datos_contacto.",
+          "name": "Asigna un nombre reconocible al esquema para encontrarlo y reutilizarlo.",
+          "description": "Resume qué información agrupa este esquema y en qué experiencia debe utilizarse."
+        },
+        "contextFields": {
+          "key": "Escribe una clave técnica única en minúsculas y sin espacios, por ejemplo correo_cliente. No puede cambiarse después de crear el campo.",
+          "label": "Escribe el nombre visible que permitirá al cliente entender qué dato se solicita.",
+          "fieldType": "Selecciona el formato del dato para mostrar el control adecuado y validar su contenido.",
+          "collectionMode": "Define si el dato se pregunta, se precarga, se confirma, permanece interno o se recopila durante la llamada.",
+          "description": "Añade una explicación corta que aclare qué información debe proporcionar el cliente.",
+          "sensitivity": "Marca como sensible cualquier dato que requiera un tratamiento más cuidadoso.",
+          "required": "Actívalo si el cliente debe proporcionar este dato para poder continuar.",
+          "options": "Agrega una opción por línea con el formato valor|Etiqueta. Se requiere al menos una para campos de selección.",
+          "validation": "Agrega reglas avanzadas como un objeto JSON válido. Déjalo vacío si no necesitas validaciones adicionales."
+        }
+      },
       "wizard": {
         "title": "Crear experiencia de voz", "description": "Configura el formulario previo y su contexto, sin iniciar llamadas.", "progress": "Progreso de creación", "back": "Anterior", "next": "Siguiente", "createDraft": "Crear borrador",
         "steps": { "agent": "Agente", "contextSchema": "Esquema", "basicInfo": "Información", "content": "Contenido", "appearance": "Apariencia", "consent": "Consentimiento", "callSettings": "Comportamiento", "preview": "Vista previa", "create": "Crear" },

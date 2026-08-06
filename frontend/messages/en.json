@@ -1046,6 +1046,53 @@
       "confirm": { "publish": { "title": "Publish this experience?", "description": "An immutable version will be created from the saved configuration." }, "unpublish": { "title": "Unpublish this experience?", "description": "The experience will return to draft state." }, "archive": { "title": "Archive this experience?", "description": "It will become read-only without deleting its history." }, "delete": { "title": "Delete this experience?", "description": "This is permanent and also deletes its published version history. This cannot be undone." } },
       "errors": { "loadTitle": "We could not load voice experiences", "generic": "A controlled error occurred. Please try again.", "conflict": "This operation conflicts with the current state.", "validation": "Review the highlighted fields.", "accessDenied": "You do not have permission for this action.", "notFound": "The resource is no longer available.", "schemaMustBeActiveToPublish": "You can save the draft, but the schema must be active before publishing.", "backend": { "maximumReached": "You reached the maximum number of voice experiences.", "slugConflict": "A unique identifier could not be assigned. Please try again.", "alreadyPublished": "The experience is already published.", "activeSchemaRequired": "Only an active context schema can be published.", "concurrentPublication": "Another concurrent publication finished first. Refresh and try again.", "publishedRequired": "Only a published experience can be unpublished.", "unpublishBeforeArchive": "Unpublish the experience before archiving it.", "schemaAgentMismatch": "The context schema does not belong to the selected agent.", "archivedImmutable": "Archived experiences cannot be changed.", "deleteRequiresArchived": "You can only delete archived experiences." } },
       "validation": { "required": "This field is required.", "invalid": "Enter a valid value.", "tooLong": "This value is too long.", "duplicate": "This value is duplicated." },
+      "help": {
+        "agent": "Select the voice agent that will run this experience. The context schema must belong to the same agent.",
+        "contextSchema": "Choose the schema that defines the data shown, prefilled, or collected before and during the call.",
+        "basic": {
+          "name": "Enter a clear internal name to identify this experience in the dashboard. Customers will not see it.",
+          "locale": "Set the default language for the copy and experience shown to the customer."
+        },
+        "content": {
+          "title": "Enter the main heading customers see when they open the experience.",
+          "description": "Briefly explain what the customer will do and why this information is requested before the call.",
+          "submit_label": "Enter the text for the button that confirms and submits the form data.",
+          "call_label": "Enter the text for the button that tells the customer they will continue to the call.",
+          "success_message": "Enter the message shown after the customer's information is saved successfully."
+        },
+        "appearance": {
+          "logoUrl": "Paste a public HTTPS URL for the logo to display. Leave it blank to use the default presentation.",
+          "color": "Visually choose the primary color used for buttons and accents.",
+          "colorHex": "Enter the same color as a six-digit hexadecimal value, for example #0891B2.",
+          "layout": "Choose how the content and form are arranged on the customer's screen."
+        },
+        "consent": {
+          "required": "Enable this when the customer must explicitly accept the legal copy before continuing.",
+          "label": "Write the copy shown beside the consent checkbox. It is required only when consent is enabled.",
+          "privacyUrl": "Paste a public HTTPS URL for the applicable privacy policy."
+        },
+        "behavior": {
+          "language": "Select the language the agent will use during the call.",
+          "auto_start": "Enable this to indicate that the call should start after the context is completed.",
+          "show_microphone_help": "Enable this to show the customer guidance about microphone permission."
+        },
+        "contextSchemaFields": {
+          "schemaKey": "Enter a stable lowercase technical key without spaces; use letters, numbers, and underscores, for example contact_details.",
+          "name": "Give the schema a recognizable name so it can be found and reused.",
+          "description": "Summarize the information grouped by this schema and when it should be used."
+        },
+        "contextFields": {
+          "key": "Enter a unique lowercase technical key without spaces, for example customer_email. It cannot be changed after creation.",
+          "label": "Enter the visible name that helps the customer understand which information is requested.",
+          "fieldType": "Choose the data format so the correct control and validation can be applied.",
+          "collectionMode": "Choose whether the value is requested, prefilled, confirmed, kept internal, or collected during the call.",
+          "description": "Add a short explanation of the information the customer should provide.",
+          "sensitivity": "Mark data as sensitive when it requires more careful handling.",
+          "required": "Enable this when the customer must provide the value before continuing.",
+          "options": "Add one option per line using value|Label. At least one is required for select fields.",
+          "validation": "Add advanced rules as a valid JSON object. Leave it blank when no additional validation is needed."
+        }
+      },
       "wizard": { "title": "Create voice experience", "description": "Configure the pre-call form and context without starting calls.", "progress": "Creation progress", "back": "Back", "next": "Next", "createDraft": "Create draft", "steps": { "agent": "Agent", "contextSchema": "Schema", "basicInfo": "Information", "content": "Content", "appearance": "Appearance", "consent": "Consent", "callSettings": "Behavior", "preview": "Preview", "create": "Create" }, "ready": { "title": "Ready to create the draft", "description": "Review the configuration. Publishing remains a separate explicit action." } },
       "editor": { "description": "Adjust the saved draft and publish only when it is ready.", "navigation": "Editor sections", "mobileView": "Mobile view", "configuration": "Configuration", "agentLockedHasPublished": "The agent is locked once published history exists.", "publishedDraftWarning": "Changes are saved as a draft and do not alter the published version.", "saveBeforePublish": "Save changes before publishing.", "readOnlyArchived": "This experience is archived and read-only.", "readOnlyRole": "Your role can view but cannot edit.", "unsavedChanges": "You have unsaved changes. Leave anyway?", "sectionHasErrors": "This section has validation errors", "sections": { "general": "General", "agentContext": "Agent and context", "content": "Content", "appearance": "Appearance", "consent": "Consent", "behavior": "Behavior", "versions": "Versions" } },
       "form": {

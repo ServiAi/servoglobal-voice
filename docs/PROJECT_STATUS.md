@@ -1,6 +1,6 @@
 # Estado funcional del proyecto
 
-Actualizado: 2026-08-05. Fuente: código, migraciones y pruebas del repositorio.
+Actualizado: 2026-08-06. Fuente: código, migraciones y pruebas del repositorio.
 
 | Área | Estado | Implementación actual |
 | --- | --- | --- |
@@ -16,7 +16,7 @@ Actualizado: 2026-08-05. Fuente: código, migraciones y pruebas del repositorio.
 | WhatsApp Cloud | Operativa | Configuración, plantillas, envío CRM, mensajes, estados y webhook. |
 | Automatizaciones y notificaciones | Operativa en código | Contratos versionados de eventos, builder dinámico, dry-run sin envío, reglas, destinatarios, entregas, planificación, reintentos, recuperación y worker PostgreSQL. El despliegue del proceso worker debe verificarse por entorno. |
 | Voz CRM | Operativa | Configuración de proveedor/agentes, llamadas desde leads, webhook y booking tools. |
-| Voice Context Experiences | Builder privado operativo en código | Feature flag, context schemas versionados, administración tenant y UI bilingüe para inventario, wizard, edición, preview local, estados y versiones. Sin endpoints públicos, captura pública ni runtime WebRTC. |
+| Voice Context Experiences | Builder privado operativo en código | Feature flag, context schemas versionados, administración tenant y UI bilingüe para inventario, wizard, edición, preview local, estados y versiones. Cada campo del builder y de los esquemas incluye ayuda contextual con obligatoriedad. Sin endpoints públicos, captura pública ni runtime WebRTC. |
 | Planes y consumo | Operativa | Límites, alertas, resumen administrativo y comparación de ahorro. |
 | Chatwoot | Legado/compatible | Webhook y acciones existentes; conservar compatibilidad al modificar CRM/mensajería. |
 

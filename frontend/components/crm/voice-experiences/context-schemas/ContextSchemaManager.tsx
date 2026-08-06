@@ -29,6 +29,7 @@ import {
 } from '@/app/[locale]/crm/settings/voice-experiences/actions';
 import { ActionDialog } from '@/components/crm/voice-experiences/ActionDialog';
 import { ContextFieldForm } from './ContextFieldForm';
+import { FieldHelp } from '@/components/crm/integrations/FieldHelp';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import type {
@@ -316,7 +317,10 @@ export function ContextSchemaManager({
     <section className="grid gap-5 lg:grid-cols-[minmax(220px,0.72fr)_minmax(0,1.28fr)]">
       <div className="space-y-3">
         <div className="flex items-center justify-between gap-2">
-          <h3 className="text-sm font-semibold text-foreground">{t('contextSchemas.title')}</h3>
+          <h3 className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
+            {t('contextSchemas.title')}
+            <FieldHelp label={t('contextSchemas.title')} required>{t('help.contextSchema')}</FieldHelp>
+          </h3>
           {canEdit ? (
             <Button type="button" size="sm" variant="outline" onClick={() => setShowCreate(true)}>
               <Plus className="mr-1.5 size-4" aria-hidden="true" />
@@ -327,7 +331,10 @@ export function ContextSchemaManager({
         {showCreate ? (
           <div className="space-y-3 rounded-lg border border-primary/20 bg-primary/[0.03] p-3">
             <label className="grid gap-1 text-xs font-semibold text-muted-foreground">
-              {t('contextSchemas.schemaKey')}
+              <span className="flex items-center gap-1.5">
+                {t('contextSchemas.schemaKey')}
+                <FieldHelp label={t('contextSchemas.schemaKey')} required>{t('help.contextSchemaFields.schemaKey')}</FieldHelp>
+              </span>
               <input
                 className={FIELD_CLASS}
                 value={newSchema.schema_key}
@@ -338,7 +345,10 @@ export function ContextSchemaManager({
               />
             </label>
             <label className="grid gap-1 text-xs font-semibold text-muted-foreground">
-              {t('contextSchemas.name')}
+              <span className="flex items-center gap-1.5">
+                {t('contextSchemas.name')}
+                <FieldHelp label={t('contextSchemas.name')} required>{t('help.contextSchemaFields.name')}</FieldHelp>
+              </span>
               <input
                 className={FIELD_CLASS}
                 value={newSchema.name}
@@ -348,7 +358,10 @@ export function ContextSchemaManager({
               />
             </label>
             <label className="grid gap-1 text-xs font-semibold text-muted-foreground">
-              {t('contextSchemas.description')}
+              <span className="flex items-center gap-1.5">
+                {t('contextSchemas.description')}
+                <FieldHelp label={t('contextSchemas.description')} required={false}>{t('help.contextSchemaFields.description')}</FieldHelp>
+              </span>
               <textarea
                 className={FIELD_CLASS}
                 rows={2}
@@ -464,7 +477,10 @@ export function ContextSchemaManager({
 
               <div className="mt-4 grid gap-3 sm:grid-cols-2">
                 <label className="grid gap-1 text-xs font-semibold text-muted-foreground">
-                  {t('contextSchemas.name')}
+                  <span className="flex items-center gap-1.5">
+                    {t('contextSchemas.name')}
+                    <FieldHelp label={t('contextSchemas.name')} required>{t('help.contextSchemaFields.name')}</FieldHelp>
+                  </span>
                   <input
                     className={FIELD_CLASS}
                     value={meta.name}
@@ -473,7 +489,10 @@ export function ContextSchemaManager({
                   />
                 </label>
                 <label className="grid gap-1 text-xs font-semibold text-muted-foreground sm:col-span-2">
-                  {t('contextSchemas.description')}
+                  <span className="flex items-center gap-1.5">
+                    {t('contextSchemas.description')}
+                    <FieldHelp label={t('contextSchemas.description')} required={false}>{t('help.contextSchemaFields.description')}</FieldHelp>
+                  </span>
                   <textarea
                     className={FIELD_CLASS}
                     rows={2}

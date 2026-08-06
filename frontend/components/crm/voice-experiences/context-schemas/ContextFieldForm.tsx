@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { Plus, Save, X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
+import { FieldHelp } from '@/components/crm/integrations/FieldHelp';
 import { validateContextField } from '@/lib/voice-experiences/validation';
 import type {
   VoiceContextCollectionMode,
@@ -132,7 +133,10 @@ export function ContextFieldForm({
       ) : null}
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="grid gap-1.5 text-xs font-semibold text-muted-foreground">
-          {t('contextSchemas.fields.key')}
+          <span className="flex items-center gap-1.5">
+            {t('contextSchemas.fields.key')}
+            <FieldHelp label={t('contextSchemas.fields.key')} required>{t('help.contextFields.key')}</FieldHelp>
+          </span>
           <input
             className={FIELD_CLASS}
             value={field.key}
@@ -142,7 +146,10 @@ export function ContextFieldForm({
           />
         </label>
         <label className="grid gap-1.5 text-xs font-semibold text-muted-foreground">
-          {t('contextSchemas.fields.label')}
+          <span className="flex items-center gap-1.5">
+            {t('contextSchemas.fields.label')}
+            <FieldHelp align="right" label={t('contextSchemas.fields.label')} required>{t('help.contextFields.label')}</FieldHelp>
+          </span>
           <input
             className={FIELD_CLASS}
             value={field.label}
@@ -151,7 +158,10 @@ export function ContextFieldForm({
           />
         </label>
         <label className="grid gap-1.5 text-xs font-semibold text-muted-foreground">
-          {t('contextSchemas.fields.fieldType')}
+          <span className="flex items-center gap-1.5">
+            {t('contextSchemas.fields.fieldType')}
+            <FieldHelp label={t('contextSchemas.fields.fieldType')} required>{t('help.contextFields.fieldType')}</FieldHelp>
+          </span>
           <select
             className={FIELD_CLASS}
             value={field.field_type}
@@ -171,7 +181,10 @@ export function ContextFieldForm({
           </select>
         </label>
         <label className="grid gap-1.5 text-xs font-semibold text-muted-foreground">
-          {t('contextSchemas.fields.collectionMode')}
+          <span className="flex items-center gap-1.5">
+            {t('contextSchemas.fields.collectionMode')}
+            <FieldHelp align="right" label={t('contextSchemas.fields.collectionMode')} required>{t('help.contextFields.collectionMode')}</FieldHelp>
+          </span>
           <select
             className={FIELD_CLASS}
             value={field.collection_mode}
@@ -190,7 +203,10 @@ export function ContextFieldForm({
           </select>
         </label>
         <label className="grid gap-1.5 text-xs font-semibold text-muted-foreground sm:col-span-2">
-          {t('contextSchemas.fields.description')}
+          <span className="flex items-center gap-1.5">
+            {t('contextSchemas.fields.description')}
+            <FieldHelp label={t('contextSchemas.fields.description')} required={false}>{t('help.contextFields.description')}</FieldHelp>
+          </span>
           <textarea
             className={FIELD_CLASS}
             rows={2}
@@ -202,7 +218,10 @@ export function ContextFieldForm({
           />
         </label>
         <label className="grid gap-1.5 text-xs font-semibold text-muted-foreground">
-          {t('contextSchemas.fields.sensitivity')}
+          <span className="flex items-center gap-1.5">
+            {t('contextSchemas.fields.sensitivity')}
+            <FieldHelp label={t('contextSchemas.fields.sensitivity')} required>{t('help.contextFields.sensitivity')}</FieldHelp>
+          </span>
           <select
             className={FIELD_CLASS}
             value={field.sensitivity}
@@ -225,11 +244,17 @@ export function ContextFieldForm({
               setField((current) => ({ ...current, required: event.target.checked }))
             }
           />
-          {t('contextSchemas.fields.required')}
+          <span className="flex items-center gap-1.5">
+            {t('contextSchemas.fields.required')}
+            <FieldHelp align="right" label={t('contextSchemas.fields.required')} required={false}>{t('help.contextFields.required')}</FieldHelp>
+          </span>
         </label>
         {field.field_type === 'select' ? (
           <label className="grid gap-1.5 text-xs font-semibold text-muted-foreground sm:col-span-2">
-            {t('contextSchemas.fields.options')}
+            <span className="flex items-center gap-1.5">
+              {t('contextSchemas.fields.options')}
+              <FieldHelp label={t('contextSchemas.fields.options')} required>{t('help.contextFields.options')}</FieldHelp>
+            </span>
             <textarea
               className={FIELD_CLASS}
               rows={4}
@@ -240,7 +265,10 @@ export function ContextFieldForm({
           </label>
         ) : null}
         <label className="grid gap-1.5 text-xs font-semibold text-muted-foreground sm:col-span-2">
-          {t('contextSchemas.fields.validation')}
+          <span className="flex items-center gap-1.5">
+            {t('contextSchemas.fields.validation')}
+            <FieldHelp label={t('contextSchemas.fields.validation')} required={false}>{t('help.contextFields.validation')}</FieldHelp>
+          </span>
           <textarea
             className={FIELD_CLASS}
             rows={3}
