@@ -111,7 +111,7 @@ La respuesta omite el identificador del tenant, el usuario que realizó el cambi
 
 El tenant se deriva de `AuthContext`; los bodies rechazan `tenant_id`. Lectura: plataforma interna y roles tenant de lectura. Escritura: plataforma interna y `tenant_admin`. La feature `voice_experiences` debe estar habilitada. `max_context_fields` sólo limita campos de schemas; `max_experiences` cuenta experiencias cuyo estado no sea `archived`. Los slugs se generan en servidor y las respuestas no exponen prompts, tools, secretos de proveedor, credenciales SIP ni PII interna.
 
-Estos endpoints son exclusivamente autenticados. Todavía no existen página o formulario público, tokens públicos, context submission ni runtime WebRTC para Voice Experiences.
+Estos endpoints son exclusivamente autenticados y alimentan el builder privado de CRM en `/{locale}/crm/settings/voice-experiences`. Todavía no existen página o formulario público, tokens públicos, context submission ni runtime WebRTC para Voice Experiences.
 
 ## Convenciones
 

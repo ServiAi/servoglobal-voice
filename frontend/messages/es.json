@@ -699,6 +699,7 @@
       "voiceMetrics": "Métricas de voz",
       "integrations": "Integraciones",
       "notifications": "Automatizaciones",
+      "voiceExperiences": "Experiencias de voz",
       "leadDetail": "Detalle del lead",
       "pipeline": "Pipeline"
     },
@@ -996,6 +997,59 @@
         "timezoneSuggestion": "Sugerencia: America/Bogota",
         "defaultValue": "Valor por defecto"
       }
+    },
+    "voiceExperiences": {
+      "page": { "eyebrow": "Voice Context", "title": "Experiencias de voz", "description": "Diseña y administra la experiencia privada que prepara el contexto antes de una llamada." },
+      "newExperience": "Nueva experiencia",
+      "featureDisabled": { "title": "Funcionalidad no habilitada", "description": "Voice Experiences no está habilitado para este tenant." },
+      "integrationDisabled": { "title": "Integración de voz pendiente", "description": "La integración de voz no está habilitada para este tenant.", "cta": "Ir a integraciones" },
+      "noAgents": { "title": "Configura un agente de voz", "description": "La integración está disponible, pero necesitas al menos un agente de voz para continuar.", "cta": "Configurar agente" },
+      "accessDenied": { "title": "Acceso restringido", "description": "Tu rol no tiene permiso para administrar experiencias de voz." },
+      "notFound": { "title": "Experiencia no encontrada", "description": "La experiencia no existe o ya no está disponible.", "back": "Volver a experiencias" },
+      "list": {
+        "eyebrow": "Inventario privado", "count": "{count, plural, =0 {Sin experiencias} one {# experiencia} other {# experiencias}}", "empty": "Aún no hay experiencias", "emptyAction": "Crea un borrador y define el contexto que recopilará.", "unknownAgent": "Agente no disponible", "locale": "Idioma", "versions": "Versiones", "updated": "Actualizada {date}", "open": "Abrir editor",
+        "status": { "draft": "Borrador", "published": "Publicada", "unpublished": "Despublicada", "archived": "Archivada" }
+      },
+      "actions": { "publish": "Publicar", "unpublish": "Despublicar", "archive": "Archivar" },
+      "confirm": {
+        "publish": { "title": "¿Publicar esta experiencia?", "description": "Se creará una versión inmutable con la configuración guardada." },
+        "unpublish": { "title": "¿Despublicar esta experiencia?", "description": "La experiencia volverá a borrador y dejará de estar disponible para publicación." },
+        "archive": { "title": "¿Archivar esta experiencia?", "description": "Quedará en modo de solo lectura. Esta acción no elimina el historial." }
+      },
+      "errors": { "loadTitle": "No pudimos cargar las experiencias", "generic": "Ocurrió un error controlado. Intenta nuevamente.", "conflict": "La operación entra en conflicto con el estado actual.", "validation": "Revisa los campos marcados.", "accessDenied": "No tienes permiso para realizar esta acción.", "notFound": "El recurso ya no está disponible.", "schemaMustBeActiveToPublish": "Puedes guardar el borrador, pero debes activar el esquema antes de publicar.", "backend": { "maximumReached": "Alcanzaste el máximo de experiencias de voz.", "slugConflict": "No se pudo asignar un identificador único. Intenta nuevamente.", "alreadyPublished": "La experiencia ya está publicada.", "activeSchemaRequired": "Sólo puedes publicar con un esquema de contexto activo.", "concurrentPublication": "Otra publicación simultánea terminó primero. Actualiza e intenta nuevamente.", "publishedRequired": "Sólo puedes despublicar una experiencia publicada.", "unpublishBeforeArchive": "Despublica la experiencia antes de archivarla.", "schemaAgentMismatch": "El esquema de contexto no pertenece al agente seleccionado.", "archivedImmutable": "Las experiencias archivadas no se pueden modificar." } },
+      "validation": { "required": "Este campo es obligatorio.", "invalid": "El valor no es válido.", "tooLong": "El valor supera la longitud permitida.", "duplicate": "El valor está duplicado." },
+      "wizard": {
+        "title": "Crear experiencia de voz", "description": "Configura el formulario previo y su contexto, sin iniciar llamadas.", "progress": "Progreso de creación", "back": "Anterior", "next": "Siguiente", "createDraft": "Crear borrador",
+        "steps": { "agent": "Agente", "contextSchema": "Esquema", "basicInfo": "Información", "content": "Contenido", "appearance": "Apariencia", "consent": "Consentimiento", "callSettings": "Comportamiento", "preview": "Vista previa", "create": "Crear" },
+        "ready": { "title": "Todo listo para crear el borrador", "description": "Revisa la configuración. Publicar seguirá siendo una acción separada y explícita." }
+      },
+      "editor": {
+        "description": "Ajusta el borrador guardado y publica sólo cuando esté listo.", "navigation": "Secciones del editor", "mobileView": "Vista móvil", "configuration": "Configuración", "agentLockedHasPublished": "El agente queda bloqueado cuando ya existe historial publicado.", "publishedDraftWarning": "Los cambios se guardan como borrador y no alteran la versión publicada.", "saveBeforePublish": "Guarda los cambios antes de publicar.", "readOnlyArchived": "Esta experiencia está archivada y se muestra en modo de solo lectura.", "readOnlyRole": "Tu rol permite consultar, pero no editar.", "unsavedChanges": "Tienes cambios sin guardar. ¿Quieres salir?", "sectionHasErrors": "La sección tiene errores de validación",
+        "sections": { "general": "General", "agentContext": "Agente y contexto", "content": "Contenido", "appearance": "Apariencia", "consent": "Consentimiento", "behavior": "Comportamiento", "versions": "Versiones" }
+      },
+      "form": {
+        "agent": { "title": "Agente de voz", "description": "Selecciona el agente privado al que pertenece la experiencia.", "label": "Agente", "placeholder": "Selecciona un agente" },
+        "context": { "title": "Esquema de contexto", "description": "Define qué datos se muestran, precargan o recopilan." },
+        "basic": { "title": "Información básica", "description": "Identifica el borrador y su idioma predeterminado.", "name": "Nombre interno", "locale": "Idioma predeterminado" },
+        "content": { "title": "Contenido", "description": "Redacta los textos visibles de la experiencia.", "fields": { "title": "Título", "description": "Descripción", "submit_label": "Botón de envío", "call_label": "Botón de llamada", "success_message": "Mensaje de éxito" } },
+        "appearance": { "title": "Apariencia", "description": "Usa una identidad clara y comprueba el resultado en la vista previa.", "logoUrl": "URL HTTPS del logo", "color": "Color", "colorHex": "Color hexadecimal", "layout": "Composición", "layouts": { "centered": "Centrada", "split": "Dividida", "card": "Tarjeta" } },
+        "consent": { "title": "Consentimiento", "description": "Configura el texto legal mostrado antes de continuar.", "required": "Requerir consentimiento", "requiredHint": "La persona debe marcarlo para continuar.", "label": "Texto de consentimiento", "privacyUrl": "URL HTTPS de privacidad" },
+        "behavior": { "title": "Comportamiento", "description": "Estas opciones sólo describen el borrador; la vista previa no inicia llamadas.", "language": "Idioma de llamada", "languages": { "es": "Español", "en": "Inglés" }, "auto_start": "Inicio automático", "auto_startHint": "Marca la intención de iniciar al completar el contexto.", "show_microphone_help": "Mostrar ayuda de micrófono", "show_microphone_helpHint": "Incluye instrucciones visibles para la persona." }
+      },
+      "preview": { "label": "Vista previa", "notFunctional": "Vista no funcional", "microphoneHelp": "Permite el acceso al micrófono cuando inicie la llamada.", "noFields": "El esquema no tiene campos visibles.", "privacy": "Ver política de privacidad", "localOnly": "Representación local; no realiza solicitudes de red.", "safeNote": "La vista previa es segura: no usa micrófono, WebRTC ni inicia llamadas." },
+      "versions": { "title": "Historial de versiones", "empty": "Todavía no hay versiones publicadas.", "current": "Actual" },
+      "contextSchemas": {
+        "title": "Esquemas disponibles", "new": "Nuevo esquema", "schemaKey": "Clave estable", "name": "Nombre", "description": "Descripción", "created": "Esquema creado.", "saved": "Esquema guardado.", "selectAgentFirst": "Selecciona un agente para administrar sus esquemas.", "fieldCount": "{count, plural, one {# campo} other {# campos}}", "empty": "No hay esquemas para este agente.", "selectSchema": "Selecciona o crea un esquema para continuar.", "notActiveWarning": "Sólo un esquema activo puede usarse al publicar.", "selected": "Seleccionado", "useSchema": "Usar este esquema", "activate": "Activar", "newVersion": "Nueva versión", "archive": "Archivar", "versions": "Versiones del esquema",
+        "status": { "draft": "Borrador", "active": "Activo", "archived": "Archivado" },
+        "confirmActivate": { "title": "¿Activar este esquema?", "description": "Quedará disponible para publicar experiencias." },
+        "confirmNewVersion": { "title": "¿Crear una nueva versión?", "description": "Se copiarán los campos a un nuevo borrador editable." },
+        "confirmArchive": { "title": "¿Archivar este esquema?", "description": "El esquema quedará en modo de solo lectura." },
+        "fieldTypes": { "text": "Texto", "textarea": "Texto largo", "email": "Correo", "phone": "Teléfono", "integer": "Número entero", "select": "Selección", "checkbox": "Casilla", "date": "Fecha" },
+        "collectionModes": { "ask_if_missing": "Preguntar si falta", "prefill_and_confirm": "Precargar y confirmar", "trust_prefill": "Confiar en precarga", "internal_only": "Sólo interno", "collect_during_call": "Recopilar durante llamada" },
+        "sensitivity": { "standard": "Estándar", "sensitive": "Sensible" },
+        "fields": { "title": "Campos de contexto", "editableHint": "Ordena mediante la posición asignada al crear cada campo.", "readOnlyHint": "Activa una nueva versión para editar campos.", "add": "Agregar campo", "edit": "Editar campo", "delete": "Eliminar campo", "empty": "Este esquema todavía no tiene campos.", "key": "Clave", "label": "Etiqueta", "fieldType": "Tipo", "collectionMode": "Modo de recopilación", "description": "Descripción", "sensitivity": "Sensibilidad", "required": "Campo obligatorio", "options": "Opciones", "optionsHint": "valor|Etiqueta, una opción por línea", "validation": "Validación JSON", "invalidJson": "La validación debe ser un objeto JSON válido.", "saved": "Campo guardado.", "confirmDelete": { "title": "¿Eliminar este campo?", "description": "Se eliminará {label} del borrador actual." } }
+      },
+      "common": { "cancel": "Cancelar", "create": "Crear", "save": "Guardar", "saving": "Guardando…", "saved": "Guardado", "loading": "Cargando…", "back": "Volver" }
     }
   }
 }
