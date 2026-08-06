@@ -299,6 +299,94 @@ class VoiceExperienceTests(Integration2ATestCase):
                 409,
             )
 
+    def test_delete_requires_archived_status(self) -> None:
+        self._enable_feature()
+        experience_id = self._create().json()["id"]
+        self.assertEqual(
+            self.client.delete(f"/api/v1/voice/experiences/{experience_id}").status_code,
+            409,
+        )
+        self.client.post(f"/api/v1/voice/experiences/{experience_id}/publish")
+        self.assertEqual(
+            self.client.delete(f"/api/v1/voice/experiences/{experience_id}").status_code,
+            409,
+        )
+        self.client.post(f"/api/v1/voice/experiences/{experience_id}/unpublish")
+        self.assertEqual(
+            self.client.delete(f"/api/v1/voice/experiences/{experience_id}").status_code,
+            409,
+        )
+
+    def test_delete_archived_experience_cascades_versions(self) -> None:
+        self._enable_feature()
+        experience_id = self._create().json()["id"]
+        self.client.post(f"/api/v1/voice/experiences/{experience_id}/publish")
+        self.client.post(f"/api/v1/voice/experiences/{experience_id}/unpublish")
+        self.client.post(f"/api/v1/voice/experiences/{experience_id}/archive")
+
+        response = self.client.delete(f"/api/v1/voice/experiences/{experience_id}")
+        self.assertEqual(response.status_code, 204, response.text)
+        self.assertEqual(
+            self.client.get(f"/api/v1/voice/experiences/{experience_id}").status_code,
+            404,
+        )
+        with SessionLocal() as db:
+            self.assertIsNone(db.get(TenantVoiceExperience, experience_id))
+            remaining_versions = db.scalars(
+                select(TenantVoiceExperienceVersion).where(
+                    TenantVoiceExperienceVersion.experience_id == experience_id
+                )
+            ).all()
+            self.assertEqual(list(remaining_versions), [])
+
+    def test_delete_unknown_experience_is_not_found(self) -> None:
+        self._enable_feature()
+        self.assertEqual(
+            self.client.delete("/api/v1/voice/experiences/unknown-id").status_code,
+            404,
+        )
+
+    def test_delete_respects_tenant_isolation(self) -> None:
+        tenant_b, _ = self._seed_tenant_user(slug="tenant-b", email="delete-b@example.com")
+        agent_b = self._seed_agent(tenant_b.id, "agent-tenant-b-delete")
+        schema_b = self._seed_schema(tenant_b.id, agent_b, "active", "tenant_b_delete")
+        self._enable_feature(tenant_b.id)
+        with SessionLocal() as db:
+            other_experience = VoiceExperienceService(db).create_experience(
+                tenant_b.id,
+                VoiceExperienceWriteRequest.model_validate(
+                    self._payload(agent_id=agent_b, schema_id=schema_b)
+                ),
+                None,
+            )
+            other_id = other_experience.id
+            other_experience.status = "archived"
+            db.add(other_experience)
+            db.commit()
+        self._enable_feature()
+        self.assertEqual(
+            self.client.delete(f"/api/v1/voice/experiences/{other_id}").status_code,
+            404,
+        )
+        with SessionLocal() as db:
+            self.assertIsNotNone(db.get(TenantVoiceExperience, other_id))
+
+    def test_delete_write_roles_enforced(self) -> None:
+        self._enable_feature()
+        experience_id = self._create().json()["id"]
+        self.client.post(f"/api/v1/voice/experiences/{experience_id}/archive")
+        for role in ("tenant_analyst", "tenant_viewer"):
+            self._set_actor(role)
+            self.assertEqual(
+                self.client.delete(f"/api/v1/voice/experiences/{experience_id}").status_code,
+                403,
+            )
+        self._set_actor("tenant_admin")
+        self.assertEqual(
+            self.client.delete(f"/api/v1/voice/experiences/{experience_id}").status_code,
+            204,
+        )
+
     def test_request_and_nested_json_forbid_extra_fields(self) -> None:
         self._enable_feature()
         top_level = self._payload()
