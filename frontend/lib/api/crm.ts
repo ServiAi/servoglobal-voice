@@ -89,8 +89,8 @@ async function requestIntegrationEndpoint<T>(
 }
 
 export async function requestBackendEndpoint<T>(
-  method: 'GET' | 'POST' | 'PATCH' | 'DELETE',
-  resource: 'crm' | 'integrations' | 'admin' | 'forms',
+  method: 'GET' | 'POST' | 'PATCH' | 'DELETE' | 'PUT',
+  resource: 'crm' | 'integrations' | 'admin' | 'forms' | 'voice',
   endpoint: string,
   accessToken: string,
   queryParams?: Record<string, unknown>,
@@ -157,6 +157,23 @@ export async function requestBackendEndpoint<T>(
   }
 
   return { ok: true, data };
+}
+
+export function requestVoiceEndpoint<T>(
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE',
+  endpoint: string,
+  accessToken: string,
+  queryParams?: Record<string, unknown>,
+  body?: unknown
+): Promise<FetchResult<T>> {
+  return requestBackendEndpoint<T>(
+    method,
+    'voice',
+    endpoint,
+    accessToken,
+    queryParams,
+    body
+  );
 }
 
 async function requestPublicBackendEndpoint<T>(

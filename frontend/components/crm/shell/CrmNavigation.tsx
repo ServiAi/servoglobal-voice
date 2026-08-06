@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
+  AudioLines,
   BarChart3,
   BellRing,
   CheckSquare2,
@@ -33,6 +34,7 @@ const GROUPS = [
     links: [
       { label: 'integrations', path: '/crm/settings/integrations', icon: Settings },
       { label: 'notifications', path: '/crm/settings/notifications', icon: BellRing },
+      { label: 'voiceExperiences', path: '/crm/settings/voice-experiences', icon: AudioLines },
     ],
   },
 ] as const;
