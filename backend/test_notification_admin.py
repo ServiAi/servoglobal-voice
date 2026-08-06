@@ -556,7 +556,9 @@ class NotificationAdminTests(unittest.TestCase):
             f"{_BASE}/rules",
             json={
                 **_VALID_RULE_PAYLOAD,
-                "conditions_json": [{"field": "booking.party_size", "operator": "greater_than", "value": "60"}],
+                "capability_key": "call_notifications",
+                "event_type": "call.completed",
+                "conditions_json": [{"field": "call.duration_seconds", "operator": "greater_than", "value": "60"}],
             },
         )
         self.assertEqual(response.status_code, 422)
@@ -564,7 +566,9 @@ class NotificationAdminTests(unittest.TestCase):
 
     def test_numeric_condition_with_number_value_is_valid(self):
         rule = self._create_rule(
-            conditions_json=[{"field": "booking.party_size", "operator": "greater_than", "value": 60}],
+            capability_key="call_notifications",
+            event_type="call.completed",
+            conditions_json=[{"field": "call.duration_seconds", "operator": "greater_than", "value": 60}],
         )
         self.assertIsNone(rule["configuration_error"])
 
@@ -574,7 +578,9 @@ class NotificationAdminTests(unittest.TestCase):
             f"{_BASE}/rules",
             json={
                 **_VALID_RULE_PAYLOAD,
-                "conditions_json": [{"field": "booking.party_size", "operator": "greater_than", "value": True}],
+                "capability_key": "call_notifications",
+                "event_type": "call.completed",
+                "conditions_json": [{"field": "call.duration_seconds", "operator": "greater_than", "value": True}],
             },
         )
         self.assertEqual(response.status_code, 422)
@@ -806,6 +812,92 @@ class NotificationAdminTests(unittest.TestCase):
         response = self.client.get(f"{_BASE}/deliveries/{delivery_id}")
         for forbidden in ("access_token", "webhook_secret", "api_key", "credentials"):
             self.assertNotIn(forbidden, response.text)
+
+
+    # -------------------------------------------- event schema registry / dry-run
+    def test_catalog_exposes_versioned_event_schemas(self):
+        self._as("tenant_viewer")
+        response = self.client.get(f"{_BASE}/catalog")
+        self.assertEqual(response.status_code, 200)
+        catalog = response.json()
+        schema = next(item for item in catalog["event_schemas"] if item["event_type"] == "booking.created")
+        self.assertEqual(schema["capability_key"], "booking_notifications")
+        self.assertEqual(schema["version"], 1)
+        self.assertIn("customer.phone", schema["recipient_paths"])
+        self.assertIn("booking.status", {field["path"] for field in schema["fields"]})
+
+    def test_event_schema_metadata_endpoints_are_authenticated(self):
+        self._as("tenant_analyst")
+        events = self.client.get(f"{_BASE}/catalog/capabilities/booking_notifications/events")
+        self.assertEqual(events.status_code, 200)
+        self.assertEqual(len(events.json()), 3)
+        schema = self.client.get(
+            f"{_BASE}/catalog/capabilities/booking_notifications/events/booking.created"
+        )
+        self.assertEqual(schema.status_code, 200)
+        self.assertEqual(schema.json()["event_type"], "booking.created")
+
+    def test_create_rule_rejects_mismatched_capability_and_event(self):
+        self._as("tenant_admin")
+        response = self.client.post(
+            f"{_BASE}/rules",
+            json={**_VALID_RULE_PAYLOAD, "capability_key": "call_notifications"},
+        )
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.json()["detail"], "unsupported_capability_event_pair")
+
+    def test_create_rule_rejects_stale_schema_field(self):
+        self._as("tenant_admin")
+        response = self.client.post(
+            f"{_BASE}/rules",
+            json={
+                **_VALID_RULE_PAYLOAD,
+                "conditions_json": [{"field": "booking.removed_field", "operator": "equals", "value": "x"}],
+            },
+        )
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.json()["detail"], "condition_field_not_in_event_schema")
+
+    def test_conditions_mode_any_is_persisted(self):
+        rule = self._create_rule(conditions_mode="any")
+        self.assertEqual(rule["conditions_mode"], "any")
+        self.assertEqual(rule["event_schema_version"], 1)
+
+    def test_dry_run_evaluates_without_creating_delivery(self):
+        self._as("tenant_admin")
+        body = {
+            **_VALID_RULE_PAYLOAD,
+            "conditions_mode": "all",
+            "conditions_json": [{"field": "booking.status", "operator": "equals", "value": "scheduled"}],
+            "event_payload": {
+                "booking": {
+                    "id": "booking-demo-001",
+                    "status": "scheduled",
+                    "start_at": "2026-08-12T15:00:00+00:00",
+                    "timezone": "America/Bogota",
+                },
+                "customer": {"phone": "+573001112233"},
+                "custom": {},
+            },
+        }
+        response = self.client.post(f"{_BASE}/rules/test", json=body)
+        self.assertEqual(response.status_code, 200, response.text)
+        result = response.json()
+        self.assertTrue(result["matches"])
+        self.assertTrue(result["condition_results"][0]["matched"])
+        self.assertEqual(result["variables"], {"1": "Reserva confirmada"})
+        self.assertNotIn("+573001112233", str(result["recipients_masked"]))
+        self.assertIn("Reserva confirmada", result["preview"])
+        with SessionLocal() as db:
+            self.assertEqual(db.query(NotificationDelivery).count(), 0)
+
+    def test_dry_run_requires_write_role(self):
+        self._as("tenant_analyst")
+        response = self.client.post(
+            f"{_BASE}/rules/test",
+            json={**_VALID_RULE_PAYLOAD, "event_payload": {}},
+        )
+        self.assertEqual(response.status_code, 403)
 
 
 if __name__ == "__main__":

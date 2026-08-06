@@ -40,6 +40,10 @@ class NotificationConditionOperator(str, Enum):
     EXISTS = "exists"
     NOT_EXISTS = "not_exists"
     NOT_EMPTY = "not_empty"
+    IS_EMPTY = "is_empty"
+    CONTAINS = "contains"
+    STARTS_WITH = "starts_with"
+    ENDS_WITH = "ends_with"
     GREATER_THAN = "greater_than"
     GREATER_THAN_OR_EQUAL = "greater_than_or_equal"
     LESS_THAN = "less_than"
@@ -55,7 +59,14 @@ _COMPARISON_OPERATORS = frozenset(
     }
 )
 _VALUE_REQUIRED_OPERATORS = frozenset(
-    {NotificationConditionOperator.EQUALS, NotificationConditionOperator.NOT_EQUALS} | _COMPARISON_OPERATORS
+    {
+        NotificationConditionOperator.EQUALS,
+        NotificationConditionOperator.NOT_EQUALS,
+        NotificationConditionOperator.CONTAINS,
+        NotificationConditionOperator.STARTS_WITH,
+        NotificationConditionOperator.ENDS_WITH,
+    }
+    | _COMPARISON_OPERATORS
 )
 _VALUE_LIST_OPERATORS = frozenset(
     {NotificationConditionOperator.IN, NotificationConditionOperator.NOT_IN}
@@ -194,5 +205,15 @@ def validate_notification_rule(rule: TenantNotificationRule) -> list[Notificatio
 
     if not isinstance(rule.variable_mapping_json, dict):
         raise _fail("variable_mapping_must_be_dict")
+
+    from app.domain.notification_event_schemas import (  # local import avoids a domain cycle
+        NotificationEventSchemaError,
+        validate_rule_event_schema,
+    )
+
+    try:
+        validate_rule_event_schema(rule, conditions)
+    except NotificationEventSchemaError as exc:
+        raise _fail(exc.code) from None
 
     return conditions

@@ -21,6 +21,8 @@ from app.schemas.notification_admin import (
     NotificationRuleCreateRequest,
     NotificationRuleEnabledUpdateRequest,
     NotificationRuleItem,
+    NotificationRuleTestRequest,
+    NotificationRuleTestResponse,
     NotificationRuleUpdateRequest,
 )
 from app.services.notification_admin_service import NotificationAdminError, NotificationAdminService
@@ -51,7 +53,9 @@ def _rule_item(service: NotificationAdminService, rule) -> NotificationRuleItem:
         recipient_strategy=rule.recipient_strategy,
         recipient_group_key=rule.recipient_group_key,
         conditions_json=rule.conditions_json,
+        conditions_mode=rule.conditions_mode,
         variable_mapping_json=rule.variable_mapping_json,
+        event_schema_version=rule.event_schema_version,
         schedule_mode=rule.schedule_mode,
         schedule_offset_minutes=rule.schedule_offset_minutes,
         priority=rule.priority,
@@ -91,6 +95,50 @@ def get_catalog(
     db: Session = Depends(get_db),
 ) -> Any:
     return NotificationAdminService(db).get_catalog()
+
+
+@router.get("/catalog/capabilities", response_model=list[dict])
+def get_event_schema_capabilities(
+    context: AuthContext = Depends(require_roles(_READ_ROLES)),
+    db: Session = Depends(get_db),
+) -> Any:
+    return NotificationAdminService(db).get_catalog()["capabilities_metadata"]
+
+
+@router.get("/catalog/capabilities/{capability_key}/events", response_model=list[dict])
+def get_capability_event_schemas(
+    capability_key: str,
+    context: AuthContext = Depends(require_roles(_READ_ROLES)),
+    db: Session = Depends(get_db),
+) -> Any:
+    schemas = [
+        schema
+        for schema in NotificationAdminService(db).get_catalog()["event_schemas"]
+        if schema["capability_key"] == capability_key
+    ]
+    if not schemas:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="capability_schema_not_found")
+    return schemas
+
+
+@router.get("/catalog/capabilities/{capability_key}/events/{event_type}", response_model=dict)
+def get_event_schema(
+    capability_key: str,
+    event_type: str,
+    context: AuthContext = Depends(require_roles(_READ_ROLES)),
+    db: Session = Depends(get_db),
+) -> Any:
+    schema = next(
+        (
+            item
+            for item in NotificationAdminService(db).get_catalog()["event_schemas"]
+            if item["capability_key"] == capability_key and item["event_type"] == event_type
+        ),
+        None,
+    )
+    if schema is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="event_schema_not_found")
+    return schema
 
 
 @router.get("/capabilities", response_model=list[NotificationCapabilityItem])
@@ -140,6 +188,18 @@ def create_rule(
     except NotificationAdminError as exc:
         _raise_admin_error(exc)
     return _rule_item(service, rule)
+
+
+@router.post("/rules/test", response_model=NotificationRuleTestResponse)
+def test_rule(
+    body: NotificationRuleTestRequest,
+    context: AuthContext = Depends(require_roles(_WRITE_ROLES)),
+    db: Session = Depends(get_db),
+) -> Any:
+    try:
+        return NotificationAdminService(db).test_rule(tenant_id=context.tenant.id, payload=body)
+    except NotificationAdminError as exc:
+        _raise_admin_error(exc)
 
 
 @router.patch("/rules/{rule_id}", response_model=NotificationRuleItem)

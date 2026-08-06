@@ -7,7 +7,12 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.domain.events import SUPPORTED_DOMAIN_EVENT_TYPES
+from app.domain.events import SUPPORTED_DOMAIN_EVENT_TYPES, validate_domain_event_payload
+from app.domain.notification_event_schemas import (
+    get_notification_event_schema,
+    list_notification_event_schemas,
+    notification_capabilities_metadata,
+)
 from app.domain.notification_delivery_state import (
     CANCELLED,
     DEAD_LETTER,
@@ -45,6 +50,9 @@ from app.models.notifications import (
 )
 from app.services.whatsapp_message_service import mask_phone, normalize_phone
 from app.services.whatsapp_template_service import WhatsAppTemplateService
+from app.services.notification_condition_service import NotificationConditionService
+from app.services.notification_recipient_service import NotificationRecipientService
+from app.services.notification_variable_mapper import NotificationVariableMapper
 
 KNOWN_CAPABILITY_KEYS = ("booking_notifications", "call_notifications")
 _RECIPIENT_STATUSES = {"active", "inactive"}
@@ -137,6 +145,8 @@ class NotificationAdminService:
             "condition_operators": [operator.value for operator in NotificationConditionOperator],
             "variable_sources": [source.value for source in NotificationVariableSource],
             "variable_formats": [fmt.value for fmt in NotificationVariableFormat],
+            "capabilities_metadata": notification_capabilities_metadata(),
+            "event_schemas": [schema.to_dict() for schema in list_notification_event_schemas()],
         }
 
     # ------------------------------------------------------------- capabilities
@@ -223,7 +233,13 @@ class NotificationAdminService:
             recipient_strategy=payload.recipient_strategy,
             recipient_group_key=payload.recipient_group_key,
             conditions_json=payload.conditions_json,
+            conditions_mode=payload.conditions_mode,
             variable_mapping_json=payload.variable_mapping_json,
+            event_schema_version=(
+                get_notification_event_schema(payload.capability_key, payload.event_type).version
+                if get_notification_event_schema(payload.capability_key, payload.event_type)
+                else 1
+            ),
             schedule_mode=payload.schedule_mode,
             schedule_offset_minutes=payload.schedule_offset_minutes,
             priority=payload.priority,
@@ -267,6 +283,10 @@ class NotificationAdminService:
 
         for field_name, value in updates.items():
             setattr(rule, field_name, value)
+
+        schema = get_notification_event_schema(rule.capability_key, rule.event_type)
+        if schema is not None:
+            rule.event_schema_version = schema.version
 
         try:
             self._validate_rule_or_raise(rule)
@@ -326,13 +346,89 @@ class NotificationAdminService:
             variable_mapping=validated_mapping,
         )
 
+    def test_rule(self, *, tenant_id: str, payload) -> dict[str, Any]:
+        schema = get_notification_event_schema(payload.capability_key, payload.event_type)
+        try:
+            event_payload = validate_domain_event_payload(payload.event_type, payload.event_payload)
+        except ValueError:
+            raise NotificationAdminError(code="event_payload_invalid", kind="unprocessable") from None
+        rule = TenantNotificationRule(
+            id="dry-run",
+            tenant_id=tenant_id,
+            name=payload.name,
+            capability_key=payload.capability_key,
+            event_type=payload.event_type,
+            channel=_FIXED_CHANNEL,
+            action_type=_FIXED_ACTION_TYPE,
+            template_key=payload.template_key,
+            recipient_strategy=payload.recipient_strategy,
+            recipient_group_key=payload.recipient_group_key,
+            conditions_json=payload.conditions_json,
+            conditions_mode=payload.conditions_mode,
+            variable_mapping_json=payload.variable_mapping_json,
+            event_schema_version=schema.version if schema else 1,
+            schedule_mode=payload.schedule_mode,
+            schedule_offset_minutes=payload.schedule_offset_minutes,
+            priority=payload.priority,
+            enabled=payload.enabled,
+        )
+        self._validate_rule_or_raise(rule)
+        conditions = validate_notification_rule(rule)
+        condition_service = NotificationConditionService()
+        condition_results = [
+            {
+                "field": condition.field,
+                "operator": condition.operator.value,
+                "matched": condition_service.evaluate(condition, event_payload),
+            }
+            for condition in conditions
+        ]
+        matches = True if not condition_results else (
+            any(item["matched"] for item in condition_results)
+            if rule.conditions_mode == "any"
+            else all(item["matched"] for item in condition_results)
+        )
+        try:
+            variables = NotificationVariableMapper().map_variables(
+                tenant_id=tenant_id,
+                rule_id=rule.id,
+                mapping=rule.variable_mapping_json,
+                payload=event_payload,
+            )
+            recipients = NotificationRecipientService(self.db).resolve(
+                tenant_id=tenant_id,
+                rule=rule,
+                payload=event_payload,
+            )
+        except ValueError as exc:
+            raise NotificationAdminError(
+                code=getattr(exc, "code", "dry_run_resolution_failed"),
+                kind="unprocessable",
+            ) from None
+        template = self.db.scalar(
+            select(TenantWhatsAppTemplate).where(
+                TenantWhatsAppTemplate.tenant_id == tenant_id,
+                TenantWhatsAppTemplate.template_key == rule.template_key,
+            )
+        )
+        preview = template.body if template is not None else ""
+        for key, value in variables.items():
+            preview = preview.replace("{{" + key + "}}", value)
+        return {
+            "matches": matches,
+            "condition_results": condition_results,
+            "variables": variables,
+            "recipients_masked": [mask_phone(recipient) for recipient in recipients],
+            "preview": preview,
+        }
+
     @staticmethod
     def _validate_numeric_conditions_or_raise(conditions: list) -> None:
         for condition in conditions:
             if condition.operator not in _NUMERIC_COMPARISON_OPERATORS:
                 continue
             value = condition.value
-            if isinstance(value, bool) or not isinstance(value, (int, float)):
+            if isinstance(value, bool) or not isinstance(value, (int, float, str)):
                 raise NotificationAdminError(code="condition_numeric_value_required", kind="unprocessable")
 
     @staticmethod

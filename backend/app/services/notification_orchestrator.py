@@ -118,7 +118,11 @@ class NotificationOrchestrator:
                 skipped_rule_count += 1
                 continue
 
-            if not self._condition_service.matches(conditions=conditions, payload=event.payload_json):
+            if not self._condition_service.matches(
+                conditions=conditions,
+                payload=event.payload_json,
+                mode=rule.conditions_mode,
+            ):
                 skipped_rule_count += 1
                 continue
 

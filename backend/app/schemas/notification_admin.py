@@ -50,6 +50,8 @@ class NotificationCatalogResponse(BaseModel):
     condition_operators: list[str]
     variable_sources: list[str]
     variable_formats: list[str]
+    capabilities_metadata: list[dict] = Field(default_factory=list)
+    event_schemas: list[dict] = Field(default_factory=list)
 
 
 class NotificationCapabilityItem(BaseModel):
@@ -73,7 +75,9 @@ class NotificationRuleItem(BaseModel):
     recipient_strategy: str
     recipient_group_key: Optional[str] = None
     conditions_json: list = Field(default_factory=list)
+    conditions_mode: str = "all"
     variable_mapping_json: dict = Field(default_factory=dict)
+    event_schema_version: int = 1
     schedule_mode: str
     schedule_offset_minutes: int
     priority: int
@@ -91,6 +95,7 @@ class NotificationRuleCreateRequest(BaseModel):
     recipient_strategy: str = Field(..., min_length=1, max_length=40)
     recipient_group_key: Optional[str] = Field(None, max_length=80)
     conditions_json: list = Field(default_factory=list)
+    conditions_mode: str = "all"
     variable_mapping_json: dict = Field(default_factory=dict)
     schedule_mode: str = "immediate"
     schedule_offset_minutes: int = 0
@@ -106,6 +111,7 @@ class NotificationRuleUpdateRequest(BaseModel):
     recipient_strategy: Optional[str] = Field(None, min_length=1, max_length=40)
     recipient_group_key: Optional[str] = Field(None, max_length=80)
     conditions_json: Optional[list] = None
+    conditions_mode: Optional[str] = None
     variable_mapping_json: Optional[dict] = None
     schedule_mode: Optional[str] = None
     schedule_offset_minutes: Optional[int] = None
@@ -115,6 +121,24 @@ class NotificationRuleUpdateRequest(BaseModel):
 
 class NotificationRuleEnabledUpdateRequest(BaseModel):
     enabled: bool
+
+
+class NotificationRuleTestRequest(NotificationRuleCreateRequest):
+    event_payload: dict
+
+
+class NotificationRuleTestConditionResult(BaseModel):
+    field: str
+    operator: str
+    matched: bool
+
+
+class NotificationRuleTestResponse(BaseModel):
+    matches: bool
+    condition_results: list[NotificationRuleTestConditionResult]
+    variables: dict[str, str]
+    recipients_masked: list[str]
+    preview: str
 
 
 class NotificationRecipientItem(BaseModel):
