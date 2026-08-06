@@ -977,6 +977,7 @@ class ScheduleReconciliationPipelineTests(_BasePipelineTestCase):
             event_type="call.completed",
             template_key=template.template_key,
             capability_key="call_notifications",
+            path="call.status",
         )
         call = self._create_call(tenant_id)
         result = self.pipeline.process_call_event(tenant_id=tenant_id, voice_call_id=call.id, now=NOW)
