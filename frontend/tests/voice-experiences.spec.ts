@@ -209,16 +209,32 @@ test.describe('administración privada de Voice Experiences', () => {
     await page.getByRole('dialog').getByRole('button', { name: /^Archivar$/i }).click();
   });
 
-  test('cubre archivado con una experiencia desechable', async ({ page }) => {
+  test('cubre archivado y borrado con una experiencia desechable', async ({ page }) => {
     test.skip(
       process.env.VOICE_EXPERIENCE_E2E_MUTATIONS !== '1',
-      'Requiere una experiencia desechable para no archivar datos compartidos.'
+      'Requiere una experiencia desechable para no archivar/eliminar datos compartidos.'
     );
     await requireAuthenticatedInventory(page);
     const card = page.locator('article').filter({ has: page.getByRole('button', { name: /^Archivar$/i }) }).first();
     test.skip((await card.count()) === 0, 'No hay una experiencia desechable archivable.');
+    const name = (await card.locator('h2').innerText()).trim();
     await card.getByRole('button', { name: /^Archivar$/i }).click();
     await page.getByRole('dialog').getByRole('button', { name: /^Archivar$/i }).click();
     await expect(card.getByText('Archivada', { exact: true })).toBeVisible();
+
+    await expect(card.getByRole('button', { name: /^Archivar$/i })).toHaveCount(0);
+    await card.getByRole('button', { name: /^Eliminar$/i }).click();
+    await page.getByRole('dialog').getByRole('button', { name: /^Eliminar$/i }).click();
+    await expect(page.locator('article').filter({ hasText: name })).toHaveCount(0);
+  });
+
+  test('sólo permite eliminar experiencias archivadas', async ({ page }) => {
+    await requireAuthenticatedInventory(page);
+    const nonArchivedCard = page
+      .locator('article')
+      .filter({ hasNot: page.getByText('Archivada', { exact: true }) })
+      .first();
+    test.skip((await nonArchivedCard.count()) === 0, 'No hay experiencias no archivadas para verificar.');
+    await expect(nonArchivedCard.getByRole('button', { name: /^Eliminar$/i })).toHaveCount(0);
   });
 });

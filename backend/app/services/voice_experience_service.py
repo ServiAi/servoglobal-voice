@@ -238,6 +238,30 @@ class VoiceExperienceService:
         self.db.refresh(experience)
         return experience
 
+    def delete_experience(
+        self, tenant_id: str, experience_id: str, user_id: str | None = None
+    ) -> None:
+        experience = self._locked_experience(tenant_id, experience_id)
+        if experience.status != "archived":
+            raise VoiceExperienceConflictError(
+                "Only archived voice experiences can be deleted."
+            )
+        agent, _ = self._require_relations(
+            tenant_id, experience.agent_config_id, experience.context_schema_id
+        )
+        provider = agent.provider
+        self.db.delete(experience)
+        self.db.commit()
+        self.event_service.record_event(
+            tenant_id=tenant_id,
+            provider=provider,
+            event_type="voice_experience_deleted",
+            status="success",
+            resource_type="voice_experience",
+            resource_id=experience_id,
+            metadata={"actor_user_id": user_id},
+        )
+
     def list_versions(
         self, tenant_id: str, experience_id: str
     ) -> list[VoiceExperienceVersionResponse]:

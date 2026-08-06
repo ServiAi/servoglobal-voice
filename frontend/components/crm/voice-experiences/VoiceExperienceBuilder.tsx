@@ -17,11 +17,13 @@ import {
   Save,
   ShieldCheck,
   Sparkles,
+  Trash2,
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import {
   archiveVoiceExperienceAction,
   createVoiceExperienceAction,
+  deleteVoiceExperienceAction,
   fetchVoiceExperienceVersionsAction,
   publishVoiceExperienceAction,
   unpublishVoiceExperienceAction,
@@ -257,6 +259,19 @@ export function VoiceExperienceBuilder({
       if (history.ok) setVersions(history.data);
     }
     router.refresh();
+  };
+
+  const deleteExperience = async () => {
+    if (!experience || submitting) return;
+    setSubmitting(true);
+    setServerError(null);
+    const result = await deleteVoiceExperienceAction(locale, experience.id);
+    setSubmitting(false);
+    if (!result.ok) {
+      setServerError(safeError(result.status, result.detail));
+      return;
+    }
+    router.push(`/${locale}/crm/settings/voice-experiences`);
   };
 
   const sectionTitle = mode === 'create'
@@ -744,6 +759,22 @@ export function VoiceExperienceBuilder({
                   destructive
                   busy={submitting}
                   onConfirm={() => transitionExperience(archiveVoiceExperienceAction)}
+                />
+              ) : null}
+              {canEdit && experience?.status === 'archived' ? (
+                <ActionDialog
+                  trigger={
+                    <Button type="button" variant="ghost" size="icon" disabled={submitting} aria-label={t('actions.delete')}>
+                      <Trash2 className="size-4" aria-hidden="true" />
+                    </Button>
+                  }
+                  title={t('confirm.delete.title')}
+                  description={t('confirm.delete.description')}
+                  confirmLabel={t('actions.delete')}
+                  cancelLabel={t('common.cancel')}
+                  destructive
+                  busy={submitting}
+                  onConfirm={deleteExperience}
                 />
               ) : null}
             </div>

@@ -8,6 +8,7 @@ const ERROR_KEYS = {
   'A published experience must be unpublished before archiving.': 'unpublishBeforeArchive',
   'Voice context schema does not belong to the selected voice agent.': 'schemaAgentMismatch',
   'Archived voice experiences are immutable.': 'archivedImmutable',
+  'Only archived voice experiences can be deleted.': 'deleteRequiresArchived',
 } as const;
 
 export function getVoiceExperienceErrorKey(detail: string) {

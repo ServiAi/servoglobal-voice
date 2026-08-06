@@ -13,10 +13,12 @@ import {
   RadioTower,
   ShieldAlert,
   Sparkles,
+  Trash2,
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import {
   archiveVoiceExperienceAction,
+  deleteVoiceExperienceAction,
   publishVoiceExperienceAction,
   unpublishVoiceExperienceAction,
 } from '@/app/[locale]/crm/settings/voice-experiences/actions';
@@ -72,6 +74,19 @@ export function VoiceExperiencesList({
           experience.id === result.data.id ? result.data : experience
         )
       );
+    });
+  };
+
+  const remove = (experienceId: string) => {
+    startTransition(async () => {
+      setError(null);
+      const result = await deleteVoiceExperienceAction(locale, experienceId);
+      if (!result.ok) {
+        const key = result.status === 409 ? 'conflict' : result.status === 422 ? 'validation' : 'generic';
+        setError(t(`errors.${key}`));
+        return;
+      }
+      setExperiences((current) => current.filter((experience) => experience.id !== experienceId));
     });
   };
 
@@ -276,6 +291,28 @@ export function VoiceExperiencesList({
                         destructive
                         busy={isPending}
                         onConfirm={() => mutate(experience.id, archiveVoiceExperienceAction)}
+                      />
+                    ) : null}
+                    {canEdit && experience.status === 'archived' ? (
+                      <ActionDialog
+                        trigger={
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            disabled={isPending}
+                            aria-label={t('actions.delete')}
+                          >
+                            <Trash2 className="size-4" aria-hidden="true" />
+                          </Button>
+                        }
+                        title={t('confirm.delete.title')}
+                        description={t('confirm.delete.description')}
+                        confirmLabel={t('actions.delete')}
+                        cancelLabel={t('common.cancel')}
+                        destructive
+                        busy={isPending}
+                        onConfirm={() => remove(experience.id)}
                       />
                     ) : null}
                   </div>
