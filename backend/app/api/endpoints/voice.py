@@ -1,5 +1,8 @@
+import logging
+import re
+
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -16,10 +19,71 @@ from app.api.deps import verify_turnstile
 
 router = APIRouter(prefix="/api/v1", tags=["Voice"])
 
+logger = logging.getLogger(__name__)
+
+# Lightweight format checks for the public demo. Not a full RFC validator; just
+# enough to reject clearly malformed input without adding an email-validator
+# dependency. The landing (DemoInbound) submits phones as "+<country><number>".
+_DEMO_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+_DEMO_PHONE_RE = re.compile(r"^\+?[0-9][0-9\s()\-]{6,19}$")
+
+
+class DemoCallContext(BaseModel):
+    """Typed allowlist for the legacy public landing demo.
+
+    Only the fields the landing form actually submits are accepted. A public
+    browser cannot inject prompts, provider agent ids, or arbitrary keys.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    user_name: str | None = None
+    user_email: str | None = None
+    user_phone: str | None = None
+    user_company: str | None = None
+    user_industry: str | None = None
+    user_use_case: str | None = None
+    user_volume: str | None = None
+    user_pain_point: str | None = None
+
+    @field_validator("*", mode="before")
+    @classmethod
+    def _normalize(cls, value):
+        if isinstance(value, str):
+            value = value.strip()
+            return value or None
+        return value
+
+    @field_validator("*")
+    @classmethod
+    def _limit_length(cls, value):
+        if isinstance(value, str) and len(value) > 200:
+            raise ValueError("Field exceeds the maximum allowed length.")
+        return value
+
+    @field_validator("user_email")
+    @classmethod
+    def _valid_email(cls, value):
+        if value is not None and not _DEMO_EMAIL_RE.match(value):
+            raise ValueError("Invalid email format.")
+        return value
+
+    @field_validator("user_phone")
+    @classmethod
+    def _valid_phone(cls, value):
+        if value is not None and not _DEMO_PHONE_RE.match(value):
+            raise ValueError("Invalid phone format.")
+        return value
+
+
 class CreateCallRequest(BaseModel):
-    agent_id: str | None = None
-    system_prompt: str | None = None
-    template_context: dict | None = None
+    # Legacy public demo contract. This endpoint is the inherited landing demo
+    # and is NOT the Voice Experiences runtime; it will be replaced/complemented
+    # later by a tenant-scoped public runtime. No provider agent id or system
+    # prompt is accepted from the browser: the agent is resolved server-side.
+    model_config = ConfigDict(extra="forbid")
+
+    template_context: DemoCallContext | None = None
     turnstile_token: str | None = None
 
 class CreateOutboundCallRequest(BaseModel):
@@ -157,18 +221,20 @@ async def create_call(
     ahora = datetime.now(bogota_tz)
     dias_es = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
     
-    context = request.template_context or {}
+    context = (
+        request.template_context.model_dump(exclude_none=True)
+        if request.template_context
+        else {}
+    )
     context["fecha_ejecucion"] = ahora.strftime("%Y-%m-%d %H:%M:%S")
     context["dia_semana"] = dias_es[ahora.weekday()]
     call_context = _create_form_context_and_lead(db, tenant, context)
 
     try:
-        join_url = await create_call_session(
-            agent_id=request.agent_id,
-            system_prompt=request.system_prompt,
-            template_context=context,
-        )
-        
+        # The provider agent is resolved server-side (DEFAULT_AGENT_ID); the
+        # browser never selects an agent id or system prompt.
+        join_url = await create_call_session(template_context=context)
+
         # Registrar el inicio de la demo en el CRM
         if context:
             background_tasks.add_task(notification_service.notify_demo_start, dict(context))
@@ -176,8 +242,17 @@ async def create_call(
         return {"joinUrl": join_url}
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as exc:
+        # Log only the safe error class name -- never str(exc) or the traceback,
+        # which may carry provider tokens, URLs, payloads, prompts or agent ids.
+        # template_context is never logged here either.
+        logger.error(
+            "Unexpected demo call session failure",
+            extra={"error_type": type(exc).__name__},
+        )
+        raise HTTPException(
+            status_code=500, detail="Could not start the demo call. Please try again."
+        ) from None
 
 @router.post("/call-outbound")
 async def create_outbound_call(

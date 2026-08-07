@@ -34,7 +34,10 @@ Editar la experiencia no modifica snapshots anteriores. Despublicar conserva el 
 - `POST /api/v1/voice/experiences/{experience_id}/publish`
 - `POST /api/v1/voice/experiences/{experience_id}/unpublish`
 - `POST /api/v1/voice/experiences/{experience_id}/archive`
+- `DELETE /api/v1/voice/experiences/{experience_id}`
 - `GET /api/v1/voice/experiences/{experience_id}/versions`
+
+Actualización (Etapa 0, `fix/voice-experience-functional-alignment`): `published` es un **snapshot interno**; la UI lo presenta como "Versión preparada" y no existe URL pública. `get_current_published_version()` resuelve estrictamente por `published_version_id` (fail-closed). `PUT` rechaza cambiar el agente si hay historial de versiones. `DELETE` sólo aplica a experiencias **archivadas sin historial**; con historial devuelve `409` y conserva snapshots. `/api/v1/calls` es la demo pública heredada, no el runtime de Voice Experiences. Ver `VOICE_EXPERIENCE_FUNCTIONAL_ALIGNMENT.md`.
 
 Lectura: `platform_admin` interno en su contexto actual, `tenant_admin`, `tenant_analyst` y `tenant_viewer`. Escritura: `platform_admin` interno en su contexto actual y `tenant_admin`. Un `platform_admin` no interno recibe `403`.
 

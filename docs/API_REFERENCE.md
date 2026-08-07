@@ -109,16 +109,22 @@ La respuesta omite el identificador del tenant, el usuario que realizó el cambi
 | `POST /api/v1/voice/context-schemas/{schema_id}/activate` | Activa el draft y archiva la active anterior del lineage. |
 | `POST /api/v1/voice/context-schemas/{schema_id}/archive` | Archiva un draft o active. |
 | `POST /api/v1/voice/context-schemas/{schema_id}/new-version` | Clona una versión inmutable a un nuevo draft. |
+| `DELETE /api/v1/voice/context-schemas/{schema_id}` | Elimina únicamente un schema archivado sin referencias actuales ni históricas; una referencia responde `409` y nunca elimina experiencias o snapshots. |
 | `GET/POST /api/v1/voice/experiences` | Lista las experiencias del tenant o crea un draft. |
 | `GET/PUT /api/v1/voice/experiences/{experience_id}` | Consulta o reemplaza el draft mutable sin alterar snapshots publicados. |
-| `POST /api/v1/voice/experiences/{experience_id}/publish` | Publica un snapshot inmutable nuevo; exige schema `active`. |
-| `POST /api/v1/voice/experiences/{experience_id}/unpublish` | Despublica la experiencia sin eliminar su historial. |
+| `POST /api/v1/voice/experiences/{experience_id}/publish` | Prepara una versión: crea un snapshot interno inmutable (estado `published`); exige schema `active`. No genera URL pública. |
+| `POST /api/v1/voice/experiences/{experience_id}/unpublish` | Retira la versión preparada sin eliminar su historial. |
 | `POST /api/v1/voice/experiences/{experience_id}/archive` | Archiva una experiencia no publicada y libera capacidad. |
-| `GET /api/v1/voice/experiences/{experience_id}/versions` | Lista snapshots publicados inmutables. |
+| `DELETE /api/v1/voice/experiences/{experience_id}` | Elimina físicamente **sólo** experiencias archivadas **sin** historial de versiones; con historial devuelve `409` y conserva snapshots. |
+| `GET /api/v1/voice/experiences/{experience_id}/versions` | Lista snapshots inmutables. |
+
+Los context schemas usados por `TenantVoiceExperienceVersion` forman parte del contrato reproducible de la publicación. Aunque una experiencia cambie su borrador a otro schema, el schema histórico no puede eliminarse mientras un snapshot lo referencie. La política de retención puede evolucionar posteriormente; el historial actual se conserva.
 
 El tenant se deriva de `AuthContext`; los bodies rechazan `tenant_id`. Lectura: plataforma interna y roles tenant de lectura. Escritura: plataforma interna y `tenant_admin`. La feature `voice_experiences` debe estar habilitada. `max_context_fields` sólo limita campos de schemas; `max_experiences` cuenta experiencias cuyo estado no sea `archived`. Los slugs se generan en servidor y las respuestas no exponen prompts, tools, secretos de proveedor, credenciales SIP ni PII interna.
 
-Estos endpoints son exclusivamente autenticados y alimentan el builder privado de CRM en `/{locale}/crm/settings/voice-experiences`. Todavía no existen página o formulario público, tokens públicos, context submission ni runtime WebRTC para Voice Experiences.
+Reglas de dominio: `PUT` rechaza con `409` cambiar `agent_config_id` cuando ya existe historial de versiones. El estado persistido `published` representa un **snapshot interno**: en la interfaz se presenta como "Versión preparada" y **no existe URL pública** ni runtime de llamada en esta etapa.
+
+Estos endpoints son exclusivamente autenticados y alimentan el builder privado de CRM en `/{locale}/crm/settings/voice-experiences`. Todavía no existen página o formulario público, tokens públicos, context submission ni runtime WebRTC para Voice Experiences. La demo pública heredada `POST /api/v1/calls` (y `POST /api/v1/call-outbound`) pertenece a la landing sobre el tenant bootstrap y **no** es el runtime de Voice Experiences; `/api/v1/calls` no acepta `system_prompt` ni provider `agent_id` desde el navegador. Ver `docs-local/fase-4/VOICE_EXPERIENCE_FUNCTIONAL_ALIGNMENT.md`.
 
 ## Convenciones
 

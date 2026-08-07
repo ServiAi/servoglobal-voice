@@ -7,7 +7,10 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.voice_context import TenantVoiceContextField, TenantVoiceContextSchema
-from app.models.voice_experiences import TenantVoiceExperience
+from app.models.voice_experiences import (
+    TenantVoiceExperience,
+    TenantVoiceExperienceVersion,
+)
 from app.schemas.tenant_features import VoiceExperienceLimits
 from app.schemas.voice_context import (
     VoiceContextFieldRequest,
@@ -38,6 +41,14 @@ FIELD_KEY_CONSTRAINT = "uq_tenant_voice_context_fields_schema_key"
 FIELD_POSITION_CONSTRAINT = "uq_tenant_voice_context_fields_schema_position"
 ACTIVE_LINEAGE_INDEX = "uq_tenant_voice_context_schemas_active_lineage"
 DRAFT_LINEAGE_INDEX = "uq_tenant_voice_context_schemas_draft_lineage"
+EXPERIENCE_SCHEMA_FK = "tenant_voice_experiences_context_schema_id_fkey"
+VERSION_SCHEMA_FK = "tenant_voice_experience_versions_context_schema_id_fkey"
+EXPERIENCE_SCHEMA_REFERENCE_ERROR = (
+    "Voice context schema is referenced by a voice experience and cannot be deleted."
+)
+VERSION_SCHEMA_REFERENCE_ERROR = (
+    "Voice context schema is referenced by publication history and cannot be deleted."
+)
 
 
 def _constraint_name(exc: IntegrityError) -> str | None:
@@ -295,32 +306,33 @@ class VoiceContextService:
         schema_key = schema.schema_key
         schema_version = schema.version
 
-        dependent_experiences = list(
-            self.db.scalars(
-                select(TenantVoiceExperience)
-                .where(
-                    TenantVoiceExperience.tenant_id == tenant_id,
-                    TenantVoiceExperience.context_schema_id == schema.id,
-                )
-                .with_for_update()
-            ).all()
-        )
-        experience_ids = [experience.id for experience in dependent_experiences]
-        for experience in dependent_experiences:
-            self.db.delete(experience)
-        self.db.delete(schema)
-        self.db.commit()
-
-        for experience_id in experience_ids:
-            self.event_service.record_event(
-                tenant_id=tenant_id,
-                provider=agent.provider,
-                event_type="voice_experience_deleted",
-                status="success",
-                resource_type="voice_experience",
-                resource_id=experience_id,
-                metadata={"actor_user_id": user_id, "cascade_from": "context_schema"},
+        if self.db.scalar(
+            select(TenantVoiceExperience.id).where(
+                TenantVoiceExperience.tenant_id == tenant_id,
+                TenantVoiceExperience.context_schema_id == schema.id,
             )
+        ):
+            raise VoiceContextConflictError(EXPERIENCE_SCHEMA_REFERENCE_ERROR)
+        if self.db.scalar(
+            select(TenantVoiceExperienceVersion.id).where(
+                TenantVoiceExperienceVersion.tenant_id == tenant_id,
+                TenantVoiceExperienceVersion.context_schema_id == schema.id,
+            )
+        ):
+            raise VoiceContextConflictError(VERSION_SCHEMA_REFERENCE_ERROR)
+
+        self.db.delete(schema)
+        try:
+            self.db.commit()
+        except IntegrityError as exc:
+            self.db.rollback()
+            constraint_name = _constraint_name(exc)
+            if constraint_name == EXPERIENCE_SCHEMA_FK:
+                raise VoiceContextConflictError(EXPERIENCE_SCHEMA_REFERENCE_ERROR) from exc
+            if constraint_name == VERSION_SCHEMA_FK:
+                raise VoiceContextConflictError(VERSION_SCHEMA_REFERENCE_ERROR) from exc
+            raise
+
         self.event_service.record_event(
             tenant_id=tenant_id,
             provider=agent.provider,
@@ -332,7 +344,6 @@ class VoiceContextService:
                 "actor_user_id": user_id,
                 "schema_key": schema_key,
                 "version": schema_version,
-                "cascaded_experience_ids": experience_ids,
             },
         )
 

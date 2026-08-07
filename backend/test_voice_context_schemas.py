@@ -521,13 +521,17 @@ class VoiceContextSchemaTests(Integration2ATestCase):
             409,
         )
 
-    def test_delete_requires_archived_status(self) -> None:
+    def test_delete_draft_schema_is_blocked(self) -> None:
         self._enable_feature()
         schema_id = self._create_ready_schema()
         self.assertEqual(
             self.client.delete(f"/api/v1/voice/context-schemas/{schema_id}").status_code,
             409,
         )
+
+    def test_delete_active_schema_is_blocked(self) -> None:
+        self._enable_feature()
+        schema_id = self._create_ready_schema()
         self.assertEqual(
             self.client.post(f"/api/v1/voice/context-schemas/{schema_id}/activate").status_code,
             200,
@@ -559,7 +563,31 @@ class VoiceContextSchemaTests(Integration2ATestCase):
             ).all()
             self.assertEqual(list(remaining_fields), [])
 
-    def test_delete_archived_schema_cascades_dependent_experiences_and_versions(self) -> None:
+    def test_delete_archived_schema_used_by_draft_experience_is_blocked(self) -> None:
+        self._enable_feature()
+        schema_id = self._create_ready_schema()
+        create = self.client.post(
+            "/api/v1/voice/experiences",
+            json=self._experience_payload(schema_id, self.agent_id),
+        )
+        self.assertEqual(create.status_code, 201, create.text)
+        experience_id = create.json()["id"]
+        self.assertEqual(
+            self.client.post(f"/api/v1/voice/context-schemas/{schema_id}/archive").status_code,
+            200,
+        )
+
+        response = self.client.delete(f"/api/v1/voice/context-schemas/{schema_id}")
+        self.assertEqual(response.status_code, 409, response.text)
+        self.assertEqual(
+            response.json()["detail"],
+            "Voice context schema is referenced by a voice experience and cannot be deleted.",
+        )
+        with SessionLocal() as db:
+            self.assertIsNotNone(db.get(TenantVoiceContextSchema, schema_id))
+            self.assertIsNotNone(db.get(TenantVoiceExperience, experience_id))
+
+    def test_delete_archived_schema_used_by_unpublished_experience_is_blocked(self) -> None:
         self._enable_feature()
         schema_id = self._create_ready_schema()
         self.assertEqual(
@@ -574,23 +602,130 @@ class VoiceContextSchemaTests(Integration2ATestCase):
         experience_id = create.json()["id"]
         publish = self.client.post(f"/api/v1/voice/experiences/{experience_id}/publish")
         self.assertEqual(publish.status_code, 200, publish.text)
+        unpublish = self.client.post(f"/api/v1/voice/experiences/{experience_id}/unpublish")
+        self.assertEqual(unpublish.status_code, 200, unpublish.text)
 
         self.assertEqual(
             self.client.post(f"/api/v1/voice/context-schemas/{schema_id}/archive").status_code,
             200,
         )
         response = self.client.delete(f"/api/v1/voice/context-schemas/{schema_id}")
-        self.assertEqual(response.status_code, 204, response.text)
+        self.assertEqual(response.status_code, 409, response.text)
 
         with SessionLocal() as db:
-            self.assertIsNone(db.get(TenantVoiceContextSchema, schema_id))
-            self.assertIsNone(db.get(TenantVoiceExperience, experience_id))
+            self.assertIsNotNone(db.get(TenantVoiceContextSchema, schema_id))
+            self.assertIsNotNone(db.get(TenantVoiceExperience, experience_id))
             remaining_versions = db.scalars(
                 select(TenantVoiceExperienceVersion).where(
                     TenantVoiceExperienceVersion.experience_id == experience_id
                 )
             ).all()
-            self.assertEqual(list(remaining_versions), [])
+            self.assertEqual(len(list(remaining_versions)), 1)
+
+    def test_delete_archived_schema_preserves_all_publication_history(self) -> None:
+        self._enable_feature()
+        schema_id = self._create_ready_schema()
+        self.client.post(f"/api/v1/voice/context-schemas/{schema_id}/activate")
+        create = self.client.post(
+            "/api/v1/voice/experiences",
+            json=self._experience_payload(schema_id, self.agent_id),
+        )
+        self.assertEqual(create.status_code, 201, create.text)
+        experience_id = create.json()["id"]
+        for _ in range(2):
+            self.assertEqual(
+                self.client.post(
+                    f"/api/v1/voice/experiences/{experience_id}/publish"
+                ).status_code,
+                200,
+            )
+            self.assertEqual(
+                self.client.post(
+                    f"/api/v1/voice/experiences/{experience_id}/unpublish"
+                ).status_code,
+                200,
+            )
+        self.client.post(f"/api/v1/voice/context-schemas/{schema_id}/archive")
+
+        response = self.client.delete(f"/api/v1/voice/context-schemas/{schema_id}")
+        self.assertEqual(response.status_code, 409, response.text)
+        with SessionLocal() as db:
+            self.assertIsNotNone(db.get(TenantVoiceContextSchema, schema_id))
+            self.assertIsNotNone(db.get(TenantVoiceExperience, experience_id))
+            versions = db.scalars(
+                select(TenantVoiceExperienceVersion).where(
+                    TenantVoiceExperienceVersion.experience_id == experience_id
+                )
+            ).all()
+            self.assertEqual(len(list(versions)), 2)
+
+    def test_delete_schema_used_only_by_historical_version_is_blocked(self) -> None:
+        self._enable_feature()
+        schema_a = self._create_ready_schema(schema_key="historical_a")
+        self.client.post(f"/api/v1/voice/context-schemas/{schema_a}/activate")
+        create = self.client.post(
+            "/api/v1/voice/experiences",
+            json=self._experience_payload(schema_a, self.agent_id),
+        )
+        self.assertEqual(create.status_code, 201, create.text)
+        experience_id = create.json()["id"]
+        self.client.post(f"/api/v1/voice/experiences/{experience_id}/publish")
+        self.client.post(f"/api/v1/voice/experiences/{experience_id}/unpublish")
+
+        schema_b = self._create_ready_schema(schema_key="current_b")
+        self.client.post(f"/api/v1/voice/context-schemas/{schema_b}/activate")
+        update = self.client.put(
+            f"/api/v1/voice/experiences/{experience_id}",
+            json=self._experience_payload(schema_b, self.agent_id),
+        )
+        self.assertEqual(update.status_code, 200, update.text)
+        self.client.post(f"/api/v1/voice/context-schemas/{schema_a}/archive")
+
+        response = self.client.delete(f"/api/v1/voice/context-schemas/{schema_a}")
+        self.assertEqual(response.status_code, 409, response.text)
+        self.assertEqual(
+            response.json()["detail"],
+            "Voice context schema is referenced by publication history and cannot be deleted.",
+        )
+        with SessionLocal() as db:
+            self.assertIsNotNone(db.get(TenantVoiceContextSchema, schema_a))
+            experience = db.get(TenantVoiceExperience, experience_id)
+            self.assertEqual(experience.context_schema_id, schema_b)
+            versions = db.scalars(
+                select(TenantVoiceExperienceVersion).where(
+                    TenantVoiceExperienceVersion.experience_id == experience_id
+                )
+            ).all()
+            self.assertEqual([version.context_schema_id for version in versions], [schema_a])
+
+    def test_delete_unknown_integrity_error_is_rolled_back_and_reraised(self) -> None:
+        error = self._integrity_error("unknown_constraint")
+        schema = TenantVoiceContextSchema(
+            tenant_id=self.tenant.id,
+            agent_config_id=self.agent_id,
+            schema_key="unknown_integrity",
+            version=1,
+            status="archived",
+            name="Unknown integrity",
+        )
+        with SessionLocal() as db:
+            service = VoiceContextService(db)
+            with (
+                patch.object(service, "_locked_schema", return_value=schema),
+                patch.object(
+                    service,
+                    "_require_agent",
+                    return_value=SimpleNamespace(provider="ultravox"),
+                ),
+                patch.object(db, "scalar", return_value=None),
+                patch.object(db, "delete"),
+                patch.object(db, "commit", side_effect=error),
+                patch.object(db, "rollback") as rollback,
+            ):
+                with self.assertRaises(IntegrityError) as raised:
+                    service.delete_schema(self.tenant.id, "schema-id", self.user.id)
+                self.assertIs(raised.exception, error)
+                rollback.assert_called_once_with()
 
     def test_delete_unknown_schema_is_not_found(self) -> None:
         self._enable_feature()

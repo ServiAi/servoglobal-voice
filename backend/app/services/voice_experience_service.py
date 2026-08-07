@@ -127,6 +127,12 @@ class VoiceExperienceService:
     ) -> TenantVoiceExperience:
         experience = self.get_experience(tenant_id, experience_id)
         self._ensure_mutable(experience)
+        if body.agent_config_id != experience.agent_config_id and self._has_versions(
+            experience.id
+        ):
+            raise VoiceExperienceConflictError(
+                "Voice experience agent cannot change after publication history exists."
+            )
         self._require_relations(tenant_id, body.agent_config_id, body.context_schema_id)
         for key, value in self._draft_values(body).items():
             setattr(experience, key, value)
@@ -246,6 +252,10 @@ class VoiceExperienceService:
             raise VoiceExperienceConflictError(
                 "Only archived voice experiences can be deleted."
             )
+        if self._has_versions(experience.id):
+            raise VoiceExperienceConflictError(
+                "Voice experience with publication history cannot be deleted."
+            )
         agent, _ = self._require_relations(
             tenant_id, experience.agent_config_id, experience.context_schema_id
         )
@@ -279,16 +289,31 @@ class VoiceExperienceService:
     def get_current_published_version(
         self, tenant_id: str, experience_id: str
     ) -> TenantVoiceExperienceVersion | None:
-        self.get_experience(tenant_id, experience_id)
+        experience = self.get_experience(tenant_id, experience_id)
+        # Fail-closed: only a published experience with a consistent published
+        # version reference resolves. An unpublished/draft/archived experience,
+        # a missing reference, or a reference that points at another
+        # experience/tenant version resolves to None -- never to a historical
+        # version picked "by highest number".
+        if experience.status != "published" or experience.published_version_id is None:
+            return None
         return self.db.scalar(
-            select(TenantVoiceExperienceVersion)
-            .where(
-                TenantVoiceExperienceVersion.experience_id == experience_id,
+            select(TenantVoiceExperienceVersion).where(
+                TenantVoiceExperienceVersion.id == experience.published_version_id,
+                TenantVoiceExperienceVersion.experience_id == experience.id,
                 TenantVoiceExperienceVersion.tenant_id == tenant_id,
             )
-            .order_by(TenantVoiceExperienceVersion.version.desc())
-            .limit(1)
         )
+
+    def _has_versions(self, experience_id: str) -> bool:
+        return (
+            self.db.scalar(
+                select(func.count(TenantVoiceExperienceVersion.id)).where(
+                    TenantVoiceExperienceVersion.experience_id == experience_id
+                )
+            )
+            or 0
+        ) > 0
 
     def _record_event(
         self,

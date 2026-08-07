@@ -70,6 +70,14 @@ ServiGlobal IA es una plataforma multitenant de captación, atención y seguimie
 - Configuración de proveedor Ultravox y agentes por tenant.
 - Inicio y consulta de llamadas desde un lead.
 - Webhook de proveedor y herramientas internas de disponibilidad/reserva protegidas.
+- La demo pública heredada `POST /api/v1/calls` opera sobre el tenant bootstrap con Turnstile y contexto tipado (allowlist); no acepta `system_prompt` ni provider `agent_id` desde el navegador. No pertenece a Voice Experiences.
+
+### Voice Experiences (builder administrativo privado)
+
+- Administración autenticada y tenant-scoped de experiencias y context schemas versionados.
+- "Preparar versión" (estado persistido `published`) crea un snapshot interno inmutable; la resolución de la versión preparada es fail-closed por `published_version_id`.
+- El agente no puede cambiarse una vez existe historial de versiones; una experiencia con historial no puede eliminarse físicamente.
+- No existe URL pública, formulario público, context submission, WebRTC ni llamada asociada en esta etapa; la vista previa es local y no funcional. Ver `docs-local/fase-4/VOICE_EXPERIENCE_FUNCTIONAL_ALIGNMENT.md`.
 
 ## 4. Requisitos no funcionales
 

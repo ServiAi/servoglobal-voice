@@ -8,6 +8,7 @@ import {
   Cable,
   CircleOff,
   Clock3,
+  Lock,
   Mic2,
   Plus,
   RadioTower,
@@ -19,9 +20,9 @@ import { useTranslations } from 'next-intl';
 import {
   archiveVoiceExperienceAction,
   deleteVoiceExperienceAction,
-  publishVoiceExperienceAction,
-  unpublishVoiceExperienceAction,
 } from '@/app/[locale]/crm/settings/voice-experiences/actions';
+import { canDeleteArchivedExperience } from '@/lib/voice-experiences/deletion';
+import { getVoiceExperienceErrorKey } from '@/lib/voice-experiences/error-messages';
 import { ActionDialog } from './ActionDialog';
 import { VoiceExperienceStatusBadge } from './VoiceExperienceStatusBadge';
 import { Button } from '@/components/ui/button';
@@ -36,7 +37,7 @@ type Props = {
   canEdit: boolean;
   initialExperiences: VoiceExperienceResponse[];
   agents: VoiceAgentConfigResponse[];
-  versionCounts: Record<string, number>;
+  versionCounts: Record<string, number | null>;
   gateState: VoiceExperienceGateState;
 };
 
@@ -82,6 +83,11 @@ export function VoiceExperiencesList({
       setError(null);
       const result = await deleteVoiceExperienceAction(locale, experienceId);
       if (!result.ok) {
+        const backendKey = getVoiceExperienceErrorKey(result.detail);
+        if ((result.status === 409 || result.status === 422) && backendKey) {
+          setError(t(`errors.backend.${backendKey}`));
+          return;
+        }
         const key = result.status === 409 ? 'conflict' : result.status === 422 ? 'validation' : 'generic';
         setError(t(`errors.${key}`));
         return;
@@ -162,6 +168,11 @@ export function VoiceExperiencesList({
         ) : null}
       </div>
 
+      <p className="flex items-start gap-2 rounded-lg border border-border bg-muted/40 p-3 text-xs leading-5 text-muted-foreground">
+        <Lock className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+        {t('list.privateNotice')}
+      </p>
+
       <div aria-live="polite">
         {error ? (
           <p role="alert" className="rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
@@ -191,7 +202,14 @@ export function VoiceExperiencesList({
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {experiences.map((experience) => {
-            const versions = versionCounts[experience.id] ?? 0;
+            // null = version history could not be determined; fail closed.
+            const versionCount = versionCounts[experience.id] ?? null;
+            const canDelete = canDeleteArchivedExperience(experience.status, versionCount);
+            const deleteLocked = experience.status === 'archived' && !canDelete;
+            const lockedReason =
+              versionCount === null
+                ? t('list.historyUnknown')
+                : t('errors.backend.deleteHistoryBlocked');
             return (
               <article
                 key={experience.id}
@@ -222,7 +240,7 @@ export function VoiceExperiencesList({
                       <dt className="text-muted-foreground">{t('list.versions')}</dt>
                       <dd className="mt-1 flex items-center gap-1 font-semibold text-foreground">
                         <RadioTower className="size-3.5" aria-hidden="true" />
-                        {versions}
+                        {versionCount ?? '—'}
                       </dd>
                     </div>
                   </dl>
@@ -241,36 +259,6 @@ export function VoiceExperiencesList({
                         <ArrowRight className="ml-1.5 size-4" aria-hidden="true" />
                       </Link>
                     </Button>
-                    {canEdit && (experience.status === 'draft' || experience.status === 'unpublished') ? (
-                      <ActionDialog
-                        trigger={
-                          <Button type="button" size="sm" variant="ghost" disabled={isPending}>
-                            {t('actions.publish')}
-                          </Button>
-                        }
-                        title={t('confirm.publish.title')}
-                        description={t('confirm.publish.description')}
-                        confirmLabel={t('actions.publish')}
-                        cancelLabel={t('common.cancel')}
-                        busy={isPending}
-                        onConfirm={() => mutate(experience.id, publishVoiceExperienceAction)}
-                      />
-                    ) : null}
-                    {canEdit && experience.status === 'published' ? (
-                      <ActionDialog
-                        trigger={
-                          <Button type="button" size="sm" variant="ghost" disabled={isPending}>
-                            {t('actions.unpublish')}
-                          </Button>
-                        }
-                        title={t('confirm.unpublish.title')}
-                        description={t('confirm.unpublish.description')}
-                        confirmLabel={t('actions.unpublish')}
-                        cancelLabel={t('common.cancel')}
-                        busy={isPending}
-                        onConfirm={() => mutate(experience.id, unpublishVoiceExperienceAction)}
-                      />
-                    ) : null}
                     {canEdit && experience.status !== 'published' && experience.status !== 'archived' ? (
                       <ActionDialog
                         trigger={
@@ -293,7 +281,7 @@ export function VoiceExperiencesList({
                         onConfirm={() => mutate(experience.id, archiveVoiceExperienceAction)}
                       />
                     ) : null}
-                    {canEdit && experience.status === 'archived' ? (
+                    {canEdit && canDelete ? (
                       <ActionDialog
                         trigger={
                           <Button
@@ -314,6 +302,18 @@ export function VoiceExperiencesList({
                         busy={isPending}
                         onConfirm={() => remove(experience.id)}
                       />
+                    ) : null}
+                    {canEdit && deleteLocked ? (
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        disabled
+                        aria-label={lockedReason}
+                        title={lockedReason}
+                      >
+                        <Lock className="size-4" aria-hidden="true" />
+                      </Button>
                     ) : null}
                   </div>
                 </div>

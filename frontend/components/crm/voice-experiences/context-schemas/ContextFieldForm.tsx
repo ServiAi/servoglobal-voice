@@ -201,6 +201,9 @@ export function ContextFieldForm({
               </option>
             ))}
           </select>
+          <p className="font-normal text-muted-foreground">
+            {t(`contextSchemas.collectionModeHelp.${field.collection_mode}`)}
+          </p>
         </label>
         <label className="grid gap-1.5 text-xs font-semibold text-muted-foreground sm:col-span-2">
           <span className="flex items-center gap-1.5">
