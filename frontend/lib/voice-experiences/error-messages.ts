@@ -9,6 +9,8 @@ const ERROR_KEYS = {
   'Voice context schema does not belong to the selected voice agent.': 'schemaAgentMismatch',
   'Archived voice experiences are immutable.': 'archivedImmutable',
   'Only archived voice experiences can be deleted.': 'deleteRequiresArchived',
+  'Voice experience agent cannot change after publication history exists.': 'agentChangeBlocked',
+  'Voice experience with publication history cannot be deleted.': 'deleteHistoryBlocked',
 } as const;
 
 export function getVoiceExperienceErrorKey(detail: string) {

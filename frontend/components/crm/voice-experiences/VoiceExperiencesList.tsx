@@ -8,6 +8,7 @@ import {
   Cable,
   CircleOff,
   Clock3,
+  Lock,
   Mic2,
   Plus,
   RadioTower,
@@ -19,9 +20,8 @@ import { useTranslations } from 'next-intl';
 import {
   archiveVoiceExperienceAction,
   deleteVoiceExperienceAction,
-  publishVoiceExperienceAction,
-  unpublishVoiceExperienceAction,
 } from '@/app/[locale]/crm/settings/voice-experiences/actions';
+import { getVoiceExperienceErrorKey } from '@/lib/voice-experiences/error-messages';
 import { ActionDialog } from './ActionDialog';
 import { VoiceExperienceStatusBadge } from './VoiceExperienceStatusBadge';
 import { Button } from '@/components/ui/button';
@@ -82,6 +82,11 @@ export function VoiceExperiencesList({
       setError(null);
       const result = await deleteVoiceExperienceAction(locale, experienceId);
       if (!result.ok) {
+        const backendKey = getVoiceExperienceErrorKey(result.detail);
+        if ((result.status === 409 || result.status === 422) && backendKey) {
+          setError(t(`errors.backend.${backendKey}`));
+          return;
+        }
         const key = result.status === 409 ? 'conflict' : result.status === 422 ? 'validation' : 'generic';
         setError(t(`errors.${key}`));
         return;
@@ -162,6 +167,11 @@ export function VoiceExperiencesList({
         ) : null}
       </div>
 
+      <p className="flex items-start gap-2 rounded-lg border border-border bg-muted/40 p-3 text-xs leading-5 text-muted-foreground">
+        <Lock className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+        {t('list.privateNotice')}
+      </p>
+
       <div aria-live="polite">
         {error ? (
           <p role="alert" className="rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
@@ -241,36 +251,6 @@ export function VoiceExperiencesList({
                         <ArrowRight className="ml-1.5 size-4" aria-hidden="true" />
                       </Link>
                     </Button>
-                    {canEdit && (experience.status === 'draft' || experience.status === 'unpublished') ? (
-                      <ActionDialog
-                        trigger={
-                          <Button type="button" size="sm" variant="ghost" disabled={isPending}>
-                            {t('actions.publish')}
-                          </Button>
-                        }
-                        title={t('confirm.publish.title')}
-                        description={t('confirm.publish.description')}
-                        confirmLabel={t('actions.publish')}
-                        cancelLabel={t('common.cancel')}
-                        busy={isPending}
-                        onConfirm={() => mutate(experience.id, publishVoiceExperienceAction)}
-                      />
-                    ) : null}
-                    {canEdit && experience.status === 'published' ? (
-                      <ActionDialog
-                        trigger={
-                          <Button type="button" size="sm" variant="ghost" disabled={isPending}>
-                            {t('actions.unpublish')}
-                          </Button>
-                        }
-                        title={t('confirm.unpublish.title')}
-                        description={t('confirm.unpublish.description')}
-                        confirmLabel={t('actions.unpublish')}
-                        cancelLabel={t('common.cancel')}
-                        busy={isPending}
-                        onConfirm={() => mutate(experience.id, unpublishVoiceExperienceAction)}
-                      />
-                    ) : null}
                     {canEdit && experience.status !== 'published' && experience.status !== 'archived' ? (
                       <ActionDialog
                         trigger={
@@ -293,7 +273,7 @@ export function VoiceExperiencesList({
                         onConfirm={() => mutate(experience.id, archiveVoiceExperienceAction)}
                       />
                     ) : null}
-                    {canEdit && experience.status === 'archived' ? (
+                    {canEdit && experience.status === 'archived' && versions === 0 ? (
                       <ActionDialog
                         trigger={
                           <Button
@@ -314,6 +294,18 @@ export function VoiceExperiencesList({
                         busy={isPending}
                         onConfirm={() => remove(experience.id)}
                       />
+                    ) : null}
+                    {canEdit && experience.status === 'archived' && versions > 0 ? (
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        disabled
+                        aria-label={t('errors.backend.deleteHistoryBlocked')}
+                        title={t('errors.backend.deleteHistoryBlocked')}
+                      >
+                        <Lock className="size-4" aria-hidden="true" />
+                      </Button>
                     ) : null}
                   </div>
                 </div>

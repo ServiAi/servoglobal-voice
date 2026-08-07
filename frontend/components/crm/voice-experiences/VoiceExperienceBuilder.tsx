@@ -11,6 +11,7 @@ import {
   Eye,
   FileText,
   Loader2,
+  Lock,
   Mic2,
   PanelLeft,
   RadioTower,
@@ -133,6 +134,15 @@ export function VoiceExperienceBuilder({
   const editable = canEdit && !archived;
   const agentLocked = mode === 'edit' && versions.length > 0;
   const activeSchema = schemaDetail?.status === 'active';
+  const publishDisabledReason = !canEdit
+    ? t('editor.publishReasons.readOnly')
+    : archived
+      ? t('editor.publishReasons.archived')
+      : dirty
+        ? t('editor.publishReasons.unsaved')
+        : !activeSchema
+          ? t('editor.publishReasons.schemaInactive')
+          : null;
   const wizardSteps = [
     'agent',
     'contextSchema',
@@ -751,6 +761,10 @@ export function VoiceExperienceBuilder({
               <p className="mt-1 text-sm text-muted-foreground">
                 {mode === 'create' ? t('wizard.description') : t('editor.description')}
               </p>
+              <p className="mt-2 flex items-start gap-2 text-xs leading-5 text-muted-foreground">
+                <Lock className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+                {t('list.privateNotice')}
+              </p>
               {experience?.status === 'published' && dirty ? (
                 <p className="mt-2 text-xs font-medium text-amber-700 dark:text-amber-300">
                   {t('editor.publishedDraftWarning')}
@@ -781,20 +795,31 @@ export function VoiceExperienceBuilder({
                 />
               ) : null}
               {canEdit && (experience?.status === 'draft' || experience?.status === 'unpublished') ? (
-                <ActionDialog
-                  trigger={
-                    <Button type="button" disabled={submitting || dirty || !activeSchema} title={dirty ? t('editor.saveBeforePublish') : undefined}>
-                      <RadioTower className="mr-2 size-4" aria-hidden="true" />
-                      {t('actions.publish')}
-                    </Button>
-                  }
-                  title={t('confirm.publish.title')}
-                  description={t('confirm.publish.description')}
-                  confirmLabel={t('actions.publish')}
-                  cancelLabel={t('common.cancel')}
-                  busy={submitting}
-                  onConfirm={() => transitionExperience(publishVoiceExperienceAction)}
-                />
+                <div className="flex flex-col items-end gap-1">
+                  <ActionDialog
+                    trigger={
+                      <Button
+                        type="button"
+                        disabled={submitting || dirty || !activeSchema}
+                        title={publishDisabledReason ?? undefined}
+                      >
+                        <RadioTower className="mr-2 size-4" aria-hidden="true" />
+                        {t('actions.publish')}
+                      </Button>
+                    }
+                    title={t('confirm.publish.title')}
+                    description={t('confirm.publish.description')}
+                    confirmLabel={t('actions.publish')}
+                    cancelLabel={t('common.cancel')}
+                    busy={submitting}
+                    onConfirm={() => transitionExperience(publishVoiceExperienceAction)}
+                  />
+                  {publishDisabledReason ? (
+                    <p className="max-w-56 text-right text-xs text-muted-foreground">
+                      {publishDisabledReason}
+                    </p>
+                  ) : null}
+                </div>
               ) : null}
               {canEdit && experience && experience.status !== 'published' && experience.status !== 'archived' ? (
                 <ActionDialog
