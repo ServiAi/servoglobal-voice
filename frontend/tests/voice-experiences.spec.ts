@@ -4,9 +4,11 @@ import enMessages from '../messages/en.json';
 import esMessages from '../messages/es.json';
 import { resolveVoiceExperienceGateState } from '../lib/permissions/voice-experiences';
 import { isVoiceExperienceDirty } from '../lib/voice-experiences/change-detection';
+import { getPreCallVisibleContextFields } from '../lib/voice-experiences/collection-modes';
 import { getVoiceExperienceErrorKey } from '../lib/voice-experiences/error-messages';
 import { isSafeHttpsUrl } from '../lib/voice-experiences/url-safety';
 import { createVoiceExperienceDefaults } from '../lib/voice-experiences/validation';
+import type { VoiceContextCollectionMode } from '../types/voice-experiences';
 
 const PATH = '/es/crm/settings/voice-experiences';
 
@@ -37,6 +39,42 @@ test.describe('protecciones puras de Voice Experiences', () => {
     expect(enMessages.crm.voiceExperiences.list.status.unpublished).toBe('Unpublished');
   });
 
+  test('usa la semántica privada de "versión preparada" en vez de "publicada"', () => {
+    expect(esMessages.crm.voiceExperiences.list.status.published).toBe('Versión preparada');
+    expect(enMessages.crm.voiceExperiences.list.status.published).toBe('Version prepared');
+    expect(esMessages.crm.voiceExperiences.actions.publish).toBe('Preparar versión');
+    expect(esMessages.crm.voiceExperiences.actions.unpublish).toBe('Retirar versión');
+    expect(enMessages.crm.voiceExperiences.actions.publish).toBe('Prepare version');
+    expect(enMessages.crm.voiceExperiences.actions.unpublish).toBe('Withdraw version');
+    // The UI must not promise a public URL at this stage.
+    expect(esMessages.crm.voiceExperiences.list.privateNotice).toMatch(/No existe enlace público/i);
+    expect(enMessages.crm.voiceExperiences.list.privateNotice).toMatch(/no public link/i);
+  });
+
+  test('el helper de collection modes decide qué campos aparecen antes de la llamada', () => {
+    const modes: VoiceContextCollectionMode[] = [
+      'internal_only',
+      'ask_if_missing',
+      'collect_during_call',
+      'trust_prefill',
+      'prefill_and_confirm',
+    ];
+    const fields = modes.map((mode, index) => ({
+      collection_mode: mode,
+      // Deliberately unsorted so we also assert ordering by position.
+      position: modes.length - index,
+    }));
+    const visible = getPreCallVisibleContextFields(fields);
+    expect(visible.map((field) => field.collection_mode)).toEqual([
+      'prefill_and_confirm',
+      'trust_prefill',
+      'ask_if_missing',
+    ]);
+    // internal_only and collect_during_call never render in the pre-call form.
+    expect(visible.some((field) => field.collection_mode === 'internal_only')).toBe(false);
+    expect(visible.some((field) => field.collection_mode === 'collect_during_call')).toBe(false);
+  });
+
   test('distingue integración deshabilitada de integración sin agentes', () => {
     const base = { canRead: true, experiencesStatus: null, agentCount: 0 };
     expect(resolveVoiceExperienceGateState({ ...base, agentsStatus: 404 })).toBe(
@@ -51,8 +89,25 @@ test.describe('protecciones puras de Voice Experiences', () => {
     );
     expect(getVoiceExperienceErrorKey('Unknown backend detail.')).toBeUndefined();
     expect(esMessages.crm.voiceExperiences.errors.backend.alreadyPublished).toBe(
-      'La experiencia ya está publicada.'
+      'La experiencia ya tiene una versión preparada.'
     );
+  });
+
+  test('localiza los nuevos conflictos de dominio (agente e historial)', () => {
+    expect(
+      getVoiceExperienceErrorKey(
+        'Voice experience agent cannot change after publication history exists.'
+      )
+    ).toBe('agentChangeBlocked');
+    expect(
+      getVoiceExperienceErrorKey(
+        'Voice experience with publication history cannot be deleted.'
+      )
+    ).toBe('deleteHistoryBlocked');
+    expect(esMessages.crm.voiceExperiences.errors.backend.agentChangeBlocked).toBeTruthy();
+    expect(esMessages.crm.voiceExperiences.errors.backend.deleteHistoryBlocked).toBeTruthy();
+    expect(enMessages.crm.voiceExperiences.errors.backend.agentChangeBlocked).toBeTruthy();
+    expect(enMessages.crm.voiceExperiences.errors.backend.deleteHistoryBlocked).toBeTruthy();
   });
 });
 
@@ -83,9 +138,19 @@ test.describe('administración privada de Voice Experiences', () => {
 
     await createLink.click();
     await expect(page.getByRole('heading', { name: /Crear experiencia de voz/i })).toBeVisible();
-    await expect(page.getByTestId('voice-experience-preview')).toBeVisible();
+    const preview = page.getByTestId('voice-experience-preview');
+    await expect(preview).toBeVisible();
     await expect(page.getByText(/Vista no funcional/i)).toBeVisible();
+    // On the default Form state no call/mic action is offered.
     await expect(page.getByRole('button', { name: /Unirse|Iniciar llamada|Permitir micrófono/i })).toHaveCount(0);
+
+    // The three local states are reachable and stay non-functional.
+    await preview.getByRole('tab', { name: /^Confirmación$/i }).click();
+    await preview.getByRole('tab', { name: /^Antes de la llamada$/i }).click();
+    // Either a simulated (disabled) call button or the auto-start note is shown.
+    const callButton = preview.getByRole('button', { disabled: true }).last();
+    await expect(callButton.or(page.getByText(/se iniciaría automáticamente/i))).toBeVisible();
+    await preview.getByRole('tab', { name: /^Formulario$/i }).click();
 
     const accessibility = await new AxeBuilder({ page })
       .include('[data-testid="voice-experience-preview"]')
@@ -93,18 +158,25 @@ test.describe('administración privada de Voice Experiences', () => {
     expect(accessibility.violations, JSON.stringify(accessibility.violations, null, 2)).toEqual([]);
   });
 
-  test('despublica con badge traducido y restaura la publicación', async ({ page }) => {
+  test('las tarjetas del inventario no ofrecen preparar ni retirar versiones', async ({ page }) => {
     await requireAuthenticatedInventory(page);
-    const card = page.locator('article').filter({ hasText: 'Publicada' }).first();
-    test.skip((await card.count()) === 0, 'No hay una experiencia publicada para la regresión.');
+    const cards = page.locator('article');
+    test.skip((await cards.count()) === 0, 'No hay experiencias en el inventario.');
+    await expect(
+      cards.getByRole('button', { name: /Preparar versión|Retirar versión|Publicar|Despublicar/i })
+    ).toHaveCount(0);
+  });
 
-    await card.getByRole('button', { name: /^Despublicar$/ }).click();
-    await page.getByRole('dialog').getByRole('button', { name: /^Despublicar$/ }).click();
-    await expect(card.getByText('Despublicada', { exact: true })).toBeVisible();
-
-    await card.getByRole('button', { name: /^Publicar$/ }).click();
-    await page.getByRole('dialog').getByRole('button', { name: /^Publicar$/ }).click();
-    await expect(card.getByText('Publicada', { exact: true })).toBeVisible();
+  test('la preparación y el retiro de versiones viven en el editor', async ({ page }) => {
+    await requireAuthenticatedInventory(page);
+    const openEditor = page.getByRole('link', { name: /Abrir editor/i }).first();
+    test.skip((await openEditor.count()) === 0, 'No hay una experiencia editable en el tenant QA.');
+    await openEditor.click();
+    await expect(
+      page
+        .getByRole('button', { name: /Preparar versión/i })
+        .or(page.getByRole('button', { name: /Retirar versión/i }))
+    ).toBeVisible();
   });
 
   test('limpia el detalle de schema al cambiar de agente', async ({ page }) => {
