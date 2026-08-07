@@ -21,6 +21,7 @@ import {
   archiveVoiceExperienceAction,
   deleteVoiceExperienceAction,
 } from '@/app/[locale]/crm/settings/voice-experiences/actions';
+import { canDeleteArchivedExperience } from '@/lib/voice-experiences/deletion';
 import { getVoiceExperienceErrorKey } from '@/lib/voice-experiences/error-messages';
 import { ActionDialog } from './ActionDialog';
 import { VoiceExperienceStatusBadge } from './VoiceExperienceStatusBadge';
@@ -36,7 +37,7 @@ type Props = {
   canEdit: boolean;
   initialExperiences: VoiceExperienceResponse[];
   agents: VoiceAgentConfigResponse[];
-  versionCounts: Record<string, number>;
+  versionCounts: Record<string, number | null>;
   gateState: VoiceExperienceGateState;
 };
 
@@ -201,7 +202,14 @@ export function VoiceExperiencesList({
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {experiences.map((experience) => {
-            const versions = versionCounts[experience.id] ?? 0;
+            // null = version history could not be determined; fail closed.
+            const versionCount = versionCounts[experience.id] ?? null;
+            const canDelete = canDeleteArchivedExperience(experience.status, versionCount);
+            const deleteLocked = experience.status === 'archived' && !canDelete;
+            const lockedReason =
+              versionCount === null
+                ? t('list.historyUnknown')
+                : t('errors.backend.deleteHistoryBlocked');
             return (
               <article
                 key={experience.id}
@@ -232,7 +240,7 @@ export function VoiceExperiencesList({
                       <dt className="text-muted-foreground">{t('list.versions')}</dt>
                       <dd className="mt-1 flex items-center gap-1 font-semibold text-foreground">
                         <RadioTower className="size-3.5" aria-hidden="true" />
-                        {versions}
+                        {versionCount ?? '—'}
                       </dd>
                     </div>
                   </dl>
@@ -273,7 +281,7 @@ export function VoiceExperiencesList({
                         onConfirm={() => mutate(experience.id, archiveVoiceExperienceAction)}
                       />
                     ) : null}
-                    {canEdit && experience.status === 'archived' && versions === 0 ? (
+                    {canEdit && canDelete ? (
                       <ActionDialog
                         trigger={
                           <Button
@@ -295,14 +303,14 @@ export function VoiceExperiencesList({
                         onConfirm={() => remove(experience.id)}
                       />
                     ) : null}
-                    {canEdit && experience.status === 'archived' && versions > 0 ? (
+                    {canEdit && deleteLocked ? (
                       <Button
                         type="button"
                         size="icon"
                         variant="ghost"
                         disabled
-                        aria-label={t('errors.backend.deleteHistoryBlocked')}
-                        title={t('errors.backend.deleteHistoryBlocked')}
+                        aria-label={lockedReason}
+                        title={lockedReason}
                       >
                         <Lock className="size-4" aria-hidden="true" />
                       </Button>

@@ -1,4 +1,5 @@
 import logging
+import re
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, field_validator
@@ -19,6 +20,12 @@ from app.api.deps import verify_turnstile
 router = APIRouter(prefix="/api/v1", tags=["Voice"])
 
 logger = logging.getLogger(__name__)
+
+# Lightweight format checks for the public demo. Not a full RFC validator; just
+# enough to reject clearly malformed input without adding an email-validator
+# dependency. The landing (DemoInbound) submits phones as "+<country><number>".
+_DEMO_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+_DEMO_PHONE_RE = re.compile(r"^\+?[0-9][0-9\s()\-]{6,19}$")
 
 
 class DemoCallContext(BaseModel):
@@ -52,6 +59,20 @@ class DemoCallContext(BaseModel):
     def _limit_length(cls, value):
         if isinstance(value, str) and len(value) > 200:
             raise ValueError("Field exceeds the maximum allowed length.")
+        return value
+
+    @field_validator("user_email")
+    @classmethod
+    def _valid_email(cls, value):
+        if value is not None and not _DEMO_EMAIL_RE.match(value):
+            raise ValueError("Invalid email format.")
+        return value
+
+    @field_validator("user_phone")
+    @classmethod
+    def _valid_phone(cls, value):
+        if value is not None and not _DEMO_PHONE_RE.match(value):
+            raise ValueError("Invalid phone format.")
         return value
 
 
@@ -221,11 +242,17 @@ async def create_call(
         return {"joinUrl": join_url}
     except HTTPException:
         raise
-    except Exception:
-        logger.exception("Unexpected error creating demo call session")
+    except Exception as exc:
+        # Log only the safe error class name -- never str(exc) or the traceback,
+        # which may carry provider tokens, URLs, payloads, prompts or agent ids.
+        # template_context is never logged here either.
+        logger.error(
+            "Unexpected demo call session failure",
+            extra={"error_type": type(exc).__name__},
+        )
         raise HTTPException(
             status_code=500, detail="Could not start the demo call. Please try again."
-        )
+        ) from None
 
 @router.post("/call-outbound")
 async def create_outbound_call(

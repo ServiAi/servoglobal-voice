@@ -40,7 +40,8 @@ import { VoiceExperiencePreview } from './preview/VoiceExperiencePreview';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { isVoiceExperienceDirty } from '@/lib/voice-experiences/change-detection';
-import { getVoiceExperienceErrorKey } from '@/lib/voice-experiences/error-messages';
+import { canDeleteArchivedExperience } from '@/lib/voice-experiences/deletion';
+import { getVoiceExperienceMessageKey } from '@/lib/voice-experiences/error-messages';
 import {
   createVoiceExperienceDefaults,
   validateVoiceExperience,
@@ -75,6 +76,8 @@ type Props = {
   agents: VoiceAgentConfigResponse[];
   initialExperience?: VoiceExperienceResponse | null;
   initialVersions?: VoiceExperienceVersionResponse[];
+  // true when the version history could not be read; deletion fails closed.
+  versionsUnknown?: boolean;
   initialSchemas?: VoiceContextSchemaSummaryResponse[];
   initialSchema?: VoiceContextSchemaResponse | null;
 };
@@ -101,6 +104,7 @@ export function VoiceExperienceBuilder({
   agents,
   initialExperience = null,
   initialVersions = [],
+  versionsUnknown = false,
   initialSchemas = [],
   initialSchema = null,
 }: Props) {
@@ -134,6 +138,15 @@ export function VoiceExperienceBuilder({
   const editable = canEdit && !archived;
   const agentLocked = mode === 'edit' && versions.length > 0;
   const activeSchema = schemaDetail?.status === 'active';
+  // Deletion is only offered for an archived experience with a confirmed empty
+  // history. Unknown history (read failure) is treated as null and fails closed;
+  // the backend remains the authority and rejects the rest.
+  const versionCount = versionsUnknown ? null : versions.length;
+  const canDeleteExperience = experience
+    ? canDeleteArchivedExperience(experience.status, versionCount)
+    : false;
+  const deleteBlockedByHistory =
+    experience?.status === 'archived' && !canDeleteExperience;
   const publishDisabledReason = !canEdit
     ? t('editor.publishReasons.readOnly')
     : archived
@@ -204,14 +217,10 @@ export function VoiceExperienceBuilder({
     setCurrentStep((step) => Math.min(step + 1, wizardSteps.length - 1));
   };
 
-  const safeError = (status: number, detail: string) => {
-    const errorKey = getVoiceExperienceErrorKey(detail);
-    if ((status === 409 || status === 422) && errorKey) return t(`errors.backend.${errorKey}`);
-    if (status === 409 || status === 422) return detail;
-    if (status === 403) return t('errors.accessDenied');
-    if (status === 404) return t('errors.notFound');
-    return t('errors.generic');
-  };
+  // Never surface a raw backend detail: unknown 409/422 fall back to localized
+  // conflict/validation messages via the shared safe mapper.
+  const safeError = (status: number, detail: string) =>
+    t(getVoiceExperienceMessageKey(status, detail));
 
   const save = async () => {
     if (submitting || !editable) return;
@@ -837,7 +846,7 @@ export function VoiceExperienceBuilder({
                   onConfirm={() => transitionExperience(archiveVoiceExperienceAction)}
                 />
               ) : null}
-              {canEdit && experience?.status === 'archived' ? (
+              {canEdit && canDeleteExperience ? (
                 <ActionDialog
                   trigger={
                     <Button type="button" variant="ghost" size="icon" disabled={submitting} aria-label={t('actions.delete')}>
@@ -852,6 +861,15 @@ export function VoiceExperienceBuilder({
                   busy={submitting}
                   onConfirm={deleteExperience}
                 />
+              ) : null}
+              {canEdit && deleteBlockedByHistory ? (
+                <span
+                  className="inline-flex items-center gap-1.5 rounded-md bg-muted px-2.5 py-1.5 text-xs text-muted-foreground"
+                  role="note"
+                >
+                  <Lock className="size-3.5" aria-hidden="true" />
+                  {versionsUnknown ? t('list.historyUnknown') : t('editor.deleteBlockedHistory')}
+                </span>
               ) : null}
             </div>
           ) : null}

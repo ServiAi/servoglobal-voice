@@ -132,12 +132,6 @@ export function VoiceExperiencePreview({ form, contextFields, locale }: Props) {
           <>
             <div className="space-y-4">
               {renderHeader()}
-              {form.call_settings.show_microphone_help ? (
-                <p className="flex items-start gap-2 rounded-md bg-slate-100 p-3 text-xs text-slate-600">
-                  <Mic2 className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-                  {t('preview.microphoneHelp')}
-                </p>
-              ) : null}
             </div>
 
             <div className="space-y-3">

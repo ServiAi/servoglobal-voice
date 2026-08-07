@@ -59,6 +59,7 @@ export default async function VoiceExperienceEditorPage({
       agents={agentsResult.data}
       initialExperience={experience}
       initialVersions={versionsResult.ok ? versionsResult.data : []}
+      versionsUnknown={!versionsResult.ok}
       initialSchemas={schemasResult.ok ? schemasResult.data : []}
       initialSchema={schemaResult.ok ? schemaResult.data : null}
     />

@@ -48,7 +48,9 @@ export default async function VoiceExperiencesPage({
     ? await Promise.all(
         experiences.map(async (experience) => {
           const result = await fetchVoiceExperienceVersions(accessToken, experience.id);
-          return [experience.id, result.ok ? result.data.length : 0] as const;
+          // null = could not determine. Never turn a read error into "0", which
+          // would wrongly present an experience as safe to delete (fail-closed).
+          return [experience.id, result.ok ? result.data.length : null] as const;
         })
       )
     : [];

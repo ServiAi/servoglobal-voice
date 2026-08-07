@@ -13,6 +13,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import { getVoiceExperienceMessageKey } from '@/lib/voice-experiences/error-messages';
 import {
   activateVoiceContextSchemaAction,
   addVoiceContextFieldAction,
@@ -93,8 +94,9 @@ export function ContextSchemaManager({
   const latestSchemaRequestId = useRef<string | null>(null);
 
   const showResultError = (status: number, detailText: string) => {
-    const key = status === 409 ? 'conflict' : status === 422 ? 'validation' : 'generic';
-    setMessage({ type: 'error', text: `${t(`errors.${key}`)} ${detailText}` });
+    // Map known errors and fall back to a localized message; never surface a raw
+    // backend detail to the user.
+    setMessage({ type: 'error', text: t(getVoiceExperienceMessageKey(status, detailText)) });
   };
 
   const refreshSchemas = async (agentId = agentConfigId) => {

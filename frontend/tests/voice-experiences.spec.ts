@@ -5,7 +5,11 @@ import esMessages from '../messages/es.json';
 import { resolveVoiceExperienceGateState } from '../lib/permissions/voice-experiences';
 import { isVoiceExperienceDirty } from '../lib/voice-experiences/change-detection';
 import { getPreCallVisibleContextFields } from '../lib/voice-experiences/collection-modes';
-import { getVoiceExperienceErrorKey } from '../lib/voice-experiences/error-messages';
+import { canDeleteArchivedExperience } from '../lib/voice-experiences/deletion';
+import {
+  getVoiceExperienceErrorKey,
+  getVoiceExperienceMessageKey,
+} from '../lib/voice-experiences/error-messages';
 import { isSafeHttpsUrl } from '../lib/voice-experiences/url-safety';
 import { createVoiceExperienceDefaults } from '../lib/voice-experiences/validation';
 import type { VoiceContextCollectionMode } from '../types/voice-experiences';
@@ -109,6 +113,54 @@ test.describe('protecciones puras de Voice Experiences', () => {
     expect(enMessages.crm.voiceExperiences.errors.backend.agentChangeBlocked).toBeTruthy();
     expect(enMessages.crm.voiceExperiences.errors.backend.deleteHistoryBlocked).toBeTruthy();
   });
+
+  test('nunca muestra un backend detail arbitrario al usuario', () => {
+    // Known detail → specific backend key.
+    expect(
+      getVoiceExperienceMessageKey(409, 'Voice experience is already published.')
+    ).toBe('errors.backend.alreadyPublished');
+    // Unknown 409/422 → localized fallback, never the raw detail.
+    expect(getVoiceExperienceMessageKey(409, 'Some raw internal detail')).toBe('errors.conflict');
+    expect(getVoiceExperienceMessageKey(422, 'Another raw detail')).toBe('errors.validation');
+    expect(getVoiceExperienceMessageKey(403, 'x')).toBe('errors.accessDenied');
+    expect(getVoiceExperienceMessageKey(404, 'x')).toBe('errors.notFound');
+    expect(getVoiceExperienceMessageKey(500, 'x')).toBe('errors.generic');
+    // The returned keys must resolve to real translations in both locales.
+    for (const messages of [esMessages, enMessages]) {
+      for (const status of [400, 403, 404, 409, 422, 500]) {
+        const key = getVoiceExperienceMessageKey(status, 'raw');
+        const value = key
+          .split('.')
+          .reduce<Record<string, unknown> | string | undefined>(
+            (node, part) =>
+              node && typeof node === 'object'
+                ? (node as Record<string, unknown>)[part] as Record<string, unknown> | string
+                : undefined,
+            messages.crm.voiceExperiences as unknown as Record<string, unknown>
+          );
+        expect(typeof value).toBe('string');
+      }
+    }
+  });
+
+  test('la eliminación falla cerrado: solo archived con historial confirmado en cero', () => {
+    expect(canDeleteArchivedExperience('archived', 0)).toBe(true);
+    expect(canDeleteArchivedExperience('archived', 1)).toBe(false);
+    expect(canDeleteArchivedExperience('archived', 3)).toBe(false);
+    // Unknown history (read failure) must never enable deletion.
+    expect(canDeleteArchivedExperience('archived', null)).toBe(false);
+    // Non-archived states never allow deletion regardless of history.
+    expect(canDeleteArchivedExperience('draft', 0)).toBe(false);
+    expect(canDeleteArchivedExperience('unpublished', 0)).toBe(false);
+    expect(canDeleteArchivedExperience('published', 0)).toBe(false);
+  });
+
+  test('expone textos de historial desconocido y bloqueo de eliminación en editor', () => {
+    expect(esMessages.crm.voiceExperiences.list.historyUnknown).toBeTruthy();
+    expect(enMessages.crm.voiceExperiences.list.historyUnknown).toBeTruthy();
+    expect(esMessages.crm.voiceExperiences.editor.deleteBlockedHistory).toBeTruthy();
+    expect(enMessages.crm.voiceExperiences.editor.deleteBlockedHistory).toBeTruthy();
+  });
 });
 
 test.describe('administración privada de Voice Experiences', () => {
@@ -144,13 +196,20 @@ test.describe('administración privada de Voice Experiences', () => {
     // On the default Form state no call/mic action is offered.
     await expect(page.getByRole('button', { name: /Unirse|Iniciar llamada|Permitir micrófono/i })).toHaveCount(0);
 
+    // Microphone help belongs to "Antes de la llamada", never to the form.
+    const micHelp = preview.getByText(/acceso al micrófono/i);
+    await expect(micHelp).toHaveCount(0);
+
     // The three local states are reachable and stay non-functional.
     await preview.getByRole('tab', { name: /^Confirmación$/i }).click();
     await preview.getByRole('tab', { name: /^Antes de la llamada$/i }).click();
     // Either a simulated (disabled) call button or the auto-start note is shown.
     const callButton = preview.getByRole('button', { disabled: true }).last();
     await expect(callButton.or(page.getByText(/se iniciaría automáticamente/i))).toBeVisible();
+    // Microphone help only appears in the before-call state.
+    await expect(micHelp).toBeVisible();
     await preview.getByRole('tab', { name: /^Formulario$/i }).click();
+    await expect(micHelp).toHaveCount(0);
 
     const accessibility = await new AxeBuilder({ page })
       .include('[data-testid="voice-experience-preview"]')

@@ -91,6 +91,16 @@ class LegacyPublicCallEndpointTests(unittest.TestCase):
         payload["template_context"]["user_name"] = "x" * 201
         self.assertEqual(self.client.post("/api/v1/calls", json=payload).status_code, 422)
 
+    def test_rejects_invalid_email(self) -> None:
+        payload = _valid_landing_payload()
+        payload["template_context"]["user_email"] = "not-an-email"
+        self.assertEqual(self.client.post("/api/v1/calls", json=payload).status_code, 422)
+
+    def test_rejects_invalid_phone(self) -> None:
+        payload = _valid_landing_payload()
+        payload["template_context"]["user_phone"] = "abc123!!"
+        self.assertEqual(self.client.post("/api/v1/calls", json=payload).status_code, 422)
+
     def test_cannot_set_tenant_via_body(self) -> None:
         payload = _valid_landing_payload()
         payload["tenant_id"] = "other-tenant"
@@ -132,17 +142,29 @@ class LegacyPublicCallEndpointTests(unittest.TestCase):
         self.assertEqual(response.json(), {"joinUrl": "https://join.example.test/call"})
 
     def test_unexpected_error_is_sanitized(self) -> None:
-        secret = "ultravox-secret-abc123 https://api.ultravox.ai/agents/internal"
+        token = "ultravox-secret-abc123"
+        private_url = "https://api.ultravox.ai/agents/internal-agent"
+        provider_agent_id = "agent_provider_9f8e7d"
+        secret = f"{token} {private_url} {provider_agent_id}"
 
         async def failing_session(template_context=None):
             raise RuntimeError(secret)
 
         patches = self._patched_endpoint(call_session=failing_session)
         with patches[0], patches[1], patches[2], patches[3], patches[4]:
-            response = self.client.post("/api/v1/calls", json=_valid_landing_payload())
+            with self.assertLogs("app.api.endpoints.voice", level="ERROR") as logs:
+                response = self.client.post("/api/v1/calls", json=_valid_landing_payload())
+
+        # Response is generic and never leaks provider details.
         self.assertEqual(response.status_code, 500)
-        self.assertNotIn(secret, response.text)
-        self.assertNotIn("ultravox-secret-abc123", response.text)
+        for leak in (token, private_url, provider_agent_id, secret):
+            self.assertNotIn(leak, response.text)
+
+        # Logs record only the safe error class, never str(exc)/traceback.
+        log_output = "\n".join(logs.output)
+        for leak in (token, private_url, provider_agent_id, secret):
+            self.assertNotIn(leak, log_output)
+        self.assertTrue(any(getattr(r, "error_type", None) == "RuntimeError" for r in logs.records))
 
 
 if __name__ == "__main__":
