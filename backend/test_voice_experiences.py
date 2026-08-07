@@ -272,6 +272,78 @@ class VoiceExperienceTests(Integration2ATestCase):
         self.assertEqual(versions[0]["content"]["title"], "Edited draft")
         self.assertEqual(versions[1]["content"]["title"], "Version one")
 
+    def test_update_content_without_changing_agent_is_allowed(self) -> None:
+        self._enable_feature()
+        experience_id = self._create(title="Original").json()["id"]
+        response = self.client.put(
+            f"/api/v1/voice/experiences/{experience_id}",
+            json=self._payload(title="Edited"),
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["content"]["title"], "Edited")
+
+    def test_update_schema_within_same_agent_is_allowed(self) -> None:
+        self._enable_feature()
+        other_schema = self._seed_schema(
+            self.tenant.id, self.agent_id, "active", "second_active_schema"
+        )
+        experience_id = self._create().json()["id"]
+        response = self.client.put(
+            f"/api/v1/voice/experiences/{experience_id}",
+            json=self._payload(schema_id=other_schema),
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["context_schema_id"], other_schema)
+
+    def test_update_agent_without_history_is_allowed(self) -> None:
+        self._enable_feature()
+        other_agent_schema = self._seed_schema(
+            self.tenant.id, self.other_agent_id, "active", "other_agent_active"
+        )
+        experience_id = self._create().json()["id"]
+        response = self.client.put(
+            f"/api/v1/voice/experiences/{experience_id}",
+            json=self._payload(
+                agent_id=self.other_agent_id, schema_id=other_agent_schema
+            ),
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["agent_config_id"], self.other_agent_id)
+
+    def test_update_agent_with_history_is_rejected(self) -> None:
+        self._enable_feature()
+        other_agent_schema = self._seed_schema(
+            self.tenant.id, self.other_agent_id, "active", "other_agent_active"
+        )
+        experience_id = self._create().json()["id"]
+        self.client.post(f"/api/v1/voice/experiences/{experience_id}/publish")
+        self.client.post(f"/api/v1/voice/experiences/{experience_id}/unpublish")
+        response = self.client.put(
+            f"/api/v1/voice/experiences/{experience_id}",
+            json=self._payload(
+                agent_id=self.other_agent_id, schema_id=other_agent_schema
+            ),
+        )
+        self.assertEqual(response.status_code, 409, response.text)
+        self.assertEqual(
+            self.client.get(f"/api/v1/voice/experiences/{experience_id}").json()[
+                "agent_config_id"
+            ],
+            self.agent_id,
+        )
+
+    def test_update_agent_cannot_cross_tenant(self) -> None:
+        tenant_b, _ = self._seed_tenant_user(slug="tenant-b", email="agent-b@example.com")
+        agent_b = self._seed_agent(tenant_b.id, "agent-cross-tenant")
+        schema_b = self._seed_schema(tenant_b.id, agent_b, "active", "cross_tenant")
+        self._enable_feature()
+        experience_id = self._create().json()["id"]
+        response = self.client.put(
+            f"/api/v1/voice/experiences/{experience_id}",
+            json=self._payload(agent_id=agent_b, schema_id=schema_b),
+        )
+        self.assertEqual(response.status_code, 404, response.text)
+
     def test_published_must_be_unpublished_before_archive(self) -> None:
         self._enable_feature()
         experience_id = self._create().json()["id"]
@@ -317,11 +389,9 @@ class VoiceExperienceTests(Integration2ATestCase):
             409,
         )
 
-    def test_delete_archived_experience_cascades_versions(self) -> None:
+    def test_delete_archived_without_history_removes_experience(self) -> None:
         self._enable_feature()
         experience_id = self._create().json()["id"]
-        self.client.post(f"/api/v1/voice/experiences/{experience_id}/publish")
-        self.client.post(f"/api/v1/voice/experiences/{experience_id}/unpublish")
         self.client.post(f"/api/v1/voice/experiences/{experience_id}/archive")
 
         response = self.client.delete(f"/api/v1/voice/experiences/{experience_id}")
@@ -332,12 +402,43 @@ class VoiceExperienceTests(Integration2ATestCase):
         )
         with SessionLocal() as db:
             self.assertIsNone(db.get(TenantVoiceExperience, experience_id))
+
+    def test_delete_archived_with_single_version_is_blocked(self) -> None:
+        self._enable_feature()
+        experience_id = self._create().json()["id"]
+        self.client.post(f"/api/v1/voice/experiences/{experience_id}/publish")
+        self.client.post(f"/api/v1/voice/experiences/{experience_id}/unpublish")
+        self.client.post(f"/api/v1/voice/experiences/{experience_id}/archive")
+
+        response = self.client.delete(f"/api/v1/voice/experiences/{experience_id}")
+        self.assertEqual(response.status_code, 409, response.text)
+        with SessionLocal() as db:
+            self.assertIsNotNone(db.get(TenantVoiceExperience, experience_id))
             remaining_versions = db.scalars(
                 select(TenantVoiceExperienceVersion).where(
                     TenantVoiceExperienceVersion.experience_id == experience_id
                 )
             ).all()
-            self.assertEqual(list(remaining_versions), [])
+            self.assertEqual(len(list(remaining_versions)), 1)
+
+    def test_delete_archived_with_multiple_versions_is_blocked(self) -> None:
+        self._enable_feature()
+        experience_id = self._create().json()["id"]
+        for _ in range(2):
+            self.client.post(f"/api/v1/voice/experiences/{experience_id}/publish")
+            self.client.post(f"/api/v1/voice/experiences/{experience_id}/unpublish")
+        self.client.post(f"/api/v1/voice/experiences/{experience_id}/archive")
+
+        response = self.client.delete(f"/api/v1/voice/experiences/{experience_id}")
+        self.assertEqual(response.status_code, 409, response.text)
+        with SessionLocal() as db:
+            self.assertIsNotNone(db.get(TenantVoiceExperience, experience_id))
+            remaining_versions = db.scalars(
+                select(TenantVoiceExperienceVersion).where(
+                    TenantVoiceExperienceVersion.experience_id == experience_id
+                )
+            ).all()
+            self.assertEqual(len(list(remaining_versions)), 2)
 
     def test_delete_unknown_experience_is_not_found(self) -> None:
         self._enable_feature()
@@ -502,18 +603,96 @@ class VoiceExperienceTests(Integration2ATestCase):
         self.assertEqual(archived.status_code, 200, archived.text)
         self._assert_safe_event("voice_experience_archived", experience_id)
 
-    def test_get_current_published_version_returns_latest_after_unpublish(self) -> None:
+    def _resolve_published(self, experience_id: str, tenant_id: str | None = None):
+        with SessionLocal() as db:
+            return VoiceExperienceService(db).get_current_published_version(
+                tenant_id or self.tenant.id, experience_id
+            )
+
+    def test_published_version_resolves_by_published_reference(self) -> None:
+        self._enable_feature()
+        experience_id = self._create().json()["id"]
+        published = self.client.post(
+            f"/api/v1/voice/experiences/{experience_id}/publish"
+        ).json()
+        version = self._resolve_published(experience_id)
+        self.assertIsNotNone(version)
+        self.assertEqual(version.id, published["published_version_id"])
+        self.assertEqual(version.version, 1)
+
+    def test_draft_experience_resolves_to_none(self) -> None:
+        self._enable_feature()
+        experience_id = self._create().json()["id"]
+        self.assertIsNone(self._resolve_published(experience_id))
+
+    def test_unpublished_experience_resolves_to_none(self) -> None:
         self._enable_feature()
         experience_id = self._create().json()["id"]
         self.client.post(f"/api/v1/voice/experiences/{experience_id}/publish")
         self.client.post(f"/api/v1/voice/experiences/{experience_id}/unpublish")
+        self.assertIsNone(self._resolve_published(experience_id))
 
+    def test_archived_experience_resolves_to_none(self) -> None:
+        self._enable_feature()
+        experience_id = self._create().json()["id"]
+        self.client.post(f"/api/v1/voice/experiences/{experience_id}/archive")
+        self.assertIsNone(self._resolve_published(experience_id))
+
+    def test_published_without_reference_resolves_to_none(self) -> None:
+        self._enable_feature()
+        experience_id = self._create().json()["id"]
+        self.client.post(f"/api/v1/voice/experiences/{experience_id}/publish")
+        # A published row whose reference was lost must fail closed, not fall
+        # back to the highest historical version.
         with SessionLocal() as db:
-            version = VoiceExperienceService(db).get_current_published_version(
-                self.tenant.id, experience_id
+            experience = db.get(TenantVoiceExperience, experience_id)
+            experience.published_version_id = None
+            db.add(experience)
+            db.commit()
+        self.assertIsNone(self._resolve_published(experience_id))
+
+    def test_reference_to_other_experience_version_resolves_to_none(self) -> None:
+        self._enable_feature()
+        first = self._create().json()["id"]
+        self.client.post(f"/api/v1/voice/experiences/{first}/publish")
+        second = self._create(name="Second").json()["id"]
+        second_version = self.client.post(
+            f"/api/v1/voice/experiences/{second}/publish"
+        ).json()["published_version_id"]
+        # Point the first experience at the second experience's version id.
+        with SessionLocal() as db:
+            experience = db.get(TenantVoiceExperience, first)
+            experience.published_version_id = second_version
+            db.add(experience)
+            db.commit()
+        self.assertIsNone(self._resolve_published(first))
+
+    def test_reference_to_other_tenant_version_resolves_to_none(self) -> None:
+        tenant_b, user_b = self._seed_tenant_user(slug="tenant-b", email="pv-b@example.com")
+        agent_b = self._seed_agent(tenant_b.id, "agent-pv-b")
+        schema_b = self._seed_schema(tenant_b.id, agent_b, "active", "schema_pv_b")
+        self._enable_feature(tenant_b.id)
+        with SessionLocal() as db:
+            service = VoiceExperienceService(db)
+            other = service.create_experience(
+                tenant_b.id,
+                VoiceExperienceWriteRequest.model_validate(
+                    self._payload(agent_id=agent_b, schema_id=schema_b)
+                ),
+                user_b.id,
             )
-            self.assertIsNotNone(version)
-            self.assertEqual(version.version, 1)
+            other_published = service.publish_experience(tenant_b.id, other.id, user_b.id)
+            other_version_id = other_published.published_version_id
+
+        self._enable_feature()
+        experience_id = self._create().json()["id"]
+        self.client.post(f"/api/v1/voice/experiences/{experience_id}/publish")
+        with SessionLocal() as db:
+            experience = db.get(TenantVoiceExperience, experience_id)
+            experience.published_version_id = other_version_id
+            db.add(experience)
+            db.commit()
+        self.assertIsNone(self._resolve_published(experience_id))
 
     def test_consent_label_is_optional_when_consent_is_not_required(self) -> None:
         self._enable_feature()
