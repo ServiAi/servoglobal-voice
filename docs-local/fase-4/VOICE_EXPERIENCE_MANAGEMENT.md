@@ -6,7 +6,7 @@ Estado: tercer incremento backend implementado en `feature/voice-experience-mana
 
 Este incremento agrega administración autenticada y tenant-scoped de Voice Experiences. No agrega frontend, builder, página o formulario público, tokens públicos, context submission, CRM call context, WebRTC, `joinUrl`, llamadas Ultravox, WhatsApp, dominios personalizados ni analítica.
 
-Tampoco existen todavía endpoints públicos ni runtime WebRTC para consumir una experiencia publicada.
+La administración descrita aquí continúa siendo privada. El incremento posterior `feature/voice-experience-public-runtime` agregó una lectura pública sanitizada del snapshot publicado, pero no captura de datos ni runtime WebRTC; ver `VOICE_EXPERIENCE_PUBLIC_RUNTIME.md`.
 
 ## Persistencia
 
@@ -37,7 +37,7 @@ Editar la experiencia no modifica snapshots anteriores. Despublicar conserva el 
 - `DELETE /api/v1/voice/experiences/{experience_id}`
 - `GET /api/v1/voice/experiences/{experience_id}/versions`
 
-Actualización (Etapa 0, `fix/voice-experience-functional-alignment`): `published` es un **snapshot interno**; la UI lo presenta como "Versión preparada" y no existe URL pública. `get_current_published_version()` resuelve estrictamente por `published_version_id` (fail-closed). `PUT` rechaza cambiar el agente si hay historial de versiones. `DELETE` sólo aplica a experiencias **archivadas sin historial**; con historial devuelve `409` y conserva snapshots. `/api/v1/calls` es la demo pública heredada, no el runtime de Voice Experiences. Ver `VOICE_EXPERIENCE_FUNCTIONAL_ALIGNMENT.md`.
+Actualización (Etapa 0, `fix/voice-experience-functional-alignment`): `get_current_published_version()` resuelve estrictamente por `published_version_id` (fail-closed). `PUT` rechaza cambiar el agente si hay historial y `DELETE` sólo aplica a archivadas sin historial. Actualización posterior: el snapshot exacto puede representarse en la página pública de solo lectura, sin conectarlo a `/api/v1/calls`. Ver `VOICE_EXPERIENCE_FUNCTIONAL_ALIGNMENT.md` y `VOICE_EXPERIENCE_PUBLIC_RUNTIME.md`.
 
 Lectura: `platform_admin` interno en su contexto actual, `tenant_admin`, `tenant_analyst` y `tenant_viewer`. Escritura: `platform_admin` interno en su contexto actual y `tenant_admin`. Un `platform_admin` no interno recibe `403`.
 

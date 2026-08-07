@@ -1138,5 +1138,25 @@
       },
       "common": { "cancel": "Cancelar", "create": "Crear", "save": "Guardar", "saving": "Guardando…", "saved": "Guardado", "loading": "Cargando…", "back": "Volver" }
     }
+  },
+  "publicVoiceExperience": {
+    "metadata": {
+      "title": "Experiencia de voz",
+      "description": "Vista pública de una experiencia de voz publicada."
+    },
+    "eyebrow": "Experiencia de voz",
+    "version": "Versión",
+    "required": "Obligatorio",
+    "selectPlaceholder": "Selecciona una opción",
+    "privacy": "Ver política de privacidad",
+    "emptyFields": "Esta experiencia no solicita información previa.",
+    "noticeTitle": "Vista de solo lectura",
+    "noticeDescription": "La captura de datos y las llamadas aún no están habilitadas en esta página.",
+    "logoAlt": "Logo de la experiencia",
+    "notFound": {
+      "title": "Experiencia no disponible",
+      "description": "No encontramos una experiencia publicada en esta dirección.",
+      "back": "Volver al inicio"
+    }
   }
 }

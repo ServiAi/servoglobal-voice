@@ -1119,5 +1119,25 @@
       },
       "common": { "cancel": "Cancel", "create": "Create", "save": "Save", "saving": "Saving…", "saved": "Saved", "loading": "Loading…", "back": "Back" }
     }
+  },
+  "publicVoiceExperience": {
+    "metadata": {
+      "title": "Voice experience",
+      "description": "Public view of a published voice experience."
+    },
+    "eyebrow": "Voice experience",
+    "version": "Version",
+    "required": "Required",
+    "selectPlaceholder": "Select an option",
+    "privacy": "View privacy policy",
+    "emptyFields": "This experience does not request information in advance.",
+    "noticeTitle": "Read-only preview",
+    "noticeDescription": "Data capture and calls are not enabled on this page yet.",
+    "logoAlt": "Experience logo",
+    "notFound": {
+      "title": "Experience unavailable",
+      "description": "We could not find a published experience at this address.",
+      "back": "Back to home"
+    }
   }
 }

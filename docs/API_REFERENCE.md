@@ -117,14 +117,15 @@ La respuesta omite el identificador del tenant, el usuario que realizó el cambi
 | `POST /api/v1/voice/experiences/{experience_id}/archive` | Archiva una experiencia no publicada y libera capacidad. |
 | `DELETE /api/v1/voice/experiences/{experience_id}` | Elimina físicamente **sólo** experiencias archivadas **sin** historial de versiones; con historial devuelve `409` y conserva snapshots. |
 | `GET /api/v1/voice/experiences/{experience_id}/versions` | Lista snapshots inmutables. |
+| `GET /api/v1/public/voice-experiences/{slug}` | Resuelve sin autenticación exclusivamente el snapshot publicado exacto y su schema histórico. Devuelve un DTO público sanitizado y `Cache-Control: no-store`; cualquier estado no publicable responde un `404` genérico. |
 
 Los context schemas usados por `TenantVoiceExperienceVersion` forman parte del contrato reproducible de la publicación. Aunque una experiencia cambie su borrador a otro schema, el schema histórico no puede eliminarse mientras un snapshot lo referencie. La política de retención puede evolucionar posteriormente; el historial actual se conserva.
 
 El tenant se deriva de `AuthContext`; los bodies rechazan `tenant_id`. Lectura: plataforma interna y roles tenant de lectura. Escritura: plataforma interna y `tenant_admin`. La feature `voice_experiences` debe estar habilitada. `max_context_fields` sólo limita campos de schemas; `max_experiences` cuenta experiencias cuyo estado no sea `archived`. Los slugs se generan en servidor y las respuestas no exponen prompts, tools, secretos de proveedor, credenciales SIP ni PII interna.
 
-Reglas de dominio: `PUT` rechaza con `409` cambiar `agent_config_id` cuando ya existe historial de versiones. El estado persistido `published` representa un **snapshot interno**: en la interfaz se presenta como "Versión preparada" y **no existe URL pública** ni runtime de llamada en esta etapa.
+Reglas de dominio: `PUT` rechaza con `409` cambiar `agent_config_id` cuando ya existe historial de versiones. El estado persistido `published` representa un snapshot inmutable. El endpoint público exige estado `published`, referencia exacta `published_version_id`, feature tenant habilitada y coincidencia de experiencia/tenant/schema; ante cualquier inconsistencia falla cerrado.
 
-Estos endpoints son exclusivamente autenticados y alimentan el builder privado de CRM en `/{locale}/crm/settings/voice-experiences`. Todavía no existen página o formulario público, tokens públicos, context submission ni runtime WebRTC para Voice Experiences. La demo pública heredada `POST /api/v1/calls` (y `POST /api/v1/call-outbound`) pertenece a la landing sobre el tenant bootstrap y **no** es el runtime de Voice Experiences; `/api/v1/calls` no acepta `system_prompt` ni provider `agent_id` desde el navegador. Ver `docs-local/fase-4/VOICE_EXPERIENCE_FUNCTIONAL_ALIGNMENT.md`.
+Los endpoints bajo `/api/v1/voice` siguen siendo autenticados y alimentan el builder privado de CRM. La superficie pública se limita a lectura en `/{locale}/voice/{slug}`: no acepta datos, no crea sesiones ni leads y no inicia llamadas. El DTO no expone IDs, tenant, proveedor, prompt, tools, credenciales, sensibilidad, modo de recopilación ni reglas internas. La demo heredada `POST /api/v1/calls` continúa separada. Ver `docs-local/fase-4/VOICE_EXPERIENCE_PUBLIC_RUNTIME.md`.
 
 ## Convenciones
 
