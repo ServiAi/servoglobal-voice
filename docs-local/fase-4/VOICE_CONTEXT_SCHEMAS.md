@@ -26,6 +26,7 @@ Todas las rutas requieren `voice_experiences`, derivan `tenant_id` de `AuthConte
 | `POST` | `/api/v1/voice/context-schemas/{schema_id}/activate` |
 | `POST` | `/api/v1/voice/context-schemas/{schema_id}/archive` |
 | `POST` | `/api/v1/voice/context-schemas/{schema_id}/new-version` |
+| `DELETE` | `/api/v1/voice/context-schemas/{schema_id}` |
 
 Lectura: `platform_admin` interno, `tenant_admin`, `tenant_analyst`, `tenant_viewer`. Escritura: `platform_admin` interno y `tenant_admin`.
 
@@ -38,6 +39,8 @@ Los cuerpos usan `extra="forbid"`: no aceptan `tenant_id`, `agent_config_id` ni 
 - Los campos `select` exigen opciones tipadas con values únicos; los demás tipos no admiten opciones.
 - Transiciones: `draft -> active -> archived` y `draft -> archived`.
 - Un schema active o archived sólo puede evolucionar mediante `new-version`.
+- El borrado físico solo se permite para un schema `archived` sin referencias tenant-scoped en `TenantVoiceExperience` ni `TenantVoiceExperienceVersion`. Una referencia actual o histórica responde `409` y no modifica ninguna fila.
+- Eliminar un context schema nunca elimina una Voice Experience ni publication history. Un schema referenciado por un snapshot se conserva como parte del contrato reproducible de esa publicación.
 
 ## Eventos
 
@@ -45,4 +48,4 @@ Se registran eventos sanitizados `context_schema_created`, `context_schema_activ
 
 ## Fuera de alcance
 
-Consumo del schema durante llamadas, builder/UI, endpoints o formularios públicos, WebRTC, `joinUrl`, WhatsApp, analítica y borrado físico de schemas.
+Consumo del schema durante llamadas, formularios públicos, WebRTC, `joinUrl`, WhatsApp, analítica y una política completa de retención. La retención puede evolucionar posteriormente, pero el historial existente se conserva.

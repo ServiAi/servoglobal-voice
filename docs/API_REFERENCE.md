@@ -109,6 +109,7 @@ La respuesta omite el identificador del tenant, el usuario que realizó el cambi
 | `POST /api/v1/voice/context-schemas/{schema_id}/activate` | Activa el draft y archiva la active anterior del lineage. |
 | `POST /api/v1/voice/context-schemas/{schema_id}/archive` | Archiva un draft o active. |
 | `POST /api/v1/voice/context-schemas/{schema_id}/new-version` | Clona una versión inmutable a un nuevo draft. |
+| `DELETE /api/v1/voice/context-schemas/{schema_id}` | Elimina únicamente un schema archivado sin referencias actuales ni históricas; una referencia responde `409` y nunca elimina experiencias o snapshots. |
 | `GET/POST /api/v1/voice/experiences` | Lista las experiencias del tenant o crea un draft. |
 | `GET/PUT /api/v1/voice/experiences/{experience_id}` | Consulta o reemplaza el draft mutable sin alterar snapshots publicados. |
 | `POST /api/v1/voice/experiences/{experience_id}/publish` | Prepara una versión: crea un snapshot interno inmutable (estado `published`); exige schema `active`. No genera URL pública. |
@@ -116,6 +117,8 @@ La respuesta omite el identificador del tenant, el usuario que realizó el cambi
 | `POST /api/v1/voice/experiences/{experience_id}/archive` | Archiva una experiencia no publicada y libera capacidad. |
 | `DELETE /api/v1/voice/experiences/{experience_id}` | Elimina físicamente **sólo** experiencias archivadas **sin** historial de versiones; con historial devuelve `409` y conserva snapshots. |
 | `GET /api/v1/voice/experiences/{experience_id}/versions` | Lista snapshots inmutables. |
+
+Los context schemas usados por `TenantVoiceExperienceVersion` forman parte del contrato reproducible de la publicación. Aunque una experiencia cambie su borrador a otro schema, el schema histórico no puede eliminarse mientras un snapshot lo referencie. La política de retención puede evolucionar posteriormente; el historial actual se conserva.
 
 El tenant se deriva de `AuthContext`; los bodies rechazan `tenant_id`. Lectura: plataforma interna y roles tenant de lectura. Escritura: plataforma interna y `tenant_admin`. La feature `voice_experiences` debe estar habilitada. `max_context_fields` sólo limita campos de schemas; `max_experiences` cuenta experiencias cuyo estado no sea `archived`. Los slugs se generan en servidor y las respuestas no exponen prompts, tools, secretos de proveedor, credenciales SIP ni PII interna.
 

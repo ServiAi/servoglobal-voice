@@ -48,6 +48,8 @@ El futuro runtime público debe reutilizar exactamente esta política.
 
 `delete_experience()` solo elimina físicamente cuando la experiencia está **archivada y sin versiones**. Archivada con historial → **HTTP 409** (`Voice experience with publication history cannot be deleted.`), sin borrar experiencia ni snapshots. No se introdujo soft delete ni política de retención completa en esta etapa. La UI oculta/deshabilita "Eliminar" cuando existen versiones.
 
+Un context schema archivado solo puede eliminarse cuando ninguna experiencia actual ni ningún snapshot histórico lo referencia. Eliminar un context schema **nunca** elimina una Voice Experience ni su historial de publicación. Los schemas usados por snapshots forman parte del contrato reproducible de cada publicación y responden **HTTP 409** aunque el borrador actual ya use otro schema. La política de retención completa puede evolucionar posteriormente; la Etapa 0 conserva todo el historial existente.
+
 ## 8. Endpoint heredado `/api/v1/calls`
 
 - Contrato tipado con `extra="forbid"`.

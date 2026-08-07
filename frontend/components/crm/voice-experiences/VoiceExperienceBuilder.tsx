@@ -39,7 +39,10 @@ import { VersionHistoryPanel } from './editor/VersionHistoryPanel';
 import { VoiceExperiencePreview } from './preview/VoiceExperiencePreview';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { isVoiceExperienceDirty } from '@/lib/voice-experiences/change-detection';
+import {
+  isVoiceExperienceAgentLocked,
+  isVoiceExperienceDirty,
+} from '@/lib/voice-experiences/change-detection';
 import { canDeleteArchivedExperience } from '@/lib/voice-experiences/deletion';
 import { getVoiceExperienceMessageKey } from '@/lib/voice-experiences/error-messages';
 import {
@@ -136,7 +139,7 @@ export function VoiceExperienceBuilder({
   const dirty = isVoiceExperienceDirty(form, baseline);
   const archived = experience?.status === 'archived';
   const editable = canEdit && !archived;
-  const agentLocked = mode === 'edit' && versions.length > 0;
+  const agentLocked = isVoiceExperienceAgentLocked(mode, versionsUnknown, versions.length);
   const activeSchema = schemaDetail?.status === 'active';
   // Deletion is only offered for an archived experience with a confirmed empty
   // history. Unknown history (read failure) is treated as null and fails closed;
@@ -313,7 +316,11 @@ export function VoiceExperienceBuilder({
       </div>
       {agentLocked ? (
         <p className="rounded-lg border border-amber-500/20 bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-200">
-          {t('editor.agentLockedHasPublished')}
+          {t(
+            versionsUnknown
+              ? 'editor.agentLockedHistoryUnknown'
+              : 'editor.agentLockedHasPublished'
+          )}
         </p>
       ) : null}
       <label className="grid gap-2 text-sm font-semibold text-foreground">

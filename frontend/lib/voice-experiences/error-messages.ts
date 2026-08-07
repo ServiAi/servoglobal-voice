@@ -11,6 +11,10 @@ const ERROR_KEYS = {
   'Only archived voice experiences can be deleted.': 'deleteRequiresArchived',
   'Voice experience agent cannot change after publication history exists.': 'agentChangeBlocked',
   'Voice experience with publication history cannot be deleted.': 'deleteHistoryBlocked',
+  'Voice context schema is referenced by a voice experience and cannot be deleted.':
+    'schemaDeleteReferenced',
+  'Voice context schema is referenced by publication history and cannot be deleted.':
+    'schemaDeleteReferenced',
 } as const;
 
 export function getVoiceExperienceErrorKey(detail: string) {

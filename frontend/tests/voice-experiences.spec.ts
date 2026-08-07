@@ -3,7 +3,10 @@ import { expect, test } from '@playwright/test';
 import enMessages from '../messages/en.json';
 import esMessages from '../messages/es.json';
 import { resolveVoiceExperienceGateState } from '../lib/permissions/voice-experiences';
-import { isVoiceExperienceDirty } from '../lib/voice-experiences/change-detection';
+import {
+  isVoiceExperienceAgentLocked,
+  isVoiceExperienceDirty,
+} from '../lib/voice-experiences/change-detection';
 import { getPreCallVisibleContextFields } from '../lib/voice-experiences/collection-modes';
 import { canDeleteArchivedExperience } from '../lib/voice-experiences/deletion';
 import {
@@ -112,6 +115,26 @@ test.describe('protecciones puras de Voice Experiences', () => {
     expect(esMessages.crm.voiceExperiences.errors.backend.deleteHistoryBlocked).toBeTruthy();
     expect(enMessages.crm.voiceExperiences.errors.backend.agentChangeBlocked).toBeTruthy();
     expect(enMessages.crm.voiceExperiences.errors.backend.deleteHistoryBlocked).toBeTruthy();
+    expect(
+      getVoiceExperienceErrorKey(
+        'Voice context schema is referenced by publication history and cannot be deleted.'
+      )
+    ).toBe('schemaDeleteReferenced');
+    expect(esMessages.crm.voiceExperiences.errors.backend.schemaDeleteReferenced).toBeTruthy();
+    expect(enMessages.crm.voiceExperiences.errors.backend.schemaDeleteReferenced).toBeTruthy();
+  });
+
+  test('bloquea el agente cuando el historial existe o no pudo verificarse', () => {
+    expect(isVoiceExperienceAgentLocked('edit', false, 1)).toBe(true);
+    expect(isVoiceExperienceAgentLocked('edit', true, 0)).toBe(true);
+    expect(isVoiceExperienceAgentLocked('edit', false, 0)).toBe(false);
+    expect(isVoiceExperienceAgentLocked('create', true, 0)).toBe(false);
+    expect(esMessages.crm.voiceExperiences.editor.agentLockedHistoryUnknown).toBe(
+      'No pudimos verificar el historial de publicaciones. El agente permanece bloqueado hasta poder validarlo.'
+    );
+    expect(enMessages.crm.voiceExperiences.editor.agentLockedHistoryUnknown).toBe(
+      'We could not verify the publication history. The agent remains locked until it can be validated.'
+    );
   });
 
   test('nunca muestra un backend detail arbitrario al usuario', () => {
