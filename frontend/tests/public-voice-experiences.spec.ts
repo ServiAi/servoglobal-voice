@@ -65,9 +65,14 @@ const unsafeExperience: PublicVoiceExperienceData = {
 };
 
 let apiServer: Server;
+// Egress guardrail: every request the runtime makes lands here, on 127.0.0.1:43119.
+// If SSR ever reached staging instead of the mock, this list would stay empty and
+// the assertion in the snapshot test below would fail.
+const mockRequests: string[] = [];
 
 test.beforeAll(async () => {
   apiServer = createServer((request, response) => {
+    if (request.url) mockRequests.push(request.url);
     if (request.url?.endsWith('/missing')) {
       response.writeHead(404, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
       response.end(JSON.stringify({ detail: 'Not found' }));
@@ -95,6 +100,9 @@ function flattenKeys(value: unknown, prefix = ''): string[] {
 test('renders the published snapshot as a disabled, responsive public view', async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 812 });
   await page.goto('/en/voice/consultation-demo');
+
+  // Egress guardrail: the render must have been served by the local mock, not staging.
+  expect(mockRequests).toContain('/api/v1/public/voice-experiences/consultation-demo');
 
   await expect(page.getByRole('heading', { name: experience.content.title })).toBeVisible();
   await expect(page.getByText('Version 3')).toBeVisible();

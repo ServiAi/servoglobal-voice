@@ -36,7 +36,10 @@ export default defineConfig({
     { name: 'auth', testMatch: /auth\.setup\.ts/, use: { viewport: { width: 1440, height: 1024 } } },
     {
       name: 'crm-visual',
-      testMatch: /(crm-visual|crm-notifications|voice-experiences)\.spec\.ts/,
+      // Anchored so `voice-experiences.spec.ts` never also matches the public
+      // `public-voice-experiences.spec.ts`, which belongs to playwright.public.config.ts.
+      testMatch: /[\\/](crm-visual|crm-notifications|voice-experiences)\.spec\.ts$/,
+      testIgnore: /public-voice-experiences\.spec\.ts/,
       use: { storageState: 'playwright/.auth/user.json', viewport: { width: 1440, height: 1024 } },
     },
   ],

@@ -38,6 +38,7 @@ logs
 frontend/playwright/.auth/
 frontend/playwright-report/
 frontend/test-results/
+frontend/test-results-public/
 
 # OS generated files
 .DS_Store
