@@ -217,7 +217,7 @@ class PublicVoiceExperienceTests(Integration2ATestCase):
                         "options": [],
                     },
                 ],
-                "capabilities": {"submissions": False, "calls": False},
+                "capabilities": {"submissions": True, "calls": False},
             },
         )
 

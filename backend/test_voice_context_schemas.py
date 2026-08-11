@@ -888,7 +888,7 @@ class VoiceContextSchemaTests(Integration2ATestCase):
 
     def test_alembic_has_single_expected_head(self) -> None:
         heads = ScriptDirectory.from_config(Config("alembic.ini")).get_heads()
-        self.assertEqual(heads, ["202608050003"])
+        self.assertEqual(heads, ["202608110001"])
 
 
 if __name__ == "__main__":

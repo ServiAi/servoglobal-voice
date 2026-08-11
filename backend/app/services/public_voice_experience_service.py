@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import re
 
 from sqlalchemy import select
@@ -27,18 +29,46 @@ class PublicExperienceNotFound(Exception):
     pass
 
 
+@dataclass(frozen=True)
+class PublicVoiceSnapshot:
+    experience: TenantVoiceExperience
+    version: TenantVoiceExperienceVersion
+    schema: TenantVoiceContextSchema
+    fields: list[TenantVoiceContextField]
+
+
 class PublicVoiceExperienceService:
     def __init__(self, db: Session) -> None:
         self.db = db
         self.feature_service = TenantFeatureService(db)
 
     def resolve(self, slug: str) -> PublicVoiceExperienceResponse:
+        snapshot = self._resolve_snapshot(slug)
+        version = snapshot.version
+
+        return PublicVoiceExperienceResponse(
+            slug=version.slug,
+            locale=version.default_locale,
+            version=version.version,
+            content=self._content(version.content_json),
+            theme=self._theme(version.theme_json),
+            consent=self._consent(version.consent_json),
+            fields=[self._field(field) for field in snapshot.fields],
+            capabilities=PublicCapabilities(),
+        )
+
+    def _resolve_snapshot(
+        self, slug: str, for_update: bool = False
+    ) -> PublicVoiceSnapshot:
         if not PUBLIC_SLUG_RE.fullmatch(slug):
             raise PublicExperienceNotFound
 
-        experience = self.db.scalar(
-            select(TenantVoiceExperience).where(TenantVoiceExperience.slug == slug)
+        experience_query = select(TenantVoiceExperience).where(
+            TenantVoiceExperience.slug == slug
         )
+        if for_update:
+            experience_query = experience_query.with_for_update()
+        experience = self.db.scalar(experience_query)
         if (
             experience is None
             or experience.status != "published"
@@ -78,15 +108,11 @@ class PublicVoiceExperienceService:
             .order_by(TenantVoiceContextField.position)
         ).all()
 
-        return PublicVoiceExperienceResponse(
-            slug=version.slug,
-            locale=version.default_locale,
-            version=version.version,
-            content=self._content(version.content_json),
-            theme=self._theme(version.theme_json),
-            consent=self._consent(version.consent_json),
-            fields=[self._field(field) for field in fields],
-            capabilities=PublicCapabilities(),
+        return PublicVoiceSnapshot(
+            experience=experience,
+            version=version,
+            schema=schema,
+            fields=list(fields),
         )
 
     @staticmethod
