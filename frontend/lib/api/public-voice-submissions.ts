@@ -9,6 +9,7 @@ const ERROR_CODES = new Set<PublicSubmissionErrorCode>([
   'validation_error',
   'verification_failed',
   'rate_limited',
+  'internal_error',
 ]);
 
 export async function submitPublicVoiceExperience(

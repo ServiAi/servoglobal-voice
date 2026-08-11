@@ -31,6 +31,7 @@ export interface PublicVoiceMessages {
 
 interface Props {
   experience: PublicVoiceExperienceData;
+  locale: string;
   messages: PublicVoiceMessages;
 }
 
@@ -89,7 +90,7 @@ function Shell({ children, layout }: { children: ReactNode; layout: PublicVoiceE
   );
 }
 
-export function PublicVoiceExperience({ experience, messages }: Props) {
+export function PublicVoiceExperience({ experience, locale, messages }: Props) {
   const testMode = process.env.NEXT_PUBLIC_VOICE_PUBLIC_TURNSTILE_TEST_MODE === '1';
   const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
   const turnstileRef = useRef<TurnstileInstance>();
@@ -133,7 +134,7 @@ export function PublicVoiceExperience({ experience, messages }: Props) {
     setFieldErrors({});
     const result = await submitPublicVoiceExperience(experience.slug, {
       version: experience.version,
-      locale: experience.locale,
+      locale,
       answers,
       consent: data.has('consent'),
       turnstile_token: turnstileToken,

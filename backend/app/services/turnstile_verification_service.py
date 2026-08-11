@@ -12,7 +12,7 @@ class TurnstileVerificationService:
         self.secret = settings.TURNSTILE_SECRET_KEY if secret is None else secret
         self.timeout_seconds = timeout_seconds
 
-    async def verify(self, token: str, remote_ip: str) -> bool:
+    async def verify(self, token: str | None, remote_ip: str) -> bool:
         if not token or not self.secret:
             return False
         try:

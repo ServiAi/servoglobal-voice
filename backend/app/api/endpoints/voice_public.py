@@ -122,13 +122,13 @@ async def submit_public_voice_experience(
     except HTTPException:
         raise
     except VoicePublicRateLimitConfigurationError:
-        raise _public_error(status.HTTP_429_TOO_MANY_REQUESTS, "rate_limited") from None
+        raise _public_error(status.HTTP_500_INTERNAL_SERVER_ERROR, "internal_error") from None
     except Exception as exc:
         logger.error(
             "Public voice global rate limiter failed closed",
             extra={"error_type": type(exc).__name__},
         )
-        raise _public_error(status.HTTP_429_TOO_MANY_REQUESTS, "rate_limited") from None
+        raise _public_error(status.HTTP_500_INTERNAL_SERVER_ERROR, "internal_error") from None
 
     try:
         limiter.cleanup(retention_hours=24, batch_size=500)
@@ -160,7 +160,7 @@ async def submit_public_voice_experience(
             "Unexpected public voice submission pre-resolution failure",
             extra={"error_type": type(exc).__name__},
         )
-        raise _public_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "validation_error") from None
+        raise _public_error(status.HTTP_500_INTERNAL_SERVER_ERROR, "internal_error") from None
 
     try:
         if not limiter.consume(
@@ -175,7 +175,7 @@ async def submit_public_voice_experience(
             "Public voice tenant rate limiter failed closed",
             extra={"error_type": type(exc).__name__},
         )
-        raise _public_error(status.HTTP_429_TOO_MANY_REQUESTS, "rate_limited") from None
+        raise _public_error(status.HTTP_500_INTERNAL_SERVER_ERROR, "internal_error") from None
 
     try:
         verified = await verifier.verify(payload.turnstile_token, normalized_ip)
@@ -199,7 +199,7 @@ async def submit_public_voice_experience(
             "Invalid historical voice validation configuration",
             extra={"error_type": "HistoricalValidationConfigurationError"},
         )
-        raise _public_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "validation_error") from None
+        raise _public_error(status.HTTP_500_INTERNAL_SERVER_ERROR, "internal_error") from None
     except PublicExperienceNotFound:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -211,4 +211,4 @@ async def submit_public_voice_experience(
             "Unexpected public voice submission persistence failure",
             extra={"error_type": type(exc).__name__},
         )
-        raise _public_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "validation_error") from None
+        raise _public_error(status.HTTP_500_INTERNAL_SERVER_ERROR, "internal_error") from None

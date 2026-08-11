@@ -1168,7 +1168,8 @@
       "experience_version_changed": "El formulario cambió. Recarga la página antes de continuar.",
       "validation_error": "Revisa los campos marcados e inténtalo de nuevo.",
       "verification_failed": "La verificación caducó o falló. Completa la nueva verificación.",
-      "rate_limited": "Has realizado demasiados intentos. Espera un minuto e inténtalo de nuevo."
+      "rate_limited": "Has realizado demasiados intentos. Espera un minuto e inténtalo de nuevo.",
+      "internal_error": "No pudimos procesar la solicitud. Inténtalo más tarde."
     },
     "notFound": {
       "title": "Experiencia no disponible",

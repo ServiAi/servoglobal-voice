@@ -8,7 +8,7 @@ import type { PublicVoiceExperience as PublicVoiceExperienceData } from '../type
 
 const experience: PublicVoiceExperienceData = {
   slug: 'consultation-demo',
-  locale: 'en',
+  locale: 'es',
   version: 3,
   content: {
     title: 'Plan your consultation',
@@ -70,6 +70,7 @@ let apiServer: Server;
 // the assertion in the snapshot test below would fail.
 const mockRequests: string[] = [];
 const submittedTokens: string[] = [];
+const submittedLocales: string[] = [];
 const unexpectedEgress: string[] = [];
 
 test.beforeEach(async ({ page }) => {
@@ -104,9 +105,11 @@ test.beforeAll(async () => {
       for await (const chunk of request) chunks.push(Buffer.from(chunk));
       const body = JSON.parse(Buffer.concat(chunks).toString()) as {
         answers: Record<string, unknown>;
+        locale: string;
         turnstile_token: string;
       };
       submittedTokens.push(body.turnstile_token);
+      submittedLocales.push(body.locale);
       const simulated = body.answers.notes;
       const errors: Record<string, [number, string, Array<{ key: string; code: string }>]> = {
         validation: [422, 'validation_error', [{ key: 'notes', code: 'too_short' }]],
@@ -141,11 +144,9 @@ test.beforeAll(async () => {
   await new Promise<void>((resolveListen) => apiServer.listen(43119, '127.0.0.1', resolveListen));
 });
 
-test.afterAll(async () => {
-  await new Promise<void>((resolveClose, reject) => {
-    apiServer.close((error) => (error ? reject(error) : resolveClose()));
-    apiServer.closeAllConnections();
-  });
+test.afterAll(() => {
+  apiServer.closeAllConnections();
+  apiServer.close();
 });
 
 function flattenKeys(value: unknown, prefix = ''): string[] {
@@ -209,6 +210,20 @@ test('submits integer zero and checkbox false without exposing the context token
   expect(await page.evaluate(() => ({ local: { ...localStorage }, session: { ...sessionStorage }, cookie: document.cookie })))
     .toEqual({ local: {}, session: {}, cookie: '' });
   expect((await context.cookies()).some((cookie) => cookie.value.includes('context-token'))).toBe(false);
+});
+
+test('submits the URL locale instead of the snapshot default locale', async ({ page }) => {
+  const start = submittedLocales.length;
+  for (const locale of ['en', 'es']) {
+    await page.goto(`/${locale}/voice/consultation-demo`);
+    await page.locator('#public-field-full_name').fill('Ada Lovelace');
+    await page.locator('#public-field-guests').fill('0');
+    await page.locator('#public-field-property_type').selectOption('house');
+    await page.locator('#public-consent').check();
+    await page.getByRole('button', { name: 'Continue' }).click();
+    await expect.poll(() => submittedLocales.length).toBe(start + (locale === 'en' ? 1 : 2));
+  }
+  expect(submittedLocales.slice(start)).toEqual(['en', 'es']);
 });
 
 test('renews the single-use token after validation failure before retrying', async ({ page }) => {

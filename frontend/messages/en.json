@@ -1149,7 +1149,8 @@
       "experience_version_changed": "The form changed. Reload the page before continuing.",
       "validation_error": "Review the highlighted fields and try again.",
       "verification_failed": "Verification expired or failed. Complete the new verification.",
-      "rate_limited": "Too many attempts. Wait a minute and try again."
+      "rate_limited": "Too many attempts. Wait a minute and try again.",
+      "internal_error": "We could not process the request. Try again later."
     },
     "notFound": {
       "title": "Experience unavailable",

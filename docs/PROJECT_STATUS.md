@@ -16,7 +16,7 @@ Actualizado: 2026-08-11. Fuente: código, migraciones y pruebas del repositorio.
 | WhatsApp Cloud | Operativa | Configuración, plantillas, envío CRM, mensajes, estados y webhook. |
 | Automatizaciones y notificaciones | Operativa en código | Contratos versionados de eventos, builder dinámico, dry-run sin envío, reglas, destinatarios, entregas, planificación, reintentos, recuperación y worker PostgreSQL. El despliegue del proceso worker debe verificarse por entorno. |
 | Voz CRM | Operativa | Configuración de proveedor/agentes, llamadas desde leads, webhook y booking tools. |
-| Voice Context Experiences | Builder, lectura y context submissions implementados en código | Feature flag, schemas/versiones históricas, administración tenant y formulario público bilingüe. La submission es estricta, usa Turnstile, rate limit PostgreSQL, consentimiento persistido y context token sólo en memoria. `submissions=true`; llamadas/WebRTC siguen deshabilitadas. Ver `docs-local/fase-4/VOICE_EXPERIENCE_CONTEXT_SUBMISSIONS.md`. |
+| Voice Context Experiences | Builder, lectura y context submissions implementados en código | Feature flag, snapshots históricos, formulario bilingüe con locale de URL, límites estrictos, Turnstile y rate limit PostgreSQL. Cada submission crea context session 1:1 y proyecta contact/lead/activity CRM sin invalidar la captura primaria ante fallos CRM. `submissions=true`; llamadas/WebRTC siguen deshabilitadas. Ver `docs-local/fase-4/VOICE_EXPERIENCE_CONTEXT_SUBMISSIONS.md`. |
 | Planes y consumo | Operativa | Límites, alertas, resumen administrativo y comparación de ahorro. |
 | Chatwoot | Legado/compatible | Webhook y acciones existentes; conservar compatibilidad al modificar CRM/mensajería. |
 

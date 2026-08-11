@@ -64,7 +64,8 @@ export type PublicSubmissionErrorCode =
   | 'experience_version_changed'
   | 'validation_error'
   | 'verification_failed'
-  | 'rate_limited';
+  | 'rate_limited'
+  | 'internal_error';
 
 export interface PublicSubmissionResponse {
   status: 'accepted';
