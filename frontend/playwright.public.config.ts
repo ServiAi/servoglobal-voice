@@ -1,4 +1,14 @@
+import { rmSync } from 'node:fs';
 import { defineConfig } from '@playwright/test';
+
+// next dev is started directly (see webServer.command), so replicate the
+// clean:next step the old `npm run dev` did on every boot: a stale .next
+// cache makes Next reparse tailwind.config.ts as ESM (require -> crash).
+// Only the main runner imports this config before the server boots; workers
+// re-import it mid-run, so skip them or they would wipe the live .next.
+if (process.env.TEST_WORKER_INDEX === undefined) {
+  rmSync('.next', { recursive: true, force: true });
+}
 
 // Dedicated Playwright config for the PUBLIC voice runtime E2E suite.
 // - Runs only public-voice-experiences.spec.ts.
@@ -25,9 +35,9 @@ export default defineConfig({
     screenshot: 'only-on-failure',
   },
   webServer: {
-    command: `npm run dev -- -p ${port}`,
+    command: `node ./node_modules/next/dist/bin/next dev -p ${port}`,
     url: baseURL,
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: false,
     timeout: 120_000,
     env: {
       // The public SSR client reads this at request time; the mock at 43119 is the
