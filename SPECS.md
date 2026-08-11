@@ -77,8 +77,9 @@ ServiGlobal IA es una plataforma multitenant de captación, atención y seguimie
 - Administración autenticada y tenant-scoped de experiencias y context schemas versionados.
 - "Preparar versión" (estado persistido `published`) crea un snapshot inmutable; su resolución pública es fail-closed por `published_version_id`, tenant, experiencia, feature y schema histórico.
 - El agente no puede cambiarse una vez existe historial de versiones; una experiencia con historial no puede eliminarse físicamente.
-- `GET /api/v1/public/voice-experiences/{slug}` y `/{locale}/voice/{slug}` ofrecen lectura pública sin Auth0 con respuesta sanitizada, `no-store` y `noindex`.
-- La vista pública presenta campos y consentimiento deshabilitados. No existe context submission, persistencia de consentimiento, sesión pública, WebRTC ni llamada asociada en este incremento. Ver `docs-local/fase-4/VOICE_EXPERIENCE_PUBLIC_RUNTIME.md`.
+- `GET /api/v1/public/voice-experiences/{slug}` y `/{locale}/voice/{slug}` ofrecen el snapshot público sin Auth0 con respuesta sanitizada, `no-store` y `noindex`.
+- `POST /api/v1/public/voice-experiences/{slug}/submissions` captura contexto estricto y consentimiento contra la versión exacta, aplica Turnstile y rate limit PostgreSQL por IP/tenant, y emite una context session efímera cuyo token sólo vive en memoria del cliente.
+- La capacidad pública es `submissions=true` / `calls=false`: no existe WebRTC, micrófono, `joinUrl` ni llamada asociada. Ver `docs-local/fase-4/VOICE_EXPERIENCE_CONTEXT_SUBMISSIONS.md`.
 
 ## 4. Requisitos no funcionales
 

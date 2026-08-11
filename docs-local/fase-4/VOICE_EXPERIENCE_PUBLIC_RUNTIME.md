@@ -1,6 +1,6 @@
 # Voice Experience Public Runtime — lectura inicial
 
-Estado: implementado en `feature/voice-experience-public-runtime`.
+Estado: lectura inicial implementada en `feature/voice-experience-public-runtime`; context submissions agregadas después en `feature/voice-experience-context-submissions`.
 
 ## Alcance
 
@@ -16,7 +16,7 @@ No implementa context submission, tokens o sesiones públicas, creación de lead
 | Capacidad | Estado |
 | --- | --- |
 | Public runtime de lectura | ✅ |
-| Submissions | ❌ |
+| Submissions | ✅ Ver `VOICE_EXPERIENCE_CONTEXT_SUBMISSIONS.md` |
 | Context session | ❌ |
 | WebRTC | ❌ |
 | Calls | ❌ |
@@ -29,7 +29,7 @@ Se incluyen sólo campos con `ask_if_missing`, `prefill_and_confirm` o `trust_pr
 
 ## Contrato público
 
-El DTO incluye únicamente slug, locale, número de versión, contenido visible, theme, consentimiento, campos visibles y capacidades `submissions: false` / `calls: false`. No expone IDs internos, tenant, agente/proveedor, prompt, tools, credenciales, SIP, sensibilidad, `collection_mode` ni `validation_json`.
+El DTO incluye únicamente slug, locale, número de versión, contenido visible, theme, consentimiento, campos visibles y capacidades `submissions: true` / `calls: false`. No expone IDs internos, tenant, agente/proveedor, prompt, tools, credenciales, SIP, sensibilidad, `collection_mode` ni `validation_json`.
 
 La página Next.js es dinámica (`force-dynamic`), consulta sin bearer token con `cache: no-store`, declara `noindex` y usa una página 404 genérica. Los inputs, selects, consentimiento y botón se muestran sin handlers y deshabilitados; el aviso visible explica que captura y llamadas aún no están habilitadas.
 
@@ -38,4 +38,4 @@ La página Next.js es dinámica (`force-dynamic`), consulta sin bearer token con
 - `backend/test_public_voice_experiences.py`: publicación exacta, sanitización, estados indistinguibles, feature, referencias inconsistentes, snapshots y schemas históricos, filtrado y no-store.
 - `frontend/tests/public-voice-experiences.spec.ts`: ruta pública real con backend local, responsive, controles deshabilitados, URLs inseguras, accesibilidad acotada al runtime, ausencia de Auth0 y paridad de traducciones.
 
-No requiere migración: reutiliza las tablas y snapshots existentes.
+La lectura original no requirió migración. La captura posterior usa `202608110001`; ver `VOICE_EXPERIENCE_CONTEXT_SUBMISSIONS.md`.
