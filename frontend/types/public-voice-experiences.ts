@@ -45,7 +45,35 @@ export interface PublicVoiceExperience {
   };
   fields: PublicVoiceContextField[];
   capabilities: {
-    submissions: false;
+    submissions: true;
     calls: false;
   };
+}
+
+export type PublicSubmissionFieldErrorCode =
+  | 'required'
+  | 'unknown_field'
+  | 'invalid_type'
+  | 'too_long'
+  | 'too_short'
+  | 'invalid_option'
+  | 'invalid_format'
+  | 'consent_required';
+
+export type PublicSubmissionErrorCode =
+  | 'experience_version_changed'
+  | 'validation_error'
+  | 'verification_failed'
+  | 'rate_limited';
+
+export interface PublicSubmissionResponse {
+  status: 'accepted';
+  context_token: string;
+  expires_at: string;
+  capabilities: { submissions: true; calls: false };
+}
+
+export interface PublicSubmissionFailure {
+  code: PublicSubmissionErrorCode;
+  fields: Array<{ key: string; code: PublicSubmissionFieldErrorCode }>;
 }

@@ -27,12 +27,13 @@ export default defineConfig({
   webServer: {
     command: `npm run dev -- -p ${port}`,
     url: baseURL,
-    reuseExistingServer: false,
+    reuseExistingServer: !process.env.CI,
     timeout: 120_000,
     env: {
       // The public SSR client reads this at request time; the mock at 43119 is the
       // ONLY backend the runtime is allowed to reach during the public suite.
       NEXT_PUBLIC_API_URL: 'http://127.0.0.1:43119',
+      NEXT_PUBLIC_VOICE_PUBLIC_TURNSTILE_TEST_MODE: '1',
     },
   },
   projects: [{ name: 'public' }],
