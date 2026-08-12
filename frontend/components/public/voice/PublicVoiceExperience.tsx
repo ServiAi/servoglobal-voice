@@ -7,6 +7,7 @@ import type { CSSProperties, FormEvent, ReactNode } from 'react';
 import { Check, LockKeyhole, ShieldCheck } from 'lucide-react';
 
 import { submitPublicVoiceExperience } from '@/lib/api/public-voice-submissions';
+import { PublicVoiceCall } from './PublicVoiceCall';
 import { isSafeHttpsUrl } from '@/lib/voice-experiences/url-safety';
 import type {
   PublicVoiceContextField,
@@ -26,6 +27,11 @@ export interface PublicVoiceMessages {
   loading: string;
   successTitle: string;
   verificationUnavailable: string;
+  microphoneHelp: string;
+  callLoading: string;
+  callConnected: string;
+  endCall: string;
+  callEnded: string;
   errors: Record<string, string>;
 }
 
@@ -98,7 +104,7 @@ export function PublicVoiceExperience({ experience, locale, messages }: Props) {
   const [widgetKey, setWidgetKey] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
-  const [, setContextToken] = useState<string | null>(null);
+  const [contextToken, setContextToken] = useState<string | null>(null);
   const [errorCode, setErrorCode] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
@@ -210,6 +216,16 @@ export function PublicVoiceExperience({ experience, locale, messages }: Props) {
                   </span>
                   <h2 className="mt-5 text-xl font-semibold">{messages.successTitle}</h2>
                   <p className="mt-2 text-sm leading-6 text-slate-600">{experience.content.success_message}</p>
+                  {contextToken && experience.capabilities.calls ? (
+                    <PublicVoiceCall
+                      slug={experience.slug}
+                      contextToken={contextToken}
+                      callLabel={experience.content.call_label}
+                      autoStart={experience.call_settings.auto_start}
+                      showMicrophoneHelp={experience.call_settings.show_microphone_help}
+                      messages={messages}
+                    />
+                  ) : null}
                 </div>
               </div>
             ) : (

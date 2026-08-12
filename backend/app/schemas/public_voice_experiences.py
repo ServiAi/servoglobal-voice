@@ -47,7 +47,13 @@ class PublicVoiceConsent(_PublicModel):
 
 class PublicCapabilities(_PublicModel):
     submissions: bool = True
-    calls: bool = False
+    calls: bool = True
+
+
+class PublicVoiceCallSettings(_PublicModel):
+    auto_start: bool = False
+    show_microphone_help: bool = True
+    language: str = Field(default="es", min_length=2, max_length=16)
 
 
 class PublicVoiceExperienceResponse(_PublicModel):
@@ -58,4 +64,5 @@ class PublicVoiceExperienceResponse(_PublicModel):
     theme: PublicVoiceTheme
     consent: PublicVoiceConsent
     fields: list[PublicVoiceContextField]
+    call_settings: PublicVoiceCallSettings
     capabilities: PublicCapabilities

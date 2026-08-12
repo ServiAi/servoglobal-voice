@@ -11,15 +11,15 @@ Este incremento publica una representación de solo lectura de una Voice Experie
 - Campos visibles ordenados y consentimiento del snapshot publicado.
 - Diseño responsive, enlaces HTTPS validados y formulario público habilitado por Etapa 2.
 
-Etapa 2 agregó context submissions, consentimiento persistido, context sessions y correlación CRM contact/lead/activity. Siguen fuera de alcance micrófono, WebRTC, `joinUrl`, Ultravox, callbacks e integración con `/api/v1/calls`.
+Etapa 2 agregó context submissions y Etapa 3 añadió WebRTC one-shot tenant-scoped, sin reutilizar `/api/v1/calls`.
 
 | Capacidad | Estado |
 | --- | --- |
 | Public runtime de lectura | ✅ |
 | Submissions | ✅ Ver `VOICE_EXPERIENCE_CONTEXT_SUBMISSIONS.md` |
 | Context session | ✅ Etapa 2: `active` → `consumed` o `expired` |
-| WebRTC | ❌ |
-| Calls | ❌ |
+| WebRTC | ✅ Etapa 3 |
+| Calls | ✅ recovery-first / one-shot |
 
 ## Resolución fail-closed
 
@@ -29,7 +29,7 @@ Se incluyen sólo campos con `ask_if_missing`, `prefill_and_confirm` o `trust_pr
 
 ## Contrato público
 
-El DTO incluye únicamente slug, locale, número de versión, contenido visible, theme, consentimiento, campos visibles y capacidades `submissions: true` / `calls: false`. No expone IDs internos, tenant, agente/proveedor, prompt, tools, credenciales, SIP, sensibilidad, `collection_mode` ni `validation_json`.
+El DTO incluye slug, locale, número de versión, contenido visible, theme, consentimiento, campos, `call_settings` sanitizado y capacidades `submissions: true` / `calls: true`. No expone IDs internos, tenant, agente/proveedor, prompt, tools, credenciales, SIP, sensibilidad, `collection_mode` ni `validation_json`.
 
 La página Next.js es dinámica (`force-dynamic`), consulta sin bearer token con `cache: no-store`, declara `noindex` y usa una página 404 genérica. Etapa 2 habilita inputs, consentimiento y submission con Turnstile; el locale persistido proviene de `/{locale}/voice/{slug}`, no del locale por defecto del snapshot. Las llamadas continúan deshabilitadas.
 

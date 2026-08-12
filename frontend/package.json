@@ -13,7 +13,7 @@
     "lint": "next lint",
     "qa:auth": "playwright test --project=auth --headed",
     "qa:visual": "playwright test --project=crm-visual",
-    "qa:public": "playwright test --config=playwright.public.config.ts --project=public && playwright test --config=playwright.public-no-turnstile.config.ts --project=public-no-turnstile",
+    "qa:public": "node ./tests/support/run-public-qa.mjs",
     "qa:visual:update": "playwright test --project=crm-visual --update-snapshots",
     "qa:report": "playwright show-report"
   },

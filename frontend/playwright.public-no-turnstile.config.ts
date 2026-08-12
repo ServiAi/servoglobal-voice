@@ -6,7 +6,7 @@ import { defineConfig } from '@playwright/test';
 // cache makes Next reparse tailwind.config.ts as ESM (require -> crash).
 // Only the main runner imports this config before the server boots; workers
 // re-import it mid-run, so skip them or they would wipe the live .next.
-if (process.env.TEST_WORKER_INDEX === undefined) {
+if (process.env.TEST_WORKER_INDEX === undefined && process.env.PLAYWRIGHT_EXTERNAL_PUBLIC_SERVER !== '1') {
   rmSync('.next', { recursive: true, force: true });
 }
 
@@ -21,7 +21,7 @@ export default defineConfig({
   workers: 1,
   reporter: [['list']],
   use: { baseURL, browserName: 'chromium' },
-  webServer: {
+  webServer: process.env.PLAYWRIGHT_EXTERNAL_PUBLIC_SERVER === '1' ? undefined : {
     command: `node ./node_modules/next/dist/bin/next dev -p ${port}`,
     url: baseURL,
     reuseExistingServer: false,

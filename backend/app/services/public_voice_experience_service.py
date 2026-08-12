@@ -16,6 +16,7 @@ from app.schemas.public_voice_experiences import (
     PublicVoiceContent,
     PublicVoiceContextField,
     PublicVoiceExperienceResponse,
+    PublicVoiceCallSettings,
     PublicVoiceTheme,
 )
 from app.services.tenant_feature_service import VOICE_EXPERIENCES, TenantFeatureService
@@ -54,6 +55,13 @@ class PublicVoiceExperienceService:
             theme=self._theme(version.theme_json),
             consent=self._consent(version.consent_json),
             fields=[self._field(field) for field in snapshot.fields],
+            call_settings=PublicVoiceCallSettings.model_validate(
+                {
+                    key: version.call_settings_json.get(key)
+                    for key in PublicVoiceCallSettings.model_fields
+                    if key in version.call_settings_json
+                }
+            ),
             capabilities=PublicCapabilities(),
         )
 

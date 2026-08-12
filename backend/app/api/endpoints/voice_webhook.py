@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.services.notification_event_pipeline import run_call_notification_pipeline_task
 from app.services.voice_webhook_service import VoiceWebhookService
+from app.services.voice_runtime_webhook_service import VoiceRuntimeWebhookService
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +37,19 @@ async def voice_webhook(
         ) from exc
 
     service = VoiceWebhookService(db)
+    runtime_service = VoiceRuntimeWebhookService(db)
+    runtime_target = runtime_service.resolve_target(provider, payload)
+
+    if runtime_target:
+        secret = runtime_service.runtime_secret(runtime_target)
+        service.verify_webhook_signature(request, raw_body, secret)
+        try:
+            return runtime_service.process(provider, payload, runtime_target)
+        except HTTPException:
+            raise
+        except Exception as exc:
+            logger.error("Error processing runtime voice webhook", extra={"error_type": type(exc).__name__})
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Webhook processing error") from None
 
     # Resolve call to get tenant signature validation
     call = service.resolve_call_by_metadata_or_provider_id(payload)
@@ -50,7 +64,7 @@ async def voice_webhook(
                     # Reraise signature failure
                     raise
                 except Exception as exc:
-                    logger.error("Error verifying webhook signature: %s", str(exc))
+                    logger.error("Error verifying webhook signature: %s", type(exc).__name__)
                     raise HTTPException(
                         status_code=status.HTTP_401_UNAUTHORIZED,
                         detail="Webhook signature verification failed",

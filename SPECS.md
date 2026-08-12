@@ -80,7 +80,7 @@ ServiGlobal IA es una plataforma multitenant de captación, atención y seguimie
 - `GET /api/v1/public/voice-experiences/{slug}` y `/{locale}/voice/{slug}` ofrecen el snapshot público sin Auth0 con respuesta sanitizada, `no-store` y `noindex`.
 - `POST /api/v1/public/voice-experiences/{slug}/submissions` captura contexto estricto con locale `es|en` de la URL y consentimiento contra la versión exacta, aplica Turnstile y rate limit PostgreSQL por IP/tenant, y emite una context session 1:1 (`active|consumed|expired`) cuyo token sólo vive en memoria del cliente.
 - La captura proyecta contacto, lead y activity CRM con `context_id=submission.id`; los eventos de integración sólo contienen metadata estructural y un fallo CRM no revierte la submission primaria.
-- La capacidad pública es `submissions=true` / `calls=false`: no existe WebRTC, micrófono, `joinUrl` ni llamada asociada. Ver `docs-local/fase-4/VOICE_EXPERIENCE_CONTEXT_SUBMISSIONS.md`.
+- `POST /api/v1/public/voice-experiences/{slug}/calls` consume la context session one-shot, crea una llamada WebRTC Ultravox tenant-scoped con recovery-first/leases y correlaciona webhook, analytics, billing y CRM nullable. La capacidad pública es `submissions=true` / `calls=true`. Ver `docs-local/fase-4/VOICE_EXPERIENCE_WEBRTC_RUNTIME.md`.
 
 ## 4. Requisitos no funcionales
 

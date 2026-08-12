@@ -379,6 +379,7 @@ class CrmVoiceCallEvent(Base):
     __table_args__ = (
         Index("ix_crm_voice_call_events_tenant_call", "tenant_id", "voice_call_id"),
         Index("ix_crm_voice_call_events_event_type", "event_type"),
+        UniqueConstraint("dedup_key", name="uq_crm_voice_call_events_dedup_key"),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
@@ -387,6 +388,7 @@ class CrmVoiceCallEvent(Base):
     provider: Mapped[str] = mapped_column(String(40), nullable=False)
     event_type: Mapped[str] = mapped_column(String(80), nullable=False)
     status: Mapped[str] = mapped_column(String(32), nullable=False)
+    dedup_key: Mapped[str | None] = mapped_column(String(400), nullable=True)
     payload_summary_json: Mapped[dict] = mapped_column(sa.JSON, nullable=False, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, nullable=False)
 

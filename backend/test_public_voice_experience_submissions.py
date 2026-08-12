@@ -199,7 +199,7 @@ class PublicVoiceExperienceSubmissionTests(Integration2ATestCase):
         self.assertEqual(response.headers["cache-control"], "no-store")
         payload = response.json()
         self.assertEqual(payload["status"], "accepted")
-        self.assertEqual(payload["capabilities"], {"submissions": True, "calls": False})
+        self.assertEqual(payload["capabilities"], {"submissions": True, "calls": True})
         self.assertNotIn("tenant_id", response.text)
         self.assertNotIn("experience_id", response.text)
         with SessionLocal() as db:

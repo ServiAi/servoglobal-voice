@@ -17,6 +17,12 @@ from app.schemas.public_voice_submissions import (
     PublicVoiceExperienceSubmissionRequest,
     PublicVoiceExperienceSubmissionResponse,
 )
+from app.schemas.public_voice_calls import (
+    PublicVoiceCallError,
+    PublicVoiceCallRequest,
+    PublicVoiceCallResponse,
+)
+from app.services.public_voice_call_service import PublicCallFailure, PublicVoiceCallService
 from app.services.public_voice_experience_service import (
     PublicExperienceNotFound,
     PublicVoiceExperienceService,
@@ -55,6 +61,23 @@ def get_public_submission_service() -> PublicVoiceSubmissionService:
     return PublicVoiceSubmissionService(
         session_factory=SessionLocal,
         ttl_seconds=settings.VOICE_CONTEXT_SESSION_TTL_SECONDS,
+    )
+
+
+def get_public_call_service() -> PublicVoiceCallService:
+    return PublicVoiceCallService(
+        session_factory=SessionLocal,
+        provider_timeout_seconds=settings.VOICE_RUNTIME_PROVIDER_TIMEOUT_SECONDS,
+        reserved_lease_seconds=settings.VOICE_RUNTIME_RESERVED_LEASE_SECONDS,
+        starting_lease_seconds=settings.VOICE_RUNTIME_STARTING_LEASE_SECONDS,
+    )
+
+
+def _call_error(status_code: int, code: str) -> HTTPException:
+    return HTTPException(
+        status_code=status_code,
+        detail=PublicVoiceCallError(code=code).model_dump(),
+        headers=NO_STORE_HEADERS,
     )
 
 
@@ -123,12 +146,15 @@ async def submit_public_voice_experience(
         raise
     except VoicePublicRateLimitConfigurationError:
         raise _public_error(status.HTTP_500_INTERNAL_SERVER_ERROR, "internal_error") from None
+
+
     except Exception as exc:
         logger.error(
             "Public voice global rate limiter failed closed",
             extra={"error_type": type(exc).__name__},
         )
         raise _public_error(status.HTTP_500_INTERNAL_SERVER_ERROR, "internal_error") from None
+
 
     try:
         limiter.cleanup(retention_hours=24, batch_size=500)
@@ -212,3 +238,48 @@ async def submit_public_voice_experience(
             extra={"error_type": type(exc).__name__},
         )
         raise _public_error(status.HTTP_500_INTERNAL_SERVER_ERROR, "internal_error") from None
+
+
+@router.post("/{slug}/calls", response_model=PublicVoiceCallResponse)
+async def launch_public_voice_call(
+    slug: str,
+    request: Request,
+    response: Response,
+    limiter: VoicePublicRateLimiter = Depends(get_public_rate_limiter),
+    service: PublicVoiceCallService = Depends(get_public_call_service),
+) -> PublicVoiceCallResponse:
+    response.headers.update(NO_STORE_HEADERS)
+    normalized_ip = resolve_public_client_ip(request, settings.TRUST_CLOUDFLARE_CONNECTING_IP)
+    try:
+        ip_hash = pseudonymize_ip(settings.VOICE_PUBLIC_RATE_LIMIT_HASH_SECRET, normalized_ip)
+        if not limiter.consume(
+            f"call:global:{ip_hash}",
+            settings.VOICE_PUBLIC_CALL_LAUNCH_RATE_LIMIT_GLOBAL_IP_PER_MINUTE,
+        ):
+            raise _call_error(status.HTTP_429_TOO_MANY_REQUESTS, "rate_limited")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("Public voice call limiter failed closed", extra={"error_type": type(exc).__name__})
+        raise _call_error(status.HTTP_500_INTERNAL_SERVER_ERROR, "internal_error") from None
+
+    try:
+        payload = PublicVoiceCallRequest.model_validate(await request.json())
+    except (ValueError, ValidationError):
+        raise _call_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "validation_error") from None
+
+    try:
+        tenant_id = service.resolve_tenant(slug, payload.context_token)
+        if not limiter.consume(
+            f"call:tenant:{tenant_id}:{ip_hash}",
+            settings.VOICE_PUBLIC_CALL_LAUNCH_RATE_LIMIT_TENANT_IP_PER_MINUTE,
+        ):
+            raise _call_error(status.HTTP_429_TOO_MANY_REQUESTS, "rate_limited")
+        return service.launch(slug, payload.context_token)
+    except HTTPException:
+        raise
+    except PublicCallFailure as exc:
+        raise _call_error(exc.status_code, exc.code) from None
+    except Exception as exc:
+        logger.error("Unexpected public voice call failure", extra={"error_type": type(exc).__name__})
+        raise _call_error(status.HTTP_500_INTERNAL_SERVER_ERROR, "internal_error") from None

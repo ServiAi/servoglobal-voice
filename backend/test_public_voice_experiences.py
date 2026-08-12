@@ -217,7 +217,12 @@ class PublicVoiceExperienceTests(Integration2ATestCase):
                         "options": [],
                     },
                 ],
-                "capabilities": {"submissions": True, "calls": False},
+                "call_settings": {
+                    "auto_start": False,
+                    "show_microphone_help": True,
+                    "language": "es",
+                },
+                "capabilities": {"submissions": True, "calls": True},
             },
         )
 

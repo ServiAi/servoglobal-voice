@@ -44,9 +44,14 @@ export interface PublicVoiceExperience {
     privacy_url: string | null;
   };
   fields: PublicVoiceContextField[];
+  call_settings: {
+    auto_start: boolean;
+    show_microphone_help: boolean;
+    language: string;
+  };
   capabilities: {
     submissions: true;
-    calls: false;
+    calls: true;
   };
 }
 

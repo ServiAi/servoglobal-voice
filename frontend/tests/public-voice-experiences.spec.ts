@@ -54,7 +54,8 @@ const experience: PublicVoiceExperienceData = {
     { key: 'verified', label: 'Verified', description: 'I confirm', field_type: 'checkbox', required: true, options: [] },
     { key: 'date', label: 'Date', description: null, field_type: 'date', required: false, options: [] },
   ],
-  capabilities: { submissions: true, calls: false },
+  call_settings: { auto_start: false, show_microphone_help: true, language: 'es' },
+  capabilities: { submissions: true, calls: true },
 };
 
 const unsafeExperience: PublicVoiceExperienceData = {
@@ -72,6 +73,7 @@ const mockRequests: string[] = [];
 const submittedTokens: string[] = [];
 const submittedLocales: string[] = [];
 const unexpectedEgress: string[] = [];
+let callLaunches = 0;
 
 test.beforeEach(async ({ page }) => {
   unexpectedEgress.length = 0;
@@ -98,6 +100,12 @@ test.beforeAll(async () => {
     if (request.method === 'OPTIONS') {
       response.writeHead(204, cors);
       response.end();
+      return;
+    }
+    if (request.method === 'POST' && request.url?.endsWith('/calls')) {
+      callLaunches += 1;
+      response.writeHead(200, { ...cors, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+      response.end(JSON.stringify({ status: 'ready', join_url: 'https://provider.invalid/join/secret' }));
       return;
     }
     if (request.method === 'POST' && request.url?.endsWith('/submissions')) {
@@ -128,7 +136,7 @@ test.beforeAll(async () => {
         status: 'accepted',
         context_token: 'context-token-must-never-render',
         expires_at: '2026-08-11T12:10:00Z',
-        capabilities: { submissions: true, calls: false },
+        capabilities: { submissions: true, calls: true },
       }));
       return;
     }
@@ -171,7 +179,7 @@ test('renders all enabled field types as a responsive public form', async ({ pag
   await expect(page.getByRole('option', { name: 'House' })).toHaveAttribute('value', 'house');
   await expect(page.getByTestId('turnstile-test-mode')).toBeAttached();
   await expect(page.getByRole('button', { name: 'Continue' })).toBeEnabled();
-  await expect(page.getByText('Complete the information to prepare your experience context. Calls are not enabled yet.')).toBeVisible();
+  await expect(page.getByText('Complete the information to prepare your secure call context.')).toBeVisible();
   await expect(page.getByRole('link', { name: 'View privacy policy' })).toHaveAttribute('href', experience.consent.privacy_url!);
   await expect(page.getByAltText('Experience logo')).toHaveCount(0);
   await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', /noindex/);
@@ -210,6 +218,48 @@ test('submits integer zero and checkbox false without exposing the context token
   expect(await page.evaluate(() => ({ local: { ...localStorage }, session: { ...sessionStorage }, cookie: document.cookie })))
     .toEqual({ local: {}, session: {}, cookie: '' });
   expect((await context.cookies()).some((cookie) => cookie.value.includes('context-token'))).toBe(false);
+});
+
+test('preflights microphone, starts one fake WebRTC call, and leaks neither capability', async ({ page, context }) => {
+  const start = callLaunches;
+  await page.goto('/en/voice/consultation-demo');
+  await page.evaluate(() => {
+    const stop = () => { (window as typeof window & { __preflightStopped?: boolean }).__preflightStopped = true; };
+    Object.defineProperty(navigator.mediaDevices, 'getUserMedia', {
+      configurable: true,
+      value: async () => ({ getTracks: () => [{ stop }] }),
+    });
+  });
+  await completeRequiredFields(page);
+  await page.getByRole('button', { name: 'Continue' }).click();
+  const startButton = page.getByRole('button', { name: 'Start call' });
+  await startButton.evaluate((button) => {
+    (button as HTMLButtonElement).click();
+    (button as HTMLButtonElement).click();
+  });
+  await expect(page.getByText('Call connected')).toBeVisible();
+  expect(callLaunches).toBe(start + 1);
+  expect(await page.evaluate(() => (window as typeof window & { __preflightStopped?: boolean }).__preflightStopped)).toBe(true);
+  await expect(page.getByText('https://provider.invalid/join/secret')).toHaveCount(0);
+  expect((await context.cookies()).some((cookie) => cookie.value.includes('secret'))).toBe(false);
+  await page.getByRole('button', { name: 'End call' }).click();
+  await expect(page.getByText('Call ended')).toBeVisible();
+});
+
+test('microphone denial never launches a call', async ({ page }) => {
+  const start = callLaunches;
+  await page.goto('/en/voice/consultation-demo');
+  await page.evaluate(() => {
+    Object.defineProperty(navigator.mediaDevices, 'getUserMedia', {
+      configurable: true,
+      value: async () => { throw new DOMException('denied', 'NotAllowedError'); },
+    });
+  });
+  await completeRequiredFields(page);
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await page.getByRole('button', { name: 'Start call' }).click();
+  await expect(page.getByText('Microphone access is required to start the call.')).toBeVisible();
+  expect(callLaunches).toBe(start);
 });
 
 test('submits the URL locale instead of the snapshot default locale', async ({ page }) => {
