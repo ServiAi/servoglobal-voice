@@ -1,6 +1,6 @@
 # Estado funcional del proyecto
 
-Actualizado: 2026-08-06. Fuente: código, migraciones y pruebas del repositorio.
+Actualizado: 2026-08-11. Fuente: código, migraciones y pruebas del repositorio.
 
 | Área | Estado | Implementación actual |
 | --- | --- | --- |
@@ -16,13 +16,13 @@ Actualizado: 2026-08-06. Fuente: código, migraciones y pruebas del repositorio.
 | WhatsApp Cloud | Operativa | Configuración, plantillas, envío CRM, mensajes, estados y webhook. |
 | Automatizaciones y notificaciones | Operativa en código | Contratos versionados de eventos, builder dinámico, dry-run sin envío, reglas, destinatarios, entregas, planificación, reintentos, recuperación y worker PostgreSQL. El despliegue del proceso worker debe verificarse por entorno. |
 | Voz CRM | Operativa | Configuración de proveedor/agentes, llamadas desde leads, webhook y booking tools. |
-| Voice Context Experiences | Builder privado y lectura pública implementados en código | Feature flag, schemas versionados, administración tenant y UI bilingüe privada. Una versión publicada puede consultarse sin Auth0 en `/{locale}/voice/{slug}` mediante un DTO sanitizado, histórico y fail-closed. La página pública es responsive, no indexable y estrictamente de solo lectura: no captura datos ni inicia llamadas/WebRTC. Ver `docs-local/fase-4/VOICE_EXPERIENCE_PUBLIC_RUNTIME.md`. |
+| Voice Context Experiences | Builder, lectura y context submissions implementados en código | Feature flag, snapshots históricos, formulario bilingüe con locale de URL, límites estrictos, Turnstile y rate limit PostgreSQL. Cada submission crea context session 1:1 y proyecta contact/lead/activity CRM sin invalidar la captura primaria ante fallos CRM. `submissions=true`; llamadas/WebRTC siguen deshabilitadas. Ver `docs-local/fase-4/VOICE_EXPERIENCE_CONTEXT_SUBMISSIONS.md`. |
 | Planes y consumo | Operativa | Límites, alertas, resumen administrativo y comparación de ahorro. |
 | Chatwoot | Legado/compatible | Webhook y acciones existentes; conservar compatibilidad al modificar CRM/mensajería. |
 
 ## Persistencia
 
-Las migraciones cubren identidad, analítica, riesgo Auth0, planes/uso, CRM base y contexto de llamadas, Resend/email/formularios, Cal.com/Google Calendar, WhatsApp, voz, disponibilidad de integraciones, notificaciones y grants de funcionalidades tenant. La migración más reciente es `202608050003_notification_rule_event_schemas.py` y la cadena debe conservar una única head.
+Las migraciones cubren identidad, analítica, riesgo Auth0, planes/uso, CRM base y contexto de llamadas, Resend/email/formularios, Cal.com/Google Calendar, WhatsApp, voz, disponibilidad de integraciones, notificaciones, grants tenant y context submissions públicas. La migración más reciente es `202608110001_voice_experience_context_submissions.py` y la cadena debe conservar una única head.
 
 ## Continuidad: automatizaciones y notificaciones
 
@@ -40,7 +40,7 @@ Las migraciones cubren identidad, analítica, riesgo Auth0, planes/uso, CRM base
 - Habilitar Google Calendar `events.insert` sólo en un sprint dedicado con callback, scopes y pruebas completas.
 - Evolucionar el builder de formularios y la UI de submissions si el producto lo requiere.
 - Mantener separados futuros cambios de WhatsApp y voz.
-- Completar en incrementos posteriores la captura pública, consentimiento persistido y runtime de llamada de Voice Experiences; la superficie pública actual sólo representa el snapshot publicado y mantiene ambas capacidades deshabilitadas.
+- Completar en un incremento posterior el runtime de llamada de Voice Experiences; la captura pública y el consentimiento ya están implementados, pero WebRTC/micrófono/`joinUrl` permanecen fuera de alcance.
 - Etapa 0 (`fix/voice-experience-functional-alignment`): `get_current_published_version()` es fail-closed por `published_version_id`; `PUT` bloquea cambio de agente con historial; `DELETE` sólo elimina archivadas sin historial; `/api/v1/calls` quedó tipado y sanitizado. Pendiente: endurecer `/api/v1/call-outbound` con el mismo criterio.
 - El aviso de cambios sin guardar cubre recarga/cierre y navegación mediante enlaces; el historial nativo atrás/adelante sigue como limitación conocida de App Router hasta disponer de un hook estable.
 - El listado consulta el historial por experiencia para mostrar su conteo. Si `max_experiences` crece y esto se vuelve un cuello de botella, el backend deberá incluir el conteo en la respuesta del listado.

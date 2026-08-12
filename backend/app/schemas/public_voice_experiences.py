@@ -46,7 +46,7 @@ class PublicVoiceConsent(_PublicModel):
 
 
 class PublicCapabilities(_PublicModel):
-    submissions: bool = False
+    submissions: bool = True
     calls: bool = False
 
 

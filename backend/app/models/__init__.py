@@ -34,6 +34,12 @@ from app.models.notifications import (
 from app.models.tenant_features import TenantFeatureGrant
 from app.models.voice_context import TenantVoiceContextField, TenantVoiceContextSchema
 from app.models.voice_experiences import TenantVoiceExperience, TenantVoiceExperienceVersion
+from app.models.voice_submissions import (
+    TenantVoiceContextSession,
+    TenantVoiceExperienceSubmission,
+    TenantVoiceExperienceSubmissionValue,
+    VoicePublicRateLimitWindow,
+)
 
 __all__ = [
     "AccessAuditLog",
@@ -57,6 +63,10 @@ __all__ = [
     "TenantVoiceContextSchema",
     "TenantVoiceExperience",
     "TenantVoiceExperienceVersion",
+    "TenantVoiceExperienceSubmission",
+    "TenantVoiceExperienceSubmissionValue",
+    "TenantVoiceContextSession",
+    "VoicePublicRateLimitWindow",
     "TenantWhatsAppConfig",
     "TenantWhatsAppTemplate",
     "TenantMembership",

@@ -21,7 +21,7 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function PublicVoiceExperiencePage({ params }: PageProps) {
-  const { slug } = await params;
+  const { locale, slug } = await params;
   const [result, t] = await Promise.all([
     fetchPublicVoiceExperience(slug),
     getTranslations('publicVoiceExperience'),
@@ -32,6 +32,7 @@ export default async function PublicVoiceExperiencePage({ params }: PageProps) {
   return (
     <PublicVoiceExperience
       experience={result.data}
+      locale={locale}
       messages={{
         eyebrow: t('eyebrow'),
         version: t('version'),
@@ -42,6 +43,24 @@ export default async function PublicVoiceExperiencePage({ params }: PageProps) {
         noticeTitle: t('noticeTitle'),
         noticeDescription: t('noticeDescription'),
         logoAlt: t('logoAlt'),
+        loading: t('loading'),
+        successTitle: t('successTitle'),
+        verificationUnavailable: t('verificationUnavailable'),
+        errors: {
+          required: t('errors.required'),
+          unknown_field: t('errors.unknown_field'),
+          invalid_type: t('errors.invalid_type'),
+          too_long: t('errors.too_long'),
+          too_short: t('errors.too_short'),
+          invalid_option: t('errors.invalid_option'),
+          invalid_format: t('errors.invalid_format'),
+          consent_required: t('errors.consent_required'),
+          experience_version_changed: t('errors.experience_version_changed'),
+          validation_error: t('errors.validation_error'),
+          verification_failed: t('errors.verification_failed'),
+          rate_limited: t('errors.rate_limited'),
+          internal_error: t('errors.internal_error'),
+        },
       }}
     />
   );
