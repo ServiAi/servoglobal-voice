@@ -122,6 +122,15 @@ class PublicVoiceCallService:
                         raise PublicCallFailure(404, "experience_unavailable")
                     experience = db.scalar(select(TenantVoiceExperience).where(TenantVoiceExperience.id == context_session.experience_id).with_for_update())
                     version = db.get(TenantVoiceExperienceVersion, context_session.experience_version_id)
+                    if context_session.status == "consumed":
+                        runtime_id = db.scalar(
+                            select(TenantVoiceRuntimeCall.id).where(
+                                TenantVoiceRuntimeCall.context_session_id == context_session.id
+                            )
+                        )
+                        if runtime_id:
+                            return runtime_id, False
+                        raise PublicCallFailure(409, "context_session_unavailable")
                     if context_session.status != "active":
                         raise PublicCallFailure(409, "context_session_unavailable")
                     if self._utc(context_session.expires_at) <= now:
@@ -279,14 +288,13 @@ class PublicVoiceCallService:
                 if not result.provider_call_id:
                     raise PublicCallFailure(503, "call_provider_unavailable")
                 self._finish_attempt(runtime_id, "unknown", provider_call_id=result.provider_call_id, failure_code="provider_ambiguous")
+            if result.ended_at is not None:
+                self._finish_attempt(runtime_id, "ended", provider_call_id=result.provider_call_id)
+                raise PublicCallFailure(409, "call_already_started")
+            if result.joined_at is not None:
+                self._finish_attempt(runtime_id, "connected", provider_call_id=result.provider_call_id)
+                raise PublicCallFailure(409, "call_already_started")
             if result.join_url and result.provider_call_id:
-                provider_state = str(result.state or "").lower()
-                if provider_state in {"ended", "completed"}:
-                    self._finish_attempt(runtime_id, "ended", provider_call_id=result.provider_call_id)
-                    raise PublicCallFailure(409, "call_already_started")
-                if provider_state in {"joined", "connected", "in_progress"}:
-                    self._finish_attempt(runtime_id, "connected", provider_call_id=result.provider_call_id)
-                    raise PublicCallFailure(409, "call_already_started")
                 self._finish_attempt(runtime_id, "ready", provider_call_id=result.provider_call_id)
                 return PublicVoiceCallResponse(status="ready", join_url=result.join_url)
         except PublicCallFailure:

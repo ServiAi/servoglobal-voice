@@ -16,7 +16,7 @@ Actualizado: 2026-08-11. Fuente: código, migraciones y pruebas del repositorio.
 | WhatsApp Cloud | Operativa | Configuración, plantillas, envío CRM, mensajes, estados y webhook. |
 | Automatizaciones y notificaciones | Operativa en código | Contratos versionados de eventos, builder dinámico, dry-run sin envío, reglas, destinatarios, entregas, planificación, reintentos, recuperación y worker PostgreSQL. El despliegue del proceso worker debe verificarse por entorno. |
 | Voz CRM | Operativa | Configuración de proveedor/agentes, llamadas desde leads, webhook y booking tools. |
-| Voice Context Experiences | Runtime público WebRTC implementado en código | Feature flag, snapshots, submissions y context session one-shot; launch Ultravox tenant-scoped con recovery-first, leases, webhook firmado/deduplicado, analytics/billing, CRM nullable y preflight de micrófono. `submissions=true`; `calls=true`. Ver `docs-local/fase-4/VOICE_EXPERIENCE_WEBRTC_RUNTIME.md`. |
+| Voice Context Experiences | Runtime público WebRTC implementado en código | Feature flag, snapshots, submissions y context session one-shot; launch Ultravox tenant-scoped con recovery-first, leases, recovery por `joined`/`ended`, webhook firmado/deduplicado, billing real por `billedDuration`, CRM monotónico, concurrencia PostgreSQL y preflight de micrófono. `submissions=true`; `calls=true`. Ver `docs-local/fase-4/VOICE_EXPERIENCE_WEBRTC_RUNTIME.md`. |
 | Planes y consumo | Operativa | Límites, alertas, resumen administrativo y comparación de ahorro. |
 | Chatwoot | Legado/compatible | Webhook y acciones existentes; conservar compatibilidad al modificar CRM/mensajería. |
 

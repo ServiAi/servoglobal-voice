@@ -111,21 +111,29 @@ class VoiceRuntimeWebhookService:
                 analytics.ended_at = now
                 analytics.normalized_status = "answered" if runtime.connected_at else "unanswered"
             if event_type == "call.billed":
-                analytics.billed_minutes = self._decimal(call_obj.get("billedMinutes") or call_obj.get("billedDuration") or payload.get("billedMinutes"))
+                analytics.billed_minutes = self._decimal(call_obj.get("billedMinutes") or payload.get("billedMinutes"))
+                if analytics.billed_minutes is None:
+                    analytics.billed_minutes = self._duration_minutes(
+                        call_obj.get("billedDuration") or payload.get("billedDuration")
+                    )
                 if analytics.normalized_status == "in_progress":
                     analytics.normalized_status = "answered" if runtime.connected_at else "unanswered"
             self.db.add(CallEvent(tenant_id=runtime.tenant_id, call_id=analytics.id, event_type=event_type, provider_event_id=None, dedup_key=dedup_key, payload_json={"event_type": event_type}, received_at=now))
 
             call.provider_call_id = provider_call_id
+            crm_terminal = call.status in {"completed", "failed", "cancelled", "no_answer", "busy"}
             if event_type == "call.started":
-                call.status = "queued"
+                if not crm_terminal:
+                    call.status = "queued"
                 origins, target_status = {"starting", "unknown"}, "ready"
             elif event_type == "call.joined":
-                call.status = "in_progress"
-                call.answered_at = call.answered_at or now
+                if not crm_terminal:
+                    call.status = "in_progress"
+                    call.answered_at = call.answered_at or now
                 origins, target_status = {"starting", "unknown", "ready"}, "connected"
             elif event_type == "call.ended":
-                call.status = "completed"
+                if not crm_terminal:
+                    call.status = "completed"
                 call.ended_at = call.ended_at or now
                 origins, target_status = {"starting", "unknown", "ready", "connected"}, "ended"
             else:
@@ -167,3 +175,9 @@ class VoiceRuntimeWebhookService:
             return Decimal(str(value)) if value is not None else None
         except (InvalidOperation, ValueError):
             return None
+
+    @staticmethod
+    def _duration_minutes(value: Any) -> Decimal | None:
+        from app.services.ultravox_ingestion_service import UltravoxIngestionService
+
+        return UltravoxIngestionService._duration_to_minutes(value)

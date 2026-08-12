@@ -84,6 +84,28 @@ class PublicVoiceCallTests(Integration2ATestCase):
             json={"context_token": token},
         )
 
+    def _send_runtime_event(self, voice_call_id: str, provider_call_id: str, event_type: str, **call_values):
+        payload = {
+            "event": event_type,
+            "call": {
+                "callId": provider_call_id,
+                "metadata": {"voice_call_id": voice_call_id, "tenant_id": "attacker"},
+                **call_values,
+            },
+        }
+        raw = json.dumps(payload, separators=(",", ":")).encode()
+        timestamp = datetime.now(UTC).isoformat()
+        signature = hmac.new(b"tenant-webhook-secret", raw + timestamp.encode(), hashlib.sha256).hexdigest()
+        return self.client.post(
+            "/api/v1/voice/webhook/ultravox",
+            content=raw,
+            headers={
+                "Content-Type": "application/json",
+                "x-ultravox-webhook-timestamp": timestamp,
+                "x-ultravox-webhook-signature": signature,
+            },
+        )
+
     @patch(
         "app.services.voice_experience_runtime_provider.VoiceExperienceRuntimeProvider.create_webrtc_call",
         return_value=ProviderCallResult("provider-call-1", "https://provider.invalid/join/secret"),
@@ -126,6 +148,24 @@ class PublicVoiceCallTests(Integration2ATestCase):
         self.assertEqual(response.json()["detail"], {"code": "validation_error"})
         self.assertNotIn("loc", response.text)
         self.assertNotIn("input", response.text)
+
+    def test_provider_result_uses_joined_ended_and_end_reason_contract(self) -> None:
+        from app.services.voice_experience_runtime_provider import VoiceExperienceRuntimeProvider
+
+        result = VoiceExperienceRuntimeProvider._result(
+            {
+                "callId": "provider-real-contract",
+                "joinUrl": "https://provider.invalid/join/real-contract",
+                "status": "ignored-legacy-status",
+                "joined": "2026-08-12T11:59:00Z",
+                "ended": "2026-08-12T12:00:00Z",
+                "endReason": "hangup",
+            }
+        )
+        self.assertEqual(result.provider_call_id, "provider-real-contract")
+        self.assertEqual(result.joined_at, "2026-08-12T11:59:00Z")
+        self.assertEqual(result.ended_at, "2026-08-12T12:00:00Z")
+        self.assertEqual(result.end_reason, "hangup")
 
     @patch(
         "app.services.voice_experience_runtime_provider.VoiceExperienceRuntimeProvider.create_webrtc_call",
@@ -174,6 +214,73 @@ class PublicVoiceCallTests(Integration2ATestCase):
 
     @patch(
         "app.services.voice_experience_runtime_provider.VoiceExperienceRuntimeProvider.create_webrtc_call",
+        return_value=ProviderCallResult("provider-ended", "https://provider.invalid/join/ended"),
+    )
+    @patch(
+        "app.services.voice_experience_runtime_provider.VoiceExperienceRuntimeProvider.get_call",
+        return_value=ProviderCallResult(
+            "provider-ended",
+            "https://provider.invalid/join/ended",
+            ended_at="2026-08-12T12:00:00Z",
+            end_reason="hangup",
+        ),
+    )
+    def test_get_call_ended_never_returns_join_url(self, _get_call, create_call) -> None:
+        token = self._post().json()["context_token"]
+        self.assertEqual(self._launch(token).status_code, 200)
+        recovered = self._launch(token)
+        self.assertEqual(recovered.status_code, 409)
+        self.assertEqual(recovered.json()["detail"]["code"], "call_already_started")
+        self.assertNotIn("join_url", recovered.text)
+        self.assertEqual(create_call.call_count, 1)
+
+    @patch(
+        "app.services.voice_experience_runtime_provider.VoiceExperienceRuntimeProvider.create_webrtc_call",
+        return_value=ProviderCallResult("provider-joined", "https://provider.invalid/join/joined"),
+    )
+    @patch(
+        "app.services.voice_experience_runtime_provider.VoiceExperienceRuntimeProvider.get_call",
+        return_value=ProviderCallResult(
+            "provider-joined",
+            "https://provider.invalid/join/joined",
+            joined_at="2026-08-12T11:59:00Z",
+        ),
+    )
+    def test_get_call_joined_returns_call_already_started(self, _get_call, create_call) -> None:
+        token = self._post().json()["context_token"]
+        self.assertEqual(self._launch(token).status_code, 200)
+        recovered = self._launch(token)
+        self.assertEqual(recovered.status_code, 409)
+        self.assertEqual(recovered.json()["detail"]["code"], "call_already_started")
+        self.assertEqual(create_call.call_count, 1)
+
+    @patch(
+        "app.services.voice_experience_runtime_provider.VoiceExperienceRuntimeProvider.create_webrtc_call",
+        side_effect=ProviderAmbiguousFailure(),
+    )
+    @patch(
+        "app.services.voice_experience_runtime_provider.VoiceExperienceRuntimeProvider.find_call_by_runtime_metadata",
+        return_value=[
+            ProviderCallResult(
+                "provider-list-ended",
+                "https://provider.invalid/join/list-ended",
+                ended_at="2026-08-12T12:00:00Z",
+                end_reason="hangup",
+            )
+        ],
+    )
+    def test_unknown_list_calls_ended_recovers_as_ended_without_recreate(self, _find_call, create_call) -> None:
+        token = self._post().json()["context_token"]
+        self.assertEqual(self._launch(token).status_code, 503)
+        recovered = self._launch(token)
+        self.assertEqual(recovered.status_code, 409)
+        self.assertEqual(recovered.json()["detail"]["code"], "call_already_started")
+        self.assertEqual(create_call.call_count, 1)
+        with SessionLocal() as db:
+            self.assertEqual(db.scalars(select(TenantVoiceRuntimeCall)).one().status, "ended")
+
+    @patch(
+        "app.services.voice_experience_runtime_provider.VoiceExperienceRuntimeProvider.create_webrtc_call",
         return_value=ProviderCallResult("provider-webhook", "https://provider.invalid/join/webhook"),
     )
     def test_runtime_webhook_is_signed_deduplicated_and_updates_analytics(self, _create_call) -> None:
@@ -182,31 +289,12 @@ class PublicVoiceCallTests(Integration2ATestCase):
         with SessionLocal() as db:
             crm_call = db.scalars(select(CrmVoiceCall)).one()
 
-        def send(event_type: str, **call_values):
-            payload = {
-                "event": event_type,
-                "call": {
-                    "callId": "provider-webhook",
-                    "metadata": {"voice_call_id": crm_call.id, "tenant_id": "attacker"},
-                    **call_values,
-                },
-            }
-            raw = json.dumps(payload, separators=(",", ":")).encode()
-            timestamp = datetime.now(UTC).isoformat()
-            signature = hmac.new(b"tenant-webhook-secret", raw + timestamp.encode(), hashlib.sha256).hexdigest()
-            return self.client.post(
-                "/api/v1/voice/webhook/ultravox",
-                content=raw,
-                headers={
-                    "Content-Type": "application/json",
-                    "x-ultravox-webhook-timestamp": timestamp,
-                    "x-ultravox-webhook-signature": signature,
-                },
-            )
-
+        send = lambda event_type, **values: self._send_runtime_event(
+            crm_call.id, "provider-webhook", event_type, **values
+        )
         self.assertEqual(send("call.joined").status_code, 200)
-        self.assertEqual(send("call.billed", billedMinutes="1.25").status_code, 200)
-        duplicate = send("call.billed", billedMinutes="9.99")
+        self.assertEqual(send("call.billed", billedDuration="75s").status_code, 200)
+        duplicate = send("call.billed", billedDuration="120s")
         self.assertEqual(duplicate.status_code, 200)
         self.assertFalse(duplicate.json()["processed"])
         self.assertEqual(send("call.ended", duration=75).status_code, 200)
@@ -217,12 +305,62 @@ class PublicVoiceCallTests(Integration2ATestCase):
             self.assertEqual(str(analytics.billed_minutes), "1.25")
             self.assertEqual(db.query(CallEvent).count(), 3)
             self.assertEqual(db.query(CrmVoiceCallEvent).count(), 3)
+            from app.services.tenant_usage_service import TenantUsageService
+
+            usage = TenantUsageService(db).get_usage(db.get(type(self.tenant), self.tenant.id), persist_alerts=False)
+            self.assertEqual(usage.minutes_used, 1.25)
 
         unsigned = self.client.post(
             "/api/v1/voice/webhook/ultravox",
             json={"event": "call.started", "call": {"callId": "provider-webhook", "metadata": {"voice_call_id": crm_call.id}}},
         )
         self.assertEqual(unsigned.status_code, 401)
+
+    @patch(
+        "app.services.voice_experience_runtime_provider.VoiceExperienceRuntimeProvider.create_webrtc_call",
+        return_value=ProviderCallResult("provider-duration-120", "https://provider.invalid/join/duration-120"),
+    )
+    def test_runtime_billing_parses_120_second_official_duration(self, _create_call) -> None:
+        token = self._post().json()["context_token"]
+        self.assertEqual(self._launch(token).status_code, 200)
+        with SessionLocal() as db:
+            crm_call = db.scalars(select(CrmVoiceCall)).one()
+        response = self._send_runtime_event(
+            crm_call.id,
+            "provider-duration-120",
+            "call.billed",
+            billedDuration="120s",
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        with SessionLocal() as db:
+            analytics = db.scalars(select(Call)).one()
+            self.assertEqual(str(analytics.billed_minutes), "2.00")
+            from app.services.tenant_usage_service import TenantUsageService
+
+            usage = TenantUsageService(db).get_usage(db.get(type(self.tenant), self.tenant.id), persist_alerts=False)
+            self.assertEqual(usage.minutes_used, 2.0)
+
+    @patch(
+        "app.services.voice_experience_runtime_provider.VoiceExperienceRuntimeProvider.create_webrtc_call",
+        return_value=ProviderCallResult("provider-monotonic", "https://provider.invalid/join/monotonic"),
+    )
+    def test_terminal_runtime_and_crm_do_not_regress_on_late_events(self, _create_call) -> None:
+        token = self._post().json()["context_token"]
+        self.assertEqual(self._launch(token).status_code, 200)
+        with SessionLocal() as db:
+            crm_call = db.scalars(select(CrmVoiceCall)).one()
+        send = lambda event_type: self._send_runtime_event(
+            crm_call.id, "provider-monotonic", event_type
+        )
+        self.assertEqual(send("call.ended").status_code, 200)
+        self.assertEqual(send("call.joined").status_code, 200)
+        with SessionLocal() as db:
+            self.assertEqual(db.get(CrmVoiceCall, crm_call.id).status, "completed")
+            self.assertEqual(db.scalars(select(TenantVoiceRuntimeCall)).one().status, "ended")
+        self.assertEqual(send("call.started").status_code, 200)
+        with SessionLocal() as db:
+            self.assertEqual(db.get(CrmVoiceCall, crm_call.id).status, "completed")
+            self.assertEqual(db.scalars(select(TenantVoiceRuntimeCall)).one().status, "ended")
 
 
 if __name__ == "__main__":

@@ -14,7 +14,9 @@ from app.services.voice_config_service import VoiceConfigService
 class ProviderCallResult:
     provider_call_id: str | None
     join_url: str | None
-    state: str | None = None
+    joined_at: str | None = None
+    ended_at: str | None = None
+    end_reason: str | None = None
 
 
 class ProviderDefiniteFailure(Exception):
@@ -116,5 +118,7 @@ class VoiceExperienceRuntimeProvider:
         return ProviderCallResult(
             provider_call_id=str(provider_call_id) if provider_call_id else None,
             join_url=join_url,
-            state=data.get("status") or data.get("state"),
+            joined_at=data.get("joined") or data.get("joinedAt") or data.get("joined_at"),
+            ended_at=data.get("ended") or data.get("endedAt") or data.get("ended_at"),
+            end_reason=data.get("endReason") or data.get("end_reason"),
         )
