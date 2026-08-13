@@ -125,7 +125,9 @@ class TenantVoiceContextSession(Base):
         DateTime(timezone=True), nullable=False, default=_utcnow
     )
 
-    def mark_consumed(self, db, *, now: datetime | None = None) -> bool:
+    def mark_consumed(
+        self, db, *, now: datetime | None = None, commit: bool = True
+    ) -> bool:
         current = now or datetime.now(UTC)
         consumed = db.query(type(self)).filter(
             type(self).id == self.id,
@@ -141,9 +143,55 @@ class TenantVoiceContextSession(Base):
                 type(self).status == "active",
                 type(self).expires_at <= current,
             ).update({type(self).status: "expired"}, synchronize_session=False)
-        db.commit()
-        db.refresh(self)
+        if commit:
+            db.commit()
+            db.refresh(self)
+        else:
+            db.flush()
         return consumed == 1
+
+
+class TenantVoiceRuntimeCall(Base):
+    __tablename__ = "tenant_voice_runtime_calls"
+    __table_args__ = (
+        UniqueConstraint("context_session_id", name="uq_voice_runtime_context_session"),
+        UniqueConstraint("crm_voice_call_id", name="uq_voice_runtime_crm_call"),
+        Index("ix_voice_runtime_tenant_status", "tenant_id", "status"),
+        Index(
+            "uq_voice_runtime_provider_call",
+            "provider",
+            "provider_call_id",
+            unique=True,
+            postgresql_where=sa.text("provider_call_id IS NOT NULL"),
+            sqlite_where=sa.text("provider_call_id IS NOT NULL"),
+        ),
+        sa.CheckConstraint(
+            "status IN ('reserved', 'starting', 'ready', 'connected', 'ended', 'failed', 'unknown')",
+            name="ck_voice_runtime_status",
+        ),
+        sa.CheckConstraint(
+            "failure_code IS NULL OR failure_code IN ('provider_connect_failed', 'provider_rejected', "
+            "'provider_ambiguous', 'provider_inconsistent', 'configuration_unavailable')",
+            name="ck_voice_runtime_failure_code",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
+    context_session_id: Mapped[str] = mapped_column(ForeignKey("tenant_voice_context_sessions.id", ondelete="CASCADE"), nullable=False)
+    submission_id: Mapped[str] = mapped_column(ForeignKey("tenant_voice_experience_submissions.id", ondelete="CASCADE"), nullable=False)
+    experience_id: Mapped[str] = mapped_column(ForeignKey("tenant_voice_experiences.id"), nullable=False)
+    experience_version_id: Mapped[str] = mapped_column(ForeignKey("tenant_voice_experience_versions.id"), nullable=False)
+    agent_config_id: Mapped[str] = mapped_column(ForeignKey("tenant_voice_agent_configs.id"), nullable=False)
+    crm_voice_call_id: Mapped[str] = mapped_column(ForeignKey("crm_voice_calls.id", ondelete="CASCADE"), nullable=False)
+    provider: Mapped[str] = mapped_column(String(40), nullable=False, default="ultravox")
+    provider_call_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="reserved")
+    failure_code: Mapped[str | None] = mapped_column(String(48), nullable=True)
+    provider_attempt_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utcnow)
+    connected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class VoicePublicRateLimitWindow(Base):

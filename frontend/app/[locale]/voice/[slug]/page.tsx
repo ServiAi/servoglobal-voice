@@ -46,6 +46,11 @@ export default async function PublicVoiceExperiencePage({ params }: PageProps) {
         loading: t('loading'),
         successTitle: t('successTitle'),
         verificationUnavailable: t('verificationUnavailable'),
+        microphoneHelp: t('microphoneHelp'),
+        callLoading: t('callLoading'),
+        callConnected: t('callConnected'),
+        endCall: t('endCall'),
+        callEnded: t('callEnded'),
         errors: {
           required: t('errors.required'),
           unknown_field: t('errors.unknown_field'),
@@ -60,6 +65,14 @@ export default async function PublicVoiceExperiencePage({ params }: PageProps) {
           verification_failed: t('errors.verification_failed'),
           rate_limited: t('errors.rate_limited'),
           internal_error: t('errors.internal_error'),
+          microphone_unavailable: t('errors.microphone_unavailable'),
+          experience_unavailable: t('errors.experience_unavailable'),
+          call_already_started: t('errors.call_already_started'),
+          call_state_conflict: t('errors.call_state_conflict'),
+          context_session_unavailable: t('errors.context_session_unavailable'),
+          context_session_expired: t('errors.context_session_expired'),
+          call_unavailable: t('errors.call_unavailable'),
+          call_provider_unavailable: t('errors.call_provider_unavailable'),
         },
       }}
     />

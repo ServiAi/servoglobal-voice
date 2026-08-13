@@ -36,6 +36,7 @@ from app.models.voice_context import TenantVoiceContextField, TenantVoiceContext
 from app.models.voice_experiences import TenantVoiceExperience, TenantVoiceExperienceVersion
 from app.models.voice_submissions import (
     TenantVoiceContextSession,
+    TenantVoiceRuntimeCall,
     TenantVoiceExperienceSubmission,
     TenantVoiceExperienceSubmissionValue,
     VoicePublicRateLimitWindow,
@@ -66,6 +67,7 @@ __all__ = [
     "TenantVoiceExperienceSubmission",
     "TenantVoiceExperienceSubmissionValue",
     "TenantVoiceContextSession",
+    "TenantVoiceRuntimeCall",
     "VoicePublicRateLimitWindow",
     "TenantWhatsAppConfig",
     "TenantWhatsAppTemplate",

@@ -70,7 +70,7 @@ class PublicSubmissionCapabilities(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     submissions: Literal[True] = True
-    calls: Literal[False] = False
+    calls: Literal[True] = True
 
 
 class PublicVoiceExperienceSubmissionResponse(BaseModel):

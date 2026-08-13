@@ -372,7 +372,8 @@ class UltravoxIngestionService:
         )
         return self._duration_to_minutes(billed_duration)
 
-    def _duration_to_minutes(self, value: Any) -> Decimal | None:
+    @staticmethod
+    def _duration_to_minutes(value: Any) -> Decimal | None:
         if value is None:
             return None
         if isinstance(value, (int, float, Decimal)):

@@ -134,6 +134,7 @@ class CallEvent(Base):
         Index("ix_call_events_tenant_id", "tenant_id"),
         Index("ix_call_events_received_at", "received_at"),
         Index("ix_call_events_tenant_received_at", "tenant_id", "received_at"),
+        UniqueConstraint("dedup_key", name="uq_call_events_dedup_key"),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
@@ -141,6 +142,7 @@ class CallEvent(Base):
     tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False)
     event_type: Mapped[str] = mapped_column(String(120), nullable=False)
     provider_event_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    dedup_key: Mapped[str | None] = mapped_column(String(400), nullable=True)
     payload_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, nullable=False)
 

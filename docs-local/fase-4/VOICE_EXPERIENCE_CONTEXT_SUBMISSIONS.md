@@ -4,7 +4,7 @@ Estado: implementado en `feature/voice-experience-context-submissions`.
 
 ## Alcance
 
-La página pública `/{locale}/voice/{slug}` captura los ocho tipos de campo pre-call, consentimiento y verificación Turnstile. `POST /api/v1/public/voice-experiences/{slug}/submissions` no usa Auth0, bearer ni tenant headers. Devuelve un `context_token` efímero sólo en la respuesta y mantiene `calls: false`; WebRTC, micrófono, `joinUrl`, Ultravox y los endpoints legacy de llamadas siguen fuera de alcance.
+La página pública `/{locale}/voice/{slug}` captura los ocho tipos de campo pre-call, consentimiento y verificación Turnstile. `POST /api/v1/public/voice-experiences/{slug}/submissions` no usa Auth0, bearer ni tenant headers. Devuelve un `context_token` efímero sólo en la respuesta; Etapa 3 consume esa capacidad para WebRTC one-shot, mientras los endpoints legacy siguen separados. Ver `VOICE_EXPERIENCE_WEBRTC_RUNTIME.md`.
 
 ## Persistencia e historial
 

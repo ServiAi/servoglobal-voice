@@ -22,6 +22,7 @@ jobs:
           --health-interval 10s --health-timeout 5s --health-retries 5
     env:
       DATABASE_URL: postgresql+psycopg://serviai:serviai@localhost:5432/serviai
+      VOICE_RUNTIME_TEST_DATABASE_URL: postgresql+psycopg://serviai:serviai@localhost:5432/serviai_voice_runtime_test
       ULTRAVOX_API_KEY: ci_test_ultravox_key
     steps:
       - uses: actions/checkout@v4
@@ -29,10 +30,30 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install -r backend/requirements.txt
+      - name: Create Voice Runtime PostgreSQL test database
+        run: |
+          python - <<'PY'
+          import psycopg
+
+          conn = psycopg.connect(
+              "postgresql://serviai:serviai@localhost:5432/postgres",
+              autocommit=True,
+          )
+          try:
+              with conn.cursor() as cur:
+                  cur.execute(
+                      "SELECT 1 FROM pg_database WHERE datname = %s",
+                      ("serviai_voice_runtime_test",),
+                  )
+                  if cur.fetchone() is None:
+                      cur.execute("CREATE DATABASE serviai_voice_runtime_test OWNER serviai")
+          finally:
+              conn.close()
+          PY
       - name: Backend test suite (excludes test_endpoints.py / test_kpis.py / test_db.py / test_db_user.py / test_db_validation.py - hardcoded staging DB creds, no network to staging from CI; excludes test_crm_sprint_2.py - known pre-existing assertion drift vs voice_call_service/voice_config_service error messages, unrelated to this branch, tracked separately)
         working-directory: backend
         run: |
-          modules=$(ls test_*.py | grep -v -e test_endpoints.py -e test_kpis.py -e test_db.py -e test_db_user.py -e test_db_validation.py -e test_crm_sprint_2.py | sed 's/\.py$//')
+          modules=$(ls test_*.py | grep -v -e test_endpoints.py -e test_kpis.py -e test_db.py -e test_db_user.py -e test_db_validation.py -e test_crm_sprint_2.py -e test_voice_runtime_postgres.py | sed 's/\.py$//')
           status=0
           for module in $modules; do
             # Most test modules pin DATABASE_URL to their own sqlite file at import time,
@@ -41,6 +62,24 @@ jobs:
             python -m unittest "$module" || status=1
           done
           exit $status
+      - name: Voice Runtime PostgreSQL concurrency
+        working-directory: backend
+        run: |
+          python - <<'PY'
+          import os
+          from sqlalchemy.engine import make_url
+
+          raw = os.environ.get("VOICE_RUNTIME_TEST_DATABASE_URL")
+          if not raw:
+              raise SystemExit("VOICE_RUNTIME_TEST_DATABASE_URL is missing")
+          url = make_url(raw)
+          if url.database != "serviai_voice_runtime_test":
+              raise SystemExit(f"Unexpected Voice Runtime test database: {url.database}")
+          print("Voice Runtime PostgreSQL test database configured")
+          print("host:", url.host)
+          print("database:", url.database)
+          PY
+          python -m unittest test_voice_runtime_postgres -v
       - name: Compile check
         working-directory: backend
         run: python -m compileall app
