@@ -1,6 +1,6 @@
 # Estado funcional del proyecto
 
-Actualizado: 2026-08-11. Fuente: código, migraciones y pruebas del repositorio.
+Actualizado: 2026-08-12. Fuente: código, migraciones y pruebas del repositorio.
 
 | Área | Estado | Implementación actual |
 | --- | --- | --- |
@@ -41,7 +41,7 @@ Las migraciones cubren identidad, analítica, riesgo Auth0, planes/uso, CRM base
 - Evolucionar el builder de formularios y la UI de submissions si el producto lo requiere.
 - Mantener separados futuros cambios de WhatsApp y voz.
 - Verificar por entorno los prerequisitos Ultravox tenant (API key, webhook secret, agente compatible con `user_context` y eventos webhook) antes de habilitar el runtime público.
-- Etapa 0 (`fix/voice-experience-functional-alignment`): `get_current_published_version()` es fail-closed por `published_version_id`; `PUT` bloquea cambio de agente con historial; `DELETE` sólo elimina archivadas sin historial; `/api/v1/calls` quedó tipado y sanitizado. Pendiente: endurecer `/api/v1/call-outbound` con el mismo criterio.
+- Etapa 0 (`fix/voice-experience-functional-alignment`): `get_current_published_version()` es fail-closed por `published_version_id`; `PUT` bloquea cambio de agente con historial; `DELETE` elimina definitivamente experiencias archivadas junto con versiones, submissions, valores, sesiones y runtime asociados; `/api/v1/calls` quedó tipado y sanitizado. Pendiente: endurecer `/api/v1/call-outbound` con el mismo criterio.
 - El aviso de cambios sin guardar cubre recarga/cierre y navegación mediante enlaces; el historial nativo atrás/adelante sigue como limitación conocida de App Router hasta disponer de un hook estable.
 - El listado consulta el historial por experiencia para mostrar su conteo. Si `max_experiences` crece y esto se vuelve un cuello de botella, el backend deberá incluir el conteo en la respuesta del listado.
 - Confirmar que cada entorno con automatizaciones tenga un proceso persistente `python -m app.workers.notification_worker` conectado a PostgreSQL.

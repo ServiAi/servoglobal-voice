@@ -14,6 +14,12 @@ from app.models.voice_experiences import (
     TenantVoiceExperience,
     TenantVoiceExperienceVersion,
 )
+from app.models.voice_submissions import (
+    TenantVoiceContextSession,
+    TenantVoiceExperienceSubmission,
+    TenantVoiceExperienceSubmissionValue,
+    TenantVoiceRuntimeCall,
+)
 from app.schemas.tenant_features import VoiceExperienceLimits
 from app.schemas.voice_experiences import (
     VoiceExperienceResponse,
@@ -252,14 +258,34 @@ class VoiceExperienceService:
             raise VoiceExperienceConflictError(
                 "Only archived voice experiences can be deleted."
             )
-        if self._has_versions(experience.id):
-            raise VoiceExperienceConflictError(
-                "Voice experience with publication history cannot be deleted."
-            )
         agent, _ = self._require_relations(
             tenant_id, experience.agent_config_id, experience.context_schema_id
         )
         provider = agent.provider
+        submission_ids = select(TenantVoiceExperienceSubmission.id).where(
+            TenantVoiceExperienceSubmission.tenant_id == tenant_id,
+            TenantVoiceExperienceSubmission.experience_id == experience_id,
+        )
+        self.db.query(TenantVoiceRuntimeCall).filter(
+            TenantVoiceRuntimeCall.tenant_id == tenant_id,
+            TenantVoiceRuntimeCall.experience_id == experience_id,
+        ).delete(synchronize_session=False)
+        self.db.query(TenantVoiceContextSession).filter(
+            TenantVoiceContextSession.tenant_id == tenant_id,
+            TenantVoiceContextSession.experience_id == experience_id,
+        ).delete(synchronize_session=False)
+        self.db.query(TenantVoiceExperienceSubmissionValue).filter(
+            TenantVoiceExperienceSubmissionValue.tenant_id == tenant_id,
+            TenantVoiceExperienceSubmissionValue.submission_id.in_(submission_ids),
+        ).delete(synchronize_session=False)
+        self.db.query(TenantVoiceExperienceSubmission).filter(
+            TenantVoiceExperienceSubmission.tenant_id == tenant_id,
+            TenantVoiceExperienceSubmission.experience_id == experience_id,
+        ).delete(synchronize_session=False)
+        self.db.query(TenantVoiceExperienceVersion).filter(
+            TenantVoiceExperienceVersion.tenant_id == tenant_id,
+            TenantVoiceExperienceVersion.experience_id == experience_id,
+        ).delete(synchronize_session=False)
         self.db.delete(experience)
         self.db.commit()
         self.event_service.record_event(

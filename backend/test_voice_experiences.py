@@ -403,7 +403,7 @@ class VoiceExperienceTests(Integration2ATestCase):
         with SessionLocal() as db:
             self.assertIsNone(db.get(TenantVoiceExperience, experience_id))
 
-    def test_delete_archived_with_single_version_is_blocked(self) -> None:
+    def test_delete_archived_with_single_version_removes_history(self) -> None:
         self._enable_feature()
         experience_id = self._create().json()["id"]
         self.client.post(f"/api/v1/voice/experiences/{experience_id}/publish")
@@ -411,17 +411,17 @@ class VoiceExperienceTests(Integration2ATestCase):
         self.client.post(f"/api/v1/voice/experiences/{experience_id}/archive")
 
         response = self.client.delete(f"/api/v1/voice/experiences/{experience_id}")
-        self.assertEqual(response.status_code, 409, response.text)
+        self.assertEqual(response.status_code, 204, response.text)
         with SessionLocal() as db:
-            self.assertIsNotNone(db.get(TenantVoiceExperience, experience_id))
+            self.assertIsNone(db.get(TenantVoiceExperience, experience_id))
             remaining_versions = db.scalars(
                 select(TenantVoiceExperienceVersion).where(
                     TenantVoiceExperienceVersion.experience_id == experience_id
                 )
             ).all()
-            self.assertEqual(len(list(remaining_versions)), 1)
+            self.assertEqual(len(list(remaining_versions)), 0)
 
-    def test_delete_archived_with_multiple_versions_is_blocked(self) -> None:
+    def test_delete_archived_with_multiple_versions_removes_history(self) -> None:
         self._enable_feature()
         experience_id = self._create().json()["id"]
         for _ in range(2):
@@ -430,15 +430,15 @@ class VoiceExperienceTests(Integration2ATestCase):
         self.client.post(f"/api/v1/voice/experiences/{experience_id}/archive")
 
         response = self.client.delete(f"/api/v1/voice/experiences/{experience_id}")
-        self.assertEqual(response.status_code, 409, response.text)
+        self.assertEqual(response.status_code, 204, response.text)
         with SessionLocal() as db:
-            self.assertIsNotNone(db.get(TenantVoiceExperience, experience_id))
+            self.assertIsNone(db.get(TenantVoiceExperience, experience_id))
             remaining_versions = db.scalars(
                 select(TenantVoiceExperienceVersion).where(
                     TenantVoiceExperienceVersion.experience_id == experience_id
                 )
             ).all()
-            self.assertEqual(len(list(remaining_versions)), 2)
+            self.assertEqual(len(list(remaining_versions)), 0)
 
     def test_delete_unknown_experience_is_not_found(self) -> None:
         self._enable_feature()

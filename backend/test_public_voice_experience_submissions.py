@@ -19,13 +19,14 @@ from app.main import app
 from app.models.crm import CrmActivity, CrmContact, CrmLead
 from app.models.integrations import TenantIntegrationEvent, TenantVoiceAgentConfig
 from app.models.voice_context import TenantVoiceContextField, TenantVoiceContextSchema
-from app.models.voice_experiences import TenantVoiceExperience
+from app.models.voice_experiences import TenantVoiceExperience, TenantVoiceExperienceVersion
 from app.models.voice_submissions import (
     TenantVoiceContextSession,
     TenantVoiceExperienceSubmission,
     TenantVoiceExperienceSubmissionValue,
 )
 from app.services.tenant_feature_service import VOICE_EXPERIENCES, TenantFeatureService
+from app.services.voice_experience_service import VoiceExperienceService
 
 
 class _AllowLimiter:
@@ -236,6 +237,22 @@ class PublicVoiceExperienceSubmissionTests(Integration2ATestCase):
                 "experience_id": submission.experience_id,
                 "version": 1,
             })
+
+    def test_delete_archived_experience_removes_context_data_and_history(self) -> None:
+        app.dependency_overrides.pop(get_current_auth_context, None)
+        self.assertEqual(self._post().status_code, 200)
+        experience_id = self.published["id"]
+        with SessionLocal() as db:
+            service = VoiceExperienceService(db)
+            service.unpublish_experience(self.tenant.id, experience_id, self.user.id)
+            service.archive_experience(self.tenant.id, experience_id, self.user.id)
+            service.delete_experience(self.tenant.id, experience_id, self.user.id)
+
+            self.assertIsNone(db.get(TenantVoiceExperience, experience_id))
+            self.assertEqual(db.query(TenantVoiceExperienceVersion).count(), 0)
+            self.assertEqual(db.query(TenantVoiceExperienceSubmission).count(), 0)
+            self.assertEqual(db.query(TenantVoiceExperienceSubmissionValue).count(), 0)
+            self.assertEqual(db.query(TenantVoiceContextSession).count(), 0)
 
     def test_field_formats_options_and_lengths_use_stable_codes(self) -> None:
         cases = [

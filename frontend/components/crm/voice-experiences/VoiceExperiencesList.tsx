@@ -202,14 +202,8 @@ export function VoiceExperiencesList({
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {experiences.map((experience) => {
-            // null = version history could not be determined; fail closed.
             const versionCount = versionCounts[experience.id] ?? null;
-            const canDelete = canDeleteArchivedExperience(experience.status, versionCount);
-            const deleteLocked = experience.status === 'archived' && !canDelete;
-            const lockedReason =
-              versionCount === null
-                ? t('list.historyUnknown')
-                : t('errors.backend.deleteHistoryBlocked');
+            const canDelete = canDeleteArchivedExperience(experience.status);
             return (
               <article
                 key={experience.id}
@@ -296,24 +290,12 @@ export function VoiceExperiencesList({
                         }
                         title={t('confirm.delete.title')}
                         description={t('confirm.delete.description')}
-                        confirmLabel={t('actions.delete')}
+                        confirmLabel={t('confirm.delete.confirmLabel')}
                         cancelLabel={t('common.cancel')}
                         destructive
                         busy={isPending}
                         onConfirm={() => remove(experience.id)}
                       />
-                    ) : null}
-                    {canEdit && deleteLocked ? (
-                      <Button
-                        type="button"
-                        size="icon"
-                        variant="ghost"
-                        disabled
-                        aria-label={lockedReason}
-                        title={lockedReason}
-                      >
-                        <Lock className="size-4" aria-hidden="true" />
-                      </Button>
                     ) : null}
                   </div>
                 </div>
