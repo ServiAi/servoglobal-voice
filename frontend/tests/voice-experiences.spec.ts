@@ -166,23 +166,18 @@ test.describe('protecciones puras de Voice Experiences', () => {
     }
   });
 
-  test('la eliminación falla cerrado: solo archived con historial confirmado en cero', () => {
-    expect(canDeleteArchivedExperience('archived', 0)).toBe(true);
-    expect(canDeleteArchivedExperience('archived', 1)).toBe(false);
-    expect(canDeleteArchivedExperience('archived', 3)).toBe(false);
-    // Unknown history (read failure) must never enable deletion.
-    expect(canDeleteArchivedExperience('archived', null)).toBe(false);
-    // Non-archived states never allow deletion regardless of history.
-    expect(canDeleteArchivedExperience('draft', 0)).toBe(false);
-    expect(canDeleteArchivedExperience('unpublished', 0)).toBe(false);
-    expect(canDeleteArchivedExperience('published', 0)).toBe(false);
+  test('la eliminación solo se ofrece para experiencias archivadas', () => {
+    expect(canDeleteArchivedExperience('archived')).toBe(true);
+    expect(canDeleteArchivedExperience('draft')).toBe(false);
+    expect(canDeleteArchivedExperience('unpublished')).toBe(false);
+    expect(canDeleteArchivedExperience('published')).toBe(false);
   });
 
-  test('expone textos de historial desconocido y bloqueo de eliminación en editor', () => {
-    expect(esMessages.crm.voiceExperiences.list.historyUnknown).toBeTruthy();
-    expect(enMessages.crm.voiceExperiences.list.historyUnknown).toBeTruthy();
-    expect(esMessages.crm.voiceExperiences.editor.deleteBlockedHistory).toBeTruthy();
-    expect(enMessages.crm.voiceExperiences.editor.deleteBlockedHistory).toBeTruthy();
+  test('advierte claramente que la eliminación es definitiva', () => {
+    expect(esMessages.crm.voiceExperiences.confirm.delete.description).toContain('permanentemente');
+    expect(enMessages.crm.voiceExperiences.confirm.delete.description).toContain('permanently');
+    expect(esMessages.crm.voiceExperiences.confirm.delete.confirmLabel).toBeTruthy();
+    expect(enMessages.crm.voiceExperiences.confirm.delete.confirmLabel).toBeTruthy();
   });
 });
 

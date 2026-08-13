@@ -141,15 +141,9 @@ export function VoiceExperienceBuilder({
   const editable = canEdit && !archived;
   const agentLocked = isVoiceExperienceAgentLocked(mode, versionsUnknown, versions.length);
   const activeSchema = schemaDetail?.status === 'active';
-  // Deletion is only offered for an archived experience with a confirmed empty
-  // history. Unknown history (read failure) is treated as null and fails closed;
-  // the backend remains the authority and rejects the rest.
-  const versionCount = versionsUnknown ? null : versions.length;
   const canDeleteExperience = experience
-    ? canDeleteArchivedExperience(experience.status, versionCount)
+    ? canDeleteArchivedExperience(experience.status)
     : false;
-  const deleteBlockedByHistory =
-    experience?.status === 'archived' && !canDeleteExperience;
   const publishDisabledReason = !canEdit
     ? t('editor.publishReasons.readOnly')
     : archived
@@ -862,21 +856,12 @@ export function VoiceExperienceBuilder({
                   }
                   title={t('confirm.delete.title')}
                   description={t('confirm.delete.description')}
-                  confirmLabel={t('actions.delete')}
+                  confirmLabel={t('confirm.delete.confirmLabel')}
                   cancelLabel={t('common.cancel')}
                   destructive
                   busy={submitting}
                   onConfirm={deleteExperience}
                 />
-              ) : null}
-              {canEdit && deleteBlockedByHistory ? (
-                <span
-                  className="inline-flex items-center gap-1.5 rounded-md bg-muted px-2.5 py-1.5 text-xs text-muted-foreground"
-                  role="note"
-                >
-                  <Lock className="size-3.5" aria-hidden="true" />
-                  {versionsUnknown ? t('list.historyUnknown') : t('editor.deleteBlockedHistory')}
-                </span>
               ) : null}
             </div>
           ) : null}

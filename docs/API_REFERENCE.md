@@ -115,7 +115,7 @@ La respuesta omite el identificador del tenant, el usuario que realizó el cambi
 | `POST /api/v1/voice/experiences/{experience_id}/publish` | Prepara una versión: crea un snapshot interno inmutable (estado `published`); exige schema `active`. No genera URL pública. |
 | `POST /api/v1/voice/experiences/{experience_id}/unpublish` | Retira la versión preparada sin eliminar su historial. |
 | `POST /api/v1/voice/experiences/{experience_id}/archive` | Archiva una experiencia no publicada y libera capacidad. |
-| `DELETE /api/v1/voice/experiences/{experience_id}` | Elimina físicamente **sólo** experiencias archivadas **sin** historial de versiones; con historial devuelve `409` y conserva snapshots. |
+| `DELETE /api/v1/voice/experiences/{experience_id}` | Elimina físicamente una experiencia archivada y, en la misma transacción, sus versiones, submissions, valores, sesiones de contexto y runtime asociados. Conserva la auditoría CRM e integration events. Los demás estados responden `409`. |
 | `GET /api/v1/voice/experiences/{experience_id}/versions` | Lista snapshots inmutables. |
 | `GET /api/v1/public/voice-experiences/{slug}` | Resuelve sin autenticación exclusivamente el snapshot publicado exacto y su schema histórico. Devuelve un DTO público sanitizado y `Cache-Control: no-store`; cualquier estado no publicable responde un `404` genérico. |
 | `POST /api/v1/public/voice-experiences/{slug}/submissions` | Sin Auth0. Consume rate limit global antes del JSON, valida envelope/campos/consentimiento, verifica Turnstile y persiste submission, values y context session 1:1 contra la versión exacta. Proyecta contact, lead y activity CRM por `context_id`; devuelve token efímero sin IDs internos, con `submissions=true`, `calls=true`. |

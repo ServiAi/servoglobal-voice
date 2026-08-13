@@ -21,6 +21,7 @@ from app.models.integrations import TenantVoiceAgentConfig, TenantVoiceProviderC
 from app.models.voice_submissions import TenantVoiceContextSession, TenantVoiceRuntimeCall
 from app.services.secret_manager_service import SecretManager
 from app.services.tenant_feature_service import TenantFeatureService, VOICE_EXPERIENCES
+from app.services.voice_experience_service import VoiceExperienceService
 from app.services.voice_experience_runtime_provider import ProviderAmbiguousFailure, ProviderCallResult
 import test_public_voice_experience_submissions as submissions_tests
 
@@ -138,6 +139,25 @@ class PublicVoiceCallTests(Integration2ATestCase):
             self.assertEqual(context.status, "consumed")
             self.assertEqual(crm_call.direction, "webrtc")
             self.assertNotIn("join", repr(runtime.__dict__).lower())
+
+    @patch(
+        "app.services.voice_experience_runtime_provider.VoiceExperienceRuntimeProvider.create_webrtc_call",
+        return_value=ProviderCallResult("provider-delete", "https://provider.invalid/join/delete"),
+    )
+    def test_delete_archived_experience_removes_runtime_but_keeps_crm_audit(self, _create_call) -> None:
+        submission = self._post()
+        self.assertEqual(self._launch(submission.json()["context_token"]).status_code, 200)
+        experience_id = self.published["id"]
+
+        with SessionLocal() as db:
+            service = VoiceExperienceService(db)
+            service.unpublish_experience(self.tenant.id, experience_id, self.user.id)
+            service.archive_experience(self.tenant.id, experience_id, self.user.id)
+            service.delete_experience(self.tenant.id, experience_id, self.user.id)
+
+            self.assertEqual(db.query(TenantVoiceRuntimeCall).count(), 0)
+            self.assertEqual(db.query(TenantVoiceContextSession).count(), 0)
+            self.assertEqual(db.query(CrmVoiceCall).count(), 1)
 
     def test_manual_body_validation_rejects_extra_fields_without_pydantic_detail(self) -> None:
         response = self.client.post(
