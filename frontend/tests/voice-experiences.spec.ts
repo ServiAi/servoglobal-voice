@@ -371,6 +371,21 @@ test.describe('administración privada de Voice Experiences', () => {
     await expect(schemaVersion).toHaveAttribute('aria-pressed', 'true');
   });
 
+  test('abre y selecciona el borrador existente sin intentar crear otro', async ({ page }) => {
+    await requireAuthenticatedInventory(page);
+    const openEditor = page.getByRole('link', { name: /Abrir editor/i }).first();
+    test.skip((await openEditor.count()) === 0, 'No hay experiencias para abrir el editor.');
+    await openEditor.click();
+    await page.getByRole('tab', { name: /Agente y contexto/i }).click();
+    const openDraft = page.getByRole('button', { name: /Abrir borrador editable/i }).first();
+    test.skip((await openDraft.count()) === 0, 'No hay un borrador existente para esta regresión.');
+
+    await openDraft.click();
+    await expect(page.getByTestId('context-schema-detail').getByText('Borrador', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Seleccionado/i })).toBeVisible();
+    await expect(page.getByText(/La operación entra en conflicto/i)).toHaveCount(0);
+  });
+
   test('asocia cada pestaña del editor con su tabpanel e indica secciones inválidas', async ({ page }) => {
     await requireAuthenticatedInventory(page);
     const openEditor = page.getByRole('link', { name: /Abrir editor/i }).first();

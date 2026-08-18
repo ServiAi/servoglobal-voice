@@ -116,7 +116,10 @@ export function ContextSchemaManager({
     setLoadedAgentId(agentId);
   };
 
-  const loadSchema = async (summary: VoiceContextSchemaSummaryResponse) => {
+  const loadSchema = async (
+    summary: VoiceContextSchemaSummaryResponse,
+    selectResult = false
+  ) => {
     latestSchemaRequestId.current = summary.id;
     const [detailResult, versionsResult] = await Promise.all([
       fetchVoiceContextSchemaAction(summary.id),
@@ -130,7 +133,9 @@ export function ContextSchemaManager({
     setDetail(detailResult.data);
     setMeta({ name: detailResult.data.name, description: detailResult.data.description ?? '' });
     onSchemaDetailChange(detailResult.data);
+    if (selectResult) onSchemaSelected(detailResult.data);
     if (versionsResult.ok) setVersions(versionsResult.data);
+    setMessage(null);
   };
 
   useEffect(() => {
@@ -311,6 +316,32 @@ export function ContextSchemaManager({
       ),
     ]);
     if (versionsResult.ok) setVersions(versionsResult.data);
+    setMessage(null);
+  };
+
+  const openOrCreateDraft = async () => {
+    if (!detail) return;
+    const findAndOpenDraft = async () => {
+      const versionsResult = await fetchVoiceContextSchemaVersionsAction(
+        detail.agent_config_id,
+        detail.schema_key
+      );
+      if (!versionsResult.ok) return false;
+      setVersions(versionsResult.data);
+      const draft = versionsResult.data.find((version) => version.status === 'draft');
+      if (!draft) return false;
+      await loadSchema(draft, true);
+      return true;
+    };
+
+    if (await findAndOpenDraft()) return;
+    const result = await forkVoiceContextSchemaVersionAction(locale, detail.id);
+    if (!result.ok) {
+      if (result.status === 409 && await findAndOpenDraft()) return;
+      showResultError(result.status, result.detail);
+      return;
+    }
+    await replaceDetail(async () => result, true);
   };
 
   if (!agentConfigId) {
@@ -554,7 +585,7 @@ export function ContextSchemaManager({
                     type="button"
                     size="sm"
                     variant="outline"
-                    onClick={() => startTransition(() => void loadSchema(existingDraft))}
+                    onClick={() => startTransition(() => void loadSchema(existingDraft, true))}
                   >
                     <Pencil className="mr-1.5 size-4" aria-hidden="true" />
                     {t('contextSchemas.openDraft')}
@@ -573,12 +604,7 @@ export function ContextSchemaManager({
                     cancelLabel={t('common.cancel')}
                     busy={isPending}
                     onConfirm={() =>
-                      startTransition(() =>
-                          void replaceDetail(
-                            () => forkVoiceContextSchemaVersionAction(locale, detail.id),
-                            true
-                          )
-                      )
+                      startTransition(() => void openOrCreateDraft())
                     }
                   />
                 ) : null}
