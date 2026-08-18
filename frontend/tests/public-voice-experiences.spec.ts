@@ -238,12 +238,16 @@ test('preflights microphone, starts one fake WebRTC call, and leaks neither capa
     (button as HTMLButtonElement).click();
   });
   await expect(page.getByText('Call connected')).toBeVisible();
+  await expect(page.getByTestId('voice-activity-orb')).toBeVisible();
+  await expect(page.getByTestId('call-duration')).toHaveText(/^\d{2}:\d{2}$/);
+  await expect(page.getByTestId('call-duration')).not.toHaveText('00:00', { timeout: 2_500 });
   expect(callLaunches).toBe(start + 1);
-  expect(await page.evaluate(() => (window as typeof window & { __preflightStopped?: boolean }).__preflightStopped)).toBe(true);
+  expect(await page.evaluate(() => (window as typeof window & { __preflightStopped?: boolean }).__preflightStopped)).not.toBe(true);
   await expect(page.getByText('https://provider.invalid/join/secret')).toHaveCount(0);
   expect((await context.cookies()).some((cookie) => cookie.value.includes('secret'))).toBe(false);
   await page.getByRole('button', { name: 'End call' }).click();
   await expect(page.getByText('Call ended')).toBeVisible();
+  expect(await page.evaluate(() => (window as typeof window & { __preflightStopped?: boolean }).__preflightStopped)).toBe(true);
 });
 
 test('microphone denial never launches a call', async ({ page }) => {

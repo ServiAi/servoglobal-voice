@@ -1158,6 +1158,8 @@
     "microphoneHelp": "Comprobaremos brevemente el acceso al micrófono antes de iniciar la llamada.",
     "callLoading": "Iniciando llamada…",
     "callConnected": "Llamada conectada",
+    "callDuration": "Duración",
+    "voiceActivity": "Visualización de actividad de voz",
     "endCall": "Finalizar llamada",
     "callEnded": "Llamada finalizada",
     "errors": {

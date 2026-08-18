@@ -30,6 +30,8 @@ export interface PublicVoiceMessages {
   microphoneHelp: string;
   callLoading: string;
   callConnected: string;
+  callDuration: string;
+  voiceActivity: string;
   endCall: string;
   callEnded: string;
   errors: Record<string, string>;
