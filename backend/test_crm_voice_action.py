@@ -5,6 +5,7 @@ from sqlalchemy import select
 from unittest.mock import patch
 
 from _integrations_2a_test_base import Integration2ATestCase, SessionLocal
+from app.models.analytics import Agent
 from app.models.crm import CrmVoiceCall, CrmVoiceCallEvent, CrmActivity
 from app.models.integrations import TenantVoiceProviderConfig, TenantVoiceAgentConfig, TenantIntegrationEvent
 from app.services.voice_client import VoiceClient
@@ -76,6 +77,45 @@ class CrmVoiceActionTests(Integration2ATestCase):
         agents_list = response.json()
         self.assertEqual(len(agents_list), 1)
         self.assertEqual(agents_list[0]["id"], agent_data["id"])
+
+        # Creating the agent config mirrors it into the analytics `agents`
+        # table so calls resolve to a name instead of showing "Unassigned".
+        with SessionLocal() as db:
+            analytics_agent = db.scalar(
+                select(Agent).where(
+                    Agent.tenant_id == self.tenant.id,
+                    Agent.external_provider == "ultravox",
+                    Agent.external_agent_id == "wk-agent-123",
+                )
+            )
+            self.assertIsNotNone(analytics_agent)
+            self.assertEqual(analytics_agent.name, "Agente Comercial")
+            self.assertEqual(analytics_agent.status, "active")
+
+        # Updating the agent config keeps the mirror in sync.
+        update_response = self.client.put(
+            f"/api/v1/integrations/voice/agents/{agent_data['id']}",
+            json={
+                "provider_agent_id": "wk-agent-123",
+                "display_name": "Agente Comercial Renombrado",
+                "purpose": "Ventas y Generación de Leads",
+                "default_language": "es",
+                "default_timezone": "America/Bogota",
+                "status": "inactive",
+            },
+        )
+        self.assertEqual(update_response.status_code, 200)
+        with SessionLocal() as db:
+            analytics_agent = db.scalar(
+                select(Agent).where(
+                    Agent.tenant_id == self.tenant.id,
+                    Agent.external_provider == "ultravox",
+                    Agent.external_agent_id == "wk-agent-123",
+                )
+            )
+            self.assertIsNotNone(analytics_agent)
+            self.assertEqual(analytics_agent.name, "Agente Comercial Renombrado")
+            self.assertEqual(analytics_agent.status, "inactive")
 
     @patch.object(VoiceClient, "start_outbound_call")
     def test_outbound_call_triggers_successfully(self, mock_start):
