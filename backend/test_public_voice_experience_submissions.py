@@ -349,19 +349,24 @@ class PublicVoiceExperienceSubmissionTests(Integration2ATestCase):
         third = self.client.post(url, content="{", headers={"Content-Type": "application/json"})
         self.assertEqual([first.status_code, second.status_code, third.status_code], [422, 422, 429])
 
-    def test_local_phone_without_email_does_not_create_contact(self) -> None:
+    def test_local_phone_without_email_still_creates_contact(self) -> None:
+        # A bare 10-digit Colombian number (no leading "+") is a valid,
+        # commonly submitted format; normalize_phone() already turns it into
+        # "+57...", so it must not be treated as if no phone were given.
         body = self._body()
         body["answers"].pop("client_email")
         body["answers"]["mobile_number"] = "3001112233"
         self.assertEqual(self._post(body).status_code, 200)
         with SessionLocal() as db:
-            self.assertEqual(db.query(CrmContact).count(), 0)
+            contact = db.scalars(select(CrmContact)).one()
+            self.assertEqual(contact.phone_normalized, "+573001112233")
+            self.assertEqual(db.query(CrmLead).count(), 1)
             event = db.scalars(
                 select(TenantIntegrationEvent).where(
                     TenantIntegrationEvent.event_type == "voice_experience_submission_crm"
                 )
             ).one()
-            self.assertEqual(event.status, "skipped")
+            self.assertEqual(event.status, "success")
 
     def test_context_session_lifecycle_is_atomic_and_one_to_one(self) -> None:
         self.assertEqual(self._post().status_code, 200)

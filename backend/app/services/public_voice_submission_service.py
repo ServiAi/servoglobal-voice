@@ -170,11 +170,13 @@ class PublicVoiceSubmissionService:
             if email_value and EMAIL_RE.fullmatch(email_value)
             else None
         )
+        # Submissions accept phones without a leading "+" (e.g. a bare
+        # 10-digit Colombian number); CrmContactService.get_or_create_contact
+        # normalizes them via normalize_phone(), so don't re-require "+"
+        # here or a valid local-format phone silently drops the lead.
         phone = (
             phone_value
-            if phone_value
-            and phone_value.startswith("+")
-            and PHONE_RE.fullmatch(phone_value)
+            if phone_value and PHONE_RE.fullmatch(phone_value)
             else None
         )
         name_value = persisted.answers.get("full_name")
