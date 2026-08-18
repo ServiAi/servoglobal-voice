@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from unittest.mock import patch
 
 from alembic.config import Config
@@ -16,6 +17,7 @@ from app.models.voice_experiences import (
     TenantVoiceExperience,
     TenantVoiceExperienceVersion,
 )
+from app.models.voice_submissions import TenantVoiceExperienceSubmission
 from app.schemas.voice_experiences import VoiceExperienceWriteRequest
 from app.services.tenant_feature_service import VOICE_EXPERIENCES, TenantFeatureService
 from app.services.voice_experience_service import (
@@ -446,6 +448,140 @@ class VoiceExperienceTests(Integration2ATestCase):
             self.client.delete("/api/v1/voice/experiences/unknown-id").status_code,
             404,
         )
+
+    def test_version_list_marks_only_old_unreferenced_versions_deletable(self) -> None:
+        self._enable_feature()
+        experience_id = self._create().json()["id"]
+        for _ in range(3):
+            self.client.post(f"/api/v1/voice/experiences/{experience_id}/publish")
+            self.client.post(f"/api/v1/voice/experiences/{experience_id}/unpublish")
+
+        versions = self.client.get(
+            f"/api/v1/voice/experiences/{experience_id}/versions"
+        ).json()
+        self.assertEqual([item["version"] for item in versions], [3, 2, 1])
+        self.assertFalse(versions[0]["can_delete"])
+        self.assertEqual(versions[0]["delete_block_reason"], "latest")
+        self.assertTrue(versions[1]["can_delete"])
+        self.assertIsNone(versions[1]["delete_block_reason"])
+
+    def test_delete_old_unreferenced_version(self) -> None:
+        self._enable_feature()
+        experience_id = self._create().json()["id"]
+        for _ in range(3):
+            self.client.post(f"/api/v1/voice/experiences/{experience_id}/publish")
+            self.client.post(f"/api/v1/voice/experiences/{experience_id}/unpublish")
+        versions = self.client.get(
+            f"/api/v1/voice/experiences/{experience_id}/versions"
+        ).json()
+        old_version = next(item for item in versions if item["version"] == 1)
+
+        response = self.client.delete(
+            f"/api/v1/voice/experiences/{experience_id}/versions/{old_version['id']}"
+        )
+        self.assertEqual(response.status_code, 204, response.text)
+        remaining = self.client.get(
+            f"/api/v1/voice/experiences/{experience_id}/versions"
+        ).json()
+        self.assertEqual([item["version"] for item in remaining], [3, 2])
+        with SessionLocal() as db:
+            event = db.scalar(
+                select(TenantIntegrationEvent).where(
+                    TenantIntegrationEvent.tenant_id == self.tenant.id,
+                    TenantIntegrationEvent.event_type
+                    == "voice_experience_version_deleted",
+                    TenantIntegrationEvent.resource_id == old_version["id"],
+                )
+            )
+            self.assertIsNotNone(event)
+            self.assertEqual(event.metadata_json["version"], 1)
+
+    def test_delete_current_or_latest_version_is_rejected(self) -> None:
+        self._enable_feature()
+        experience_id = self._create().json()["id"]
+        self.client.post(f"/api/v1/voice/experiences/{experience_id}/publish")
+        current = self.client.get(
+            f"/api/v1/voice/experiences/{experience_id}/versions"
+        ).json()[0]
+        self.assertEqual(current["delete_block_reason"], "current")
+        self.assertEqual(
+            self.client.delete(
+                f"/api/v1/voice/experiences/{experience_id}/versions/{current['id']}"
+            ).status_code,
+            409,
+        )
+        self.client.post(f"/api/v1/voice/experiences/{experience_id}/unpublish")
+        self.assertEqual(
+            self.client.delete(
+                f"/api/v1/voice/experiences/{experience_id}/versions/{current['id']}"
+            ).status_code,
+            409,
+        )
+
+    def test_delete_referenced_version_is_rejected(self) -> None:
+        self._enable_feature()
+        experience_id = self._create().json()["id"]
+        self.client.post(f"/api/v1/voice/experiences/{experience_id}/publish")
+        first = self.client.get(
+            f"/api/v1/voice/experiences/{experience_id}/versions"
+        ).json()[0]
+        self.client.post(f"/api/v1/voice/experiences/{experience_id}/unpublish")
+        self.client.post(f"/api/v1/voice/experiences/{experience_id}/publish")
+        with SessionLocal() as db:
+            db.add(
+                TenantVoiceExperienceSubmission(
+                    tenant_id=self.tenant.id,
+                    experience_id=experience_id,
+                    experience_version_id=first["id"],
+                    context_schema_id=self.active_schema_id,
+                    version=1,
+                    locale="es",
+                    consent_accepted=True,
+                    consent_accepted_at=datetime.now(timezone.utc),
+                )
+            )
+            db.commit()
+
+        versions = self.client.get(
+            f"/api/v1/voice/experiences/{experience_id}/versions"
+        ).json()
+        referenced = next(item for item in versions if item["id"] == first["id"])
+        self.assertFalse(referenced["can_delete"])
+        self.assertEqual(referenced["delete_block_reason"], "referenced")
+        self.assertEqual(
+            self.client.delete(
+                f"/api/v1/voice/experiences/{experience_id}/versions/{first['id']}"
+            ).status_code,
+            409,
+        )
+
+    def test_delete_version_respects_tenant_isolation(self) -> None:
+        tenant_b, _ = self._seed_tenant_user(
+            slug="tenant-version-b", email="version-b@example.com"
+        )
+        agent_b = self._seed_agent(tenant_b.id, "agent-version-b")
+        schema_b = self._seed_schema(
+            tenant_b.id, agent_b, "active", "version_tenant_b"
+        )
+        self._enable_feature(tenant_b.id)
+        with SessionLocal() as db:
+            service = VoiceExperienceService(db)
+            experience = service.create_experience(
+                tenant_b.id,
+                VoiceExperienceWriteRequest.model_validate(
+                    self._payload(agent_id=agent_b, schema_id=schema_b)
+                ),
+                None,
+            )
+            service.publish_experience(tenant_b.id, experience.id, None)
+            version_id = service.list_versions(tenant_b.id, experience.id)[0].id
+            experience_id = experience.id
+
+        self._enable_feature()
+        response = self.client.delete(
+            f"/api/v1/voice/experiences/{experience_id}/versions/{version_id}"
+        )
+        self.assertEqual(response.status_code, 404, response.text)
 
     def test_delete_respects_tenant_isolation(self) -> None:
         tenant_b, _ = self._seed_tenant_user(slug="tenant-b", email="delete-b@example.com")

@@ -291,7 +291,8 @@ export function ContextSchemaManager({
     action: () => Promise<
       | { ok: true; data: VoiceContextSchemaResponse }
       | { ok: false; status: number; detail: string }
-    >
+    >,
+    selectResult = false
   ) => {
     const result = await action();
     if (!result.ok) {
@@ -301,7 +302,15 @@ export function ContextSchemaManager({
     setDetail(result.data);
     setMeta({ name: result.data.name, description: result.data.description ?? '' });
     onSchemaDetailChange(result.data);
-    await refreshSchemas();
+    if (selectResult) onSchemaSelected(result.data);
+    const [, versionsResult] = await Promise.all([
+      refreshSchemas(),
+      fetchVoiceContextSchemaVersionsAction(
+        result.data.agent_config_id,
+        result.data.schema_key
+      ),
+    ]);
+    if (versionsResult.ok) setVersions(versionsResult.data);
   };
 
   if (!agentConfigId) {
@@ -313,6 +322,7 @@ export function ContextSchemaManager({
   }
 
   const editable = canEdit && detail?.status === 'draft';
+  const existingDraft = versions.find((version) => version.status === 'draft');
   const nextPosition = detail?.fields.reduce((max, field) => Math.max(max, field.position), -1) ?? -1;
 
   return (
@@ -531,19 +541,30 @@ export function ContextSchemaManager({
                       busy={isPending}
                       onConfirm={() =>
                         startTransition(() =>
-                          void replaceDetail(() =>
-                            activateVoiceContextSchemaAction(locale, detail.id)
+                          void replaceDetail(
+                            () => activateVoiceContextSchemaAction(locale, detail.id),
+                            true
                           )
                         )
                       }
                     />
                   </>
+                ) : canEdit && existingDraft ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => startTransition(() => void loadSchema(existingDraft))}
+                  >
+                    <Pencil className="mr-1.5 size-4" aria-hidden="true" />
+                    {t('contextSchemas.openDraft')}
+                  </Button>
                 ) : canEdit ? (
                   <ActionDialog
                     trigger={
                       <Button type="button" size="sm" variant="outline">
                         <CopyPlus className="mr-1.5 size-4" aria-hidden="true" />
-                        {t('contextSchemas.newVersion')}
+                        {t('contextSchemas.editAsNewVersion')}
                       </Button>
                     }
                     title={t('contextSchemas.confirmNewVersion.title')}
@@ -553,9 +574,10 @@ export function ContextSchemaManager({
                     busy={isPending}
                     onConfirm={() =>
                       startTransition(() =>
-                        void replaceDetail(() =>
-                          forkVoiceContextSchemaVersionAction(locale, detail.id)
-                        )
+                          void replaceDetail(
+                            () => forkVoiceContextSchemaVersionAction(locale, detail.id),
+                            true
+                          )
                       )
                     }
                   />
@@ -713,9 +735,19 @@ export function ContextSchemaManager({
                 </h4>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {versions.map((version) => (
-                    <Badge key={version.id} variant="outline">
+                    <button
+                      key={version.id}
+                      type="button"
+                      aria-pressed={detail.id === version.id}
+                      onClick={() => startTransition(() => void loadSchema(version))}
+                      className={`rounded-full border px-2.5 py-1 text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                        detail.id === version.id
+                          ? 'border-primary bg-primary/10 text-primary'
+                          : 'border-border bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground'
+                      }`}
+                    >
                       v{version.version} · {t(`contextSchemas.status.${version.status}`)}
-                    </Badge>
+                    </button>
                   ))}
                 </div>
               </div>

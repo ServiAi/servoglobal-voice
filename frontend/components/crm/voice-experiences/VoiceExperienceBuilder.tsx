@@ -25,6 +25,8 @@ import {
   archiveVoiceExperienceAction,
   createVoiceExperienceAction,
   deleteVoiceExperienceAction,
+  deleteVoiceExperienceVersionAction,
+  fetchVoiceContextSchemaAction,
   fetchVoiceExperienceVersionsAction,
   publishVoiceExperienceAction,
   unpublishVoiceExperienceAction,
@@ -87,7 +89,9 @@ type Props = {
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 
-function toWriteRequest(experience: VoiceExperienceResponse): VoiceExperienceWriteRequest {
+function toWriteRequest(
+  experience: VoiceExperienceResponse | VoiceExperienceVersionResponse
+): VoiceExperienceWriteRequest {
   return {
     agent_config_id: experience.agent_config_id,
     context_schema_id: experience.context_schema_id,
@@ -135,15 +139,24 @@ export function VoiceExperienceBuilder({
   const [serverError, setServerError] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<SaveState>('idle');
   const [submitting, setSubmitting] = useState(false);
+  const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
+  const [selectedVersionSchema, setSelectedVersionSchema] =
+    useState<VoiceContextSchemaResponse | null>(null);
 
   const dirty = isVoiceExperienceDirty(form, baseline);
   const archived = experience?.status === 'archived';
   const editable = canEdit && !archived;
   const agentLocked = isVoiceExperienceAgentLocked(mode, versionsUnknown, versions.length);
-  const activeSchema = schemaDetail?.status === 'active';
+  const activeSchema =
+    schemaDetail?.id === form.context_schema_id && schemaDetail.status === 'active';
   const canDeleteExperience = experience
     ? canDeleteArchivedExperience(experience.status)
     : false;
+  const selectedVersion = versions.find((version) => version.id === selectedVersionId) ?? null;
+  const previewForm = selectedVersion ? toWriteRequest(selectedVersion) : form;
+  const previewContextFields = selectedVersion
+    ? selectedVersionSchema?.fields ?? []
+    : schemaDetail?.fields ?? [];
   const publishDisabledReason = !canEdit
     ? t('editor.publishReasons.readOnly')
     : archived
@@ -289,6 +302,69 @@ export function VoiceExperienceBuilder({
       return;
     }
     router.push(`/${locale}/crm/settings/voice-experiences`);
+  };
+
+  const selectVersion = async (version: VoiceExperienceVersionResponse) => {
+    if (submitting) return;
+    if (selectedVersionId === version.id) {
+      setSelectedVersionId(null);
+      setSelectedVersionSchema(null);
+      return;
+    }
+    setSubmitting(true);
+    setServerError(null);
+    const schemaResult = await fetchVoiceContextSchemaAction(version.context_schema_id);
+    setSubmitting(false);
+    if (!schemaResult.ok) {
+      setServerError(safeError(schemaResult.status, schemaResult.detail));
+      return;
+    }
+    setSelectedVersionId(version.id);
+    setSelectedVersionSchema(schemaResult.data);
+  };
+
+  const restoreVersion = async (version: VoiceExperienceVersionResponse) => {
+    if (submitting || !editable) return;
+    setSubmitting(true);
+    setServerError(null);
+    const schemaResult =
+      selectedVersionId === version.id && selectedVersionSchema
+        ? { ok: true as const, data: selectedVersionSchema }
+        : await fetchVoiceContextSchemaAction(version.context_schema_id);
+    setSubmitting(false);
+    if (!schemaResult.ok) {
+      setServerError(safeError(schemaResult.status, schemaResult.detail));
+      return;
+    }
+    setForm(toWriteRequest(version));
+    setSchemaDetail(schemaResult.data);
+    setSelectedVersionId(null);
+    setSelectedVersionSchema(null);
+    setErrors({});
+    setSaveState('idle');
+    setEditorSection(0);
+  };
+
+  const deleteVersion = async (version: VoiceExperienceVersionResponse) => {
+    if (!experience || submitting || !editable) return;
+    setSubmitting(true);
+    setServerError(null);
+    const result = await deleteVoiceExperienceVersionAction(
+      locale,
+      experience.id,
+      version.id
+    );
+    setSubmitting(false);
+    if (!result.ok) {
+      setServerError(safeError(result.status, result.detail));
+      return;
+    }
+    setVersions((current) => current.filter((item) => item.id !== version.id));
+    if (selectedVersionId === version.id) {
+      setSelectedVersionId(null);
+      setSelectedVersionSchema(null);
+    }
+    router.refresh();
   };
 
   const sectionTitle = mode === 'create'
@@ -746,6 +822,12 @@ export function VoiceExperienceBuilder({
         versions={versions}
         publishedVersionId={experience?.published_version_id ?? null}
         locale={locale}
+        canEdit={editable}
+        busy={submitting}
+        selectedVersionId={selectedVersionId}
+        onSelect={selectVersion}
+        onRestore={restoreVersion}
+        onDelete={deleteVersion}
       />
     );
   };
@@ -806,24 +888,36 @@ export function VoiceExperienceBuilder({
               ) : null}
               {canEdit && (experience?.status === 'draft' || experience?.status === 'unpublished') ? (
                 <div className="flex flex-col items-end gap-1">
-                  <ActionDialog
-                    trigger={
+                  {activeSchema ? (
+                    <ActionDialog
+                      trigger={
+                        <Button
+                          type="button"
+                          disabled={submitting || dirty}
+                          title={publishDisabledReason ?? undefined}
+                        >
+                          <RadioTower className="mr-2 size-4" aria-hidden="true" />
+                          {t('actions.publish')}
+                        </Button>
+                      }
+                      title={t('confirm.publish.title')}
+                      description={t('confirm.publish.description')}
+                      confirmLabel={t('actions.publish')}
+                      cancelLabel={t('common.cancel')}
+                      busy={submitting}
+                      onConfirm={() => transitionExperience(publishVoiceExperienceAction)}
+                    />
+                  ) : (
                       <Button
                         type="button"
-                        disabled={submitting || dirty || !activeSchema}
+                        disabled={submitting || dirty}
                         title={publishDisabledReason ?? undefined}
+                        onClick={() => setEditorSection(1)}
                       >
                         <RadioTower className="mr-2 size-4" aria-hidden="true" />
                         {t('actions.publish')}
                       </Button>
-                    }
-                    title={t('confirm.publish.title')}
-                    description={t('confirm.publish.description')}
-                    confirmLabel={t('actions.publish')}
-                    cancelLabel={t('common.cancel')}
-                    busy={submitting}
-                    onConfirm={() => transitionExperience(publishVoiceExperienceAction)}
-                  />
+                  )}
                   {publishDisabledReason ? (
                     <p className="max-w-56 text-right text-xs text-muted-foreground">
                       {publishDisabledReason}
@@ -1000,7 +1094,16 @@ export function VoiceExperienceBuilder({
         </Card>
 
         <aside className={`min-w-0 lg:sticky lg:top-5 lg:self-start ${mobileView === 'form' ? 'hidden lg:block' : ''}`}>
-          <VoiceExperiencePreview form={form} contextFields={schemaDetail?.fields ?? []} locale={locale} />
+          {selectedVersion ? (
+            <p className="mb-3 rounded-lg border border-cyan-500/25 bg-cyan-500/[0.07] px-3 py-2 text-xs font-semibold text-cyan-800 dark:text-cyan-200">
+              {t('versions.previewing', { version: selectedVersion.version })}
+            </p>
+          ) : null}
+          <VoiceExperiencePreview
+            form={previewForm}
+            contextFields={previewContextFields}
+            locale={locale}
+          />
           <p className="mt-3 flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
             <Mic2 className="size-3.5" aria-hidden="true" />
             {t('preview.safeNote')}

@@ -123,6 +123,36 @@ test.describe('protecciones puras de Voice Experiences', () => {
     ).toBe('schemaDeleteReferenced');
     expect(esMessages.crm.voiceExperiences.errors.backend.schemaDeleteReferenced).toBeTruthy();
     expect(enMessages.crm.voiceExperiences.errors.backend.schemaDeleteReferenced).toBeTruthy();
+    expect(
+      getVoiceExperienceErrorKey(
+        'The current published voice experience version cannot be deleted.'
+      )
+    ).toBe('versionDeleteCurrent');
+    expect(
+      getVoiceExperienceErrorKey('The latest voice experience version cannot be deleted.')
+    ).toBe('versionDeleteLatest');
+    expect(
+      getVoiceExperienceErrorKey('A referenced voice experience version cannot be deleted.')
+    ).toBe('versionDeleteReferenced');
+    expect(esMessages.crm.voiceExperiences.versions.confirmRestore.description).toBeTruthy();
+    expect(esMessages.crm.voiceExperiences.versions.confirmDelete.description).toContain(
+      'permanentemente'
+    );
+    expect(enMessages.crm.voiceExperiences.versions.confirmDelete.description).toContain(
+      'permanently'
+    );
+  });
+
+  test('explica el flujo editable y recuperable de los esquemas de contexto', () => {
+    expect(esMessages.crm.voiceExperiences.contextSchemas.editAsNewVersion).toMatch(
+      /nueva versión/i
+    );
+    expect(esMessages.crm.voiceExperiences.contextSchemas.openDraft).toMatch(/borrador/i);
+    expect(esMessages.crm.voiceExperiences.contextSchemas.fields.readOnlyHint).toMatch(
+      /borrador/i
+    );
+    expect(enMessages.crm.voiceExperiences.contextSchemas.editAsNewVersion).toBeTruthy();
+    expect(enMessages.crm.voiceExperiences.contextSchemas.openDraft).toBeTruthy();
   });
 
   test('bloquea el agente cuando el historial existe o no pudo verificarse', () => {
@@ -257,6 +287,21 @@ test.describe('administración privada de Voice Experiences', () => {
     ).toBeVisible();
   });
 
+  test('permite seleccionar una versión y cargar su vista previa histórica', async ({ page }) => {
+    await requireAuthenticatedInventory(page);
+    const openEditor = page.getByRole('link', { name: /Abrir editor/i }).first();
+    test.skip((await openEditor.count()) === 0, 'No hay una experiencia editable en el tenant QA.');
+    await openEditor.click();
+    await page.getByRole('tab', { name: /^Versiones$/i }).click();
+    const version = page.getByTestId(/^voice-version-/).first();
+    test.skip((await version.count()) === 0, 'La experiencia no tiene historial publicado.');
+
+    await version.click();
+    await expect(version).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByText(/Vista previa histórica: versión/i)).toBeVisible();
+    await expect(page.getByRole('button', { name: /Restaurar como borrador/i }).first()).toBeVisible();
+  });
+
   test('una experiencia publicada ofrece abrir y copiar su enlace público', async ({ page }) => {
     await requireAuthenticatedInventory(page);
     const publishedCard = page
@@ -307,6 +352,23 @@ test.describe('administración privada de Voice Experiences', () => {
     await schemas.first().click();
     await schemas.nth(1).click();
     await expect(page.getByTestId('context-schema-detail').getByRole('heading', { name: lastName })).toBeVisible();
+  });
+
+  test('permite abrir una versión concreta del esquema desde su historial', async ({ page }) => {
+    await requireAuthenticatedInventory(page);
+    const openEditor = page.getByRole('link', { name: /Abrir editor/i }).first();
+    test.skip((await openEditor.count()) === 0, 'No hay experiencias para abrir el editor.');
+    await openEditor.click();
+    await page.getByRole('tab', { name: /Agente y contexto/i }).click();
+    const schemaItems = page.getByRole('listitem');
+    test.skip((await schemaItems.count()) === 0, 'El agente actual no tiene schemas.');
+    await schemaItems.first().click();
+    const schemaVersion = page
+      .getByRole('button', { name: /^v\d+ · (Borrador|Activo|Archivado)$/i })
+      .first();
+    test.skip((await schemaVersion.count()) === 0, 'El esquema no tiene historial visible.');
+    await schemaVersion.click();
+    await expect(schemaVersion).toHaveAttribute('aria-pressed', 'true');
   });
 
   test('asocia cada pestaña del editor con su tabpanel e indica secciones inválidas', async ({ page }) => {

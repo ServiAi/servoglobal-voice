@@ -63,6 +63,18 @@ export function fetchVoiceExperienceVersions(accessToken: string, experienceId: 
   );
 }
 
+export function deleteVoiceExperienceVersion(
+  accessToken: string,
+  experienceId: string,
+  versionId: string
+) {
+  return requestVoiceEndpoint<null>(
+    'DELETE',
+    `experiences/${experienceId}/versions/${versionId}`,
+    accessToken
+  );
+}
+
 export function fetchVoiceContextSchemas(accessToken: string, agentConfigId: string) {
   return requestVoiceEndpoint<VoiceContextSchemaSummaryResponse[]>(
     'GET',

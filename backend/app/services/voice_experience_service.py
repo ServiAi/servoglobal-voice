@@ -301,7 +301,7 @@ class VoiceExperienceService:
     def list_versions(
         self, tenant_id: str, experience_id: str
     ) -> list[VoiceExperienceVersionResponse]:
-        self.get_experience(tenant_id, experience_id)
+        experience = self.get_experience(tenant_id, experience_id)
         versions = self.db.scalars(
             select(TenantVoiceExperienceVersion)
             .where(
@@ -310,7 +310,74 @@ class VoiceExperienceService:
             )
             .order_by(TenantVoiceExperienceVersion.version.desc())
         ).all()
-        return [self.version_response(item) for item in versions]
+        latest_version = versions[0].version if versions else None
+        return [
+            self.version_response(
+                item,
+                delete_block_reason=self._version_delete_block_reason(
+                    experience, item, latest_version
+                ),
+            )
+            for item in versions
+        ]
+
+    def delete_version(
+        self,
+        tenant_id: str,
+        experience_id: str,
+        version_id: str,
+        user_id: str | None = None,
+    ) -> None:
+        experience = self._locked_experience(tenant_id, experience_id)
+        version = self.db.scalar(
+            select(TenantVoiceExperienceVersion).where(
+                TenantVoiceExperienceVersion.id == version_id,
+                TenantVoiceExperienceVersion.experience_id == experience_id,
+                TenantVoiceExperienceVersion.tenant_id == tenant_id,
+            )
+        )
+        if version is None:
+            raise VoiceExperienceNotFoundError("Voice experience version not found.")
+        latest_version = self.db.scalar(
+            select(func.max(TenantVoiceExperienceVersion.version)).where(
+                TenantVoiceExperienceVersion.experience_id == experience_id,
+                TenantVoiceExperienceVersion.tenant_id == tenant_id,
+            )
+        )
+        reason = self._version_delete_block_reason(
+            experience, version, latest_version
+        )
+        if reason:
+            messages = {
+                "archived": "Archived voice experience versions cannot be deleted individually.",
+                "current": "The current published voice experience version cannot be deleted.",
+                "latest": "The latest voice experience version cannot be deleted.",
+                "referenced": "A referenced voice experience version cannot be deleted.",
+            }
+            raise VoiceExperienceConflictError(messages[reason])
+        self.db.delete(version)
+        try:
+            self.db.commit()
+        except IntegrityError as exc:
+            self.db.rollback()
+            raise VoiceExperienceConflictError(
+                "A referenced voice experience version cannot be deleted."
+            ) from exc
+        self.event_service.record_event(
+            tenant_id=tenant_id,
+            provider=self.agent_service.validate_agent_belongs_to_tenant(
+                tenant_id, experience.agent_config_id
+            ).provider,
+            event_type="voice_experience_version_deleted",
+            status="success",
+            resource_type="voice_experience_version",
+            resource_id=version_id,
+            metadata={
+                "actor_user_id": user_id,
+                "experience_id": experience_id,
+                "version": version.version,
+            },
+        )
 
     def get_current_published_version(
         self, tenant_id: str, experience_id: str
@@ -340,6 +407,35 @@ class VoiceExperienceService:
             )
             or 0
         ) > 0
+
+    def _version_delete_block_reason(
+        self,
+        experience: TenantVoiceExperience,
+        version: TenantVoiceExperienceVersion,
+        latest_version: int | None,
+    ) -> str | None:
+        if experience.status == "archived":
+            return "archived"
+        if experience.published_version_id == version.id:
+            return "current"
+        if version.version == latest_version:
+            return "latest"
+        referenced_models = (
+            TenantVoiceExperienceSubmission,
+            TenantVoiceContextSession,
+            TenantVoiceRuntimeCall,
+        )
+        if any(
+            self.db.scalar(
+                select(model.id)
+                .where(model.experience_version_id == version.id)
+                .limit(1)
+            )
+            is not None
+            for model in referenced_models
+        ):
+            return "referenced"
+        return None
 
     def _record_event(
         self,
@@ -447,6 +543,7 @@ class VoiceExperienceService:
     @staticmethod
     def version_response(
         version: TenantVoiceExperienceVersion,
+        delete_block_reason: str | None = None,
     ) -> VoiceExperienceVersionResponse:
         return VoiceExperienceVersionResponse(
             id=version.id,
@@ -463,4 +560,6 @@ class VoiceExperienceService:
             call_settings=version.call_settings_json,
             published_at=version.published_at,
             created_at=version.created_at,
+            can_delete=delete_block_reason is None,
+            delete_block_reason=delete_block_reason,
         )

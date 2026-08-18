@@ -15,6 +15,12 @@ const ERROR_KEYS = {
     'schemaDeleteReferenced',
   'Voice context schema is referenced by publication history and cannot be deleted.':
     'schemaDeleteReferenced',
+  'Archived voice experience versions cannot be deleted individually.':
+    'versionDeleteArchived',
+  'The current published voice experience version cannot be deleted.':
+    'versionDeleteCurrent',
+  'The latest voice experience version cannot be deleted.': 'versionDeleteLatest',
+  'A referenced voice experience version cannot be deleted.': 'versionDeleteReferenced',
 } as const;
 
 export function getVoiceExperienceErrorKey(detail: string) {
