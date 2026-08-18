@@ -126,6 +126,7 @@ class PublicVoiceCallTests(Integration2ATestCase):
         self.assertEqual(create_call.call_count, 1)
         kwargs = create_call.call_args.kwargs
         self.assertEqual(kwargs["metadata"]["source"], "voice_experience")
+        self.assertEqual(kwargs["metadata"]["tenant_id"], self.tenant.id)
         self.assertTrue(all(isinstance(value, str) for value in kwargs["metadata"].values()))
         self.assertEqual(kwargs["user_context"]["locale"], "es")
         self.assertNotIn("systemPrompt", kwargs)
@@ -186,6 +187,11 @@ class PublicVoiceCallTests(Integration2ATestCase):
         self.assertEqual(result.joined_at, "2026-08-12T11:59:00Z")
         self.assertEqual(result.ended_at, "2026-08-12T12:00:00Z")
         self.assertEqual(result.end_reason, "hangup")
+
+        websocket_result = VoiceExperienceRuntimeProvider._result(
+            {"callId": "provider-wss", "joinUrl": "wss://provider.invalid/join/secret"}
+        )
+        self.assertEqual(websocket_result.join_url, "wss://provider.invalid/join/secret")
 
     @patch(
         "app.services.voice_experience_runtime_provider.VoiceExperienceRuntimeProvider.create_webrtc_call",

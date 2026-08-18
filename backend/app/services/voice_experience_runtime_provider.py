@@ -112,7 +112,7 @@ class VoiceExperienceRuntimeProvider:
     @staticmethod
     def _result(data: dict[str, Any]) -> ProviderCallResult:
         join_url = data.get("joinUrl") or data.get("join_url")
-        if not isinstance(join_url, str) or not join_url.startswith("https://"):
+        if not isinstance(join_url, str) or not join_url.startswith(("https://", "wss://")):
             join_url = None
         provider_call_id = data.get("callId") or data.get("id")
         return ProviderCallResult(
