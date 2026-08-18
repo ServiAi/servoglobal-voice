@@ -1,9 +1,17 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from sqlalchemy import select, func
+from sqlalchemy import select, func, update, delete, or_
 from sqlalchemy.orm import Session
-from app.models.crm import CrmLead, CrmPipelineStage, CrmContact
+from app.models.crm import (
+    CrmLead,
+    CrmPipelineStage,
+    CrmContact,
+    CrmBooking,
+    CrmWhatsAppMessage,
+    CrmVoiceCall,
+)
+from app.models.integrations import TenantEmailSend, TenantFormSubmission, TenantFormToken
 from app.services.crm_pipeline_service import CrmPipelineService
 from app.services.crm_activity_service import CrmActivityService
 
@@ -237,18 +245,47 @@ class CrmLeadService:
         return True
 
     def delete_all_leads(self, tenant_id: str) -> int:
-        leads = self.db.scalars(
-            select(CrmLead).where(CrmLead.tenant_id == tenant_id)
-        ).all()
-        count = len(leads)
-        for lead in leads:
+        lead_ids = list(self.db.scalars(select(CrmLead.id).where(CrmLead.tenant_id == tenant_id)))
+        count = len(lead_ids)
+        if count == 0:
+            return 0
+        contact_ids = list(self.db.scalars(select(CrmContact.id).where(CrmContact.tenant_id == tenant_id)))
+
+        # Bookings, WhatsApp messages, voice calls and email sends are
+        # operational history outside the lead/contact lifecycle: keep the
+        # rows but clear the now-dangling references instead of blocking the
+        # delete on their foreign keys.
+        for model in (CrmBooking, CrmWhatsAppMessage, CrmVoiceCall, TenantEmailSend):
+            self.db.execute(
+                update(model)
+                .where(
+                    model.tenant_id == tenant_id,
+                    or_(model.lead_id.in_(lead_ids), model.contact_id.in_(contact_ids)),
+                )
+                .values(lead_id=None, contact_id=None)
+            )
+
+        # Form tokens/submissions require a lead and cannot be preserved
+        # without one; delete them (submissions first, they reference the
+        # token).
+        self.db.execute(
+            delete(TenantFormSubmission).where(
+                TenantFormSubmission.tenant_id == tenant_id,
+                TenantFormSubmission.lead_id.in_(lead_ids),
+            )
+        )
+        self.db.execute(
+            delete(TenantFormToken).where(
+                TenantFormToken.tenant_id == tenant_id,
+                TenantFormToken.lead_id.in_(lead_ids),
+            )
+        )
+
+        for lead in self.db.scalars(select(CrmLead).where(CrmLead.id.in_(lead_ids))):
             self.db.delete(lead)
 
         # Also delete all contacts for this tenant
-        contacts = self.db.scalars(
-            select(CrmContact).where(CrmContact.tenant_id == tenant_id)
-        ).all()
-        for contact in contacts:
+        for contact in self.db.scalars(select(CrmContact).where(CrmContact.id.in_(contact_ids))):
             self.db.delete(contact)
 
         self.db.commit()
