@@ -370,8 +370,9 @@ class CrmLeadResolverService:
             setattr(lead, field, incoming)
             return
         if current != incoming:
-            logger.warning(
-                "CRM lead correlation mismatch ignored: lead_id=%s field=%s current=%s incoming=%s",
+            logger.info(
+                "CRM lead correlation mismatch ignored (expected on repeat calls to an open lead): "
+                "lead_id=%s field=%s current=%s incoming=%s",
                 lead.id,
                 field,
                 current,
