@@ -79,7 +79,7 @@ async function requestCrmEndpoint<T>(
 }
 
 async function requestIntegrationEndpoint<T>(
-  method: 'GET' | 'POST' | 'PATCH' | 'DELETE',
+  method: 'GET' | 'POST' | 'PATCH' | 'DELETE' | 'PUT',
   endpoint: string,
   accessToken: string,
   queryParams?: Record<string, unknown>,
@@ -776,7 +776,7 @@ export function createVoiceAgent(accessToken: string, payload: VoiceAgentConfigR
 }
 
 export function updateVoiceAgent(accessToken: string, agentConfigId: string, payload: VoiceAgentConfigRequest) {
-  return requestIntegrationEndpoint<VoiceAgentConfigResponse>('PATCH', `voice/agents/${agentConfigId}`, accessToken, undefined, payload);
+  return requestIntegrationEndpoint<VoiceAgentConfigResponse>('PUT', `voice/agents/${agentConfigId}`, accessToken, undefined, payload);
 }
 
 
