@@ -31,7 +31,9 @@ export function CrmLeadsTable({ data, locale, accessToken, userRole }: Props) {
   const formatDate = (value?: string | null) => {
     if (!value) return '—';
     const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' });
+    return Number.isNaN(date.getTime())
+      ? value
+      : date.toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'America/Bogota' });
   };
 
   const runDelete = async () => {

@@ -200,7 +200,7 @@ class PublicVoiceCallTests(Integration2ATestCase):
     def test_submission_without_crm_identity_launches(self, create_call) -> None:
         body = self._body()
         body["answers"].pop("client_email")
-        body["answers"]["mobile_number"] = "3001112233"
+        body["answers"].pop("mobile_number")
         submission = self._post(body)
         response = self._launch(submission.json()["context_token"])
         self.assertEqual(response.status_code, 200, response.text)
