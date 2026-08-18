@@ -19,7 +19,17 @@ from app.main import app
 from app.api.auth.deps import AuthContext, get_current_auth_context
 from app.models.analytics import Agent, Call, CallEvent
 from app.models.identity import Tenant, User, TenantMembership
-from app.models.crm import CrmContact, CrmPipelineStage, CrmLead, CrmActivity, CrmTask
+from app.models.crm import (
+    CrmContact,
+    CrmPipelineStage,
+    CrmLead,
+    CrmActivity,
+    CrmTask,
+    CrmBooking,
+    CrmWhatsAppMessage,
+    CrmVoiceCall,
+)
+from app.models.integrations import TenantEmailSend, TenantForm, TenantFormToken, TenantFormSubmission
 from app.services.crm_pipeline_service import CrmPipelineService
 from app.services.crm_contact_service import CrmContactService, normalize_phone
 from app.services.crm_lead_service import CrmLeadService
@@ -1012,8 +1022,74 @@ class CrmSprint1Tests(unittest.TestCase):
             db.add(lead2)
             db.commit()
             db.refresh(lead2)
-            
+
             lead2_id = lead2.id
+
+            # Records referencing the lead/contact without an ORM cascade:
+            # bulk delete must clear these instead of letting the FK reject
+            # the delete (this reproduces the production 500 on DELETE
+            # /api/v1/crm/leads).
+            booking = CrmBooking(
+                tenant_id=tenant.id,
+                lead_id=lead2.id,
+                contact_id=contact2.id,
+                start_at=datetime.now(UTC),
+                attendee_name="Lead to delete 2",
+                attendee_email="lead2@example.com",
+            )
+            whatsapp_message = CrmWhatsAppMessage(
+                tenant_id=tenant.id,
+                lead_id=lead2.id,
+                contact_id=contact2.id,
+                to_phone="+573001234568",
+            )
+            voice_call = CrmVoiceCall(
+                tenant_id=tenant.id,
+                lead_id=lead2.id,
+                contact_id=contact2.id,
+            )
+            email_send = TenantEmailSend(
+                tenant_id=tenant.id,
+                lead_id=lead2.id,
+                contact_id=contact2.id,
+                to_email="lead2@example.com",
+                from_email="noreply@example.com",
+                subject="Hello",
+                idempotency_key="idem-lead2-delete",
+            )
+            db.add_all([booking, whatsapp_message, voice_call, email_send])
+
+            form = TenantForm(tenant_id=tenant.id, name="Intake form")
+            db.add(form)
+            db.commit()
+            db.refresh(form)
+            form_token = TenantFormToken(
+                tenant_id=tenant.id,
+                form_id=form.id,
+                lead_id=lead2.id,
+                contact_id=contact2.id,
+                token_hash="token-hash-lead2-delete",
+                expires_at=datetime.now(UTC) + timedelta(days=1),
+            )
+            db.add(form_token)
+            db.commit()
+            db.refresh(form_token)
+            form_submission = TenantFormSubmission(
+                tenant_id=tenant.id,
+                form_id=form.id,
+                lead_id=lead2.id,
+                contact_id=contact2.id,
+                token_id=form_token.id,
+            )
+            db.add(form_submission)
+            db.commit()
+
+            booking_id = booking.id
+            whatsapp_message_id = whatsapp_message.id
+            voice_call_id = voice_call.id
+            email_send_id = email_send.id
+            form_token_id = form_token.id
+            form_submission_id = form_submission.id
 
         # Change user role to platform_admin for bulk delete
         with SessionLocal() as db:
@@ -1034,6 +1110,31 @@ class CrmSprint1Tests(unittest.TestCase):
         with SessionLocal() as db:
             self.assertEqual(db.scalar(select(func.count()).select_from(CrmLead).where(CrmLead.tenant_id == tenant.id)), 0)
             self.assertEqual(db.scalar(select(func.count()).select_from(CrmContact).where(CrmContact.tenant_id == tenant.id)), 0)
+
+            # Operational history survives with its lead/contact reference cleared.
+            booking = db.get(CrmBooking, booking_id)
+            self.assertIsNotNone(booking)
+            self.assertIsNone(booking.lead_id)
+            self.assertIsNone(booking.contact_id)
+
+            whatsapp_message = db.get(CrmWhatsAppMessage, whatsapp_message_id)
+            self.assertIsNotNone(whatsapp_message)
+            self.assertIsNone(whatsapp_message.lead_id)
+            self.assertIsNone(whatsapp_message.contact_id)
+
+            voice_call = db.get(CrmVoiceCall, voice_call_id)
+            self.assertIsNotNone(voice_call)
+            self.assertIsNone(voice_call.lead_id)
+            self.assertIsNone(voice_call.contact_id)
+
+            email_send = db.get(TenantEmailSend, email_send_id)
+            self.assertIsNotNone(email_send)
+            self.assertIsNone(email_send.lead_id)
+            self.assertIsNone(email_send.contact_id)
+
+            # Form tokens/submissions require a lead and are deleted with it.
+            self.assertIsNone(db.get(TenantFormToken, form_token_id))
+            self.assertIsNone(db.get(TenantFormSubmission, form_submission_id))
 
 if __name__ == "__main__":
     unittest.main()
