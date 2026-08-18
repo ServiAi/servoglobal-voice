@@ -911,4 +911,4 @@ class VoiceExperienceTests(Integration2ATestCase):
 
     def test_alembic_has_one_head(self) -> None:
         heads = ScriptDirectory.from_config(Config("alembic.ini")).get_heads()
-        self.assertEqual(heads, ["202608180001"])
+        self.assertEqual(heads, ["202608180002"])
