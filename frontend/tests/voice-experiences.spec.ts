@@ -46,16 +46,17 @@ test.describe('protecciones puras de Voice Experiences', () => {
     expect(enMessages.crm.voiceExperiences.list.status.unpublished).toBe('Unpublished');
   });
 
-  test('usa la semántica privada de "versión preparada" en vez de "publicada"', () => {
-    expect(esMessages.crm.voiceExperiences.list.status.published).toBe('Versión preparada');
-    expect(enMessages.crm.voiceExperiences.list.status.published).toBe('Version prepared');
-    expect(esMessages.crm.voiceExperiences.actions.publish).toBe('Preparar versión');
-    expect(esMessages.crm.voiceExperiences.actions.unpublish).toBe('Retirar versión');
-    expect(enMessages.crm.voiceExperiences.actions.publish).toBe('Prepare version');
-    expect(enMessages.crm.voiceExperiences.actions.unpublish).toBe('Withdraw version');
-    // The UI must not promise a public URL at this stage.
-    expect(esMessages.crm.voiceExperiences.list.privateNotice).toMatch(/No existe enlace público/i);
-    expect(enMessages.crm.voiceExperiences.list.privateNotice).toMatch(/no public link/i);
+  test('explica el paso siguiente cuando una experiencia está publicada', () => {
+    expect(esMessages.crm.voiceExperiences.list.status.published).toBe('Publicada');
+    expect(enMessages.crm.voiceExperiences.list.status.published).toBe('Published');
+    expect(esMessages.crm.voiceExperiences.actions.publish).toBe('Publicar');
+    expect(esMessages.crm.voiceExperiences.actions.unpublish).toBe('Despublicar');
+    expect(enMessages.crm.voiceExperiences.actions.publish).toBe('Publish');
+    expect(enMessages.crm.voiceExperiences.actions.unpublish).toBe('Unpublish');
+    expect(esMessages.crm.voiceExperiences.list.privateNotice).toMatch(/página pública/i);
+    expect(enMessages.crm.voiceExperiences.list.privateNotice).toMatch(/public page/i);
+    expect(esMessages.crm.voiceExperiences.list.openPublic).toBeTruthy();
+    expect(esMessages.crm.voiceExperiences.list.copyLink).toBeTruthy();
   });
 
   test('el helper de collection modes decide qué campos aparecen antes de la llamada', () => {
@@ -96,7 +97,7 @@ test.describe('protecciones puras de Voice Experiences', () => {
     );
     expect(getVoiceExperienceErrorKey('Unknown backend detail.')).toBeUndefined();
     expect(esMessages.crm.voiceExperiences.errors.backend.alreadyPublished).toBe(
-      'La experiencia ya tiene una versión preparada.'
+      'La experiencia ya está publicada.'
     );
   });
 
@@ -122,6 +123,36 @@ test.describe('protecciones puras de Voice Experiences', () => {
     ).toBe('schemaDeleteReferenced');
     expect(esMessages.crm.voiceExperiences.errors.backend.schemaDeleteReferenced).toBeTruthy();
     expect(enMessages.crm.voiceExperiences.errors.backend.schemaDeleteReferenced).toBeTruthy();
+    expect(
+      getVoiceExperienceErrorKey(
+        'The current published voice experience version cannot be deleted.'
+      )
+    ).toBe('versionDeleteCurrent');
+    expect(
+      getVoiceExperienceErrorKey('The latest voice experience version cannot be deleted.')
+    ).toBe('versionDeleteLatest');
+    expect(
+      getVoiceExperienceErrorKey('A referenced voice experience version cannot be deleted.')
+    ).toBe('versionDeleteReferenced');
+    expect(esMessages.crm.voiceExperiences.versions.confirmRestore.description).toBeTruthy();
+    expect(esMessages.crm.voiceExperiences.versions.confirmDelete.description).toContain(
+      'permanentemente'
+    );
+    expect(enMessages.crm.voiceExperiences.versions.confirmDelete.description).toContain(
+      'permanently'
+    );
+  });
+
+  test('explica el flujo editable y recuperable de los esquemas de contexto', () => {
+    expect(esMessages.crm.voiceExperiences.contextSchemas.editAsNewVersion).toMatch(
+      /nueva versión/i
+    );
+    expect(esMessages.crm.voiceExperiences.contextSchemas.openDraft).toMatch(/borrador/i);
+    expect(esMessages.crm.voiceExperiences.contextSchemas.fields.readOnlyHint).toMatch(
+      /borrador/i
+    );
+    expect(enMessages.crm.voiceExperiences.contextSchemas.editAsNewVersion).toBeTruthy();
+    expect(enMessages.crm.voiceExperiences.contextSchemas.openDraft).toBeTruthy();
   });
 
   test('bloquea el agente cuando el historial existe o no pudo verificarse', () => {
@@ -235,25 +266,54 @@ test.describe('administración privada de Voice Experiences', () => {
     expect(accessibility.violations, JSON.stringify(accessibility.violations, null, 2)).toEqual([]);
   });
 
-  test('las tarjetas del inventario no ofrecen preparar ni retirar versiones', async ({ page }) => {
+  test('las tarjetas del inventario no ofrecen publicar ni despublicar', async ({ page }) => {
     await requireAuthenticatedInventory(page);
     const cards = page.locator('article');
     test.skip((await cards.count()) === 0, 'No hay experiencias en el inventario.');
     await expect(
-      cards.getByRole('button', { name: /Preparar versión|Retirar versión|Publicar|Despublicar/i })
+      cards.getByRole('button', { name: /Publicar|Despublicar/i })
     ).toHaveCount(0);
   });
 
-  test('la preparación y el retiro de versiones viven en el editor', async ({ page }) => {
+  test('la publicación y despublicación viven en el editor', async ({ page }) => {
     await requireAuthenticatedInventory(page);
     const openEditor = page.getByRole('link', { name: /Abrir editor/i }).first();
     test.skip((await openEditor.count()) === 0, 'No hay una experiencia editable en el tenant QA.');
     await openEditor.click();
     await expect(
       page
-        .getByRole('button', { name: /Preparar versión/i })
-        .or(page.getByRole('button', { name: /Retirar versión/i }))
+        .getByRole('button', { name: /^Publicar$/i })
+        .or(page.getByRole('button', { name: /^Despublicar$/i }))
     ).toBeVisible();
+  });
+
+  test('permite seleccionar una versión y cargar su vista previa histórica', async ({ page }) => {
+    await requireAuthenticatedInventory(page);
+    const openEditor = page.getByRole('link', { name: /Abrir editor/i }).first();
+    test.skip((await openEditor.count()) === 0, 'No hay una experiencia editable en el tenant QA.');
+    await openEditor.click();
+    await page.getByRole('tab', { name: /^Versiones$/i }).click();
+    const version = page.getByTestId(/^voice-version-/).first();
+    test.skip((await version.count()) === 0, 'La experiencia no tiene historial publicado.');
+
+    await version.click();
+    await expect(version).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByText(/Vista previa histórica: versión/i)).toBeVisible();
+    await expect(page.getByRole('button', { name: /Restaurar como borrador/i }).first()).toBeVisible();
+  });
+
+  test('una experiencia publicada ofrece abrir y copiar su enlace público', async ({ page }) => {
+    await requireAuthenticatedInventory(page);
+    const publishedCard = page
+      .locator('article')
+      .filter({ has: page.getByText('Publicada', { exact: true }) })
+      .first();
+    test.skip((await publishedCard.count()) === 0, 'No hay una experiencia publicada en el tenant QA.');
+
+    const publicLink = publishedCard.getByRole('link', { name: /Abrir página pública/i });
+    await expect(publicLink).toHaveAttribute('href', /\/es\/voice\/[A-Za-z0-9_-]+$/);
+    await expect(publicLink).toHaveAttribute('target', '_blank');
+    await expect(publishedCard.getByRole('button', { name: /Copiar enlace/i })).toBeVisible();
   });
 
   test('limpia el detalle de schema al cambiar de agente', async ({ page }) => {
@@ -292,6 +352,23 @@ test.describe('administración privada de Voice Experiences', () => {
     await schemas.first().click();
     await schemas.nth(1).click();
     await expect(page.getByTestId('context-schema-detail').getByRole('heading', { name: lastName })).toBeVisible();
+  });
+
+  test('permite abrir una versión concreta del esquema desde su historial', async ({ page }) => {
+    await requireAuthenticatedInventory(page);
+    const openEditor = page.getByRole('link', { name: /Abrir editor/i }).first();
+    test.skip((await openEditor.count()) === 0, 'No hay experiencias para abrir el editor.');
+    await openEditor.click();
+    await page.getByRole('tab', { name: /Agente y contexto/i }).click();
+    const schemaItems = page.getByRole('listitem');
+    test.skip((await schemaItems.count()) === 0, 'El agente actual no tiene schemas.');
+    await schemaItems.first().click();
+    const schemaVersion = page
+      .getByRole('button', { name: /^v\d+ · (Borrador|Activo|Archivado)$/i })
+      .first();
+    test.skip((await schemaVersion.count()) === 0, 'El esquema no tiene historial visible.');
+    await schemaVersion.click();
+    await expect(schemaVersion).toHaveAttribute('aria-pressed', 'true');
   });
 
   test('asocia cada pestaña del editor con su tabpanel e indica secciones inválidas', async ({ page }) => {

@@ -183,3 +183,24 @@ def list_voice_experience_versions(
         return VoiceExperienceService(db).list_versions(context.tenant.id, experience_id)
     except SERVICE_ERRORS as exc:
         _raise_service_error(exc)
+
+
+@router.delete(
+    "/{experience_id}/versions/{version_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def delete_voice_experience_version(
+    experience_id: str,
+    version_id: str,
+    context: AuthContext = Depends(require_context_write),
+    db: Session = Depends(get_db),
+) -> None:
+    try:
+        VoiceExperienceService(db).delete_version(
+            context.tenant.id,
+            experience_id,
+            version_id,
+            context.user.id,
+        )
+    except SERVICE_ERRORS as exc:
+        _raise_service_error(exc)

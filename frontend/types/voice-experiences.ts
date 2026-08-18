@@ -72,6 +72,8 @@ export type VoiceExperienceVersionResponse = VoiceExperienceWriteRequest & {
   slug: string;
   published_at: string;
   created_at: string;
+  can_delete: boolean;
+  delete_block_reason: 'current' | 'latest' | 'referenced' | 'archived' | null;
 };
 
 export type VoiceContextFieldOption = {
