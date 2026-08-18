@@ -49,6 +49,8 @@ export default async function PublicVoiceExperiencePage({ params }: PageProps) {
         microphoneHelp: t('microphoneHelp'),
         callLoading: t('callLoading'),
         callConnected: t('callConnected'),
+        callDuration: t('callDuration'),
+        voiceActivity: t('voiceActivity'),
         endCall: t('endCall'),
         callEnded: t('callEnded'),
         errors: {

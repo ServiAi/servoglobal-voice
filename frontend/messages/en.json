@@ -1140,6 +1140,8 @@
     "microphoneHelp": "We will briefly check microphone access before starting the call.",
     "callLoading": "Starting call…",
     "callConnected": "Call connected",
+    "callDuration": "Duration",
+    "voiceActivity": "Voice activity visualization",
     "endCall": "End call",
     "callEnded": "Call ended",
     "errors": {
