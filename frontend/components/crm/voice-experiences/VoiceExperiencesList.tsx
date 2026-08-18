@@ -6,9 +6,11 @@ import {
   Archive,
   ArrowRight,
   Cable,
+  Check,
   CircleOff,
   Clock3,
-  Lock,
+  Copy,
+  ExternalLink,
   Mic2,
   Plus,
   RadioTower,
@@ -52,6 +54,7 @@ export function VoiceExperiencesList({
   const t = useTranslations('crm.voiceExperiences');
   const [experiences, setExperiences] = useState(initialExperiences);
   const [error, setError] = useState<string | null>(null);
+  const [copiedExperienceId, setCopiedExperienceId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const agentNames = new Map(agents.map((agent) => [agent.id, agent.display_name]));
 
@@ -94,6 +97,16 @@ export function VoiceExperiencesList({
       }
       setExperiences((current) => current.filter((experience) => experience.id !== experienceId));
     });
+  };
+
+  const copyPublicLink = async (experienceId: string, href: string) => {
+    setError(null);
+    try {
+      await navigator.clipboard.writeText(new URL(href, window.location.origin).toString());
+      setCopiedExperienceId(experienceId);
+    } catch {
+      setError(t('list.copyFailed'));
+    }
   };
 
   if (gateState !== 'ok') {
@@ -169,7 +182,7 @@ export function VoiceExperiencesList({
       </div>
 
       <p className="flex items-start gap-2 rounded-lg border border-border bg-muted/40 p-3 text-xs leading-5 text-muted-foreground">
-        <Lock className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+        <ExternalLink className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
         {t('list.privateNotice')}
       </p>
 
@@ -204,6 +217,7 @@ export function VoiceExperiencesList({
           {experiences.map((experience) => {
             const versionCount = versionCounts[experience.id] ?? null;
             const canDelete = canDeleteArchivedExperience(experience.status);
+            const publicHref = `/${locale}/voice/${experience.slug}`;
             return (
               <article
                 key={experience.id}
@@ -246,6 +260,14 @@ export function VoiceExperiencesList({
                       ),
                     })}
                   </p>
+                  {experience.status === 'published' ? (
+                    <div className="mt-4 rounded-lg border border-cyan-500/25 bg-cyan-500/[0.07] p-3">
+                      <p className="text-sm font-semibold text-foreground">{t('list.readyTitle')}</p>
+                      <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                        {t('list.readyDescription')}
+                      </p>
+                    </div>
+                  ) : null}
                   <div className="mt-auto flex flex-wrap items-center gap-2 pt-5">
                     <Button asChild size="sm" variant="outline" className="mr-auto">
                       <Link href={`/${locale}/crm/settings/voice-experiences/${experience.id}`}>
@@ -253,6 +275,34 @@ export function VoiceExperiencesList({
                         <ArrowRight className="ml-1.5 size-4" aria-hidden="true" />
                       </Link>
                     </Button>
+                    {experience.status === 'published' ? (
+                      <>
+                        <Button asChild size="sm">
+                          <Link href={publicHref} target="_blank" rel="noopener noreferrer">
+                            <ExternalLink className="mr-1.5 size-4" aria-hidden="true" />
+                            {t('list.openPublic')}
+                          </Link>
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          aria-live="polite"
+                          onClick={() => copyPublicLink(experience.id, publicHref)}
+                        >
+                          {copiedExperienceId === experience.id ? (
+                            <Check className="mr-1.5 size-4" aria-hidden="true" />
+                          ) : (
+                            <Copy className="mr-1.5 size-4" aria-hidden="true" />
+                          )}
+                          {t(
+                            copiedExperienceId === experience.id
+                              ? 'list.linkCopied'
+                              : 'list.copyLink'
+                          )}
+                        </Button>
+                      </>
+                    ) : null}
                     {canEdit && experience.status !== 'published' && experience.status !== 'archived' ? (
                       <ActionDialog
                         trigger={
