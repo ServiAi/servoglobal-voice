@@ -46,7 +46,7 @@ Las migraciones cubren identidad, analítica, riesgo Auth0, planes/uso, CRM base
 - El listado consulta el historial por experiencia para mostrar su conteo. Si `max_experiences` crece y esto se vuelve un cuello de botella, el backend deberá incluir el conteo en la respuesta del listado.
 - El inventario de Voice Experiences muestra las experiencias publicadas como listas para compartir y ofrece abrir o copiar su enlace público desde cada tarjeta.
 - El editor permite seleccionar snapshots históricos para previsualizarlos, restaurarlos como borrador y eliminar únicamente versiones antiguas sin referencias; las versiones actual, más reciente, referenciadas o archivadas permanecen protegidas.
-- En Agente y contexto, las versiones de esquema se pueden abrir desde el historial; las versiones activas o archivadas se editan mediante un borrador nuevo o existente, y activar ese borrador lo selecciona automáticamente para recuperar el flujo de publicación.
+- En Agente y contexto, las versiones de esquema se pueden abrir desde el historial; las versiones activas o archivadas se editan mediante un borrador nuevo o existente. Abrir/crear el borrador es idempotente, lo selecciona automáticamente y evita conflictos cuando ya existe otra versión draft.
 - Confirmar que cada entorno con automatizaciones tenga un proceso persistente `python -m app.workers.notification_worker` conectado a PostgreSQL.
 - Renovar la sesión Playwright con `npm.cmd run qa:auth` antes de la validación visual si la prueba redirige a la pantalla de login.
 - Validar en cada entorno credenciales, URLs públicas, webhooks, CORS y almacenamiento; no asumir que los defaults locales representan producción.
