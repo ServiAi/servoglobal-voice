@@ -1,12 +1,18 @@
 'use client';
 
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { useTranslations, useLocale } from 'next-intl';
 import { ContactModal } from './ContactModal';
 
 export function Footer() {
   const t = useTranslations('footer');
   const locale = useLocale();
+  const pathname = usePathname();
+
+  // The published public voice experience form is meant to be embedded /
+  // shared standalone: it must show only the form, not the marketing chrome.
+  if (pathname.split('/')[2] === 'voice') return null;
 
   return (
     <footer className="bg-zinc-100 dark:bg-zinc-950 border-t border-zinc-200 dark:border-white/5 transition-colors duration-300">

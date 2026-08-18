@@ -185,6 +185,9 @@ test('renders all enabled field types as a responsive public form', async ({ pag
   await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', /noindex/);
   await expect(page.getByTestId('public-voice-runtime').locator('section')).toHaveClass(/lg:grid-cols/);
   expect(await page.locator('header').evaluate((element) => getComputedStyle(element).backgroundColor)).not.toBe('rgba(0, 0, 0, 0)');
+  // The published form is meant to be shown standalone, with no ServiGlobal
+  // marketing chrome around it.
+  await expect(page.locator('footer')).toHaveCount(0);
 
   const bodyText = await page.locator('body').innerText();
   expect(bodyText).not.toMatch(/tenant_id|agent_config_id|context_schema_id|system_prompt|api[_-]?key|joinUrl/i);
