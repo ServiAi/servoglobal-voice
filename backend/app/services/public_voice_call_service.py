@@ -203,7 +203,7 @@ class PublicVoiceCallService:
             values = db.scalars(select(TenantVoiceExperienceSubmissionValue).where(TenantVoiceExperienceSubmissionValue.submission_id == runtime.submission_id)).all()
             user_context = {value.field_key: value.value_json for value in values}
             user_context["locale"] = submission.locale if submission else "es"
-            metadata = {"voice_call_id": str(runtime.crm_voice_call_id), "runtime_call_id": str(runtime.id), "source": "voice_experience"}
+            metadata = {"voice_call_id": str(runtime.crm_voice_call_id), "runtime_call_id": str(runtime.id), "tenant_id": str(runtime.tenant_id), "source": "voice_experience"}
         try:
             result = provider.create_webrtc_call(config, agent, metadata=metadata, user_context=user_context)
         except ProviderDefiniteFailure as exc:
