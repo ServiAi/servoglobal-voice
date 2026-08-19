@@ -10,9 +10,9 @@ export function Footer() {
   const locale = useLocale();
   const pathname = usePathname();
 
-  // The published public voice experience form is meant to be embedded /
-  // shared standalone: it must show only the form, not the marketing chrome.
-  if (pathname.split('/')[2] === 'voice') return null;
+  // Public voice forms and the authenticated tenant workspace do not use
+  // the marketing footer.
+  if (['voice', 'crm'].includes(pathname.split('/')[2])) return null;
 
   return (
     <footer className="bg-zinc-100 dark:bg-zinc-950 border-t border-zinc-200 dark:border-white/5 transition-colors duration-300">
