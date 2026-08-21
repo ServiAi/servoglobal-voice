@@ -44,7 +44,7 @@ La especificación ejecutable completa está disponible en `/docs` y `/openapi.j
 - Cal.com: configuración, test y slots bajo `/api/v1/integrations/calcom`; bookings viven en CRM.
 - Google Calendar: connect URL, callback, connections y disconnect.
 - WhatsApp: configuración, test y templates.
-- Voz: configuración, test y agentes.
+- Voz: configuración, test, agentes y ruta SIP saliente por tenant. La respuesta sólo indica si existe contraseña SIP; nunca devuelve el secreto.
 
 ## Administración de automatizaciones y notificaciones
 
@@ -121,6 +121,7 @@ La respuesta omite el identificador del tenant, el usuario que realizó el cambi
 | `GET /api/v1/public/voice-experiences/{slug}` | Resuelve sin autenticación exclusivamente el snapshot publicado exacto y su schema histórico. Devuelve un DTO público sanitizado y `Cache-Control: no-store`; cualquier estado no publicable responde un `404` genérico. |
 | `POST /api/v1/public/voice-experiences/{slug}/submissions` | Sin Auth0. Consume rate limit global antes del JSON, valida envelope/campos/consentimiento, verifica Turnstile y persiste submission, values y context session 1:1 contra la versión exacta. Proyecta contact, lead y activity CRM por `context_id`; devuelve token efímero sin IDs internos, con `submissions=true`, `calls=true`. |
 | `POST /api/v1/public/voice-experiences/{slug}/calls` | Sin Auth0. Acepta sólo `context_token`, aplica rate limits, recovery-first y claim one-shot; resuelve configuración/agente Ultravox tenant, devuelve `join_url` efímero y nunca expone IDs/provider/prompt/tools. |
+| `POST /api/v1/public/voice-experiences/{slug}/callback-requests` | Sin Auth0. Acepta sólo `context_token`, valida consentimiento, teléfono, país, ruta SIP y capacidad del tenant; crea un `CrmVoiceCall` idempotente y responde `202` sin exponer tenant, número, agente ni proveedor. |
 
 Los context schemas usados por `TenantVoiceExperienceVersion` forman parte del contrato reproducible de la publicación. Aunque una experiencia cambie su borrador a otro schema, el schema histórico no puede eliminarse mientras un snapshot lo referencie. La política de retención puede evolucionar posteriormente; el historial actual se conserva.
 
@@ -128,7 +129,7 @@ El tenant se deriva de `AuthContext`; los bodies rechazan `tenant_id`. Lectura: 
 
 Reglas de dominio: `PUT` rechaza con `409` cambiar `agent_config_id` cuando ya existe historial de versiones. El estado persistido `published` representa un snapshot inmutable. Restaurar una versión copia su snapshot al borrador; no modifica el historial. La versión pública actual, la más reciente, las versiones referenciadas y las pertenecientes a experiencias archivadas no pueden eliminarse individualmente. El endpoint público exige estado `published`, referencia exacta `published_version_id`, feature tenant habilitada y coincidencia de experiencia/tenant/schema; ante cualquier inconsistencia falla cerrado.
 
-Los endpoints administrativos bajo `/api/v1/voice` siguen autenticados. La superficie pública permite lectura, context submission e inicio one-shot de WebRTC; la demo heredada `/api/v1/calls` continúa separada. El DTO no expone tenant, proveedor, prompt, tools o credenciales. Las llamadas usan errores cerrados `404/409/410/422/429/503/500`, siempre `no-store`. Ver `docs-local/fase-4/VOICE_EXPERIENCE_WEBRTC_RUNTIME.md`.
+Los endpoints administrativos bajo `/api/v1/voice` siguen autenticados. La superficie pública permite lectura, context submission y, según la versión publicada, inicio one-shot de WebRTC o solicitud de callback saliente; la demo heredada `/api/v1/calls` continúa separada. El DTO no expone tenant, proveedor, prompt, tools o credenciales. Las llamadas usan errores cerrados `404/409/410/422/429/503/500`, siempre `no-store`. Ver `docs-local/fase-4/VOICE_EXPERIENCE_WEBRTC_RUNTIME.md`.
 
 ## Convenciones
 

@@ -8,6 +8,7 @@ import { Check, LockKeyhole, ShieldCheck } from 'lucide-react';
 
 import { submitPublicVoiceExperience } from '@/lib/api/public-voice-submissions';
 import { PublicVoiceCall } from './PublicVoiceCall';
+import { PublicVoiceCallback } from './PublicVoiceCallback';
 import { isSafeHttpsUrl } from '@/lib/voice-experiences/url-safety';
 import type {
   PublicVoiceContextField,
@@ -34,6 +35,8 @@ export interface PublicVoiceMessages {
   voiceActivity: string;
   endCall: string;
   callEnded: string;
+  callbackLoading: string;
+  callbackAccepted: string;
   errors: Record<string, string>;
 }
 
@@ -43,7 +46,77 @@ interface Props {
   messages: PublicVoiceMessages;
 }
 
-function FieldControl({ field, placeholder }: { field: PublicVoiceContextField; placeholder: string }) {
+const PHONE_COUNTRIES = [
+  { code: 'CO', prefix: '+57', label: 'Colombia +57' },
+  { code: 'MX', prefix: '+52', label: 'México +52' },
+  { code: 'AR', prefix: '+549', label: 'Argentina +54 9' },
+  { code: 'PA', prefix: '+507', label: 'Panamá +507' },
+  { code: 'CL', prefix: '+56', label: 'Chile +56' },
+  { code: 'EC', prefix: '+593', label: 'Ecuador +593' },
+  { code: 'PE', prefix: '+51', label: 'Perú +51' },
+  { code: 'US', prefix: '+1', label: 'Estados Unidos +1' },
+] as const;
+
+type PhoneCountry = (typeof PHONE_COUNTRIES)[number]['code'];
+
+function PhoneFieldControl({
+  field,
+  defaultCountry,
+  allowedCountries,
+}: {
+  field: PublicVoiceContextField;
+  defaultCountry: PhoneCountry;
+  allowedCountries: PhoneCountry[];
+}) {
+  const countries = PHONE_COUNTRIES.filter((country) => allowedCountries.includes(country.code));
+  const initialCountry = countries.some((country) => country.code === defaultCountry)
+    ? defaultCountry
+    : countries[0]?.code ?? 'CO';
+  const [countryCode, setCountryCode] = useState<PhoneCountry>(initialCountry);
+  const [nationalNumber, setNationalNumber] = useState('');
+  const country = PHONE_COUNTRIES.find((item) => item.code === countryCode) ?? PHONE_COUNTRIES[0];
+  const digits = nationalNumber.replace(/\D/g, '').replace(/^0+/, '');
+
+  return (
+    <div className="mt-2 grid gap-2 sm:grid-cols-[minmax(150px,0.8fr)_1.2fr]">
+      <select
+        aria-label="País"
+        className="min-h-11 rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900"
+        value={countryCode}
+        onChange={(event) => setCountryCode(event.target.value as PhoneCountry)}
+      >
+        {countries.map((item) => <option key={item.code} value={item.code}>{item.label}</option>)}
+      </select>
+      <input
+        id={`public-field-${field.key}`}
+        type="tel"
+        inputMode="tel"
+        autoComplete="tel-national"
+        required={field.required}
+        value={nationalNumber}
+        onChange={(event) => setNationalNumber(event.target.value)}
+        placeholder="Número nacional"
+        className="min-h-11 rounded-xl border border-slate-300 bg-white px-3.5 text-sm text-slate-900 outline-none transition focus:border-[var(--voice-accent)] focus:ring-2 focus:ring-[color-mix(in_srgb,var(--voice-accent)_18%,transparent)]"
+      />
+      <input type="hidden" name={field.key} value={digits ? `${country.prefix}${digits}` : ''} />
+    </div>
+  );
+}
+
+function FieldControl({
+  field,
+  placeholder,
+  defaultCountry,
+  allowedCountries,
+}: {
+  field: PublicVoiceContextField;
+  placeholder: string;
+  defaultCountry: PhoneCountry;
+  allowedCountries: PhoneCountry[];
+}) {
+  if (field.field_type === 'phone') {
+    return <PhoneFieldControl field={field} defaultCountry={defaultCountry} allowedCountries={allowedCountries} />;
+  }
   const common = {
     id: `public-field-${field.key}`,
     name: field.key,
@@ -219,14 +292,23 @@ export function PublicVoiceExperience({ experience, locale, messages }: Props) {
                   <h2 className="mt-5 text-xl font-semibold">{messages.successTitle}</h2>
                   <p className="mt-2 text-sm leading-6 text-slate-600">{experience.content.success_message}</p>
                   {contextToken && experience.capabilities.calls ? (
-                    <PublicVoiceCall
-                      slug={experience.slug}
-                      contextToken={contextToken}
-                      callLabel={experience.content.call_label}
-                      autoStart={experience.call_settings.auto_start}
-                      showMicrophoneHelp={experience.call_settings.show_microphone_help}
-                      messages={messages}
-                    />
+                    experience.call_settings.mode === 'callback' ? (
+                      <PublicVoiceCallback
+                        slug={experience.slug}
+                        contextToken={contextToken}
+                        callLabel={experience.content.call_label}
+                        messages={messages}
+                      />
+                    ) : (
+                      <PublicVoiceCall
+                        slug={experience.slug}
+                        contextToken={contextToken}
+                        callLabel={experience.content.call_label}
+                        autoStart={experience.call_settings.auto_start}
+                        showMicrophoneHelp={experience.call_settings.show_microphone_help}
+                        messages={messages}
+                      />
+                    )
                   ) : null}
                 </div>
               </div>
@@ -242,7 +324,14 @@ export function PublicVoiceExperience({ experience, locale, messages }: Props) {
                     {field.field_type !== 'checkbox' && field.description ? (
                       <p className="mt-1 text-sm leading-5 text-slate-500">{field.description}</p>
                     ) : null}
-                    <FieldControl field={field} placeholder={messages.selectPlaceholder} />
+                    <FieldControl
+                      field={field}
+                      placeholder={messages.selectPlaceholder}
+                      defaultCountry={experience.call_settings.default_country}
+                      allowedCountries={experience.call_settings.allowed_countries.length
+                        ? experience.call_settings.allowed_countries
+                        : [experience.call_settings.default_country]}
+                    />
                     {fieldErrors[field.key] ? (
                       <p className="mt-1 text-sm text-rose-700" role="alert">
                         {messages.errors[fieldErrors[field.key]]}

@@ -85,25 +85,6 @@ async def create_call_session(
         raise
 
 
-def normalize_e164_colombia(phone: str) -> str:
-    """
-    Normalizes a Colombian phone number to E.164 format (digits only, typically starts with 57).
-    """
-    import re
-
-    digits = re.sub(r"\D", "", phone)
-
-    # If 10 digits starting with 3 (e.g. 3001234567), 
-    if len(digits) == 10 and digits.startswith("3"):
-        return f"57{digits}"
-    # If already has 57 (12 digits), return as is
-    if len(digits) == 12 and digits.startswith("57"):
-        return digits
-
-    # Fallback: return digits (might be fixed line or international not handled)
-    return digits
-
-
 async def create_sip_call_via_pbx(
     phone: str,
     agent_id: str | None = None,
@@ -125,12 +106,9 @@ async def create_sip_call_via_pbx(
         "Content-Type": "application/json",
     }
 
-    number = normalize_e164_colombia(phone)
+    from app.services.voice_phone_service import normalize_outbound_phone
 
-    # IMPORTANTE:
-    # Decide si tu dialplan matchea con + o sin +.
-    # Yo recomiendo mandar con +, y en Asterisk soportar ambos.
-    dialed = f"+{number}"
+    dialed = normalize_outbound_phone(phone, default_country="CO").e164
 
     # Tu Asterisk público (IP o dominio).
     pbx_uri = f"sip:{dialed}@{settings.ASTERISK_PUBLIC_HOST}:5060"
@@ -209,8 +187,9 @@ async def create_scheduled_sip_call_via_pbx(
     }
 
     # Normalize phone and construct SIP URI (reused from existing logic)
-    number = normalize_e164_colombia(phone)
-    dialed = f"+{number}"
+    from app.services.voice_phone_service import normalize_outbound_phone
+
+    dialed = normalize_outbound_phone(phone, default_country="CO").e164
     pbx_uri = f"sip:{dialed}@{settings.ASTERISK_PUBLIC_HOST}:5060"
 
     # Define the call object (same structure as immediate call's medium)

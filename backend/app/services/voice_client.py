@@ -9,6 +9,17 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
+class VoiceSipRouteConfig:
+    host: str
+    port: int
+    username: str
+    password: str
+    caller_id: str
+    default_country: str
+    allowed_countries: tuple[str, ...]
+
+
+@dataclass
 class VoiceClientConfig:
     provider: str
     api_key: str
@@ -17,6 +28,7 @@ class VoiceClientConfig:
     default_from_number: str | None = None
     default_language: str = "es"
     default_timezone: str = "America/Bogota"
+    sip_route: VoiceSipRouteConfig | None = None
 
 
 class VoiceClientError(Exception):
@@ -79,17 +91,17 @@ class VoiceClient:
         metadata: dict[str, Any],
         context: dict[str, Any],
     ) -> dict[str, Any]:
-        from app.services.voice_service import normalize_e164_colombia
-        from app.core.config import settings
+        from app.services.voice_phone_service import normalize_outbound_phone
 
-        number = normalize_e164_colombia(to_phone)
-        dialed = f"+{number}"
-
-        host = settings.ASTERISK_PUBLIC_HOST
-        pbx_uri = f"sip:{dialed}@{host}:5060"
-
-        username = settings.UVX_SIP_USERNAME
-        password = settings.UVX_SIP_PASSWORD
+        route = config.sip_route
+        if route is None:
+            raise VoiceClientError("Outbound SIP route is not configured.")
+        number = normalize_outbound_phone(
+            to_phone,
+            default_country=route.default_country,
+            allowed_countries=set(route.allowed_countries),
+        )
+        pbx_uri = f"sip:{number.e164}@{route.host}:{route.port}"
 
         base_url = config.base_url or "https://api.ultravox.ai"
         url = f"{base_url.rstrip('/')}/api/agents/{agent_id}/calls"
@@ -104,8 +116,8 @@ class VoiceClient:
                 "sip": {
                     "outgoing": {
                         "to": pbx_uri,
-                        "username": username,
-                        "password": password,
+                        "username": route.username,
+                        "password": route.password,
                     }
                 }
             },

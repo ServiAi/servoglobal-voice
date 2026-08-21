@@ -1082,6 +1082,9 @@
         },
         "behavior": {
           "language": "Selecciona el idioma que utilizará el agente durante la llamada.",
+          "mode": "Elige WebRTC para hablar en el navegador o devolución de llamada para llamar al teléfono registrado.",
+          "phoneField": "Selecciona el campo obligatorio de teléfono que se usará como destino.",
+          "defaultCountry": "Se usa para interpretar números locales que no incluyen código internacional.",
           "auto_start": "Actívalo para indicar que la llamada debe iniciar al completar el contexto.",
           "show_microphone_help": "Actívalo para mostrar al cliente una indicación sobre el permiso del micrófono."
         },
@@ -1118,7 +1121,7 @@
         "content": { "title": "Contenido", "description": "Redacta los textos visibles de la experiencia.", "fields": { "title": "Título", "description": "Descripción", "submit_label": "Botón de envío", "call_label": "Botón de llamada", "success_message": "Mensaje de éxito" } },
         "appearance": { "title": "Apariencia", "description": "Usa una identidad clara y comprueba el resultado en la vista previa.", "logoUrl": "URL HTTPS del logo", "color": "Color", "colorHex": "Color hexadecimal", "layout": "Composición", "layouts": { "centered": "Centrada", "split": "Dividida", "card": "Tarjeta" } },
         "consent": { "title": "Consentimiento", "description": "Configura el texto legal mostrado antes de continuar.", "required": "Requerir consentimiento", "requiredHint": "La persona debe marcarlo para continuar.", "label": "Texto de consentimiento", "privacyUrl": "URL HTTPS de privacidad" },
-        "behavior": { "title": "Comportamiento", "description": "Estas opciones sólo describen el borrador; la vista previa no inicia llamadas.", "language": "Idioma de llamada", "languages": { "es": "Español", "en": "Inglés" }, "auto_start": "Inicio automático", "auto_startHint": "Marca la intención de iniciar al completar el contexto.", "show_microphone_help": "Mostrar ayuda de micrófono", "show_microphone_helpHint": "Incluye instrucciones visibles para la persona." }
+        "behavior": { "title": "Comportamiento", "description": "Configura cómo se inicia la conversación después de registrar el contexto.", "mode": "Modo de llamada", "modes": { "webrtc": "Hablar en el navegador (WebRTC)", "callback": "Solicitar llamada al teléfono" }, "phoneField": "Campo de teléfono", "phoneFieldPlaceholder": "Selecciona un campo obligatorio", "defaultCountry": "País predeterminado", "countries": { "CO": "Colombia", "MX": "México", "AR": "Argentina", "PA": "Panamá", "CL": "Chile", "EC": "Ecuador", "PE": "Perú", "US": "Estados Unidos" }, "language": "Idioma de llamada", "languages": { "es": "Español", "en": "Inglés" }, "auto_start": "Inicio automático", "auto_startHint": "Marca la intención de iniciar al completar el contexto.", "show_microphone_help": "Mostrar ayuda de micrófono", "show_microphone_helpHint": "Incluye instrucciones visibles para la persona." }
       },
       "preview": { "label": "Vista previa", "notFunctional": "Vista no funcional", "microphoneHelp": "Permite el acceso al micrófono cuando inicie la llamada.", "noFields": "El esquema no tiene campos visibles.", "privacy": "Ver política de privacidad", "localOnly": "Representación local; no realiza solicitudes de red.", "safeNote": "La vista previa es segura: no usa micrófono, WebRTC ni inicia llamadas.", "states": { "label": "Estado de la vista previa", "form": "Formulario", "confirmation": "Confirmación", "beforeCall": "Antes de la llamada" }, "confirmationRecorded": "Los datos habrían sido registrados en esta etapa.", "continueToCall": "Continuar a la llamada", "autoStartActive": "En el runtime público la llamada se iniciaría automáticamente después de validar el contexto." },
       "versions": { "title": "Historial de versiones", "empty": "Todavía no hay versiones publicadas.", "current": "Actual", "selected": "Seleccionada", "previewing": "Vista previa histórica: versión {version}", "restore": "Restaurar como borrador", "delete": "Eliminar versión {version}", "confirmRestore": { "title": "¿Restaurar la versión {version}?", "description": "Sus datos reemplazarán el borrador actual, pero no modificarán la versión pública ni el historial hasta que guardes y publiques nuevamente." }, "confirmDelete": { "title": "¿Eliminar la versión {version}?", "description": "Esta versión histórica se eliminará permanentemente. Esta acción no se puede deshacer.", "confirmLabel": "Eliminar versión" }, "deleteReasons": { "current": "La versión pública actual no se puede eliminar.", "latest": "La versión más reciente se conserva para mantener la numeración del historial.", "referenced": "Esta versión tiene formularios, sesiones o llamadas asociadas.", "archived": "El historial de una experiencia archivada no se puede modificar." } },
@@ -1162,6 +1165,8 @@
     "voiceActivity": "Visualización de actividad de voz",
     "endCall": "Finalizar llamada",
     "callEnded": "Llamada finalizada",
+    "callbackLoading": "Solicitando llamada...",
+    "callbackAccepted": "Solicitud recibida. Te llamaremos en unos momentos.",
     "errors": {
       "required": "Este campo es obligatorio.",
       "unknown_field": "Este campo ya no forma parte del formulario.",
@@ -1183,7 +1188,10 @@
       "context_session_unavailable": "Esta sesión ya no está disponible.",
       "context_session_expired": "Esta sesión venció. Envía el formulario de nuevo.",
       "call_unavailable": "Las llamadas no están disponibles temporalmente.",
-      "call_provider_unavailable": "El proveedor de voz no está disponible temporalmente."
+      "call_provider_unavailable": "El proveedor de voz no está disponible temporalmente.",
+      "phone_unavailable": "No encontramos un número válido para realizar la llamada.",
+      "destination_not_allowed": "El destino no está habilitado para llamadas salientes.",
+      "call_capacity_reached": "Todas las líneas están ocupadas. Inténtalo nuevamente en unos minutos."
     },
     "notFound": {
       "title": "Experiencia no disponible",

@@ -346,12 +346,19 @@ class CrmVoiceCall(Base, TimestampMixin):
         Index("ix_crm_voice_calls_tenant_contact", "tenant_id", "contact_id"),
         Index("ix_crm_voice_calls_tenant_status", "tenant_id", "status"),
         Index("ix_crm_voice_calls_provider_call", "provider", "provider_call_id"),
+        UniqueConstraint("source_submission_id", name="uq_crm_voice_calls_source_submission"),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
     tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False)
     lead_id: Mapped[str | None] = mapped_column(ForeignKey("crm_leads.id"), nullable=True)
     contact_id: Mapped[str | None] = mapped_column(ForeignKey("crm_contacts.id"), nullable=True)
+    source_submission_id: Mapped[str | None] = mapped_column(
+        ForeignKey("tenant_voice_experience_submissions.id", ondelete="SET NULL"), nullable=True
+    )
+    sip_route_id: Mapped[str | None] = mapped_column(
+        ForeignKey("tenant_sip_routes.id", ondelete="SET NULL"), nullable=True
+    )
     provider: Mapped[str] = mapped_column(String(40), nullable=False, default="ultravox")
     provider_call_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     provider_session_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -365,6 +372,9 @@ class CrmVoiceCall(Base, TimestampMixin):
     transcript_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    provider_attempt_started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     answered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     duration_seconds: Mapped[int | None] = mapped_column(sa.Integer, nullable=True)

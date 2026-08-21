@@ -717,6 +717,71 @@ export function VoiceExperienceBuilder({
       </div>
       <label className="grid gap-2 text-sm font-semibold text-foreground">
         <span className="flex items-center gap-1.5">
+          {t('form.behavior.mode')}
+          <FieldHelp label={t('form.behavior.mode')} required>{t('help.behavior.mode')}</FieldHelp>
+        </span>
+        <select
+          className={FIELD_CLASS}
+          value={form.call_settings.mode}
+          disabled={!editable}
+          onChange={(event) => updateRoot('call_settings', {
+            ...form.call_settings,
+            mode: event.target.value as 'webrtc' | 'callback',
+            phone_field_key: event.target.value === 'callback'
+              ? form.call_settings.phone_field_key
+              : null,
+          })}
+        >
+          <option value="webrtc">{t('form.behavior.modes.webrtc')}</option>
+          <option value="callback">{t('form.behavior.modes.callback')}</option>
+        </select>
+      </label>
+      {form.call_settings.mode === 'callback' ? (
+        <div className="grid gap-4 sm:grid-cols-2">
+          <label className="grid gap-2 text-sm font-semibold text-foreground">
+            <span className="flex items-center gap-1.5">
+              {t('form.behavior.phoneField')}
+              <FieldHelp label={t('form.behavior.phoneField')} required>{t('help.behavior.phoneField')}</FieldHelp>
+            </span>
+            <select
+              className={FIELD_CLASS}
+              value={form.call_settings.phone_field_key ?? ''}
+              disabled={!editable}
+              onChange={(event) => updateRoot('call_settings', {
+                ...form.call_settings,
+                phone_field_key: event.target.value || null,
+              })}
+            >
+              <option value="">{t('form.behavior.phoneFieldPlaceholder')}</option>
+              {(schemaDetail?.fields ?? [])
+                .filter((field) => field.field_type === 'phone' && field.required && field.collection_mode !== 'internal_only')
+                .map((field) => <option key={field.id} value={field.key}>{field.label}</option>)}
+            </select>
+            {validationMessage('call_settings.phone_field_key')}
+          </label>
+          <label className="grid gap-2 text-sm font-semibold text-foreground">
+            <span className="flex items-center gap-1.5">
+              {t('form.behavior.defaultCountry')}
+              <FieldHelp label={t('form.behavior.defaultCountry')} required>{t('help.behavior.defaultCountry')}</FieldHelp>
+            </span>
+            <select
+              className={FIELD_CLASS}
+              value={form.call_settings.default_country}
+              disabled={!editable}
+              onChange={(event) => updateRoot('call_settings', {
+                ...form.call_settings,
+                default_country: event.target.value as VoiceExperienceWriteRequest['call_settings']['default_country'],
+              })}
+            >
+              {(['CO', 'MX', 'AR', 'PA', 'CL', 'EC', 'PE', 'US'] as const).map((country) => (
+                <option key={country} value={country}>{t(`form.behavior.countries.${country}`)}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+      ) : null}
+      <label className="grid gap-2 text-sm font-semibold text-foreground">
+        <span className="flex items-center gap-1.5">
           {t('form.behavior.language')}
           <FieldHelp label={t('form.behavior.language')} required>{t('help.behavior.language')}</FieldHelp>
         </span>
@@ -735,7 +800,7 @@ export function VoiceExperienceBuilder({
         </select>
         {validationMessage('call_settings.language')}
       </label>
-      <div className="grid gap-3 sm:grid-cols-2">
+      {form.call_settings.mode === 'webrtc' ? <div className="grid gap-3 sm:grid-cols-2">
         {(['auto_start', 'show_microphone_help'] as const).map((key) => (
           <label key={key} className="flex items-start gap-3 rounded-lg border border-border p-4 text-sm text-foreground">
             <input
@@ -760,7 +825,7 @@ export function VoiceExperienceBuilder({
             </span>
           </label>
         ))}
-      </div>
+      </div> : null}
     </div>
   );
 

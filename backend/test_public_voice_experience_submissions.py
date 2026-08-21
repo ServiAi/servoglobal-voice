@@ -368,6 +368,37 @@ class PublicVoiceExperienceSubmissionTests(Integration2ATestCase):
             ).one()
             self.assertEqual(event.status, "success")
 
+    def test_local_phone_normalizes_using_experience_default_country(self) -> None:
+        # A webrtc-mode experience configured for Mexico must not fall back
+        # to CrmContactService.normalize_phone()'s Colombia-only 10-digit
+        # heuristic when the visitor types a bare local number.
+        payload = self._experience_payload()
+        payload["call_settings"] = {
+            "auto_start": False,
+            "show_microphone_help": False,
+            "language": "es",
+            "default_country": "MX",
+        }
+        created = self.client.post("/api/v1/voice/experiences", json=payload)
+        self.assertEqual(created.status_code, 201, created.text)
+        published = self.client.post(
+            f"/api/v1/voice/experiences/{created.json()['id']}/publish"
+        )
+        self.assertEqual(published.status_code, 200, published.text)
+        slug = published.json()["slug"]
+
+        body = self._body()
+        body["answers"].pop("client_email")
+        body["answers"]["mobile_number"] = "2221234567"
+        response = self.client.post(
+            f"/api/v1/public/voice-experiences/{slug}/submissions", json=body
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+
+        with SessionLocal() as db:
+            contact = db.scalars(select(CrmContact)).one()
+            self.assertEqual(contact.phone_normalized, "+522221234567")
+
     def test_context_session_lifecycle_is_atomic_and_one_to_one(self) -> None:
         self.assertEqual(self._post().status_code, 200)
         consumed_at = datetime.now(UTC)

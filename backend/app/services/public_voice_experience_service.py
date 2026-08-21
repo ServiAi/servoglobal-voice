@@ -19,6 +19,7 @@ from app.schemas.public_voice_experiences import (
     PublicVoiceCallSettings,
     PublicVoiceTheme,
 )
+from app.services.voice_sip_route_service import VoiceSipRouteService
 from app.services.tenant_feature_service import VOICE_EXPERIENCES, TenantFeatureService
 
 
@@ -46,6 +47,21 @@ class PublicVoiceExperienceService:
     def resolve(self, slug: str) -> PublicVoiceExperienceResponse:
         snapshot = self._resolve_snapshot(slug)
         version = snapshot.version
+        call_settings = {
+            key: version.call_settings_json.get(key)
+            for key in PublicVoiceCallSettings.model_fields
+            if key in version.call_settings_json
+        }
+        calls_available = True
+        if call_settings.get("mode", "webrtc") == "callback":
+            try:
+                route = VoiceSipRouteService(self.db).get_active_route(
+                    snapshot.experience.tenant_id
+                )
+                call_settings["allowed_countries"] = list(route.allowed_countries_json)
+            except Exception:
+                calls_available = False
+                call_settings["allowed_countries"] = []
 
         return PublicVoiceExperienceResponse(
             slug=version.slug,
@@ -55,14 +71,8 @@ class PublicVoiceExperienceService:
             theme=self._theme(version.theme_json),
             consent=self._consent(version.consent_json),
             fields=[self._field(field) for field in snapshot.fields],
-            call_settings=PublicVoiceCallSettings.model_validate(
-                {
-                    key: version.call_settings_json.get(key)
-                    for key in PublicVoiceCallSettings.model_fields
-                    if key in version.call_settings_json
-                }
-            ),
-            capabilities=PublicCapabilities(),
+            call_settings=PublicVoiceCallSettings.model_validate(call_settings),
+            capabilities=PublicCapabilities(calls=calls_available),
         )
 
     def _resolve_snapshot(

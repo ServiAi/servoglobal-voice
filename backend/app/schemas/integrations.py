@@ -219,6 +219,31 @@ class WhatsAppTemplateResponse(BaseModel):
     status: str
 
 
+class VoiceSipRouteRequest(BaseModel):
+    status: str = Field(default="inactive", pattern=r"^(active|inactive)$")
+    pbx_host: str = Field(min_length=1, max_length=255)
+    pbx_port: int = Field(default=5060, ge=1, le=65535)
+    sip_username: str = Field(min_length=1, max_length=120)
+    sip_password: Optional[str] = Field(None, min_length=8, max_length=1000)
+    caller_id: str = Field(min_length=7, max_length=32)
+    default_country: str = Field(default="CO", pattern=r"^(AR|CL|CO|EC|MX|PA|PE|US)$")
+    allowed_countries: list[str] = Field(default_factory=lambda: ["CO"])
+    max_concurrent_calls: int = Field(default=1, ge=1, le=100)
+
+
+class VoiceSipRouteResponse(BaseModel):
+    id: str
+    status: str
+    pbx_host: str
+    pbx_port: int
+    sip_username: str
+    caller_id: str
+    default_country: str
+    allowed_countries: list[str]
+    max_concurrent_calls: int
+    has_sip_password: bool
+
+
 class VoiceProviderConfigRequest(BaseModel):
     provider: str = Field(default="ultravox", max_length=40)
     status: str = Field(default="active", max_length=32)
@@ -230,6 +255,7 @@ class VoiceProviderConfigRequest(BaseModel):
     default_timezone: str = Field(default="America/Bogota", max_length=80)
     api_key: Optional[str] = Field(None, max_length=1000)
     webhook_secret: Optional[str] = Field(None, max_length=1000)
+    sip_route: Optional[VoiceSipRouteRequest] = None
 
 
 class VoiceProviderConfigResponse(BaseModel):
@@ -246,6 +272,7 @@ class VoiceProviderConfigResponse(BaseModel):
     has_webhook_secret: bool = False
     last_health_check_at: Optional[datetime] = None
     last_error_message: Optional[str] = None
+    sip_route: Optional[VoiceSipRouteResponse] = None
 
 
 class VoiceAgentConfigRequest(BaseModel):

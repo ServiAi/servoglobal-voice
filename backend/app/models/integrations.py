@@ -430,6 +430,41 @@ class TenantVoiceProviderConfig(Base, TimestampMixin):
     tenant = relationship("Tenant")
 
 
+class TenantSipRoute(Base, TimestampMixin):
+    __tablename__ = "tenant_sip_routes"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", name="uq_tenant_sip_routes_tenant"),
+        UniqueConstraint("provider_config_id", name="uq_tenant_sip_routes_provider_config"),
+        Index("ix_tenant_sip_routes_tenant_status", "tenant_id", "status"),
+        sa.CheckConstraint("status IN ('active','inactive')", name="ck_tenant_sip_routes_status"),
+        sa.CheckConstraint("pbx_port BETWEEN 1 AND 65535", name="ck_tenant_sip_routes_port"),
+        sa.CheckConstraint(
+            "max_concurrent_calls BETWEEN 1 AND 100",
+            name="ck_tenant_sip_routes_concurrency",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    tenant_id: Mapped[str] = mapped_column(
+        ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
+    )
+    provider_config_id: Mapped[str] = mapped_column(
+        ForeignKey("tenant_voice_provider_configs.id", ondelete="CASCADE"), nullable=False
+    )
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="inactive")
+    pbx_host: Mapped[str] = mapped_column(String(255), nullable=False)
+    pbx_port: Mapped[int] = mapped_column(sa.Integer, nullable=False, default=5060)
+    sip_username: Mapped[str] = mapped_column(String(120), nullable=False)
+    sip_password_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
+    caller_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    default_country: Mapped[str] = mapped_column(String(2), nullable=False, default="CO")
+    allowed_countries_json: Mapped[list] = mapped_column(sa.JSON, nullable=False, default=list)
+    max_concurrent_calls: Mapped[int] = mapped_column(sa.Integer, nullable=False, default=1)
+
+    tenant = relationship("Tenant")
+    provider_config = relationship("TenantVoiceProviderConfig")
+
+
 class TenantVoiceAgentConfig(Base, TimestampMixin):
     __tablename__ = "tenant_voice_agent_configs"
     __table_args__ = (

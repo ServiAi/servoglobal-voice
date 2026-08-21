@@ -247,8 +247,6 @@ class CrmLeadService:
     def delete_all_leads(self, tenant_id: str) -> int:
         lead_ids = list(self.db.scalars(select(CrmLead.id).where(CrmLead.tenant_id == tenant_id)))
         count = len(lead_ids)
-        if count == 0:
-            return 0
         contact_ids = list(self.db.scalars(select(CrmContact.id).where(CrmContact.tenant_id == tenant_id)))
 
         # Bookings, WhatsApp messages, voice calls and email sends are

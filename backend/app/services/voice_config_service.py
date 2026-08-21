@@ -8,6 +8,7 @@ from app.models.integrations import TenantVoiceProviderConfig
 from app.schemas.integrations import VoiceProviderConfigRequest, VoiceProviderConfigResponse
 from app.services.secret_manager_service import SecretManager
 from app.services.integration_event_service import IntegrationEventService
+from app.services.voice_sip_route_service import VoiceSipRouteService
 
 
 class VoiceConfigService:
@@ -15,6 +16,7 @@ class VoiceConfigService:
         self.db = db
         self.secret_manager = secret_manager or SecretManager()
         self.event_service = IntegrationEventService(db)
+        self.route_service = VoiceSipRouteService(db, self.secret_manager)
 
     def get_provider_config(self, tenant_id: str, provider: str = "ultravox") -> TenantVoiceProviderConfig | None:
         return self.db.scalar(
@@ -57,6 +59,10 @@ class VoiceConfigService:
         config.default_language = body.default_language
         config.default_timezone = body.default_timezone
         config.last_error_message = None
+
+        if body.sip_route is not None:
+            self.db.flush()
+            self.route_service.upsert(tenant_id, config, body.sip_route)
 
         self.db.commit()
         self.db.refresh(config)
@@ -134,7 +140,9 @@ class VoiceConfigService:
                 has_webhook_secret=False,
                 last_health_check_at=None,
                 last_error_message=None,
+                sip_route=None,
             )
+        route = self.route_service.get_route(tenant_id)
         return VoiceProviderConfigResponse(
             id=config.id,
             provider=config.provider,
@@ -149,4 +157,5 @@ class VoiceConfigService:
             has_webhook_secret=bool(config.webhook_secret_encrypted),
             last_health_check_at=config.last_health_check_at,
             last_error_message=config.last_error_message,
+            sip_route=self.route_service.response(route),
         )

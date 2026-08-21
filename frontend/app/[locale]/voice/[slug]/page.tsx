@@ -53,6 +53,8 @@ export default async function PublicVoiceExperiencePage({ params }: PageProps) {
         voiceActivity: t('voiceActivity'),
         endCall: t('endCall'),
         callEnded: t('callEnded'),
+        callbackLoading: t('callbackLoading'),
+        callbackAccepted: t('callbackAccepted'),
         errors: {
           required: t('errors.required'),
           unknown_field: t('errors.unknown_field'),
@@ -75,6 +77,9 @@ export default async function PublicVoiceExperiencePage({ params }: PageProps) {
           context_session_expired: t('errors.context_session_expired'),
           call_unavailable: t('errors.call_unavailable'),
           call_provider_unavailable: t('errors.call_provider_unavailable'),
+          phone_unavailable: t('errors.phone_unavailable'),
+          destination_not_allowed: t('errors.destination_not_allowed'),
+          call_capacity_reached: t('errors.call_capacity_reached'),
         },
       }}
     />

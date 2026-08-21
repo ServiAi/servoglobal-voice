@@ -59,7 +59,7 @@ def safe_preview(value: str | None) -> str | None:
 
 def mask_phone(phone: str) -> str:
     digits = normalize_phone(phone) or ""
-    return f"***{digits[-4:]}" if len(digits) >= 4 else "***"
+    return f"***{digits[-4:]}" if len(digits) > 4 else "***"
 
 
 def extract_provider_message_id(payload: dict[str, Any]) -> str | None:
