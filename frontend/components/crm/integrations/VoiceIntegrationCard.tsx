@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { AlertCircle, CheckCircle2, Phone, Plus, Edit2, RotateCw } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Phone, Plus, Edit2, RotateCw, Router } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { FieldHelp } from './FieldHelp';
 import type {
@@ -33,6 +33,24 @@ type Props = {
 };
 
 const FIELD_CLASS = 'min-h-10 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/60 focus:ring-2 focus:ring-primary/15 disabled:cursor-not-allowed disabled:opacity-60';
+
+const COUNTRY_SELECT_OPTIONS = [['CO', 'Colombia'], ['MX', 'México'], ['AR', 'Argentina'], ['PA', 'Panamá'], ['CL', 'Chile'], ['EC', 'Ecuador'], ['PE', 'Perú'], ['US', 'Estados Unidos']] as const;
+const COUNTRY_CHIP_OPTIONS = [['CO', 'Colombia'], ['MX', 'México'], ['AR', 'Argentina'], ['PA', 'Panamá'], ['CL', 'Chile'], ['EC', 'Ecuador'], ['PE', 'Perú'], ['US', 'EE. UU.']] as const;
+
+const PURPOSE_LABELS: Record<string, string> = {
+  'Atención al Cliente': 'Atención',
+  'Call Centers y Soporte Técnico': 'Soporte',
+  'Cobranza y Recuperación de Pagos': 'Cobranza',
+  'Ventas y Generación de Leads': 'Ventas',
+  'Reclutamiento y Selección': 'Reclutamiento',
+  'Reservaciones y Agendamiento': 'Agendamiento',
+  'E-commerce y Tiendas Online': 'E-commerce',
+};
+
+function getAgentInitials(name: string): string {
+  const letters = name.trim().split(/\s+/).slice(0, 2).map((word) => word[0]?.toUpperCase() ?? '');
+  return letters.join('') || '—';
+}
 
 export function VoiceIntegrationCard({
   accessToken,
@@ -257,6 +275,9 @@ export function VoiceIntegrationCard({
     notify('success', `Agente de voz ${editingAgent ? 'actualizado' : 'creado'} exitosamente.`);
   };
 
+  const isSipActive = configForm.sip_route?.status === 'active';
+  const activeAgentCount = agents.filter((agent) => agent.status === 'active').length;
+
   return (
     <section className="overflow-hidden rounded-lg border border-border bg-card shadow-xs" aria-labelledby="voice-integration-title">
       <div className="flex flex-col gap-3 border-b border-border bg-muted/20 p-5 md:flex-row md:items-center md:justify-between">
@@ -283,59 +304,79 @@ export function VoiceIntegrationCard({
         </div>
       </div>
 
-      <div className="grid gap-6 p-5 lg:grid-cols-[minmax(280px,0.9fr)_minmax(0,2fr)]">
+      <div className="grid gap-0 lg:grid-cols-[420px_1fr]">
         {/* Left Side: Provider Credentials Config */}
-        <div className="space-y-4 border-b border-border pb-6 lg:border-b-0 lg:border-r lg:pb-0 lg:pr-6">
-          <h3 className="text-sm font-semibold text-foreground">
-            Proveedor e Integración
-          </h3>
-          <div className="space-y-3">
-            <label className="grid gap-1 text-xs font-medium text-muted-foreground">
-              <span className="flex items-center gap-1">Nombre descriptivo <FieldHelp label="Nombre descriptivo de voz" required={false}>Es un nombre interno para reconocer esta configuración; no se obtiene del proveedor.</FieldHelp></span>
-              <input
-                type="text"
-                className={FIELD_CLASS}
-                value={configForm.display_name ?? ''}
-                onChange={(e) => updateConfigField('display_name', e.target.value)}
-              />
-            </label>
+        <div className="space-y-5 border-b border-border p-5 lg:border-b-0 lg:border-r">
+          {/* Step 1: credentials */}
+          <div>
+            <div className="mb-0.5 flex items-center gap-2">
+              <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-bold text-muted-foreground">1</span>
+              <h3 className="text-[13px] font-semibold text-foreground">Credenciales del proveedor</h3>
+            </div>
+            <p className="mb-3 pl-7 text-xs leading-5 text-muted-foreground">Se configuran una sola vez para conectar Ultravox.</p>
+            <div className="space-y-3 pl-7">
+              <label className="grid gap-1 text-xs font-medium text-muted-foreground">
+                <span className="flex items-center gap-1">Nombre descriptivo <FieldHelp label="Nombre descriptivo de voz" required={false}>Es un nombre interno para reconocer esta configuración; no se obtiene del proveedor.</FieldHelp></span>
+                <input
+                  type="text"
+                  className={FIELD_CLASS}
+                  value={configForm.display_name ?? ''}
+                  onChange={(e) => updateConfigField('display_name', e.target.value)}
+                />
+              </label>
 
-            <label className="grid gap-1 text-xs font-medium text-muted-foreground">
-              <span className="flex items-center gap-1">Ultravox API Key <FieldHelp label="Ultravox API Key" required={!config?.has_secret}>Créala en el panel de Ultravox → Settings → API Keys. Solo es obligatoria la primera vez.</FieldHelp></span>
-              <input
-                type="password"
-                placeholder={config?.has_secret ? '••••••••••••••••••••' : 'uvx_api_...'}
-                className={FIELD_CLASS}
-                onChange={(e) => updateConfigField('api_key', e.target.value)}
-              />
-            </label>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="grid gap-1 text-xs font-medium text-muted-foreground">
+                  <span className="flex items-center gap-1">API Key <FieldHelp label="Ultravox API Key" required={!config?.has_secret}>Créala en el panel de Ultravox → Settings → API Keys. Solo es obligatoria la primera vez.</FieldHelp></span>
+                  <input
+                    type="password"
+                    placeholder={config?.has_secret ? '••••••••••••••••••••' : 'uvx_api_...'}
+                    className={FIELD_CLASS}
+                    onChange={(e) => updateConfigField('api_key', e.target.value)}
+                  />
+                </label>
 
-            <label className="grid gap-1 text-xs font-medium text-muted-foreground">
-              <span className="flex items-center gap-1">Webhook Secret (Firma) <FieldHelp label="Webhook Secret" required={false}>Créalo como una cadena secreta y configura el mismo valor en el webhook del proveedor.</FieldHelp></span>
-              <input
-                type="password"
-                placeholder={config?.has_webhook_secret ? '••••••••••••••••••••' : 'Secreto opcional'}
-                className={FIELD_CLASS}
-                onChange={(e) => updateConfigField('webhook_secret', e.target.value)}
-              />
-            </label>
+                <label className="grid gap-1 text-xs font-medium text-muted-foreground">
+                  <span className="flex items-center gap-1">Webhook Secret <FieldHelp label="Webhook Secret" required={false}>Créalo como una cadena secreta y configura el mismo valor en el webhook del proveedor.</FieldHelp></span>
+                  <input
+                    type="password"
+                    placeholder={config?.has_webhook_secret ? '••••••••••••••••••••' : 'Secreto opcional'}
+                    className={FIELD_CLASS}
+                    onChange={(e) => updateConfigField('webhook_secret', e.target.value)}
+                  />
+                </label>
+              </div>
 
-            <label className="grid gap-1 text-xs font-medium text-muted-foreground">
-              <span className="flex items-center gap-1">Base URL Proveedor <FieldHelp label="Base URL Proveedor" required>Usa la URL base oficial del proveedor; para Ultravox es https://api.ultravox.ai.</FieldHelp></span>
-              <input
-                type="text"
-                className={FIELD_CLASS}
-                value={configForm.base_url ?? ''}
-                onChange={(e) => updateConfigField('base_url', e.target.value)}
-              />
-            </label>
+              <label className="grid gap-1 text-xs font-medium text-muted-foreground">
+                <span className="flex items-center gap-1">Base URL Proveedor <FieldHelp label="Base URL Proveedor" required>Usa la URL base oficial del proveedor; para Ultravox es https://api.ultravox.ai.</FieldHelp></span>
+                <input
+                  type="text"
+                  className={FIELD_CLASS}
+                  value={configForm.base_url ?? ''}
+                  onChange={(e) => updateConfigField('base_url', e.target.value)}
+                />
+              </label>
+            </div>
+          </div>
 
-            <fieldset className="space-y-3 rounded-lg border border-border bg-muted/20 p-4">
-              <legend className="px-1 text-xs font-semibold text-foreground">Ruta SIP saliente por tenant</legend>
-              <p className="text-xs leading-5 text-muted-foreground">
-                Credencial del endpoint de este tenant en Asterisk. IDT Express permanece como troncal compartida.
-              </p>
-              <div className="grid gap-3 sm:grid-cols-[1fr_110px]">
+          {/* Step 2: SIP route — elevated */}
+          <div className="rounded-lg border border-border bg-muted/30">
+            <div className="flex items-center justify-between gap-2 px-4 pt-3.5">
+              <div className="flex items-center gap-2">
+                <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-bold text-muted-foreground">2</span>
+                <Router className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+                <h3 className="text-[13px] font-semibold text-foreground">Ruta SIP saliente por tenant</h3>
+              </div>
+              <span className={`inline-flex shrink-0 items-center gap-1.5 text-[11px] font-semibold ${isSipActive ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'}`}>
+                <span className={`h-1.5 w-1.5 rounded-full ${isSipActive ? 'bg-emerald-500' : 'bg-muted-foreground/50'}`} aria-hidden="true" />
+                {isSipActive ? 'Activa' : 'Inactiva'}
+              </span>
+            </div>
+            <p className="px-4 pb-3.5 pl-11 pt-1.5 text-xs leading-5 text-muted-foreground">
+              Credencial del endpoint de este tenant en Asterisk. IDT Express permanece como troncal compartida.
+            </p>
+            <div className="space-y-3 px-4 pb-4 pl-11">
+              <div className="grid gap-3 sm:grid-cols-[1fr_96px]">
                 <label className="grid gap-1 text-xs font-medium text-muted-foreground">
                   <span className="flex items-center gap-1">Host PBX <FieldHelp label="Host PBX" required>Dominio o IP pública de Asterisk, sin protocolo ni puerto.</FieldHelp></span>
                   <input className={FIELD_CLASS} value={configForm.sip_route?.pbx_host ?? ''} onChange={(event) => updateSipRouteField('pbx_host', event.target.value)} placeholder="pbx.example.com" />
@@ -363,36 +404,41 @@ export function VoiceIntegrationCard({
                 <label className="grid gap-1 text-xs font-medium text-muted-foreground">
                   <span>País predeterminado</span>
                   <select className={FIELD_CLASS} value={configForm.sip_route?.default_country ?? 'CO'} onChange={(event) => updateSipRouteField('default_country', event.target.value as VoiceOutboundCountry)}>
-                    {([['CO', 'Colombia'], ['MX', 'México'], ['AR', 'Argentina'], ['PA', 'Panamá'], ['CL', 'Chile'], ['EC', 'Ecuador'], ['PE', 'Perú'], ['US', 'Estados Unidos']] as const).map(([code, label]) => <option key={code} value={code}>{label}</option>)}
+                    {COUNTRY_SELECT_OPTIONS.map(([code, label]) => <option key={code} value={code}>{label}</option>)}
                   </select>
                 </label>
               </div>
               <div>
                 <span className="text-xs font-medium text-muted-foreground">Países habilitados</span>
-                <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
-                  {([['CO', 'Colombia'], ['MX', 'México'], ['AR', 'Argentina'], ['PA', 'Panamá'], ['CL', 'Chile'], ['EC', 'Ecuador'], ['PE', 'Perú'], ['US', 'EE. UU.']] as const).map(([code, label]) => {
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {COUNTRY_CHIP_OPTIONS.map(([code, label]) => {
                     const enabled = configForm.sip_route?.allowed_countries.includes(code) ?? false;
                     return (
-                      <label key={code} className="flex items-center gap-2 rounded-md border border-border bg-background px-2.5 py-2 text-xs text-foreground">
-                        <input
-                          type="checkbox"
-                          checked={enabled}
-                          onChange={(event) => updateSipRouteField(
-                            'allowed_countries',
-                            event.target.checked
-                              ? [...(configForm.sip_route?.allowed_countries ?? []), code]
-                              : (configForm.sip_route?.allowed_countries ?? []).filter((item) => item !== code),
-                          )}
-                        />
+                      <button
+                        key={code}
+                        type="button"
+                        aria-pressed={enabled}
+                        onClick={() => updateSipRouteField(
+                          'allowed_countries',
+                          enabled
+                            ? (configForm.sip_route?.allowed_countries ?? []).filter((item) => item !== code)
+                            : [...(configForm.sip_route?.allowed_countries ?? []), code],
+                        )}
+                        className={`inline-flex h-[30px] items-center rounded-full border px-3 text-xs font-medium transition ${
+                          enabled
+                            ? 'border-indigo-500/50 bg-indigo-500/10 text-indigo-700 dark:text-indigo-300'
+                            : 'border-border bg-background text-foreground hover:bg-accent'
+                        }`}
+                      >
                         {label}
-                      </label>
+                      </button>
                     );
                   })}
                 </div>
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <label className="grid gap-1 text-xs font-medium text-muted-foreground">
-                  <span>Máximo de llamadas simultáneas</span>
+                  <span>Máx. llamadas simultáneas</span>
                   <input type="number" min={1} max={100} className={FIELD_CLASS} value={configForm.sip_route?.max_concurrent_calls ?? 1} onChange={(event) => updateSipRouteField('max_concurrent_calls', Number(event.target.value))} />
                 </label>
                 <label className="grid gap-1 text-xs font-medium text-muted-foreground">
@@ -403,97 +449,109 @@ export function VoiceIntegrationCard({
                   </select>
                 </label>
               </div>
-            </fieldset>
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              <label className="grid gap-1 text-xs font-medium text-muted-foreground">
-                <span className="flex items-center gap-1">Default Agent ID <FieldHelp label="Default Agent ID" required={false}>Copia el ID del agente predeterminado desde el panel de Ultravox. Puede quedar vacío si se selecciona por otra regla.</FieldHelp></span>
-                <input
-                  type="text"
-                  placeholder="ID de agente por defecto"
-                  className={FIELD_CLASS}
-                  value={configForm.default_voice_agent_id ?? ''}
-                  onChange={(e) => updateConfigField('default_voice_agent_id', e.target.value)}
-                />
-              </label>
-
-              <label className="grid gap-1 text-xs font-medium text-muted-foreground">
-                <span className="flex items-center gap-1">Outgoing Number (SIP) <FieldHelp label="Outgoing Number SIP" required={false}>Es el número saliente asignado por tu operador SIP/PBX, en formato internacional.</FieldHelp></span>
-                <input
-                  type="text"
-                  placeholder="+57..."
-                  className={FIELD_CLASS}
-                  value={configForm.default_from_number ?? ''}
-                  onChange={(e) => updateConfigField('default_from_number', e.target.value)}
-                />
-              </label>
             </div>
+          </div>
 
-            <div className="grid gap-3 sm:grid-cols-2">
+          {/* Step 3: defaults */}
+          <div>
+            <div className="mb-3.5 flex items-center gap-2">
+              <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-bold text-muted-foreground">3</span>
+              <h3 className="text-[13px] font-semibold text-foreground">Comportamiento por defecto</h3>
+            </div>
+            <div className="space-y-3 pl-7">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="grid gap-1 text-xs font-medium text-muted-foreground">
+                  <span className="flex items-center gap-1">Default Agent ID <FieldHelp label="Default Agent ID" required={false}>Copia el ID del agente predeterminado desde el panel de Ultravox. Puede quedar vacío si se selecciona por otra regla.</FieldHelp></span>
+                  <input
+                    type="text"
+                    placeholder="ID de agente por defecto"
+                    className={FIELD_CLASS}
+                    value={configForm.default_voice_agent_id ?? ''}
+                    onChange={(e) => updateConfigField('default_voice_agent_id', e.target.value)}
+                  />
+                </label>
+
+                <label className="grid gap-1 text-xs font-medium text-muted-foreground">
+                  <span className="flex items-center gap-1">Outgoing Number (SIP) <FieldHelp label="Outgoing Number SIP" required={false}>Es el número saliente asignado por tu operador SIP/PBX, en formato internacional.</FieldHelp></span>
+                  <input
+                    type="text"
+                    placeholder="+57..."
+                    className={FIELD_CLASS}
+                    value={configForm.default_from_number ?? ''}
+                    onChange={(e) => updateConfigField('default_from_number', e.target.value)}
+                  />
+                </label>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="grid gap-1 text-xs font-medium text-muted-foreground">
+                  <span className="flex items-center gap-1">Idioma <FieldHelp label="Idioma predeterminado de voz" required>Selecciona el idioma principal que usará la integración.</FieldHelp></span>
+                  <select
+                    className={FIELD_CLASS}
+                    value={configForm.default_language}
+                    onChange={(e) => updateConfigField('default_language', e.target.value)}
+                  >
+                    <option value="es">Español</option>
+                    <option value="en">Inglés</option>
+                  </select>
+                </label>
+
+                <label className="grid gap-1 text-xs font-medium text-muted-foreground">
+                  <span className="flex items-center gap-1">Zona horaria <FieldHelp label="Zona horaria de voz" required>Usa una zona IANA como America/Bogota para interpretar horarios correctamente.</FieldHelp></span>
+                  <input
+                    type="text"
+                    className={FIELD_CLASS}
+                    value={configForm.default_timezone}
+                    onChange={(e) => updateConfigField('default_timezone', e.target.value)}
+                  />
+                </label>
+              </div>
+
               <label className="grid gap-1 text-xs font-medium text-muted-foreground">
-                <span className="flex items-center gap-1">Idioma <FieldHelp label="Idioma predeterminado de voz" required>Selecciona el idioma principal que usará la integración.</FieldHelp></span>
+                <span className="flex items-center gap-1">Estado de Integración <FieldHelp label="Estado de integración de voz" required>Activa la integración solo cuando las credenciales y la conexión estén listas.</FieldHelp></span>
                 <select
                   className={FIELD_CLASS}
-                  value={configForm.default_language}
-                  onChange={(e) => updateConfigField('default_language', e.target.value)}
+                  value={configForm.status}
+                  onChange={(e) => updateConfigField('status', e.target.value)}
                 >
-                  <option value="es">Español</option>
-                  <option value="en">Inglés</option>
+                  <option value="active">Activo</option>
+                  <option value="inactive">Inactivo</option>
                 </select>
               </label>
-
-              <label className="grid gap-1 text-xs font-medium text-muted-foreground">
-                <span className="flex items-center gap-1">Zona horaria <FieldHelp label="Zona horaria de voz" required>Usa una zona IANA como America/Bogota para interpretar horarios correctamente.</FieldHelp></span>
-                <input
-                  type="text"
-                  className={FIELD_CLASS}
-                  value={configForm.default_timezone}
-                  onChange={(e) => updateConfigField('default_timezone', e.target.value)}
-                />
-              </label>
             </div>
+          </div>
 
-            <label className="grid gap-1 text-xs font-medium text-muted-foreground">
-              <span className="flex items-center gap-1">Estado de Integración <FieldHelp label="Estado de integración de voz" required>Activa la integración solo cuando las credenciales y la conexión estén listas.</FieldHelp></span>
-              <select
-                className={FIELD_CLASS}
-                value={configForm.status}
-                onChange={(e) => updateConfigField('status', e.target.value)}
-              >
-                <option value="active">Activo</option>
-                <option value="inactive">Inactivo</option>
-              </select>
-            </label>
-
-            <div className="flex flex-col gap-2 border-t border-border pt-4 sm:flex-row">
-              <Button
-                type="button"
-                onClick={handleSaveConfig}
-                disabled={savingConfig}
-                className="w-full text-xs"
-              >
-                {savingConfig ? 'Guardando...' : 'Guardar Config'}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={handleTestConnection}
-                disabled={testing || !config?.has_secret}
-                className="w-full text-xs"
-              >
-                {testing ? <RotateCw className="h-3 w-3 animate-spin mr-1" /> : null}
-                Probar
-              </Button>
-            </div>
+          <div className="flex flex-col gap-2 border-t border-border pt-4 sm:flex-row">
+            <Button
+              type="button"
+              onClick={handleSaveConfig}
+              disabled={savingConfig}
+              className="w-full text-xs"
+            >
+              {savingConfig ? 'Guardando...' : 'Guardar Config'}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleTestConnection}
+              disabled={testing || !config?.has_secret}
+              className="w-full text-xs"
+            >
+              {testing ? <RotateCw className="h-3 w-3 animate-spin mr-1" /> : null}
+              Probar
+            </Button>
           </div>
         </div>
 
         {/* Right Side: Agents Management list */}
-        <div className="min-w-0 space-y-4">
+        <div className="min-w-0 space-y-4 p-5">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-foreground">
-              Agentes Configurados
-            </h3>
+            <div>
+              <h3 className="text-[13px] font-semibold text-foreground">Agentes configurados</h3>
+              {agents.length > 0 && (
+                <p className="mt-0.5 text-xs text-muted-foreground">{agents.length} {agents.length === 1 ? 'agente' : 'agentes'} · {activeAgentCount} activos</p>
+              )}
+            </div>
             {!showAgentForm && (
               <Button
                 type="button"
@@ -622,69 +680,69 @@ export function VoiceIntegrationCard({
               </div>
             </div>
           ) : (
-            <div className="space-y-2">
+            <div>
               {loadingAgents ? (
                 <div className="text-center py-6 text-sm text-muted-foreground">
                   Cargando lista de agentes de voz...
                 </div>
               ) : agents.length === 0 ? (
-                <div className="text-center py-8 rounded-lg border border-dashed border-border text-sm text-muted-foreground bg-muted/20">
-                  No hay agentes de voz registrados para este tenant.
+                <div className="rounded-lg border border-dashed border-border bg-muted/20 py-8 text-center">
+                  <p className="text-sm text-muted-foreground">No hay agentes de voz registrados para este tenant.</p>
                 </div>
               ) : (
-                <div className="overflow-x-auto rounded-lg border border-border">
-                  <table className="min-w-[720px] w-full border-collapse text-left text-xs">
-                    <thead>
-                      <tr className="bg-muted border-b border-border font-medium text-muted-foreground">
-                        <th className="p-3">Nombre</th>
-                        <th className="p-3">Propósito</th>
-                        <th className="p-3">Provider ID</th>
-                        <th className="p-3">Voz</th>
-                        <th className="p-3">Estado</th>
-                        <th className="p-3 text-right">Acciones</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border bg-card">
-                      {agents.map((agent) => (
-                        <tr key={agent.id} className="hover:bg-muted/30">
-                          <td className="p-3 font-medium text-foreground">
-                            {agent.display_name}
-                            {agent.description && (
-                              <div className="text-[10px] text-muted-foreground font-normal">
-                                {agent.description}
-                              </div>
-                            )}
-                          </td>
-                          <td className="p-3 text-muted-foreground">{agent.purpose}</td>
-                          <td className="p-3 font-mono text-[10px]">{agent.provider_agent_id}</td>
-                          <td className="p-3 font-mono text-[10px]">{agent.default_voice || 'default'}</td>
-                          <td className="p-3">
-                            <span
-                              className={`inline-flex px-1.5 py-0.5 rounded-full text-[10px] font-medium border ${
-                                agent.status === 'active'
-                                  ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-600'
-                                  : 'border-amber-500/20 bg-amber-500/10 text-amber-600'
-                              }`}
-                            >
-                              {agent.status}
+                <div className="overflow-x-auto">
+                  <div role="table" aria-label="Agentes de voz configurados" className="min-w-[640px]">
+                    <div role="rowgroup">
+                      <div role="row" className="grid grid-cols-[34px_1fr_auto_auto_84px_32px] items-center gap-3 px-2.5 pb-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/70">
+                        <span role="columnheader" className="sr-only">Avatar</span>
+                        <span role="columnheader">Agente</span>
+                        <span role="columnheader">Propósito</span>
+                        <span role="columnheader">Voz</span>
+                        <span role="columnheader">Estado</span>
+                        <span role="columnheader" className="sr-only">Acciones</span>
+                      </div>
+                    </div>
+                    <div role="rowgroup" className="space-y-0.5">
+                      {agents.map((agent) => {
+                        const active = agent.status === 'active';
+                        return (
+                          <div key={agent.id} role="row" className="grid grid-cols-[34px_1fr_auto_auto_84px_32px] items-center gap-3 rounded-md p-2.5 hover:bg-accent">
+                            <span role="cell" aria-hidden="true" className="flex h-[30px] w-[30px] items-center justify-center rounded-md bg-muted text-[11px] font-semibold text-foreground">
+                              {getAgentInitials(agent.display_name)}
                             </span>
-                          </td>
-                          <td className="p-3 text-right">
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7"
-                              onClick={() => handleEditAgentClick(agent)}
-                              aria-label={`Editar ${agent.display_name}`}
-                            >
-                              <Edit2 className="h-3 w-3" />
-                            </Button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                            <span role="cell" className="min-w-0">
+                              <div className="truncate text-[13px] font-medium text-foreground">{agent.display_name}</div>
+                              {agent.description && (
+                                <div className="truncate text-[11.5px] text-muted-foreground">{agent.description}</div>
+                              )}
+                            </span>
+                            <span role="cell" className="inline-flex h-[22px] items-center whitespace-nowrap rounded-full border border-border px-2.5 text-[11px] font-medium text-muted-foreground">
+                              {PURPOSE_LABELS[agent.purpose] ?? agent.purpose}
+                            </span>
+                            <span role="cell" className="whitespace-nowrap font-mono text-[11px] text-muted-foreground">
+                              {agent.default_voice || 'default'}
+                            </span>
+                            <span role="cell" className={`inline-flex items-center gap-1.5 text-[11px] font-semibold ${active ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'}`}>
+                              <span className={`h-1.5 w-1.5 rounded-full ${active ? 'bg-emerald-500' : 'bg-muted-foreground/50'}`} aria-hidden="true" />
+                              {active ? 'Activo' : 'Inactivo'}
+                            </span>
+                            <span role="cell">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-[30px] w-[30px]"
+                                onClick={() => handleEditAgentClick(agent)}
+                                aria-label={`Editar ${agent.display_name}`}
+                              >
+                                <Edit2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
