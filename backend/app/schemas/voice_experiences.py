@@ -61,6 +61,9 @@ class VoiceExperienceCallSettings(_StrictModel):
     auto_start: bool
     show_microphone_help: bool
     language: str = Field(min_length=2, max_length=16, pattern=r"^[a-z]{2}(?:-[A-Z]{2})?$")
+    mode: str = Field(default="webrtc", pattern=r"^(webrtc|callback)$")
+    phone_field_key: str | None = Field(default=None, max_length=80)
+    default_country: str = Field(default="CO", pattern=r"^(AR|CL|CO|EC|MX|PA|PE|US)$")
 
 
 class VoiceExperienceWriteRequest(_StrictModel):

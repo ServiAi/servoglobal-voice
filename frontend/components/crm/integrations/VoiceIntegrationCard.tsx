@@ -9,6 +9,7 @@ import type {
   VoiceProviderConfigResponse,
   VoiceAgentConfigRequest,
   VoiceAgentConfigResponse,
+  VoiceOutboundCountry,
 } from '@/types/crm';
 import {
   configureVoice,
@@ -72,6 +73,16 @@ export function VoiceIntegrationCard({
     default_language: config?.default_language ?? 'es',
     default_timezone: config?.default_timezone ?? 'America/Bogota',
     status: config?.status ?? 'active',
+    sip_route: {
+      status: config?.sip_route?.status ?? 'inactive',
+      pbx_host: config?.sip_route?.pbx_host ?? '',
+      pbx_port: config?.sip_route?.pbx_port ?? 5060,
+      sip_username: config?.sip_route?.sip_username ?? '',
+      caller_id: config?.sip_route?.caller_id ?? '',
+      default_country: config?.sip_route?.default_country ?? 'CO',
+      allowed_countries: config?.sip_route?.allowed_countries ?? ['CO'],
+      max_concurrent_calls: config?.sip_route?.max_concurrent_calls ?? 1,
+    },
   });
 
   const isActive = config?.status === 'active';
@@ -103,12 +114,37 @@ export function VoiceIntegrationCard({
     setConfigForm((curr) => ({ ...curr, [key]: value }));
   };
 
+  const updateSipRouteField = <K extends keyof NonNullable<VoiceProviderConfigRequest['sip_route']>>(
+    key: K,
+    value: NonNullable<VoiceProviderConfigRequest['sip_route']>[K],
+  ) => {
+    setConfigForm((current) => ({
+      ...current,
+      sip_route: { ...current.sip_route!, [key]: value },
+    }));
+  };
+
   const handleSaveConfig = async () => {
+    const sipRoute = configForm.sip_route;
+    const sipRouteHasInput = Boolean(
+      sipRoute?.pbx_host?.trim() || sipRoute?.sip_username?.trim() || sipRoute?.caller_id?.trim() || sipRoute?.sip_password?.trim(),
+    );
+    const sipRouteComplete = Boolean(sipRoute?.pbx_host?.trim() && sipRoute?.sip_username?.trim() && sipRoute?.caller_id?.trim());
+
+    if (sipRouteHasInput && !sipRouteComplete) {
+      notify('error', 'Completa Host PBX, Usuario SIP y Caller ID para guardar la ruta SIP, o deja esos campos vacíos.');
+      return;
+    }
+
     setSavingConfig(true);
     const payload = {
       ...configForm,
       api_key: configForm.api_key?.trim() || null,
       webhook_secret: configForm.webhook_secret?.trim() || null,
+      sip_route: sipRouteComplete ? {
+        ...sipRoute!,
+        sip_password: sipRoute!.sip_password?.trim() || null,
+      } : null,
     };
     const result =
       mode === 'admin' && tenantId
@@ -121,6 +157,12 @@ export function VoiceIntegrationCard({
       return;
     }
     setConfig(result.data);
+    setConfigForm((current) => ({
+      ...current,
+      sip_route: current.sip_route
+        ? { ...current.sip_route, sip_password: undefined }
+        : current.sip_route,
+    }));
     notify('success', 'Configuración de proveedor de voz guardada exitosamente.');
   };
 
@@ -287,6 +329,81 @@ export function VoiceIntegrationCard({
                 onChange={(e) => updateConfigField('base_url', e.target.value)}
               />
             </label>
+
+            <fieldset className="space-y-3 rounded-lg border border-border bg-muted/20 p-4">
+              <legend className="px-1 text-xs font-semibold text-foreground">Ruta SIP saliente por tenant</legend>
+              <p className="text-xs leading-5 text-muted-foreground">
+                Credencial del endpoint de este tenant en Asterisk. IDT Express permanece como troncal compartida.
+              </p>
+              <div className="grid gap-3 sm:grid-cols-[1fr_110px]">
+                <label className="grid gap-1 text-xs font-medium text-muted-foreground">
+                  <span className="flex items-center gap-1">Host PBX <FieldHelp label="Host PBX" required>Dominio o IP pública de Asterisk, sin protocolo ni puerto.</FieldHelp></span>
+                  <input className={FIELD_CLASS} value={configForm.sip_route?.pbx_host ?? ''} onChange={(event) => updateSipRouteField('pbx_host', event.target.value)} placeholder="pbx.example.com" />
+                </label>
+                <label className="grid gap-1 text-xs font-medium text-muted-foreground">
+                  <span>Puerto</span>
+                  <input type="number" min={1} max={65535} className={FIELD_CLASS} value={configForm.sip_route?.pbx_port ?? 5060} onChange={(event) => updateSipRouteField('pbx_port', Number(event.target.value))} />
+                </label>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="grid gap-1 text-xs font-medium text-muted-foreground">
+                  <span className="flex items-center gap-1">Usuario SIP <FieldHelp label="Usuario SIP" required>Debe coincidir con el endpoint PJSIP exclusivo del tenant.</FieldHelp></span>
+                  <input className={FIELD_CLASS} value={configForm.sip_route?.sip_username ?? ''} onChange={(event) => updateSipRouteField('sip_username', event.target.value)} autoComplete="off" />
+                </label>
+                <label className="grid gap-1 text-xs font-medium text-muted-foreground">
+                  <span className="flex items-center gap-1">Contraseña SIP <FieldHelp label="Contraseña SIP" required={!config?.sip_route?.has_sip_password}>Se cifra en el backend y nunca vuelve a mostrarse.</FieldHelp></span>
+                  <input type="password" className={FIELD_CLASS} placeholder={config?.sip_route?.has_sip_password ? '••••••••••••••••' : 'Mínimo 8 caracteres'} onChange={(event) => updateSipRouteField('sip_password', event.target.value)} autoComplete="new-password" />
+                </label>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="grid gap-1 text-xs font-medium text-muted-foreground">
+                  <span className="flex items-center gap-1">Caller ID autorizado <FieldHelp label="Caller ID autorizado" required>Número previamente autorizado por IDT Express, en formato internacional.</FieldHelp></span>
+                  <input type="tel" className={FIELD_CLASS} value={configForm.sip_route?.caller_id ?? ''} onChange={(event) => updateSipRouteField('caller_id', event.target.value)} placeholder="+57..." />
+                </label>
+                <label className="grid gap-1 text-xs font-medium text-muted-foreground">
+                  <span>País predeterminado</span>
+                  <select className={FIELD_CLASS} value={configForm.sip_route?.default_country ?? 'CO'} onChange={(event) => updateSipRouteField('default_country', event.target.value as VoiceOutboundCountry)}>
+                    {([['CO', 'Colombia'], ['MX', 'México'], ['AR', 'Argentina'], ['PA', 'Panamá'], ['CL', 'Chile'], ['EC', 'Ecuador'], ['PE', 'Perú'], ['US', 'Estados Unidos']] as const).map(([code, label]) => <option key={code} value={code}>{label}</option>)}
+                  </select>
+                </label>
+              </div>
+              <div>
+                <span className="text-xs font-medium text-muted-foreground">Países habilitados</span>
+                <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  {([['CO', 'Colombia'], ['MX', 'México'], ['AR', 'Argentina'], ['PA', 'Panamá'], ['CL', 'Chile'], ['EC', 'Ecuador'], ['PE', 'Perú'], ['US', 'EE. UU.']] as const).map(([code, label]) => {
+                    const enabled = configForm.sip_route?.allowed_countries.includes(code) ?? false;
+                    return (
+                      <label key={code} className="flex items-center gap-2 rounded-md border border-border bg-background px-2.5 py-2 text-xs text-foreground">
+                        <input
+                          type="checkbox"
+                          checked={enabled}
+                          onChange={(event) => updateSipRouteField(
+                            'allowed_countries',
+                            event.target.checked
+                              ? [...(configForm.sip_route?.allowed_countries ?? []), code]
+                              : (configForm.sip_route?.allowed_countries ?? []).filter((item) => item !== code),
+                          )}
+                        />
+                        {label}
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="grid gap-1 text-xs font-medium text-muted-foreground">
+                  <span>Máximo de llamadas simultáneas</span>
+                  <input type="number" min={1} max={100} className={FIELD_CLASS} value={configForm.sip_route?.max_concurrent_calls ?? 1} onChange={(event) => updateSipRouteField('max_concurrent_calls', Number(event.target.value))} />
+                </label>
+                <label className="grid gap-1 text-xs font-medium text-muted-foreground">
+                  <span>Estado de ruta</span>
+                  <select className={FIELD_CLASS} value={configForm.sip_route?.status ?? 'inactive'} onChange={(event) => updateSipRouteField('status', event.target.value as 'active' | 'inactive')}>
+                    <option value="inactive">Inactiva</option>
+                    <option value="active">Activa</option>
+                  </select>
+                </label>
+              </div>
+            </fieldset>
 
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="grid gap-1 text-xs font-medium text-muted-foreground">

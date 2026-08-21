@@ -21,6 +21,10 @@ class PublicVoiceCallResponse(BaseModel):
     capabilities: PublicVoiceCallCapabilities = PublicVoiceCallCapabilities()
 
 
+class PublicVoiceCallbackResponse(BaseModel):
+    status: Literal["accepted"]
+
+
 PublicCallErrorCode = Literal[
     "experience_unavailable",
     "experience_version_changed",
@@ -32,6 +36,9 @@ PublicCallErrorCode = Literal[
     "rate_limited",
     "call_unavailable",
     "call_provider_unavailable",
+    "phone_unavailable",
+    "destination_not_allowed",
+    "call_capacity_reached",
     "internal_error",
 ]
 

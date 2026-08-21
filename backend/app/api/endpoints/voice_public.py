@@ -21,8 +21,10 @@ from app.schemas.public_voice_calls import (
     PublicVoiceCallError,
     PublicVoiceCallRequest,
     PublicVoiceCallResponse,
+    PublicVoiceCallbackResponse,
 )
 from app.services.public_voice_call_service import PublicCallFailure, PublicVoiceCallService
+from app.services.voice_callback_service import PublicVoiceCallbackService
 from app.services.public_voice_experience_service import (
     PublicExperienceNotFound,
     PublicVoiceExperienceService,
@@ -71,6 +73,10 @@ def get_public_call_service() -> PublicVoiceCallService:
         reserved_lease_seconds=settings.VOICE_RUNTIME_RESERVED_LEASE_SECONDS,
         starting_lease_seconds=settings.VOICE_RUNTIME_STARTING_LEASE_SECONDS,
     )
+
+
+def get_public_callback_service() -> PublicVoiceCallbackService:
+    return PublicVoiceCallbackService(session_factory=SessionLocal)
 
 
 def _call_error(status_code: int, code: str) -> HTTPException:
@@ -282,4 +288,51 @@ async def launch_public_voice_call(
         raise _call_error(exc.status_code, exc.code) from None
     except Exception as exc:
         logger.error("Unexpected public voice call failure", extra={"error_type": type(exc).__name__})
+        raise _call_error(status.HTTP_500_INTERNAL_SERVER_ERROR, "internal_error") from None
+
+
+@router.post(
+    "/{slug}/callback-requests",
+    response_model=PublicVoiceCallbackResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def request_public_voice_callback(
+    slug: str,
+    request: Request,
+    response: Response,
+    limiter: VoicePublicRateLimiter = Depends(get_public_rate_limiter),
+    service: PublicVoiceCallbackService = Depends(get_public_callback_service),
+) -> PublicVoiceCallbackResponse:
+    response.headers.update(NO_STORE_HEADERS)
+    normalized_ip = resolve_public_client_ip(
+        request, settings.TRUST_CLOUDFLARE_CONNECTING_IP
+    )
+    try:
+        ip_hash = pseudonymize_ip(
+            settings.VOICE_PUBLIC_RATE_LIMIT_HASH_SECRET, normalized_ip
+        )
+        if not limiter.consume(
+            f"callback:global:{ip_hash}",
+            settings.VOICE_PUBLIC_CALL_LAUNCH_RATE_LIMIT_GLOBAL_IP_PER_MINUTE,
+        ):
+            raise _call_error(status.HTTP_429_TOO_MANY_REQUESTS, "rate_limited")
+        payload = PublicVoiceCallRequest.model_validate(await request.json())
+        tenant_id = service.resolve_tenant(slug, payload.context_token)
+        if not limiter.consume(
+            f"callback:tenant:{tenant_id}:{ip_hash}",
+            settings.VOICE_PUBLIC_CALL_LAUNCH_RATE_LIMIT_TENANT_IP_PER_MINUTE,
+        ):
+            raise _call_error(status.HTTP_429_TOO_MANY_REQUESTS, "rate_limited")
+        return service.request(slug, payload.context_token)
+    except HTTPException:
+        raise
+    except (ValueError, ValidationError):
+        raise _call_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "validation_error") from None
+    except PublicCallFailure as exc:
+        raise _call_error(exc.status_code, exc.code) from None
+    except Exception as exc:
+        logger.error(
+            "Unexpected public voice callback failure",
+            extra={"error_type": type(exc).__name__},
+        )
         raise _call_error(status.HTTP_500_INTERNAL_SERVER_ERROR, "internal_error") from None

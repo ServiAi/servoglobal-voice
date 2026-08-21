@@ -24,6 +24,17 @@ class VoiceEndpointTests(Integration2ATestCase):
                 "default_language": "es",
                 "default_timezone": "America/Bogota",
                 "status": "active",
+                "sip_route": {
+                    "status": "active",
+                    "pbx_host": "pbx.example.com",
+                    "pbx_port": 5060,
+                    "sip_username": "tenant-a",
+                    "sip_password": "test-sip-password",
+                    "caller_id": "+573001112233",
+                    "default_country": "CO",
+                    "allowed_countries": ["CO"],
+                    "max_concurrent_calls": 1,
+                },
             },
         )
         self.assertEqual(response.status_code, 200)
@@ -74,13 +85,22 @@ class VoiceEndpointTests(Integration2ATestCase):
 
 class VoiceClientLogSanitizationTests(Integration2ATestCase):
     def test_voice_client_does_not_log_provider_response_body(self):
-        from app.services.voice_client import VoiceClient, VoiceClientConfig
+        from app.services.voice_client import VoiceClient, VoiceClientConfig, VoiceSipRouteConfig
         import httpx
 
         config = VoiceClientConfig(
             provider="ultravox",
             api_key="test_key",
             base_url="https://api.ultravox.ai",
+            sip_route=VoiceSipRouteConfig(
+                host="pbx.example.com",
+                port=5060,
+                username="tenant-a",
+                password="test-sip-password",
+                caller_id="+573001112233",
+                default_country="CO",
+                allowed_countries=("CO",),
+            ),
         )
 
         with patch("httpx.Client.post") as mock_post:

@@ -54,7 +54,15 @@ const experience: PublicVoiceExperienceData = {
     { key: 'verified', label: 'Verified', description: 'I confirm', field_type: 'checkbox', required: true, options: [] },
     { key: 'date', label: 'Date', description: null, field_type: 'date', required: false, options: [] },
   ],
-  call_settings: { auto_start: false, show_microphone_help: true, language: 'es' },
+  call_settings: {
+    auto_start: false,
+    show_microphone_help: true,
+    language: 'es',
+    mode: 'webrtc',
+    phone_field_key: null,
+    default_country: 'CO',
+    allowed_countries: ['CO'],
+  },
   capabilities: { submissions: true, calls: true },
 };
 
@@ -63,6 +71,18 @@ const unsafeExperience: PublicVoiceExperienceData = {
   slug: 'unsafe-urls',
   theme: { ...experience.theme, logo_url: 'javascript:alert(1)' },
   consent: { ...experience.consent, privacy_url: 'http://example.com/privacy' },
+};
+
+const callbackExperience: PublicVoiceExperienceData = {
+  ...experience,
+  slug: 'callback-demo',
+  fields: experience.fields.map((field) => field.key === 'phone' ? { ...field, required: true } : field),
+  call_settings: {
+    ...experience.call_settings,
+    mode: 'callback',
+    phone_field_key: 'phone',
+    allowed_countries: ['CO', 'US'],
+  },
 };
 
 let apiServer: Server;
@@ -74,6 +94,7 @@ const submittedTokens: string[] = [];
 const submittedLocales: string[] = [];
 const unexpectedEgress: string[] = [];
 let callLaunches = 0;
+let callbackRequests = 0;
 
 test.beforeEach(async ({ page }) => {
   unexpectedEgress.length = 0;
@@ -106,6 +127,12 @@ test.beforeAll(async () => {
       callLaunches += 1;
       response.writeHead(200, { ...cors, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
       response.end(JSON.stringify({ status: 'ready', join_url: 'https://provider.invalid/join/secret' }));
+      return;
+    }
+    if (request.method === 'POST' && request.url?.endsWith('/callback-requests')) {
+      callbackRequests += 1;
+      response.writeHead(202, { ...cors, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+      response.end(JSON.stringify({ status: 'accepted' }));
       return;
     }
     if (request.method === 'POST' && request.url?.endsWith('/submissions')) {
@@ -145,7 +172,11 @@ test.beforeAll(async () => {
       response.end(JSON.stringify({ detail: 'Not found' }));
       return;
     }
-    const data = request.url?.endsWith('/unsafe-urls') ? unsafeExperience : experience;
+    const data = request.url?.endsWith('/unsafe-urls')
+      ? unsafeExperience
+      : request.url?.endsWith('/callback-demo')
+        ? callbackExperience
+        : experience;
     response.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
     response.end(JSON.stringify(data));
   });
@@ -221,6 +252,18 @@ test('submits integer zero and checkbox false without exposing the context token
   expect(await page.evaluate(() => ({ local: { ...localStorage }, session: { ...sessionStorage }, cookie: document.cookie })))
     .toEqual({ local: {}, session: {}, cookie: '' });
   expect((await context.cookies()).some((cookie) => cookie.value.includes('context-token'))).toBe(false);
+});
+
+test('requests one outbound callback without microphone access', async ({ page }) => {
+  const start = callbackRequests;
+  await page.goto('/en/voice/callback-demo');
+  await completeRequiredFields(page);
+  await page.getByLabel('Phone').fill('3211234567');
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await page.getByRole('button', { name: 'Start call' }).click();
+  await expect(page.getByText('Request received. We will call you shortly.')).toBeVisible();
+  expect(callbackRequests).toBe(start + 1);
+  expect(mockRequests.some((url) => url.endsWith('/callback-requests'))).toBe(true);
 });
 
 test('preflights microphone, starts one fake WebRTC call, and leaks neither capability', async ({ page, context }) => {

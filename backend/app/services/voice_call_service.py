@@ -8,8 +8,9 @@ from sqlalchemy.orm import Session
 
 from app.models.crm import CrmLead, CrmVoiceCall, CrmVoiceCallEvent
 from app.schemas.integrations import VoiceCallActionRequest, VoiceCallActionResponse, VoiceCallResponse
-from app.services.voice_client import VoiceClient, VoiceClientConfig
+from app.services.voice_client import VoiceClient, VoiceClientConfig, VoiceSipRouteConfig
 from app.services.voice_config_service import VoiceConfigService
+from app.services.voice_sip_route_service import VoiceSipRouteService
 from app.services.voice_agent_service import VoiceAgentService
 from app.services.crm_activity_service import CrmActivityService
 from app.services.integration_event_service import IntegrationEventService
@@ -21,6 +22,7 @@ class VoiceCallService:
     def __init__(self, db: Session) -> None:
         self.db = db
         self.config_service = VoiceConfigService(db)
+        self.route_service = VoiceSipRouteService(db, self.config_service.secret_manager)
         self.agent_service = VoiceAgentService(db)
         self.activity_service = CrmActivityService(db)
         self.integration_event_service = IntegrationEventService(db)
@@ -45,6 +47,9 @@ class VoiceCallService:
 
         provider_config = self.config_service.get_active_provider_config(tenant_id, "ultravox")
         api_key = self.config_service.decrypt_api_key(provider_config)
+        sip_route = self.route_service.get_active_route(tenant_id)
+        if sip_route.provider_config_id != provider_config.id:
+            raise ValueError("Outbound SIP route is not linked to the active voice provider.")
 
         if body.agent_config_id:
             agent_config = self.agent_service.validate_agent_belongs_to_tenant(tenant_id, body.agent_config_id)
@@ -62,7 +67,7 @@ class VoiceCallService:
             direction="outbound",
             status="requested",
             to_phone=to_phone,
-            from_number=provider_config.default_from_number,
+            from_number=sip_route.caller_id,
         )
         self.db.add(voice_call)
         self.db.commit()
@@ -87,15 +92,24 @@ class VoiceCallService:
         context = self._safe_context(context)
 
         client = VoiceClient()
-        client_config = VoiceClientConfig(
-            provider=provider_config.provider,
-            api_key=api_key,
-            base_url=provider_config.base_url,
-            default_language=provider_config.default_language,
-            default_timezone=provider_config.default_timezone,
-        )
 
         try:
+            client_config = VoiceClientConfig(
+                provider=provider_config.provider,
+                api_key=api_key,
+                base_url=provider_config.base_url,
+                default_language=provider_config.default_language,
+                default_timezone=provider_config.default_timezone,
+                sip_route=VoiceSipRouteConfig(
+                    host=sip_route.pbx_host,
+                    port=sip_route.pbx_port,
+                    username=sip_route.sip_username,
+                    password=self.route_service.decrypt_password(sip_route),
+                    caller_id=sip_route.caller_id,
+                    default_country=sip_route.default_country,
+                    allowed_countries=tuple(sip_route.allowed_countries_json),
+                ),
+            )
             response = client.start_outbound_call(
                 client_config,
                 to_phone=to_phone,

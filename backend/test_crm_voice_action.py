@@ -9,6 +9,7 @@ from app.models.analytics import Agent
 from app.models.crm import CrmVoiceCall, CrmVoiceCallEvent, CrmActivity
 from app.models.integrations import TenantVoiceProviderConfig, TenantVoiceAgentConfig, TenantIntegrationEvent
 from app.services.voice_client import VoiceClient
+from app.services.voice_sip_route_service import VoiceSipRouteService
 
 
 class CrmVoiceActionTests(Integration2ATestCase):
@@ -28,6 +29,17 @@ class CrmVoiceActionTests(Integration2ATestCase):
                 "default_language": "es",
                 "default_timezone": "America/Bogota",
                 "status": "active",
+                "sip_route": {
+                    "status": "active",
+                    "pbx_host": "pbx.example.com",
+                    "pbx_port": 5060,
+                    "sip_username": "tenant-a",
+                    "sip_password": "test-sip-password",
+                    "caller_id": "+573001112233",
+                    "default_country": "CO",
+                    "allowed_countries": ["CO"],
+                    "max_concurrent_calls": 1,
+                },
             },
         )
         self.assertEqual(response.status_code, 200)
@@ -41,6 +53,9 @@ class CrmVoiceActionTests(Integration2ATestCase):
         self.assertTrue(data["has_secret"])
         self.assertTrue(data["has_webhook_secret"])
         self.assertEqual(data["status"], "active")
+        self.assertEqual(data["sip_route"]["sip_username"], "tenant-a")
+        self.assertTrue(data["sip_route"]["has_sip_password"])
+        self.assertNotIn("sip_password", data["sip_route"])
 
         # 2. Get config
         response = self.client.get("/api/v1/integrations/voice/config")
@@ -48,6 +63,7 @@ class CrmVoiceActionTests(Integration2ATestCase):
         get_data = response.json()
         self.assertEqual(get_data["display_name"], "My Ultravox")
         self.assertTrue(get_data["has_secret"])
+        self.assertNotIn("sip_password", get_data["sip_route"])
 
     def test_voice_agent_config(self):
         self.configure_voice()
@@ -166,6 +182,35 @@ class CrmVoiceActionTests(Integration2ATestCase):
                 CrmActivity.activity_type == "voice_call_requested"
             ))
             self.assertIsNotNone(activity)
+
+    @patch.object(VoiceSipRouteService, "decrypt_password")
+    def test_outbound_call_marks_failed_when_sip_password_decrypt_fails(self, mock_decrypt):
+        mock_decrypt.side_effect = RuntimeError("kms unavailable")
+
+        self.configure_voice()
+        agent_res = self.client.post(
+            "/api/v1/integrations/voice/agents",
+            json={
+                "provider_agent_id": "wk-agent-decrypt-fail",
+                "display_name": "Agente Ventas",
+                "purpose": "Ventas y Generación de Leads",
+                "status": "active",
+            },
+        )
+        agent_id = agent_res.json()["id"]
+        lead_id, _ = self.seed_lead()
+
+        response = self.client.post(
+            f"/api/v1/crm/leads/{lead_id}/actions/call",
+            json={"agent_config_id": agent_id},
+        )
+        self.assertEqual(response.status_code, 422)
+
+        with SessionLocal() as db:
+            call = db.scalar(select(CrmVoiceCall).where(CrmVoiceCall.lead_id == lead_id))
+            self.assertIsNotNone(call)
+            self.assertEqual(call.status, "failed")
+            self.assertIsNotNone(call.error_message)
 
     def test_webhook_updates_status_correctly(self):
         # Seed lead and create a mock voice call

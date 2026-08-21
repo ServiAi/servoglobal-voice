@@ -10,4 +10,5 @@ PyJWT[crypto]>=2.8
 psycopg[binary]>=3.1
 cryptography>=42.0
 python-multipart>=0.0.9
+phonenumbers>=9.0,<10
 boto3>=1.34

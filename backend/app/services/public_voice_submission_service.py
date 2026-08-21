@@ -28,6 +28,12 @@ from app.services.public_voice_experience_service import (
     PublicVoiceExperienceService,
     PublicVoiceSnapshot,
 )
+from app.services.voice_phone_service import (
+    VoicePhoneValidationError,
+    normalize_caller_id,
+    normalize_outbound_phone,
+)
+from app.services.voice_sip_route_service import VoiceSipRouteService
 
 
 EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
@@ -61,6 +67,7 @@ class PersistedSubmission:
     version: int
     answers: dict[str, str | int | bool | None]
     fields: list[TenantVoiceContextField]
+    default_country: str
 
 
 class PublicVoiceSubmissionService:
@@ -96,9 +103,30 @@ class PublicVoiceSubmissionService:
                 )
                 if snapshot.version.version != payload.version:
                     raise ExperienceVersionChanged
-                errors = validate_submission(payload, snapshot)
+                call_settings = snapshot.version.call_settings_json
+                allowed_countries = None
+                if call_settings.get("mode") == "callback":
+                    route = VoiceSipRouteService(db).get_route(
+                        snapshot.experience.tenant_id
+                    )
+                    if route is not None and route.allowed_countries_json:
+                        allowed_countries = frozenset(route.allowed_countries_json)
+                errors = validate_submission(
+                    payload, snapshot, allowed_countries=allowed_countries
+                )
                 if errors:
                     raise SubmissionValidationFailed(errors)
+                answers = dict(payload.answers)
+                phone_key = call_settings.get("phone_field_key")
+                if call_settings.get("mode") == "callback" and isinstance(
+                    answers.get(phone_key), str
+                ):
+                    phone_kwargs = {"default_country": call_settings.get("default_country")}
+                    if allowed_countries is not None:
+                        phone_kwargs["allowed_countries"] = allowed_countries
+                    answers[phone_key] = normalize_outbound_phone(
+                        answers[phone_key], **phone_kwargs
+                    ).e164
 
                 submission = TenantVoiceExperienceSubmission(
                     tenant_id=snapshot.experience.tenant_id,
@@ -123,7 +151,7 @@ class PublicVoiceSubmissionService:
                             field_type=field_by_key[key].field_type,
                             value_json=value,
                         )
-                        for key, value in payload.answers.items()
+                        for key, value in answers.items()
                         if value is not None
                     ]
                 )
@@ -148,8 +176,9 @@ class PublicVoiceSubmissionService:
                 tenant_id=snapshot.experience.tenant_id,
                 experience_id=snapshot.experience.id,
                 version=snapshot.version.version,
-                answers=dict(payload.answers),
+                answers=answers,
                 fields=list(snapshot.fields),
+                default_country=call_settings.get("default_country") or "CO",
             )
 
         self._project_to_crm(persisted)
@@ -170,15 +199,20 @@ class PublicVoiceSubmissionService:
             if email_value and EMAIL_RE.fullmatch(email_value)
             else None
         )
-        # Submissions accept phones without a leading "+" (e.g. a bare
-        # 10-digit Colombian number); CrmContactService.get_or_create_contact
-        # normalizes them via normalize_phone(), so don't re-require "+"
-        # here or a valid local-format phone silently drops the lead.
-        phone = (
-            phone_value
-            if phone_value and PHONE_RE.fullmatch(phone_value)
-            else None
-        )
+        # Submissions accept phones without a leading "+" (e.g. a bare local
+        # number). CrmContactService.normalize_phone() only special-cases
+        # 10-digit Colombian numbers, so pre-format using the experience's
+        # own default_country here; fall back to the raw value if it can't
+        # be parsed so a valid-but-unusual phone doesn't silently drop the
+        # lead.
+        phone = None
+        if phone_value and PHONE_RE.fullmatch(phone_value):
+            try:
+                phone = normalize_caller_id(
+                    phone_value, default_country=persisted.default_country
+                )
+            except VoicePhoneValidationError:
+                phone = phone_value
         name_value = persisted.answers.get("full_name")
         company_value = persisted.answers.get("company")
         name = name_value.strip() or None if type(name_value) is str else None
@@ -253,6 +287,8 @@ class PublicVoiceSubmissionService:
 def validate_submission(
     payload: PublicVoiceExperienceSubmissionRequest,
     snapshot: PublicVoiceSnapshot,
+    *,
+    allowed_countries: frozenset[str] | None = None,
 ) -> list[PublicFieldError]:
     errors: list[PublicFieldError] = []
     fields = {field.key: field for field in snapshot.fields}
@@ -304,8 +340,20 @@ def validate_submission(
             errors.append(PublicFieldError(key=key, code="invalid_option"))
         elif field.field_type == "email" and not EMAIL_RE.fullmatch(value.strip()):
             errors.append(PublicFieldError(key=key, code="invalid_format"))
-        elif field.field_type == "phone" and not PHONE_RE.fullmatch(value.strip()):
-            errors.append(PublicFieldError(key=key, code="invalid_format"))
+        elif field.field_type == "phone":
+            call_settings = snapshot.version.call_settings_json
+            if call_settings.get("mode") == "callback" and key == call_settings.get(
+                "phone_field_key"
+            ):
+                try:
+                    phone_kwargs = {"default_country": call_settings.get("default_country")}
+                    if allowed_countries is not None:
+                        phone_kwargs["allowed_countries"] = allowed_countries
+                    normalize_outbound_phone(value, **phone_kwargs)
+                except ValueError:
+                    errors.append(PublicFieldError(key=key, code="invalid_format"))
+            elif not PHONE_RE.fullmatch(value.strip()):
+                errors.append(PublicFieldError(key=key, code="invalid_format"))
         elif field.field_type == "date":
             try:
                 parsed = datetime.strptime(value, "%Y-%m-%d")

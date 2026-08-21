@@ -92,9 +92,10 @@ class VoiceExperienceService:
         user_id: str | None,
     ) -> TenantVoiceExperience:
         grant = self.feature_service.require_enabled(tenant_id, VOICE_EXPERIENCES)
-        agent, _ = self._require_relations(
+        agent, schema = self._require_relations(
             tenant_id, body.agent_config_id, body.context_schema_id
         )
+        self._validate_callback_settings(body, schema)
         count = self.db.scalar(
             select(func.count(TenantVoiceExperience.id)).where(
                 TenantVoiceExperience.tenant_id == tenant_id,
@@ -139,7 +140,10 @@ class VoiceExperienceService:
             raise VoiceExperienceConflictError(
                 "Voice experience agent cannot change after publication history exists."
             )
-        self._require_relations(tenant_id, body.agent_config_id, body.context_schema_id)
+        _, schema = self._require_relations(
+            tenant_id, body.agent_config_id, body.context_schema_id
+        )
+        self._validate_callback_settings(body, schema)
         for key, value in self._draft_values(body).items():
             setattr(experience, key, value)
         self.db.commit()
@@ -158,6 +162,7 @@ class VoiceExperienceService:
         )
         if schema.status != "active":
             raise VoiceExperienceValidationError("Only an active context schema can be published.")
+        self._validate_callback_settings(self.response(experience), schema)
         next_version = (
             self.db.scalar(
                 select(func.max(TenantVoiceExperienceVersion.version)).where(
@@ -500,6 +505,25 @@ class VoiceExperienceService:
                 "Voice context schema does not belong to the selected voice agent."
             )
         return agent, schema
+
+    @staticmethod
+    def _validate_callback_settings(body, schema) -> None:
+        settings = body.call_settings
+        if settings.mode != "callback":
+            return
+        field = next(
+            (item for item in schema.fields if item.key == settings.phone_field_key),
+            None,
+        )
+        if (
+            field is None
+            or field.field_type != "phone"
+            or not field.required
+            or field.collection_mode == "internal_only"
+        ):
+            raise VoiceExperienceValidationError(
+                "Callback mode requires a required public phone field from the selected schema."
+            )
 
     @staticmethod
     def _ensure_mutable(experience: TenantVoiceExperience) -> None:

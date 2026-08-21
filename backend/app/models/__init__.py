@@ -9,6 +9,7 @@ from app.models.integrations import (
     TenantIntegration,
     TenantIntegrationEvent,
     TenantVoiceProviderConfig,
+    TenantSipRoute,
     TenantVoiceAgentConfig,
     TenantWhatsAppConfig,
     TenantWhatsAppTemplate,

@@ -636,6 +636,26 @@ export type VoiceProviderConfigRequest = {
   default_language?: string;
   default_timezone?: string;
   status?: string;
+  sip_route?: VoiceSipRouteRequest | null;
+};
+
+export type VoiceSipRouteRequest = {
+  status: 'active' | 'inactive';
+  pbx_host: string;
+  pbx_port: number;
+  sip_username: string;
+  sip_password?: string | null;
+  caller_id: string;
+  default_country: VoiceOutboundCountry;
+  allowed_countries: VoiceOutboundCountry[];
+  max_concurrent_calls: number;
+};
+
+export type VoiceOutboundCountry = 'AR' | 'CL' | 'CO' | 'EC' | 'MX' | 'PA' | 'PE' | 'US';
+
+export type VoiceSipRouteResponse = Omit<VoiceSipRouteRequest, 'sip_password'> & {
+  id: string;
+  has_sip_password: boolean;
 };
 
 export type VoiceProviderConfigResponse = {
@@ -652,6 +672,7 @@ export type VoiceProviderConfigResponse = {
   has_webhook_secret: boolean;
   last_health_check_at?: string | null;
   last_error_message?: string | null;
+  sip_route?: VoiceSipRouteResponse | null;
 };
 
 export type VoiceAgentConfigRequest = {
