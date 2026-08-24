@@ -82,6 +82,9 @@ class PublicVoiceCallbackTests(Integration2ATestCase):
                     default_country="CO",
                     allowed_countries_json=["CO", "US"],
                     max_concurrent_calls=1,
+                    provision_status="active",
+                    desired_revision=1,
+                    applied_revision=1,
                 )
             )
             db.commit()
@@ -287,6 +290,9 @@ class PublicVoiceCallbackTests(Integration2ATestCase):
                 default_country="CO",
                 allowed_countries_json=["CO"],
                 max_concurrent_calls=1,
+                provision_status="active",
+                desired_revision=1,
+                applied_revision=1,
             )
             db.add(route_b)
             db.flush()

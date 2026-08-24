@@ -94,41 +94,28 @@ Ejecute pruebas focalizadas durante el desarrollo y la suite completa antes de m
 
 ### Callback de voz saliente mediante IDT Express
 
-1. Aplique `202608190001_tenant_sip_routes_and_callbacks.py` y confirme una sola head de Alembic.
+1. Aplique `202608210001_asterisk_route_provisioning.py` y confirme una sola head de Alembic.
 2. Instale `phonenumbers` desde `backend/requirements.txt`.
 3. Configure en Integraciones la ruta SIP del tenant: host/puerto PBX, usuario y contraseña SIP, Caller ID autorizado, país predeterminado, países habilitados y concurrencia. La contraseña queda cifrada y no vuelve a mostrarse.
-4. Cree en un include protegido de `pjsip.conf` una instancia por tenant de la plantilla `ultravox-tenant`. Use un identificador opaco; no use el `tenant_id` de la aplicación:
+4. Configure `ASTERISK_PROVISIONER_SHARED_SECRET` en el backend con un secreto aleatorio dedicado. Instale en el PBX el agente `python -m app.workers.asterisk_provisioner` usando las plantillas de `ops/asterisk/`. El agente consulta el estado deseado, genera atómicamente `/etc/asterisk/pjsip.d/serviglobal-tenants.conf`, recarga PJSIP, verifica cada endpoint y reporta la revisión. En caso de error restaura el include anterior.
+
+5. La plantilla base `ultravox-tenant` permanece definida manualmente una sola vez en `pjsip.conf`. Añada después de ella este include:
 
 ```ini
-[tenant-route-example](ultravox-tenant)
-auth=auth-tenant-route-example
-aors=tenant-route-example
-set_var=TENANT_ROUTE_ID=route-example
-set_var=TENANT_CALLER_ID=+E164_AUTORIZADO
-
-[auth-tenant-route-example]
-type=auth
-auth_type=userpass
-username=USUARIO_SIP_DEL_TENANT
-password=SECRETO_SIP_DEL_TENANT
-
-[tenant-route-example]
-type=aor
-max_contacts=1
-remove_existing=yes
+#include pjsip.d/serviglobal-tenants.conf
 ```
 
-La credencial debe coincidir con la guardada en la integración. No acepte Caller ID, ruta o tenant desde el formulario. `from-ultravox-tenant` sólo acepta E.164 para CO, MX, AR, PA, CL, EC, PE y US, retira `+`, antepone `IDT_DIVISION` y marca exclusivamente por `idt-out`. Los rechazos no contactan al carrier y los logs no contienen el destino completo.
+No edite `serviglobal-tenants.conf`: se sobrescribe en cada reconciliación. La credencial generada coincide con la integración y usa un identificador de ruta opaco. No acepte Caller ID, ruta o tenant desde el formulario. `from-ultravox-tenant` sólo acepta E.164 para CO, MX, AR, PA, CL, EC, PE y US, retira `+`, antepone `IDT_DIVISION` y marca exclusivamente por `idt-out`. Los rechazos no contactan al carrier y los logs no contienen el destino completo.
 
-5. Ejecute el worker como servicio independiente:
+6. Ejecute también el worker de callbacks como servicio independiente:
 
 ```powershell
 cd backend
 .\.venv\Scripts\python.exe -m app.workers.voice_callback_worker
 ```
 
-6. Valide la configuración antes de recargar y use `pjsip reload` y `dialplan reload`; no reinicie Asterisk. Conserve copia de los includes anteriores para rollback. Las extensiones 1001/1002 usan `from-internal-test`, que rechaza todo hasta que se agreguen números exactos de prueba.
-7. Antes de habilitar un tenant, confirme con IDT que su división admite los ocho países y el formato `${IDT_DIVISION}${E164_SIN_MAS}`. Ejecute una llamada controlada por país y verifique audio bidireccional, DTMF, Caller ID, webhook, duración y CRM.
+7. Valide la configuración antes de recargar y use `pjsip reload` y `dialplan reload`; no reinicie Asterisk. Conserve copia de los includes anteriores para rollback. Las extensiones 1001/1002 usan `from-internal-test`, que rechaza todo hasta que se agreguen números exactos de prueba.
+8. Antes de habilitar un tenant, confirme con IDT que su división admite los ocho países y el formato `${IDT_DIVISION}${E164_SIN_MAS}`. Ejecute una llamada controlada por país y verifique audio bidireccional, DTMF, Caller ID, webhook, duración y CRM.
 
 El repositorio contiene Dockerfiles separados para frontend y backend. El despliegue actual usa Dokploy/VPS y puede activarse mediante workflows/webhooks configurados fuera del código. Antes de desplegar:
 

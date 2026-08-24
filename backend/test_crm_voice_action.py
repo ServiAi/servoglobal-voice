@@ -17,7 +17,7 @@ class CrmVoiceActionTests(Integration2ATestCase):
         super().setUp()
         self.provider = "ultravox"
 
-    def configure_voice(self):
+    def configure_voice(self, *, provisioned=True):
         response = self.client.post(
             "/api/v1/integrations/voice/config",
             json={
@@ -43,6 +43,13 @@ class CrmVoiceActionTests(Integration2ATestCase):
             },
         )
         self.assertEqual(response.status_code, 200)
+        if provisioned:
+            with SessionLocal() as db:
+                route = VoiceSipRouteService(db).get_route(self.tenant.id)
+                self.assertIsNotNone(route)
+                route.applied_revision = route.desired_revision
+                route.provision_status = "active"
+                db.commit()
         return response.json()
 
     def test_voice_config_lifecycle(self):
@@ -211,6 +218,27 @@ class CrmVoiceActionTests(Integration2ATestCase):
             self.assertIsNotNone(call)
             self.assertEqual(call.status, "failed")
             self.assertIsNotNone(call.error_message)
+
+    def test_outbound_call_requires_provisioned_sip_route(self):
+        self.configure_voice(provisioned=False)
+        agent = self.client.post(
+            "/api/v1/integrations/voice/agents",
+            json={
+                "provider_agent_id": "wk-agent-pending-route",
+                "display_name": "Agente pendiente",
+                "purpose": "Ventas",
+                "status": "active",
+            },
+        ).json()
+        lead_id, _ = self.seed_lead()
+
+        response = self.client.post(
+            f"/api/v1/crm/leads/{lead_id}/actions/call",
+            json={"agent_config_id": agent["id"]},
+        )
+
+        self.assertEqual(response.status_code, 422)
+        self.assertIn("aplicada", response.json()["detail"].lower())
 
     def test_webhook_updates_status_correctly(self):
         # Seed lead and create a mock voice call

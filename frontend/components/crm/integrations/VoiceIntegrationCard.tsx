@@ -276,6 +276,19 @@ export function VoiceIntegrationCard({
   };
 
   const isSipActive = configForm.sip_route?.status === 'active';
+  const sipProvisionStatus = config?.sip_route?.provision_status ?? 'disabled';
+  const sipProvisionLabel = {
+    active: 'Aplicada en Asterisk',
+    pending: 'Pendiente de aplicar',
+    failed: 'Error al aplicar',
+    disabled: 'No aprovisionada',
+  }[sipProvisionStatus];
+  const sipProvisionTone = {
+    active: 'text-emerald-600 dark:text-emerald-400',
+    pending: 'text-amber-600 dark:text-amber-400',
+    failed: 'text-red-600 dark:text-red-400',
+    disabled: 'text-muted-foreground',
+  }[sipProvisionStatus];
   const activeAgentCount = agents.filter((agent) => agent.status === 'active').length;
 
   return (
@@ -376,6 +389,20 @@ export function VoiceIntegrationCard({
               Credencial del endpoint de este tenant en Asterisk. IDT Express permanece como troncal compartida.
             </p>
             <div className="space-y-3 px-4 pb-4 pl-11">
+              {config?.sip_route && (
+                <div className={`rounded-md border border-border bg-background px-3 py-2 text-xs ${sipProvisionTone}`} role="status">
+                  <span className="font-semibold">{sipProvisionLabel}</span>
+                  <span className="ml-2 text-muted-foreground">
+                    Revisión {config.sip_route.applied_revision}/{config.sip_route.desired_revision}
+                  </span>
+                  {sipProvisionStatus === 'pending' && (
+                    <p className="mt-1 text-muted-foreground">El agente del PBX aplicará el cambio automáticamente. Las llamadas salientes permanecen bloqueadas hasta su confirmación.</p>
+                  )}
+                  {sipProvisionStatus === 'failed' && (
+                    <p className="mt-1">No se pudo aplicar la configuración ({config.sip_route.provision_error_code ?? 'apply_failed'}). Revisa el servicio aprovisionador en Asterisk.</p>
+                  )}
+                </div>
+              )}
               <div className="grid gap-3 sm:grid-cols-[1fr_96px]">
                 <label className="grid gap-1 text-xs font-medium text-muted-foreground">
                   <span className="flex items-center gap-1">Host PBX <FieldHelp label="Host PBX" required>Dominio o IP pública de Asterisk, sin protocolo ni puerto.</FieldHelp></span>

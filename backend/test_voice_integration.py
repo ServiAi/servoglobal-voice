@@ -38,7 +38,11 @@ class VoiceEndpointTests(Integration2ATestCase):
             },
         )
         self.assertEqual(response.status_code, 200)
-        return response.json()
+        data = response.json()
+        self.assertEqual(data["sip_route"]["provision_status"], "pending")
+        self.assertEqual(data["sip_route"]["desired_revision"], 1)
+        self.assertEqual(data["sip_route"]["applied_revision"], 0)
+        return data
 
     def test_voice_test_endpoint_canonical_works(self):
         self.configure_voice()

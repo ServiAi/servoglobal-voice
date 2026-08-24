@@ -1,0 +1,6 @@
+SERVIGLOBAL_API_URL=https://api.example.com
+ASTERISK_PROVISIONER_SHARED_SECRET=replace_with_the_same_random_secret_as_backend
+ASTERISK_TENANTS_INCLUDE_PATH=/etc/asterisk/pjsip.d/serviglobal-tenants.conf
+ASTERISK_PROVISIONER_STATE_PATH=/var/lib/serviglobal-asterisk/state.json
+ASTERISK_PROVISIONER_POLL_SECONDS=15
+ASTERISK_CONFIG_GROUP=asterisk
