@@ -1,0 +1,15 @@
+; Define this template once in pjsip.conf before the managed include.
+[ultravox-tenant](!)
+type=endpoint
+transport=transport-udp
+context=from-ultravox-tenant
+disallow=all
+allow=ulaw,alaw
+direct_media=no
+force_rport=yes
+rewrite_contact=yes
+rtp_symmetric=yes
+identify_by=auth_username,username
+
+; The provisioner owns the generated endpoint/auth/aor sections below.
+#include pjsip.d/serviglobal-tenants.conf

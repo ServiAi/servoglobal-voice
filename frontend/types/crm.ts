@@ -656,6 +656,12 @@ export type VoiceOutboundCountry = 'AR' | 'CL' | 'CO' | 'EC' | 'MX' | 'PA' | 'PE
 export type VoiceSipRouteResponse = Omit<VoiceSipRouteRequest, 'sip_password'> & {
   id: string;
   has_sip_password: boolean;
+  provision_status: 'pending' | 'active' | 'failed' | 'disabled';
+  desired_revision: number;
+  applied_revision: number;
+  provision_error_code?: string | null;
+  provisioned_at?: string | null;
+  last_provision_attempt_at?: string | null;
 };
 
 export type VoiceProviderConfigResponse = {

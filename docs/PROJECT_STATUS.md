@@ -1,6 +1,6 @@
 # Estado funcional del proyecto
 
-Actualizado: 2026-08-12. Fuente: código, migraciones y pruebas del repositorio.
+Actualizado: 2026-08-21. Fuente: código, migraciones y pruebas del repositorio.
 
 | Área | Estado | Implementación actual |
 | --- | --- | --- |
@@ -15,14 +15,14 @@ Actualizado: 2026-08-12. Fuente: código, migraciones y pruebas del repositorio.
 | Google Calendar | Parcial | OAuth foundation, listado y desconexión; creación directa de eventos deshabilitada. |
 | WhatsApp Cloud | Operativa | Configuración, plantillas, envío CRM, mensajes, estados y webhook. |
 | Automatizaciones y notificaciones | Operativa en código | Contratos versionados de eventos, builder dinámico, dry-run sin envío, reglas, destinatarios, entregas, planificación, reintentos, recuperación y worker PostgreSQL. El despliegue del proceso worker debe verificarse por entorno. |
-| Voz CRM | Operativa | Configuración de proveedor/agentes, rutas SIP cifradas por tenant, llamadas WebRTC y callbacks salientes mediante IDT, webhook y booking tools. |
+| Voz CRM | Operativa en código | Configuración de proveedor/agentes, rutas SIP cifradas por tenant, aprovisionamiento automático y versionado de endpoints PJSIP, llamadas WebRTC y callbacks salientes mediante IDT, webhook y booking tools. El agente local del PBX debe instalarse por entorno. |
 | Voice Context Experiences | Runtime público WebRTC implementado en código | Feature flag, snapshots, submissions y context session one-shot; launch Ultravox tenant-scoped con recovery-first, leases, recovery por `joined`/`ended`, webhook firmado/deduplicado, billing real por `billedDuration`, CRM monotónico, concurrencia PostgreSQL y preflight de micrófono. `submissions=true`; `calls=true`. Ver `docs-local/fase-4/VOICE_EXPERIENCE_WEBRTC_RUNTIME.md`. |
 | Planes y consumo | Operativa | Límites, alertas, resumen administrativo y comparación de ahorro. |
 | Chatwoot | Legado/compatible | Webhook y acciones existentes; conservar compatibilidad al modificar CRM/mensajería. |
 
 ## Persistencia
 
-Las migraciones cubren identidad, analítica, riesgo Auth0, planes/uso, CRM base y contexto de llamadas, Resend/email/formularios, Cal.com/Google Calendar, WhatsApp, voz, disponibilidad de integraciones, notificaciones, grants tenant, context submissions, runtime WebRTC y rutas SIP/callbacks salientes. La migración más reciente es `202608190001_tenant_sip_routes_and_callbacks.py` y la cadena debe conservar una única head.
+Las migraciones cubren identidad, analítica, riesgo Auth0, planes/uso, CRM base y contexto de llamadas, Resend/email/formularios, Cal.com/Google Calendar, WhatsApp, voz, disponibilidad de integraciones, notificaciones, grants tenant, context submissions, runtime WebRTC y rutas SIP/callbacks salientes. La migración más reciente es `202608210001_asterisk_route_provisioning.py` y la cadena debe conservar una única head.
 
 ## Continuidad: automatizaciones y notificaciones
 
@@ -42,7 +42,7 @@ Las migraciones cubren identidad, analítica, riesgo Auth0, planes/uso, CRM base
 - Mantener separados futuros cambios de WhatsApp y voz.
 - Verificar por entorno los prerequisitos Ultravox tenant (API key, webhook secret, agente compatible con `user_context` y eventos webhook) antes de habilitar el runtime público.
 - Etapa 0 (`fix/voice-experience-functional-alignment`): `get_current_published_version()` es fail-closed por `published_version_id`; `PUT` bloquea cambio de agente con historial; `DELETE` elimina definitivamente experiencias archivadas junto con versiones, submissions, valores, sesiones y runtime asociados; `/api/v1/calls` quedó tipado y sanitizado. Pendiente: endurecer `/api/v1/call-outbound` con el mismo criterio.
-- Callback saliente multitenant: cada tenant configura una ruta SIP cifrada y Caller ID autorizado; las experiencias publicadas pueden solicitar una llamada idempotente usando sólo el token de contexto. El backend normaliza E.164 para CO, MX, AR, PA, CL, EC, PE y US, y el worker inicia Ultravox con la credencial SIP del tenant. WebRTC permanece independiente.
+- Callback saliente multitenant: cada tenant configura una ruta SIP cifrada y Caller ID autorizado; las experiencias publicadas pueden solicitar una llamada idempotente usando sólo el token de contexto. El backend normaliza E.164 para CO, MX, AR, PA, CL, EC, PE y US, y el worker inicia Ultravox con la credencial SIP del tenant. El agente local de Asterisk reconcilia un include PJSIP administrado y reporta cada revisión; una ruta pendiente o fallida no puede originar llamadas. WebRTC permanece independiente.
 - El aviso de cambios sin guardar cubre recarga/cierre y navegación mediante enlaces; el historial nativo atrás/adelante sigue como limitación conocida de App Router hasta disponer de un hook estable.
 - El listado consulta el historial por experiencia para mostrar su conteo. Si `max_experiences` crece y esto se vuelve un cuello de botella, el backend deberá incluir el conteo en la respuesta del listado.
 - El inventario de Voice Experiences muestra las experiencias publicadas como listas para compartir y ofrece abrir o copiar su enlace público desde cada tarjeta.

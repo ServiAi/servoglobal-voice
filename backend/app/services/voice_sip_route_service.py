@@ -16,6 +16,7 @@ from app.services.voice_phone_service import (
 
 HOST_RE = re.compile(r"^[A-Za-z0-9.-]+$")
 SIP_USERNAME_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
+SIP_PASSWORD_FORBIDDEN = frozenset("\r\n;#[]")
 
 
 class VoiceSipRouteService:
@@ -45,6 +46,14 @@ class VoiceSipRouteService:
                 "La ruta SIP saliente de este tenant no tiene contraseña configurada. "
                 "Complétala en Integraciones > Voz antes de iniciar llamadas."
             )
+        if (
+            route.provision_status != "active"
+            or route.applied_revision != route.desired_revision
+        ):
+            raise ValueError(
+                "La ruta SIP todavía no está aplicada en Asterisk. "
+                "Espera la confirmación del aprovisionador antes de iniciar llamadas."
+            )
         return route
 
     def upsert(
@@ -60,6 +69,12 @@ class VoiceSipRouteService:
             raise ValueError("PBX host must be a hostname or IP address without protocol or port.")
         if not SIP_USERNAME_RE.fullmatch(username):
             raise ValueError("SIP username contains unsupported characters.")
+        if body.sip_password and (
+            any(char in SIP_PASSWORD_FORBIDDEN for char in body.sip_password)
+            or not body.sip_password.isascii()
+            or not body.sip_password.isprintable()
+        ):
+            raise ValueError("SIP password contains unsupported characters.")
         if not countries or any(code not in SUPPORTED_OUTBOUND_COUNTRIES for code in countries):
             raise ValueError("At least one supported outbound country is required.")
         if body.default_country not in countries:
@@ -67,6 +82,17 @@ class VoiceSipRouteService:
 
         route = self.get_route(tenant_id)
         is_new = route is None
+        username_owner = self.db.scalar(
+            select(TenantSipRoute).where(TenantSipRoute.sip_username == username)
+        )
+        if username_owner is not None and username_owner.tenant_id != tenant_id:
+            raise ValueError("SIP username is already assigned to another tenant.")
+        previous_pjsip_state = None if is_new else (
+            route.status,
+            route.sip_username,
+            route.caller_id,
+            False,
+        )
         if route is None:
             route = TenantSipRoute(
                 tenant_id=tenant_id,
@@ -96,6 +122,20 @@ class VoiceSipRouteService:
         route.max_concurrent_calls = body.max_concurrent_calls
         if route.status == "active" and not route.sip_password_encrypted:
             raise ValueError("SIP password is required before activating the route.")
+        current_pjsip_state = (
+            route.status,
+            route.sip_username,
+            route.caller_id,
+            bool(body.sip_password),
+        )
+        if is_new:
+            if route.status == "active":
+                route.desired_revision = 1
+                route.provision_status = "pending"
+        elif previous_pjsip_state != current_pjsip_state:
+            route.desired_revision += 1
+            route.provision_status = "pending"
+            route.provision_error_code = None
         self.db.flush()
         return route
 
@@ -119,4 +159,10 @@ class VoiceSipRouteService:
             allowed_countries=list(route.allowed_countries_json),
             max_concurrent_calls=route.max_concurrent_calls,
             has_sip_password=bool(route.sip_password_encrypted),
+            provision_status=route.provision_status,
+            desired_revision=route.desired_revision,
+            applied_revision=route.applied_revision,
+            provision_error_code=route.provision_error_code,
+            provisioned_at=route.provisioned_at,
+            last_provision_attempt_at=route.last_provision_attempt_at,
         )

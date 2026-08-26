@@ -1,0 +1,23 @@
+[Unit]
+Description=ServiGlobal tenant SIP route provisioner
+After=network-online.target asterisk.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=asterisk
+Group=asterisk
+WorkingDirectory=/opt/serviglobal/backend
+EnvironmentFile=/etc/serviglobal/asterisk-provisioner.conf
+ExecStart=/opt/serviglobal/backend/.venv/bin/python -m app.workers.asterisk_provisioner
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/etc/asterisk/pjsip.d /var/lib/serviglobal-asterisk
+
+[Install]
+WantedBy=multi-user.target
+

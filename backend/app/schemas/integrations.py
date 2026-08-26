@@ -242,6 +242,12 @@ class VoiceSipRouteResponse(BaseModel):
     allowed_countries: list[str]
     max_concurrent_calls: int
     has_sip_password: bool
+    provision_status: str
+    desired_revision: int
+    applied_revision: int
+    provision_error_code: Optional[str] = None
+    provisioned_at: Optional[datetime] = None
+    last_provision_attempt_at: Optional[datetime] = None
 
 
 class VoiceProviderConfigRequest(BaseModel):
