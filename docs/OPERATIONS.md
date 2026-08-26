@@ -114,6 +114,28 @@ cd backend
 .\.venv\Scripts\python.exe -m app.workers.voice_callback_worker
 ```
 
+El callback usa una cola persistente en PostgreSQL; no requiere Redis, RabbitMQ
+ni Celery. `crm_voice_calls` es la fuente de verdad: el endpoint público valida
+la solicitud, crea la llamada con estado `requested` y responde `202`. El worker
+toma primero las solicitudes más antiguas mediante `SELECT ... FOR UPDATE SKIP
+LOCKED`, respeta la concurrencia de cada ruta SIP y cambia cada llamada a
+`starting` antes de contactar al proveedor. Esto permite ejecutar varios workers
+sin procesar dos veces la misma llamada. Una llamada que permanezca en `starting`
+por más de 120 segundos se recupera automáticamente a `requested`.
+
+Sin el worker, la solicitud queda guardada en `requested`, pero la llamada real
+no comienza. En staging continuo, despliegue el worker como un servicio separado
+con el mismo código, `DATABASE_URL` y claves de cifrado del backend. No asigne
+dominio ni puerto público. Si se usa Nixpacks en Dokploy, configure:
+
+```text
+NIXPACKS_START_CMD=python -m app.workers.voice_callback_worker
+```
+
+El agente `app.workers.asterisk_provisioner` es otro proceso: corre en el servidor
+Asterisk, no usa `DATABASE_URL` y consulta el backend mediante
+`SERVIGLOBAL_API_URL` y `ASTERISK_PROVISIONER_SHARED_SECRET`.
+
 7. Valide la configuración antes de recargar y use `pjsip reload` y `dialplan reload`; no reinicie Asterisk. Conserve copia de los includes anteriores para rollback. Las extensiones 1001/1002 usan `from-internal-test`, que rechaza todo hasta que se agreguen números exactos de prueba.
 8. Antes de habilitar un tenant, confirme con IDT que su división admite los ocho países y el formato `${IDT_DIVISION}${E164_SIN_MAS}`. Ejecute una llamada controlada por país y verifique audio bidireccional, DTMF, Caller ID, webhook, duración y CRM.
 
