@@ -29,6 +29,7 @@ from app.services.voice_client import VoiceClient, VoiceClientConfig, VoiceSipRo
 from app.services.voice_config_service import VoiceConfigService
 from app.services.voice_phone_service import VoicePhoneValidationError, normalize_outbound_phone
 from app.services.voice_sip_route_service import VoiceSipRouteService
+from app.services.voice_webhook_service import VoiceWebhookService
 
 
 logger = logging.getLogger(__name__)
@@ -232,17 +233,104 @@ class VoiceCallbackWorker:
         session_factory: Callable[[], Session],
         *,
         starting_lease_seconds: int = 120,
+        reconcile_after_seconds: int = 30,
+        max_active_seconds: int = 7200,
     ) -> None:
         self.session_factory = session_factory
         self.starting_lease_seconds = starting_lease_seconds
+        self.reconcile_after_seconds = reconcile_after_seconds
+        self.max_active_seconds = max_active_seconds
 
     def process_once(self) -> bool:
         self._recover_stale_starting()
+        reconciled = self._reconcile_active()
         call_id = self._claim()
         if call_id is None:
-            return False
+            return reconciled
         self._start(call_id)
         return True
+
+    def _reconcile_active(self) -> bool:
+        now = datetime.now(UTC)
+        reconcile_cutoff = now - timedelta(seconds=self.reconcile_after_seconds)
+        with self.session_factory() as db:
+            with db.begin():
+                call = db.scalar(
+                    select(CrmVoiceCall)
+                    .where(
+                        CrmVoiceCall.status.in_(("queued", "in_progress")),
+                        CrmVoiceCall.provider_call_id.is_not(None),
+                        CrmVoiceCall.updated_at < reconcile_cutoff,
+                    )
+                    .order_by(CrmVoiceCall.updated_at)
+                    .with_for_update(skip_locked=True)
+                    .limit(1)
+                )
+                if call is None:
+                    return False
+                call.updated_at = now
+                call_id = call.id
+
+        timed_out = False
+        with self.session_factory() as db:
+            call = db.get(CrmVoiceCall, call_id)
+            if call is None or call.status not in {"queued", "in_progress"}:
+                return True
+            started_at = call.started_at or call.provider_attempt_started_at or call.created_at
+            timed_out = self._utc(started_at) < now - timedelta(seconds=self.max_active_seconds)
+            if timed_out:
+                provider_call = {
+                    "callId": call.provider_call_id,
+                    "ended": now.isoformat(),
+                    "endReason": "system_error",
+                }
+            else:
+                try:
+                    config_service = VoiceConfigService(db)
+                    provider_config = config_service.get_active_provider_config(
+                        call.tenant_id, call.provider
+                    )
+                    provider_call = VoiceClient().get_call(
+                        VoiceClientConfig(
+                            provider=provider_config.provider,
+                            api_key=config_service.decrypt_api_key(provider_config),
+                            base_url=provider_config.base_url,
+                        ),
+                        provider_call_id=call.provider_call_id or "",
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        "Voice callback reconciliation failed",
+                        extra={
+                            "voice_call_id": call.id,
+                            "error_type": type(exc).__name__,
+                        },
+                    )
+                    return True
+
+            ended = provider_call.get("ended")
+            joined = provider_call.get("joined")
+            if not ended and not joined:
+                return True
+            provider_call = dict(provider_call)
+            provider_call.setdefault("callId", call.provider_call_id)
+            VoiceWebhookService(db).handle_provider_event(
+                call.provider,
+                {
+                    "event": "call.ended" if ended else "call.joined",
+                    "call": provider_call,
+                },
+            )
+            if timed_out:
+                call = db.get(CrmVoiceCall, call_id)
+                if call is not None:
+                    call.error_message = "Provider completion timeout."
+                    db.commit()
+            return True
+
+    @staticmethod
+    def _utc(value: datetime) -> datetime:
+        return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
 
     def _recover_stale_starting(self) -> None:
         cutoff = datetime.now(UTC) - timedelta(seconds=self.starting_lease_seconds)

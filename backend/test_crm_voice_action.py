@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+from datetime import UTC, datetime
 from sqlalchemy import select
 from unittest.mock import patch
 
@@ -310,6 +311,40 @@ class CrmVoiceActionTests(Integration2ATestCase):
             ))
             self.assertIsNotNone(activity)
             self.assertIn("El cliente esta interesado", activity.description)
+
+    def test_late_started_webhook_does_not_reopen_completed_call(self):
+        with SessionLocal() as db:
+            call = CrmVoiceCall(
+                tenant_id=self.tenant.id,
+                provider="ultravox",
+                provider_call_id="uvx-terminal-call",
+                direction="outbound",
+                status="completed",
+                ended_at=datetime.now(UTC),
+            )
+            db.add(call)
+            db.commit()
+            voice_call_id = call.id
+
+        response = self.client.post(
+            "/api/v1/voice/webhook/ultravox",
+            json={
+                "event": "call.started",
+                "call": {
+                    "id": "uvx-terminal-call",
+                    "status": "queued",
+                    "metadata": {"voice_call_id": voice_call_id},
+                },
+            },
+            headers={
+                "x-ultravox-webhook-timestamp": "2026-07-04T12:00:00Z",
+                "x-ultravox-webhook-signature": "dummy-signature",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+
+        with SessionLocal() as db:
+            self.assertEqual(db.get(CrmVoiceCall, voice_call_id).status, "completed")
 
     def test_voice_cross_tenant_isolation(self):
         # Create tenant B

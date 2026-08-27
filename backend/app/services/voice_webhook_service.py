@@ -94,6 +94,10 @@ class VoiceWebhookService:
 
         mapped_status, ended_at, duration, recording_url, transcript_url, summary = self._parse_ultravox_event(payload)
 
+        terminal_statuses = {"completed", "failed", "cancelled", "no_answer", "busy"}
+        if call.status in terminal_statuses:
+            mapped_status = call.status
+
         call.status = mapped_status
         if ended_at:
             call.ended_at = ended_at
@@ -124,7 +128,7 @@ class VoiceWebhookService:
         )
 
         activity_type = self._activity_type_from_status(mapped_status, event_type)
-        if activity_type:
+        if activity_type and call.contact_id:
             title = self._activity_title_from_status(mapped_status)
             description = self._activity_desc_from_status(mapped_status, duration, summary)
             
@@ -234,7 +238,7 @@ class VoiceWebhookService:
             reason_lower = end_reason.lower()
             if any(term in reason_lower for term in ("error", "fail", "system")):
                 mapped_status = "failed"
-            elif any(term in reason_lower for term in ("no_answer", "timeout", "missed", "no-answer")):
+            elif any(term in reason_lower for term in ("unjoined", "no_answer", "timeout", "missed", "no-answer")):
                 mapped_status = "no_answer"
             elif any(term in reason_lower for term in ("busy", "decline", "reject")):
                 mapped_status = "busy"

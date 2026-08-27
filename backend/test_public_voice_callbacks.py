@@ -261,6 +261,79 @@ class PublicVoiceCallbackTests(Integration2ATestCase):
             call = db.get(CrmVoiceCall, fresh_id)
             self.assertEqual(call.status, "starting")
 
+    def test_worker_reconciles_ended_callback_when_webhook_is_missing(self) -> None:
+        with SessionLocal() as db:
+            route = db.scalar(
+                select(TenantSipRoute).where(TenantSipRoute.tenant_id == self.tenant.id)
+            )
+            call = CrmVoiceCall(
+                tenant_id=self.tenant.id,
+                sip_route_id=route.id,
+                source_submission_id="sub-missing-ended-webhook",
+                provider="ultravox",
+                provider_call_id="provider-ended-without-webhook",
+                direction="outbound",
+                status="queued",
+                to_phone="+573001110004",
+                from_number=route.caller_id,
+                started_at=datetime.now(UTC) - timedelta(seconds=90),
+                updated_at=datetime.now(UTC) - timedelta(seconds=90),
+            )
+            db.add(call)
+            db.commit()
+            call_id = call.id
+
+        with patch("app.services.voice_callback_service.VoiceClient.get_call") as get_call:
+            get_call.return_value = {
+                "callId": "provider-ended-without-webhook",
+                "joined": "2026-08-26T20:00:00Z",
+                "ended": "2026-08-26T20:01:00Z",
+                "endReason": "hangup",
+            }
+            worker = VoiceCallbackWorker(SessionLocal, reconcile_after_seconds=60)
+            self.assertTrue(worker.process_once())
+
+        with SessionLocal() as db:
+            call = db.get(CrmVoiceCall, call_id)
+            self.assertEqual(call.status, "completed")
+            self.assertIsNotNone(call.ended_at)
+
+    def test_worker_releases_callback_after_maximum_active_time(self) -> None:
+        with SessionLocal() as db:
+            route = db.scalar(
+                select(TenantSipRoute).where(TenantSipRoute.tenant_id == self.tenant.id)
+            )
+            call = CrmVoiceCall(
+                tenant_id=self.tenant.id,
+                sip_route_id=route.id,
+                source_submission_id="sub-active-timeout",
+                provider="ultravox",
+                provider_call_id="provider-active-timeout",
+                direction="outbound",
+                status="queued",
+                to_phone="+573001110005",
+                from_number=route.caller_id,
+                started_at=datetime.now(UTC) - timedelta(seconds=121),
+                updated_at=datetime.now(UTC) - timedelta(seconds=121),
+            )
+            db.add(call)
+            db.commit()
+            call_id = call.id
+
+        with patch("app.services.voice_callback_service.VoiceClient.get_call") as get_call:
+            worker = VoiceCallbackWorker(
+                SessionLocal,
+                reconcile_after_seconds=60,
+                max_active_seconds=120,
+            )
+            self.assertTrue(worker.process_once())
+            get_call.assert_not_called()
+
+        with SessionLocal() as db:
+            call = db.get(CrmVoiceCall, call_id)
+            self.assertEqual(call.status, "failed")
+            self.assertIsNotNone(call.ended_at)
+
     def test_claim_skips_saturated_route_to_serve_other_tenants(self) -> None:
         secrets = SecretManager()
         tenant_b, _user_b = self._seed_tenant_user(slug="tenant-b", email="admin-b@example.com")
