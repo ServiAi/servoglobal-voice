@@ -15,7 +15,8 @@ from app.main import app
 from app.api.auth.deps import AuthContext, get_current_auth_context
 from app.models.analytics import Agent, Call, CallEvent
 from app.models.identity import Tenant, User, TenantMembership
-from app.models.crm import CrmContact, CrmPipelineStage, CrmLead, CrmActivity, CrmTask
+from app.models.crm import CrmContact, CrmPipelineStage, CrmLead, CrmActivity, CrmTask, CrmVoiceCall
+from app.models.integrations import TenantIntegrationEvent, TenantSipRoute, TenantVoiceProviderConfig
 from app.services.crm_pipeline_service import CrmPipelineService
 from app.services.crm_dashboard_metrics_service import CrmDashboardMetricsService
 
@@ -33,6 +34,10 @@ class CrmDashboardMetricsTests(unittest.TestCase):
 
     def setUp(self):
         with SessionLocal() as db:
+            db.query(TenantIntegrationEvent).delete()
+            db.query(CrmVoiceCall).delete()
+            db.query(TenantSipRoute).delete()
+            db.query(TenantVoiceProviderConfig).delete()
             db.query(CrmTask).delete()
             db.query(CrmActivity).delete()
             db.query(CrmLead).delete()
@@ -409,6 +414,129 @@ class CrmDashboardMetricsTests(unittest.TestCase):
         self.assertEqual(calls["unanswered_calls"], 1)
         self.assertEqual(calls["average_duration_seconds"], 120.0)
         self.assertEqual(calls["total_billed_minutes"], 2.0)
+
+    def test_dashboard_voice_capacity_without_route_returns_zeros(self):
+        tenant, _agent, user = self.seed_tenant_agent_user()
+        self.override_auth(user, tenant)
+
+        response = self.client.get("/api/v1/crm/dashboard")
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(
+            response.json()["voice_capacity"],
+            {
+                "configured": False,
+                "route_status": None,
+                "provision_status": None,
+                "active_calls": 0,
+                "max_concurrent_calls": 0,
+                "available_slots": 0,
+                "utilization_percent": 0.0,
+                "capacity_rejections": 0,
+                "reconciled_calls": 0,
+                "forced_releases": 0,
+                "recent_events": [],
+            },
+        )
+
+    def test_dashboard_voice_capacity_is_current_period_scoped_and_tenant_isolated(self):
+        tenant_a, _agent_a, user_a = self.seed_tenant_agent_user(
+            slug="tenant-a", name="Tenant A", email="capacity-a@test.com"
+        )
+        tenant_b, _agent_b, _user_b = self.seed_tenant_agent_user(
+            slug="tenant-b", name="Tenant B", email="capacity-b@test.com"
+        )
+        self.override_auth(user_a, tenant_a)
+        now = datetime.now(UTC)
+
+        with SessionLocal() as db:
+            provider_a = TenantVoiceProviderConfig(
+                tenant_id=tenant_a.id, provider="ultravox", status="active"
+            )
+            provider_b = TenantVoiceProviderConfig(
+                tenant_id=tenant_b.id, provider="ultravox", status="active"
+            )
+            db.add_all([provider_a, provider_b])
+            db.flush()
+            route_a = TenantSipRoute(
+                tenant_id=tenant_a.id,
+                provider_config_id=provider_a.id,
+                status="active",
+                provision_status="active",
+                pbx_host="pbx-a.example.com",
+                sip_username="capacity-a",
+                caller_id="+573001110000",
+                max_concurrent_calls=3,
+            )
+            route_b = TenantSipRoute(
+                tenant_id=tenant_b.id,
+                provider_config_id=provider_b.id,
+                status="active",
+                provision_status="active",
+                pbx_host="pbx-b.example.com",
+                sip_username="capacity-b",
+                caller_id="+573001110001",
+                max_concurrent_calls=1,
+            )
+            db.add_all([route_a, route_b])
+            db.flush()
+            db.add_all(
+                [
+                    CrmVoiceCall(tenant_id=tenant_a.id, sip_route_id=route_a.id, provider="ultravox", direction="outbound", status="queued"),
+                    CrmVoiceCall(tenant_id=tenant_a.id, sip_route_id=route_a.id, provider="ultravox", direction="outbound", status="in_progress"),
+                    CrmVoiceCall(tenant_id=tenant_a.id, sip_route_id=route_a.id, provider="ultravox", direction="outbound", status="completed"),
+                    CrmVoiceCall(tenant_id=tenant_b.id, sip_route_id=route_b.id, provider="ultravox", direction="outbound", status="queued"),
+                ]
+            )
+            for index in range(12):
+                event_type = "voice_capacity_reached" if index < 8 else "voice_callback_reconciled"
+                db.add(
+                    TenantIntegrationEvent(
+                        tenant_id=tenant_a.id,
+                        provider="ultravox",
+                        event_type=event_type,
+                        status="blocked" if index < 8 else "success",
+                        metadata_json={"active_calls": 3, "max_concurrent_calls": 3},
+                        created_at=now - timedelta(minutes=index),
+                    )
+                )
+            db.add(
+                TenantIntegrationEvent(
+                    tenant_id=tenant_a.id,
+                    provider="ultravox",
+                    event_type="voice_callback_forced_release",
+                    status="success",
+                    metadata_json={"resulting_status": "failed"},
+                    created_at=now - timedelta(days=40),
+                )
+            )
+            db.add(
+                TenantIntegrationEvent(
+                    tenant_id=tenant_b.id,
+                    provider="ultravox",
+                    event_type="voice_capacity_reached",
+                    status="blocked",
+                    metadata_json={"active_calls": 1, "max_concurrent_calls": 1},
+                    created_at=now,
+                )
+            )
+            db.commit()
+
+        response = self.client.get(
+            "/api/v1/crm/dashboard?range=30d&source=ignored&campaign=ignored"
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        capacity = response.json()["voice_capacity"]
+        self.assertTrue(capacity["configured"])
+        self.assertEqual(capacity["active_calls"], 2)
+        self.assertEqual(capacity["max_concurrent_calls"], 3)
+        self.assertEqual(capacity["available_slots"], 1)
+        self.assertEqual(capacity["utilization_percent"], 66.7)
+        self.assertEqual(capacity["capacity_rejections"], 8)
+        self.assertEqual(capacity["reconciled_calls"], 4)
+        self.assertEqual(capacity["forced_releases"], 0)
+        self.assertEqual(len(capacity["recent_events"]), 10)
+        occurred = [item["occurred_at"] for item in capacity["recent_events"]]
+        self.assertEqual(occurred, sorted(occurred, reverse=True))
 
     # 11. test_dashboard_denominator_zero_returns_zero
     def test_dashboard_denominator_zero_returns_zero(self):

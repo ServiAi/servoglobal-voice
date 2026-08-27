@@ -38,7 +38,9 @@ PostgreSQL es la base principal. Alembic administra el esquema. Los dominios per
 2. Ultravox ejecuta la llamada y envía eventos.
 3. El backend normaliza y persiste la llamada de forma idempotente; el worker consulta el estado del proveedor como respaldo cuando falta el evento terminal.
 4. Los servicios CRM resuelven contacto/lead, contexto y etapa.
-5. El dashboard y timeline consultan la información ya persistida.
+5. `VoiceCapacityService` centraliza los estados que ocupan un canal SIP, registra saturaciones y cierres de respaldo en `tenant_integration_events`, y calcula la capacidad actual aislada por tenant.
+6. El dashboard separa el rendimiento reportado por Ultravox de la capacidad SIP actual; sus contadores de capacidad respetan el período, mientras ocupación y cupos son una fotografía en vivo.
+7. El dashboard y timeline consultan la información ya persistida.
 
 ### Email
 
