@@ -41,6 +41,11 @@ for (const locale of locales) {
             await expect(page.locator('body')).toBeVisible();
             await expect(page.locator('html')).toHaveAttribute('lang', new RegExp(`^${locale}(?:-|$)`, 'i'));
 
+            if (route === 'crm/dashboard') {
+              await expect(page.getByRole('heading', { name: locale === 'en' ? 'Call performance (Ultravox)' : 'Rendimiento de llamadas (Ultravox)' })).toBeVisible();
+              await expect(page.getByRole('heading', { name: locale === 'en' ? 'Outbound call capacity (SIP)' : 'Capacidad de llamadas salientes (SIP)' })).toBeVisible();
+            }
+
             const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
             expect(overflow, 'La página tiene overflow horizontal global').toBeLessThanOrEqual(1);
 

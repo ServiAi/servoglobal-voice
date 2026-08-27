@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Callable
 
 from fastapi import HTTPException
-from sqlalchemy import func, select, update
+from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -25,6 +25,7 @@ from app.services.public_voice_call_service import PublicCallFailure
 from app.services.tenant_feature_service import TenantFeatureService
 from app.services.tenant_usage_service import TenantUsageService
 from app.services.voice_call_service import VoiceCallService
+from app.services.voice_capacity_service import VoiceCapacityService
 from app.services.voice_client import VoiceClient, VoiceClientConfig, VoiceSipRouteConfig
 from app.services.voice_config_service import VoiceConfigService
 from app.services.voice_phone_service import VoicePhoneValidationError, normalize_outbound_phone
@@ -33,8 +34,15 @@ from app.services.voice_webhook_service import VoiceWebhookService
 
 
 logger = logging.getLogger(__name__)
-ACTIVE_CALLBACK_STATUSES = ("starting", "queued", "in_progress")
 CLAIM_BATCH_SIZE = 25
+
+
+class _CapacityReached(Exception):
+    def __init__(self, tenant_id: str, route_id: str, active_calls: int, limit: int) -> None:
+        self.tenant_id = tenant_id
+        self.route_id = route_id
+        self.active_calls = active_calls
+        self.limit = limit
 
 
 class PublicVoiceCallbackService:
@@ -136,7 +144,7 @@ class PublicVoiceCallbackService:
                         )
                         route = VoiceSipRouteService(
                             db, config_service.secret_manager
-                        ).get_active_route(context_session.tenant_id)
+                        ).get_active_route(context_session.tenant_id, for_update=True)
                     except (HTTPException, ValueError):
                         raise PublicCallFailure(503, "call_unavailable") from None
                     if route.provider_config_id != provider_config.id:
@@ -167,14 +175,17 @@ class PublicVoiceCallbackService:
                     except VoicePhoneValidationError:
                         raise PublicCallFailure(422, "destination_not_allowed") from None
 
-                    active_count = db.scalar(
-                        select(func.count(CrmVoiceCall.id)).where(
-                            CrmVoiceCall.sip_route_id == route.id,
-                            CrmVoiceCall.status.in_(ACTIVE_CALLBACK_STATUSES),
-                        )
-                    ) or 0
+                    active_count = VoiceCapacityService(db).active_calls(
+                        tenant_id=context_session.tenant_id,
+                        route_id=route.id,
+                    )
                     if active_count >= route.max_concurrent_calls:
-                        raise PublicCallFailure(429, "call_capacity_reached")
+                        raise _CapacityReached(
+                            context_session.tenant_id,
+                            route.id,
+                            active_count,
+                            route.max_concurrent_calls,
+                        )
 
                     call = CrmVoiceCall(
                         tenant_id=context_session.tenant_id,
@@ -211,6 +222,14 @@ class PublicVoiceCallbackService:
                         )
                     if not context_session.mark_consumed(db, now=now, commit=False):
                         raise PublicCallFailure(409, "context_session_unavailable")
+            except _CapacityReached as exc:
+                VoiceCapacityService(db).record_capacity_reached(
+                    tenant_id=exc.tenant_id,
+                    route_id=exc.route_id,
+                    active_calls=exc.active_calls,
+                    max_concurrent_calls=exc.limit,
+                )
+                raise PublicCallFailure(429, "call_capacity_reached") from None
             except IntegrityError:
                 db.rollback()
                 existing = db.scalar(
@@ -314,13 +333,22 @@ class VoiceCallbackWorker:
                 return True
             provider_call = dict(provider_call)
             provider_call.setdefault("callId", call.provider_call_id)
-            VoiceWebhookService(db).handle_provider_event(
+            prior_status = call.status
+            result = VoiceWebhookService(db).handle_provider_event(
                 call.provider,
                 {
                     "event": "call.ended" if ended else "call.joined",
                     "call": provider_call,
                 },
             )
+            if ended and result.get("status") == "processed":
+                VoiceCapacityService(db).record_release(
+                    tenant_id=call.tenant_id,
+                    call_id=call.id,
+                    prior_status=prior_status,
+                    resulting_status=result["call_status"],
+                    forced=timed_out,
+                )
             if timed_out:
                 call = db.get(CrmVoiceCall, call_id)
                 if call is not None:
@@ -377,12 +405,10 @@ class VoiceCallbackWorker:
                         call.status = "failed"
                         call.error_message = "Outbound SIP route is unavailable."
                         return call.id
-                    active_count = db.scalar(
-                        select(func.count(CrmVoiceCall.id)).where(
-                            CrmVoiceCall.sip_route_id == route.id,
-                            CrmVoiceCall.status.in_(ACTIVE_CALLBACK_STATUSES),
-                        )
-                    ) or 0
+                    active_count = VoiceCapacityService(db).active_calls(
+                        tenant_id=call.tenant_id,
+                        route_id=route.id,
+                    )
                     if active_count >= route.max_concurrent_calls:
                         # This tenant's route is at capacity; try the next
                         # oldest candidate instead of starving other tenants.

@@ -117,11 +117,13 @@ export default async function CrmIntegrationsPage({ params }: Props) {
       </div>
       {enabledProviders.has('resend') && <ResendIntegrationCard accessToken={accessToken} initialConfig={resendConfig} />}
       {enabledProviders.has('voice') && (
-        <VoiceIntegrationCard
-          accessToken={accessToken}
-          initialConfig={voiceConfigResult.ok ? voiceConfigResult.data : undefined}
-          initialAgents={voiceAgentsResult.ok ? voiceAgentsResult.data : []}
-        />
+        <div id="voice-integration" className="scroll-mt-6">
+          <VoiceIntegrationCard
+            accessToken={accessToken}
+            initialConfig={voiceConfigResult.ok ? voiceConfigResult.data : undefined}
+            initialAgents={voiceAgentsResult.ok ? voiceAgentsResult.data : []}
+          />
+        </div>
       )}
       {enabledProviders.has('whatsapp') && (
         <WhatsAppIntegrationCard

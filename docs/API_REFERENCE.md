@@ -29,6 +29,7 @@ La especificación ejecutable completa está disponible en `/docs` y `/openapi.j
 
 ## Operaciones CRM destacadas
 
+- `GET /api/v1/crm/dashboard` incluye `voice_capacity`: ocupación y cupos actuales de la ruta SIP, estado de ruta/aprovisionamiento y hasta diez saturaciones o recuperaciones del período. El tenant se deriva de `AuthContext`; fuente y campaña no alteran esta sección.
 - `GET /api/v1/crm/pipeline`, `/leads`, `/leads/{lead_id}`, `/pipeline/board`.
 - `PATCH /api/v1/crm/leads/{lead_id}` y `/stage`.
 - `GET|POST|PATCH|DELETE /api/v1/crm/tasks...`.

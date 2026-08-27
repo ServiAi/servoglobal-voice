@@ -13,7 +13,12 @@ from app.core.config import settings
 from app.db.session import SessionLocal
 from app.main import app
 from app.models.crm import CrmActivity, CrmVoiceCall
-from app.models.integrations import TenantSipRoute, TenantVoiceAgentConfig, TenantVoiceProviderConfig
+from app.models.integrations import (
+    TenantIntegrationEvent,
+    TenantSipRoute,
+    TenantVoiceAgentConfig,
+    TenantVoiceProviderConfig,
+)
 from app.models.voice_context import TenantVoiceContextField
 from app.services.secret_manager_service import SecretManager
 from app.services.tenant_feature_service import TenantFeatureService, VOICE_EXPERIENCES
@@ -135,6 +140,12 @@ class PublicVoiceCallbackTests(Integration2ATestCase):
                 select(CrmActivity).where(CrmActivity.activity_type == "voice_call_requested")
             ).one()
             self.assertEqual(activity.payload_json["voice_call_id"], calls[0].id)
+            capacity_events = db.scalars(
+                select(TenantIntegrationEvent).where(
+                    TenantIntegrationEvent.event_type == "voice_capacity_reached"
+                )
+            ).all()
+            self.assertEqual(capacity_events, [])
 
         with patch("app.services.voice_callback_service.VoiceClient.start_outbound_call") as start:
             start.return_value = {"callId": "provider-callback-1", "status": "queued"}
@@ -148,6 +159,53 @@ class PublicVoiceCallbackTests(Integration2ATestCase):
             call = db.scalars(select(CrmVoiceCall)).one()
             self.assertEqual(call.status, "queued")
             self.assertEqual(call.provider_call_id, "provider-callback-1")
+
+    def test_capacity_rejection_is_recorded_after_rollback_without_pii(self) -> None:
+        app.dependency_overrides.pop(get_current_auth_context, None)
+        submission = self._post()
+        token = submission.json()["context_token"]
+        with SessionLocal() as db:
+            route = db.scalar(
+                select(TenantSipRoute).where(TenantSipRoute.tenant_id == self.tenant.id)
+            )
+            db.add(
+                CrmVoiceCall(
+                    tenant_id=self.tenant.id,
+                    sip_route_id=route.id,
+                    provider="ultravox",
+                    direction="outbound",
+                    status="ringing",
+                    to_phone="+573009999999",
+                    from_number=route.caller_id,
+                )
+            )
+            db.commit()
+
+        response = self._request_callback(token)
+        self.assertEqual(response.status_code, 429, response.text)
+        self.assertEqual(response.json()["detail"]["code"], "call_capacity_reached")
+
+        with SessionLocal() as db:
+            event = db.scalar(
+                select(TenantIntegrationEvent).where(
+                    TenantIntegrationEvent.tenant_id == self.tenant.id,
+                    TenantIntegrationEvent.event_type == "voice_capacity_reached",
+                )
+            )
+            self.assertIsNotNone(event)
+            self.assertEqual(event.status, "blocked")
+            self.assertEqual(event.resource_type, "sip_route")
+            self.assertEqual(
+                event.metadata_json,
+                {
+                    "active_calls": 1,
+                    "max_concurrent_calls": 1,
+                    "source": "public_callback",
+                },
+            )
+            serialized = str(event.metadata_json)
+            self.assertNotIn("+573", serialized)
+            self.assertNotIn("context", serialized)
 
     def test_submission_rejects_phone_outside_tenant_allowed_countries(self) -> None:
         app.dependency_overrides.pop(get_current_auth_context, None)
@@ -297,6 +355,16 @@ class PublicVoiceCallbackTests(Integration2ATestCase):
             call = db.get(CrmVoiceCall, call_id)
             self.assertEqual(call.status, "completed")
             self.assertIsNotNone(call.ended_at)
+            event = db.scalar(
+                select(TenantIntegrationEvent).where(
+                    TenantIntegrationEvent.resource_id == call_id,
+                    TenantIntegrationEvent.event_type == "voice_callback_reconciled",
+                )
+            )
+            self.assertEqual(
+                event.metadata_json,
+                {"prior_status": "queued", "resulting_status": "completed"},
+            )
 
     def test_worker_releases_callback_after_maximum_active_time(self) -> None:
         with SessionLocal() as db:
@@ -333,6 +401,16 @@ class PublicVoiceCallbackTests(Integration2ATestCase):
             call = db.get(CrmVoiceCall, call_id)
             self.assertEqual(call.status, "failed")
             self.assertIsNotNone(call.ended_at)
+            event = db.scalar(
+                select(TenantIntegrationEvent).where(
+                    TenantIntegrationEvent.resource_id == call_id,
+                    TenantIntegrationEvent.event_type == "voice_callback_forced_release",
+                )
+            )
+            self.assertEqual(
+                event.metadata_json,
+                {"prior_status": "queued", "resulting_status": "failed"},
+            )
 
     def test_claim_skips_saturated_route_to_serve_other_tenants(self) -> None:
         secrets = SecretManager()

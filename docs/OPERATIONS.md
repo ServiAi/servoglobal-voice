@@ -133,6 +133,15 @@ un bloqueo indefinido cuando ni el webhook ni la consulta al proveedor permiten
 confirmar el cierre. Los eventos tardíos no pueden devolver una llamada terminal
 a un estado activo.
 
+El dashboard CRM muestra por separado **Rendimiento de llamadas (Ultravox)** y
+**Capacidad de llamadas salientes (SIP)**. La capacidad actual cuenta llamadas
+`starting`, `queued`, `ringing` e `in_progress`; los rechazos `call_capacity_reached`, las
+reconciliaciones y los cierres máximos se registran de forma sanitizada en
+`tenant_integration_events`. Los contadores comienzan con la versión que incorpora
+estos eventos: no se reconstruyen rechazos históricos. Los filtros de fuente y
+campaña no modifican la capacidad SIP; sólo el período limita sus contadores e
+historial. No se requieren migraciones, variables nuevas ni cambios en Asterisk.
+
 Sin el worker, la solicitud queda guardada en `requested`, pero la llamada real
 no comienza. En staging continuo, despliegue el worker como un servicio separado
 con el mismo código, `DATABASE_URL` y claves de cifrado del backend. No asigne

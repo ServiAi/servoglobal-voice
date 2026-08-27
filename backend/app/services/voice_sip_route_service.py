@@ -24,13 +24,14 @@ class VoiceSipRouteService:
         self.db = db
         self.secret_manager = secret_manager or SecretManager()
 
-    def get_route(self, tenant_id: str) -> TenantSipRoute | None:
-        return self.db.scalar(
-            select(TenantSipRoute).where(TenantSipRoute.tenant_id == tenant_id)
-        )
+    def get_route(self, tenant_id: str, *, for_update: bool = False) -> TenantSipRoute | None:
+        query = select(TenantSipRoute).where(TenantSipRoute.tenant_id == tenant_id)
+        if for_update:
+            query = query.with_for_update()
+        return self.db.scalar(query)
 
-    def get_active_route(self, tenant_id: str) -> TenantSipRoute:
-        route = self.get_route(tenant_id)
+    def get_active_route(self, tenant_id: str, *, for_update: bool = False) -> TenantSipRoute:
+        route = self.get_route(tenant_id, for_update=for_update)
         if route is None:
             raise ValueError(
                 "Este tenant no tiene una ruta SIP saliente configurada. "

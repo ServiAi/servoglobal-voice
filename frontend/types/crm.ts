@@ -271,6 +271,28 @@ export type CrmDashboardCallMetrics = {
   total_billed_minutes: number;
 };
 
+export type CrmVoiceCapacityEvent = {
+  event_type: 'capacity_reached' | 'reconciled' | 'forced_release';
+  occurred_at: string;
+  active_calls?: number | null;
+  max_concurrent_calls?: number | null;
+  resulting_status?: string | null;
+};
+
+export type CrmVoiceCapacityMetrics = {
+  configured: boolean;
+  route_status?: string | null;
+  provision_status?: string | null;
+  active_calls: number;
+  max_concurrent_calls: number;
+  available_slots: number;
+  utilization_percent: number;
+  capacity_rejections: number;
+  reconciled_calls: number;
+  forced_releases: number;
+  recent_events: CrmVoiceCapacityEvent[];
+};
+
 export type CrmPendingActionItem = {
   lead_id: string;
   contact_name: string;
@@ -289,6 +311,7 @@ export type CrmDashboardResponse = {
   sources: CrmDashboardSourceItem[];
   campaigns: CrmDashboardCampaignItem[];
   calls: CrmDashboardCallMetrics;
+  voice_capacity: CrmVoiceCapacityMetrics;
   pending_actions: CrmPendingActionItem[];
 };
 

@@ -2,7 +2,9 @@ import { redirect } from 'next/navigation';
 import { getAccessToken } from '@/lib/auth/server';
 import { locales, type Locale } from '@/i18n';
 import { fetchCrmDashboard } from '@/lib/api/crm';
+import { fetchMeProfile } from '@/lib/api/me';
 import { CrmDashboardViewClient } from './crm-dashboard-view-client';
+import { canManageVoiceCapacity } from './voice-capacity';
 
 type Props = {
   params: Promise<{ locale: string }>;
@@ -32,13 +34,16 @@ export default async function CrmDashboardPage({ params, searchParams }: Props) 
   const source = typeof resolvedSearchParams.source === 'string' ? resolvedSearchParams.source : undefined;
   const campaign = typeof resolvedSearchParams.campaign === 'string' ? resolvedSearchParams.campaign : undefined;
 
-  const dashboardRes = await fetchCrmDashboard(accessToken, {
-    range,
-    date_from,
-    date_to,
-    source,
-    campaign,
-  });
+  const [dashboardRes, profileRes] = await Promise.all([
+    fetchCrmDashboard(accessToken, {
+      range,
+      date_from,
+      date_to,
+      source,
+      campaign,
+    }),
+    fetchMeProfile(accessToken),
+  ]);
 
   if (!dashboardRes.ok) {
     return (
@@ -53,6 +58,9 @@ export default async function CrmDashboardPage({ params, searchParams }: Props) 
     <CrmDashboardViewClient
       initialData={dashboardRes.data}
       locale={locale}
+      canManageCapacity={
+        profileRes.ok && canManageVoiceCapacity(profileRes.profile.role)
+      }
     />
   );
 }

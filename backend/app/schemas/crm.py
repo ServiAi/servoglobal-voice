@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, List, Optional
+from typing import Any, List, Literal, Optional
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from app.schemas.integrations import (
     EmailActionRequest,
@@ -505,6 +505,28 @@ class CrmDashboardCallMetrics(BaseModel):
     total_billed_minutes: float
 
 
+class CrmVoiceCapacityEvent(BaseModel):
+    event_type: Literal["capacity_reached", "reconciled", "forced_release"]
+    occurred_at: datetime
+    active_calls: Optional[int] = None
+    max_concurrent_calls: Optional[int] = None
+    resulting_status: Optional[str] = None
+
+
+class CrmVoiceCapacityMetrics(BaseModel):
+    configured: bool
+    route_status: Optional[str] = None
+    provision_status: Optional[str] = None
+    active_calls: int
+    max_concurrent_calls: int
+    available_slots: int
+    utilization_percent: float
+    capacity_rejections: int
+    reconciled_calls: int
+    forced_releases: int
+    recent_events: List[CrmVoiceCapacityEvent]
+
+
 class CrmPendingActionItem(BaseModel):
     lead_id: str
     contact_name: str
@@ -523,5 +545,6 @@ class CrmDashboardResponse(BaseModel):
     sources: List[CrmDashboardSourceItem]
     campaigns: List[CrmDashboardCampaignItem]
     calls: CrmDashboardCallMetrics
+    voice_capacity: CrmVoiceCapacityMetrics
     pending_actions: List[CrmPendingActionItem]
 
