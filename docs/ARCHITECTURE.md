@@ -36,7 +36,7 @@ PostgreSQL es la base principal. Alembic administra el esquema. Los dominios per
 
 1. La landing o el CRM solicita/inicia una llamada.
 2. Ultravox ejecuta la llamada y envía eventos.
-3. El backend normaliza y persiste la llamada de forma idempotente.
+3. El backend normaliza y persiste la llamada de forma idempotente; el worker consulta el estado del proveedor como respaldo cuando falta el evento terminal.
 4. Los servicios CRM resuelven contacto/lead, contexto y etapa.
 5. El dashboard y timeline consultan la información ya persistida.
 

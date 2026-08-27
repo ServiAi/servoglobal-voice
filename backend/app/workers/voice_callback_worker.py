@@ -15,6 +15,8 @@ def main() -> None:
     worker = VoiceCallbackWorker(
         SessionLocal,
         starting_lease_seconds=settings.VOICE_CALLBACK_STARTING_LEASE_SECONDS,
+        reconcile_after_seconds=settings.VOICE_CALLBACK_RECONCILE_AFTER_SECONDS,
+        max_active_seconds=settings.VOICE_CALLBACK_MAX_ACTIVE_SECONDS,
     )
     logger.info("Voice callback worker started")
     while True:

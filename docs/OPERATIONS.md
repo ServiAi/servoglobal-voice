@@ -123,6 +123,16 @@ LOCKED`, respeta la concurrencia de cada ruta SIP y cambia cada llamada a
 sin procesar dos veces la misma llamada. Una llamada que permanezca en `starting`
 por más de 120 segundos se recupera automáticamente a `requested`.
 
+Los eventos firmados `call.joined` y `call.ended` actualizan la fila a
+`in_progress` y a un estado terminal, respectivamente. Como respaldo ante un
+webhook perdido, el mismo worker consulta a Ultravox las llamadas
+`queued`/`in_progress` después de `VOICE_CALLBACK_RECONCILE_AFTER_SECONDS`
+(30 segundos por defecto). Si Ultravox confirma `ended`, la capacidad se libera
+automáticamente. `VOICE_CALLBACK_MAX_ACTIVE_SECONDS` (7200 por defecto) evita
+un bloqueo indefinido cuando ni el webhook ni la consulta al proveedor permiten
+confirmar el cierre. Los eventos tardíos no pueden devolver una llamada terminal
+a un estado activo.
+
 Sin el worker, la solicitud queda guardada en `requested`, pero la llamada real
 no comienza. En staging continuo, despliegue el worker como un servicio separado
 con el mismo código, `DATABASE_URL` y claves de cifrado del backend. No asigne
