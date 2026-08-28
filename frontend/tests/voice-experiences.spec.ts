@@ -14,6 +14,8 @@ import {
   getVoiceExperienceMessageKey,
 } from '../lib/voice-experiences/error-messages';
 import { isSafeHttpsUrl } from '../lib/voice-experiences/url-safety';
+import { resolveVoiceTheme } from '../lib/voice-experiences/resolve-theme';
+import { buildEmbedSnippet } from '../lib/voice-experiences/build-embed-snippet';
 import { createVoiceExperienceDefaults } from '../lib/voice-experiences/validation';
 import type { VoiceContextCollectionMode } from '../types/voice-experiences';
 
@@ -41,6 +43,99 @@ test.describe('protecciones puras de Voice Experiences', () => {
     expect(isVoiceExperienceDirty(baseline, { ...baseline, name: 'Recepción' })).toBe(true);
   });
 
+  test('las experiencias nuevas usan claro por defecto y sin fondo personalizado', () => {
+    const defaults = createVoiceExperienceDefaults('es');
+    expect(defaults.theme.color_scheme).toBe('light');
+    expect(defaults.theme.background_color).toBeNull();
+  });
+
+  test('resolveVoiceTheme aplica los tokens claros por defecto', () => {
+    const tokens = resolveVoiceTheme({ primary_color: null, background_color: null, color_scheme: 'light' });
+    expect(tokens.accent).toBe('#0f766e');
+    expect(tokens.pageBg).toBe('#f4f7f6');
+    expect(tokens.cardBg).toBe('#ffffff');
+    expect(tokens.fg).toBe('#0f172a');
+  });
+
+  test('resolveVoiceTheme aplica los tokens oscuros cuando color_scheme es dark', () => {
+    const tokens = resolveVoiceTheme({ primary_color: '#7c3aed', background_color: null, color_scheme: 'dark' });
+    expect(tokens.accent).toBe('#7c3aed');
+    expect(tokens.pageBg).toBe('#0f172a');
+    expect(tokens.cardBg).toBe('#1e293b');
+    expect(tokens.fg).toBe('#f1f5f9');
+  });
+
+  test('resolveVoiceTheme deja que background_color reemplace el fondo en ambos esquemas', () => {
+    const light = resolveVoiceTheme({ primary_color: null, background_color: '#FFE4E6', color_scheme: 'light' });
+    const dark = resolveVoiceTheme({ primary_color: null, background_color: '#FFE4E6', color_scheme: 'dark' });
+    expect(light.pageBg).toBe('#FFE4E6');
+    expect(dark.pageBg).toBe('#FFE4E6');
+    // Card surface still follows the scheme; only the page background is overridden.
+    expect(dark.cardBg).toBe('#1e293b');
+  });
+
+  test('buildEmbedSnippet genera un iframe autocontenido para el formato iframe', () => {
+    const snippet = buildEmbedSnippet({
+      mode: 'inline',
+      format: 'iframe',
+      embedUrl: 'https://acme.test/es/voice/demo/embed',
+      sdkUrl: 'https://acme.test/voice-embed.v1.js',
+    });
+    expect(snippet).toContain('<iframe');
+    expect(snippet).toContain('src="https://acme.test/es/voice/demo/embed"');
+    expect(snippet).toContain('allow="microphone; autoplay"');
+  });
+
+  test('buildEmbedSnippet genera el contenedor y el script para inline en HTML', () => {
+    const snippet = buildEmbedSnippet({
+      mode: 'inline',
+      format: 'html',
+      embedUrl: 'https://acme.test/es/voice/demo/embed',
+      sdkUrl: 'https://acme.test/voice-embed.v1.js',
+    });
+    expect(snippet).toContain('data-voice-embed="inline"');
+    expect(snippet).toContain('data-voice-embed-src="https://acme.test/es/voice/demo/embed"');
+    expect(snippet).toContain('src="https://acme.test/voice-embed.v1.js"');
+  });
+
+  test('buildEmbedSnippet incluye texto y posición para flotante en HTML', () => {
+    const snippet = buildEmbedSnippet({
+      mode: 'floating',
+      format: 'html',
+      embedUrl: 'https://acme.test/es/voice/demo/embed',
+      sdkUrl: 'https://acme.test/voice-embed.v1.js',
+      floatingText: 'Habla con nosotros',
+      floatingPosition: 'bottom-left',
+    });
+    expect(snippet).toContain('data-voice-embed="floating"');
+    expect(snippet).toContain('data-voice-embed-text="Habla con nosotros"');
+    expect(snippet).toContain('data-voice-embed-position="bottom-left"');
+  });
+
+  test('buildEmbedSnippet incluye el selector del disparador para emergente en HTML', () => {
+    const snippet = buildEmbedSnippet({
+      mode: 'modal',
+      format: 'html',
+      embedUrl: 'https://acme.test/es/voice/demo/embed',
+      sdkUrl: 'https://acme.test/voice-embed.v1.js',
+      modalSelector: '#reservar-demo',
+    });
+    expect(snippet).toContain('data-voice-embed="modal"');
+    expect(snippet).toContain('data-voice-embed-trigger="#reservar-demo"');
+  });
+
+  test('buildEmbedSnippet genera una llamada a la API del SDK para React', () => {
+    const snippet = buildEmbedSnippet({
+      mode: 'modal',
+      format: 'react',
+      embedUrl: 'https://acme.test/es/voice/demo/embed',
+      sdkUrl: 'https://acme.test/voice-embed.v1.js',
+      modalSelector: '#reservar-demo',
+    });
+    expect(snippet).toContain('window.VoiceEmbed.mountModal');
+    expect(snippet).toContain("trigger: '#reservar-demo'");
+  });
+
   test('mantiene traducidos todos los estados, incluido unpublished', () => {
     expect(esMessages.crm.voiceExperiences.list.status.unpublished).toBe('Despublicada');
     expect(enMessages.crm.voiceExperiences.list.status.unpublished).toBe('Unpublished');
@@ -57,6 +152,37 @@ test.describe('protecciones puras de Voice Experiences', () => {
     expect(enMessages.crm.voiceExperiences.list.privateNotice).toMatch(/public page/i);
     expect(esMessages.crm.voiceExperiences.list.openPublic).toBeTruthy();
     expect(esMessages.crm.voiceExperiences.list.copyLink).toBeTruthy();
+  });
+
+  test('mantiene traducidos los campos nuevos de apariencia', () => {
+    expect(esMessages.crm.voiceExperiences.form.appearance.backgroundColor).toBeTruthy();
+    expect(esMessages.crm.voiceExperiences.form.appearance.colorScheme).toBeTruthy();
+    expect(esMessages.crm.voiceExperiences.form.appearance.colorSchemes.light).toBeTruthy();
+    expect(esMessages.crm.voiceExperiences.form.appearance.colorSchemes.dark).toBeTruthy();
+    expect(enMessages.crm.voiceExperiences.form.appearance.backgroundColor).toBeTruthy();
+    expect(enMessages.crm.voiceExperiences.form.appearance.colorScheme).toBeTruthy();
+    expect(enMessages.crm.voiceExperiences.form.appearance.colorSchemes.light).toBeTruthy();
+    expect(enMessages.crm.voiceExperiences.form.appearance.colorSchemes.dark).toBeTruthy();
+    expect(esMessages.crm.voiceExperiences.help.appearance.backgroundColor).toBeTruthy();
+    expect(esMessages.crm.voiceExperiences.help.appearance.colorScheme).toBeTruthy();
+  });
+
+  test('mantiene traducido el panel de compartir / incrustar', () => {
+    expect(esMessages.crm.voiceExperiences.share.trigger).toBe('Compartir / Incrustar');
+    expect(enMessages.crm.voiceExperiences.share.trigger).toBe('Share / Embed');
+    for (const locale of [esMessages, enMessages]) {
+      const share = locale.crm.voiceExperiences.share;
+      expect(share.tabs.link).toBeTruthy();
+      expect(share.tabs.inline).toBeTruthy();
+      expect(share.tabs.floating).toBeTruthy();
+      expect(share.tabs.modal).toBeTruthy();
+      expect(share.format.html).toBeTruthy();
+      expect(share.format.react).toBeTruthy();
+      expect(share.format.iframe).toBeTruthy();
+      expect(share.floating.buttonText).toBeTruthy();
+      expect(share.modal.selectorLabel).toBeTruthy();
+      expect(share.modal.selectorPlaceholder).toBeTruthy();
+    }
   });
 
   test('el helper de collection modes decide qué campos aparecen antes de la llamada', () => {

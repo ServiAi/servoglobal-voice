@@ -14,6 +14,7 @@ import {
   Mic2,
   Plus,
   RadioTower,
+  Share2,
   ShieldAlert,
   Sparkles,
   Trash2,
@@ -26,6 +27,7 @@ import {
 import { canDeleteArchivedExperience } from '@/lib/voice-experiences/deletion';
 import { getVoiceExperienceErrorKey } from '@/lib/voice-experiences/error-messages';
 import { ActionDialog } from './ActionDialog';
+import { ShareEmbedDialog } from './ShareEmbedDialog';
 import { VoiceExperienceStatusBadge } from './VoiceExperienceStatusBadge';
 import { Button } from '@/components/ui/button';
 import type { VoiceAgentConfigResponse } from '@/types/crm';
@@ -217,7 +219,8 @@ export function VoiceExperiencesList({
           {experiences.map((experience) => {
             const versionCount = versionCounts[experience.id] ?? null;
             const canDelete = canDeleteArchivedExperience(experience.status);
-            const publicHref = `/${locale}/voice/${experience.slug}`;
+            const publicHref = `/${experience.default_locale}/voice/${experience.slug}`;
+            const embedHref = `/${experience.default_locale}/voice/${experience.slug}/embed`;
             return (
               <article
                 key={experience.id}
@@ -301,6 +304,16 @@ export function VoiceExperiencesList({
                               : 'list.copyLink'
                           )}
                         </Button>
+                        <ShareEmbedDialog
+                          trigger={
+                            <Button type="button" size="sm" variant="outline">
+                              <Share2 className="mr-1.5 size-4" aria-hidden="true" />
+                              {t('share.trigger')}
+                            </Button>
+                          }
+                          publicPath={publicHref}
+                          embedPath={embedHref}
+                        />
                       </>
                     ) : null}
                     {canEdit && experience.status !== 'published' && experience.status !== 'archived' ? (

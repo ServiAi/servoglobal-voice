@@ -20,6 +20,8 @@ const experience: PublicVoiceExperienceData = {
   theme: {
     logo_url: null,
     primary_color: '#0f766e',
+    background_color: null,
+    color_scheme: 'light',
     layout: 'split',
   },
   consent: {

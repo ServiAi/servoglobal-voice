@@ -28,6 +28,8 @@ class VoiceExperienceContent(_StrictModel):
 class VoiceExperienceTheme(_StrictModel):
     logo_url: AnyHttpUrl | None = None
     primary_color: str | None = Field(None, pattern=r"^#[0-9A-Fa-f]{6}$")
+    background_color: str | None = Field(None, pattern=r"^#[0-9A-Fa-f]{6}$")
+    color_scheme: Literal["light", "dark"] = "light"
     layout: Literal["centered", "split", "card"]
 
     @field_validator("logo_url")

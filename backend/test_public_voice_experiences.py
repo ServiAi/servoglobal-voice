@@ -184,6 +184,8 @@ class PublicVoiceExperienceTests(Integration2ATestCase):
                 "theme": {
                     "logo_url": "https://example.com/logo.png",
                     "primary_color": "#123ABC",
+                    "background_color": None,
+                    "color_scheme": "light",
                     "layout": "card",
                 },
                 "consent": {
@@ -229,6 +231,45 @@ class PublicVoiceExperienceTests(Integration2ATestCase):
                 "capabilities": {"submissions": True, "calls": True},
             },
         )
+
+    def test_public_theme_dark_and_background_color_round_trip(self) -> None:
+        payload = self._payload()
+        payload["theme"]["color_scheme"] = "dark"
+        payload["theme"]["background_color"] = "#0F172A"
+        created = self.client.post(
+            "/api/v1/voice/experiences", json=payload
+        ).json()
+        published = self.client.post(
+            f"/api/v1/voice/experiences/{created['id']}/publish"
+        ).json()
+        app.dependency_overrides.pop(get_current_auth_context, None)
+
+        theme = self._get(published["slug"]).json()["theme"]
+
+        self.assertEqual(theme["color_scheme"], "dark")
+        self.assertEqual(theme["background_color"], "#0F172A")
+
+    def test_public_theme_backward_compatible_with_missing_color_scheme(self) -> None:
+        published = self._publish()
+        with SessionLocal() as db:
+            version = db.scalar(
+                select(TenantVoiceExperienceVersion).where(
+                    TenantVoiceExperienceVersion.id == published["published_version_id"]
+                )
+            )
+            legacy_theme = dict(version.theme_json)
+            legacy_theme.pop("color_scheme", None)
+            legacy_theme.pop("background_color", None)
+            version.theme_json = legacy_theme
+            db.commit()
+        app.dependency_overrides.pop(get_current_auth_context, None)
+
+        response = self._get(published["slug"])
+
+        self.assertEqual(response.status_code, 200, response.text)
+        theme = response.json()["theme"]
+        self.assertEqual(theme["color_scheme"], "light")
+        self.assertIsNone(theme["background_color"])
 
     def test_unknown_and_malformed_slugs_share_generic_404_and_no_store(self) -> None:
         for slug in ("unknown", "bad!slug", "a" * 65):

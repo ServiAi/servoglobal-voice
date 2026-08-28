@@ -36,6 +36,8 @@ export interface PublicVoiceExperience {
   theme: {
     logo_url: string | null;
     primary_color: string | null;
+    background_color: string | null;
+    color_scheme: 'light' | 'dark';
     layout: 'centered' | 'split' | 'card';
   };
   consent: {

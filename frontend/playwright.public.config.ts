@@ -11,7 +11,7 @@ if (process.env.TEST_WORKER_INDEX === undefined && process.env.PLAYWRIGHT_EXTERN
 }
 
 // Dedicated Playwright config for the PUBLIC voice runtime E2E suite.
-// - Runs only public-voice-experiences.spec.ts.
+// - Runs public-voice-experiences.spec.ts and public-voice-embed.spec.ts.
 // - No storageState / no Auth0: the public runtime is unauthenticated by design.
 // - Boots Next.js on its own port and points SSR at the in-test HTTP mock
 //   (127.0.0.1:43119) via NEXT_PUBLIC_API_URL, so there is zero egress to staging.
@@ -20,7 +20,7 @@ const baseURL = `http://127.0.0.1:${port}`;
 
 export default defineConfig({
   testDir: './tests',
-  testMatch: /public-voice-experiences\.spec\.ts/,
+  testMatch: /public-voice-(experiences|embed)\.spec\.ts/,
   outputDir: 'test-results-public',
   fullyParallel: false,
   forbidOnly: Boolean(process.env.CI),

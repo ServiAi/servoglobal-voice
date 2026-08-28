@@ -29,7 +29,7 @@ export function createVoiceExperienceDefaults(locale: string): VoiceExperienceWr
         ? 'Your details were registered.'
         : 'Tus datos fueron registrados.',
     },
-    theme: { logo_url: null, primary_color: null, layout: 'centered' },
+    theme: { logo_url: null, primary_color: null, background_color: null, color_scheme: 'light', layout: 'centered' },
     consent: {
       required: true,
       label: english
@@ -75,6 +75,9 @@ export function validateVoiceExperience(form: VoiceExperienceWriteRequest): Vali
   }
   if (form.theme.primary_color && !COLOR_PATTERN.test(form.theme.primary_color)) {
     errors['theme.primary_color'] = 'invalid';
+  }
+  if (form.theme.background_color && !COLOR_PATTERN.test(form.theme.background_color)) {
+    errors['theme.background_color'] = 'invalid';
   }
   if (form.theme.logo_url && !isSafeHttpsUrl(form.theme.logo_url)) {
     errors['theme.logo_url'] = 'invalid';

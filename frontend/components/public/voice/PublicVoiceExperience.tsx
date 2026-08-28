@@ -10,6 +10,7 @@ import { submitPublicVoiceExperience } from '@/lib/api/public-voice-submissions'
 import { PublicVoiceCall } from './PublicVoiceCall';
 import { PublicVoiceCallback } from './PublicVoiceCallback';
 import { isSafeHttpsUrl } from '@/lib/voice-experiences/url-safety';
+import { resolveVoiceTheme } from '@/lib/voice-experiences/resolve-theme';
 import type {
   PublicVoiceContextField,
   PublicVoiceExperience as PublicVoiceExperienceData,
@@ -44,6 +45,7 @@ interface Props {
   experience: PublicVoiceExperienceData;
   locale: string;
   messages: PublicVoiceMessages;
+  embed?: boolean;
 }
 
 const PHONE_COUNTRIES = [
@@ -160,10 +162,22 @@ function FieldControl({
   return <input {...common} type={type} step={field.field_type === 'integer' ? 1 : undefined} />;
 }
 
-function Shell({ children, layout }: { children: ReactNode; layout: PublicVoiceExperienceData['theme']['layout'] }) {
+function Shell({
+  children,
+  layout,
+  embed,
+}: {
+  children: ReactNode;
+  layout: PublicVoiceExperienceData['theme']['layout'];
+  embed: boolean;
+}) {
   return (
     <main
-      className={`min-h-screen px-4 py-10 sm:px-6 sm:py-16 ${layout === 'split' ? 'lg:grid lg:place-items-center' : ''}`}
+      className={
+        embed
+          ? `px-2 py-2 sm:px-3 sm:py-3 ${layout === 'split' ? 'lg:grid lg:place-items-center' : ''}`
+          : `min-h-screen px-4 py-10 sm:px-6 sm:py-16 ${layout === 'split' ? 'lg:grid lg:place-items-center' : ''}`
+      }
       data-testid="public-voice-runtime"
     >
       {children}
@@ -171,10 +185,11 @@ function Shell({ children, layout }: { children: ReactNode; layout: PublicVoiceE
   );
 }
 
-export function PublicVoiceExperience({ experience, locale, messages }: Props) {
+export function PublicVoiceExperience({ experience, locale, messages, embed = false }: Props) {
   const testMode = process.env.NEXT_PUBLIC_VOICE_PUBLIC_TURNSTILE_TEST_MODE === '1';
   const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
   const turnstileRef = useRef<TurnstileInstance>();
+  const rootRef = useRef<HTMLDivElement>(null);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const [widgetKey, setWidgetKey] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -186,6 +201,21 @@ export function PublicVoiceExperience({ experience, locale, messages }: Props) {
   useEffect(() => {
     if (testMode) setTurnstileToken(`playwright-${crypto.randomUUID()}`);
   }, [testMode, widgetKey]);
+
+  useEffect(() => {
+    if (!embed || typeof window === 'undefined' || window.parent === window) return;
+    const el = rootRef.current;
+    if (!el) return;
+    const post = () =>
+      window.parent.postMessage(
+        { type: 'voice-embed:resize', slug: experience.slug, height: el.scrollHeight },
+        '*'
+      );
+    const observer = new ResizeObserver(post);
+    observer.observe(el);
+    post();
+    return () => observer.disconnect();
+  }, [embed, experience.slug]);
 
   const resetTurnstile = () => {
     setTurnstileToken(null);
@@ -234,21 +264,26 @@ export function PublicVoiceExperience({ experience, locale, messages }: Props) {
 
   const safeLogo = isSafeHttpsUrl(experience.theme.logo_url) ? experience.theme.logo_url : null;
   const safePrivacy = isSafeHttpsUrl(experience.consent.privacy_url) ? experience.consent.privacy_url : null;
-  const accent = experience.theme.primary_color || '#0f766e';
-  const style = { '--voice-accent': accent, backgroundColor: '#f4f7f6' } as CSSProperties;
+  const tokens = resolveVoiceTheme(experience.theme);
+  const style = {
+    '--voice-accent': tokens.accent,
+    backgroundColor: tokens.pageBg,
+    color: tokens.fg,
+  } as CSSProperties;
   const isSplit = experience.theme.layout === 'split';
 
   return (
-    <div style={style} className="min-h-screen text-slate-950">
-      <Shell layout={experience.theme.layout}>
+    <div ref={rootRef} style={style} className={embed ? '' : 'min-h-screen'}>
+      <Shell layout={experience.theme.layout} embed={embed}>
         <section
-          className={`mx-auto overflow-hidden border border-black/10 bg-white shadow-[0_24px_80px_-36px_rgba(15,23,42,0.38)] ${
+          className={`mx-auto overflow-hidden border shadow-[0_24px_80px_-36px_rgba(15,23,42,0.38)] ${
             isSplit ? 'max-w-5xl rounded-[2rem] lg:grid lg:grid-cols-[0.78fr_1.22fr]' : 'max-w-2xl rounded-[2rem]'
           }`}
+          style={{ backgroundColor: tokens.cardBg, color: tokens.fg, borderColor: tokens.border }}
         >
           <header
             className={`relative overflow-hidden px-6 py-8 sm:px-10 ${isSplit ? 'lg:flex lg:min-h-[620px] lg:flex-col lg:justify-between lg:py-12' : ''}`}
-            style={{ backgroundColor: 'color-mix(in srgb, var(--voice-accent) 10%, white)' }}
+            style={{ backgroundColor: tokens.headerTint }}
           >
             <div className="absolute inset-y-0 left-0 w-1.5" style={{ backgroundColor: 'var(--voice-accent)' }} />
             <div>
@@ -258,24 +293,27 @@ export function PublicVoiceExperience({ experience, locale, messages }: Props) {
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={safeLogo} alt={messages.logoAlt} className="max-h-12 max-w-40 object-contain" />
                 ) : (
-                  <span className="grid size-11 place-items-center rounded-2xl bg-white shadow-sm" aria-hidden="true">
+                  <span className="grid size-11 place-items-center rounded-2xl shadow-sm" style={{ backgroundColor: tokens.cardBg }} aria-hidden="true">
                     <ShieldCheck className="size-5" style={{ color: 'var(--voice-accent)' }} />
                   </span>
                 )}
-                <span className="rounded-full border border-black/10 bg-white/70 px-3 py-1 text-xs font-medium text-slate-600">
+                <span
+                  className="rounded-full border px-3 py-1 text-xs font-medium"
+                  style={{ borderColor: tokens.border, color: tokens.mutedFg }}
+                >
                   {messages.version} {experience.version}
                 </span>
               </div>
-              <p className="mt-8 text-xs font-semibold uppercase tracking-[0.22em] text-slate-600">{messages.eyebrow}</p>
+              <p className="mt-8 text-xs font-semibold uppercase tracking-[0.22em]" style={{ color: tokens.mutedFg }}>{messages.eyebrow}</p>
               <h1 className="mt-3 text-balance text-3xl font-semibold tracking-[-0.035em] sm:text-4xl">
                 {experience.content.title}
               </h1>
               {experience.content.description ? (
-                <p className="mt-4 max-w-xl text-pretty text-base leading-7 text-slate-600">{experience.content.description}</p>
+                <p className="mt-4 max-w-xl text-pretty text-base leading-7" style={{ color: tokens.mutedFg }}>{experience.content.description}</p>
               ) : null}
             </div>
             {isSplit ? (
-              <div className="mt-10 hidden items-center gap-2 text-sm text-slate-600 lg:flex">
+              <div className="mt-10 hidden items-center gap-2 text-sm lg:flex" style={{ color: tokens.mutedFg }}>
                 <LockKeyhole className="size-4" aria-hidden="true" />
                 {messages.noticeTitle}
               </div>
@@ -290,7 +328,7 @@ export function PublicVoiceExperience({ experience, locale, messages }: Props) {
                     <Check className="size-7" aria-hidden="true" />
                   </span>
                   <h2 className="mt-5 text-xl font-semibold">{messages.successTitle}</h2>
-                  <p className="mt-2 text-sm leading-6 text-slate-600">{experience.content.success_message}</p>
+                  <p className="mt-2 text-sm leading-6" style={{ color: tokens.mutedFg }}>{experience.content.success_message}</p>
                   {contextToken && experience.capabilities.calls ? (
                     experience.call_settings.mode === 'callback' ? (
                       <PublicVoiceCallback
@@ -317,12 +355,12 @@ export function PublicVoiceExperience({ experience, locale, messages }: Props) {
               {experience.fields.length ? (
                 experience.fields.map((field) => (
                   <div key={field.key}>
-                    <label htmlFor={`public-field-${field.key}`} className="text-sm font-semibold text-slate-800">
+                    <label htmlFor={`public-field-${field.key}`} className="text-sm font-semibold" style={{ color: tokens.fg }}>
                       {field.label}
                       {field.required ? <span className="ml-1 text-rose-600">* <span className="sr-only">{messages.required}</span></span> : null}
                     </label>
                     {field.field_type !== 'checkbox' && field.description ? (
-                      <p className="mt-1 text-sm leading-5 text-slate-500">{field.description}</p>
+                      <p className="mt-1 text-sm leading-5" style={{ color: tokens.mutedFg }}>{field.description}</p>
                     ) : null}
                     <FieldControl
                       field={field}
@@ -340,13 +378,18 @@ export function PublicVoiceExperience({ experience, locale, messages }: Props) {
                   </div>
                 ))
               ) : (
-                <p className="rounded-xl border border-dashed border-slate-300 px-4 py-5 text-sm text-slate-500">{messages.emptyFields}</p>
+                <p
+                  className="rounded-xl border border-dashed px-4 py-5 text-sm"
+                  style={{ borderColor: tokens.border, color: tokens.mutedFg }}
+                >
+                  {messages.emptyFields}
+                </p>
               )}
 
               {experience.consent.label ? (
-                <div className="flex gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <div className="flex gap-3 rounded-xl border p-4" style={{ borderColor: tokens.border, backgroundColor: tokens.headerTint }}>
                   <input id="public-consent" name="consent" type="checkbox" required={experience.consent.required} className="mt-1 size-4 shrink-0 accent-[var(--voice-accent)]" />
-                  <label htmlFor="public-consent" className="text-sm leading-6 text-slate-600">
+                  <label htmlFor="public-consent" className="text-sm leading-6" style={{ color: tokens.mutedFg }}>
                     {experience.consent.label}
                     {experience.consent.required ? <span className="ml-1 text-rose-600">*</span> : null}
                     {safePrivacy ? (
