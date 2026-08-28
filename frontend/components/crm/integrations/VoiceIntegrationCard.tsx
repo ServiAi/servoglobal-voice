@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { AlertCircle, CheckCircle2, Phone, Plus, Edit2, RotateCw, Router } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Copy, Phone, Plus, Edit2, RotateCw, Router } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { FieldHelp } from './FieldHelp';
 import type {
@@ -95,7 +95,6 @@ export function VoiceIntegrationCard({
       status: config?.sip_route?.status ?? 'inactive',
       pbx_host: config?.sip_route?.pbx_host ?? '',
       pbx_port: config?.sip_route?.pbx_port ?? 5060,
-      sip_username: config?.sip_route?.sip_username ?? '',
       caller_id: config?.sip_route?.caller_id ?? '',
       default_country: config?.sip_route?.default_country ?? 'CO',
       allowed_countries: config?.sip_route?.allowed_countries ?? ['CO'],
@@ -145,12 +144,12 @@ export function VoiceIntegrationCard({
   const handleSaveConfig = async () => {
     const sipRoute = configForm.sip_route;
     const sipRouteHasInput = Boolean(
-      sipRoute?.pbx_host?.trim() || sipRoute?.sip_username?.trim() || sipRoute?.caller_id?.trim() || sipRoute?.sip_password?.trim(),
+      sipRoute?.pbx_host?.trim() || sipRoute?.caller_id?.trim() || sipRoute?.sip_password?.trim(),
     );
-    const sipRouteComplete = Boolean(sipRoute?.pbx_host?.trim() && sipRoute?.sip_username?.trim() && sipRoute?.caller_id?.trim());
+    const sipRouteComplete = Boolean(sipRoute?.pbx_host?.trim() && sipRoute?.caller_id?.trim());
 
     if (sipRouteHasInput && !sipRouteComplete) {
-      notify('error', 'Completa Host PBX, Usuario SIP y Caller ID para guardar la ruta SIP, o deja esos campos vacíos.');
+      notify('error', 'Completa Host PBX y Caller ID para guardar la ruta SIP, o deja esos campos vacíos.');
       return;
     }
 
@@ -182,6 +181,17 @@ export function VoiceIntegrationCard({
         : current.sip_route,
     }));
     notify('success', 'Configuración de proveedor de voz guardada exitosamente.');
+  };
+
+  const handleCopySipUsername = async () => {
+    const username = config?.sip_route?.sip_username;
+    if (!username) return;
+    try {
+      await navigator.clipboard.writeText(username);
+      notify('success', 'Usuario SIP copiado.');
+    } catch {
+      notify('error', 'No se pudo copiar el usuario SIP.');
+    }
   };
 
   const handleTestConnection = async () => {
@@ -414,10 +424,28 @@ export function VoiceIntegrationCard({
                 </label>
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
-                <label className="grid gap-1 text-xs font-medium text-muted-foreground">
-                  <span className="flex items-center gap-1">Usuario SIP <FieldHelp label="Usuario SIP" required>Debe coincidir con el endpoint PJSIP exclusivo del tenant.</FieldHelp></span>
-                  <input className={FIELD_CLASS} value={configForm.sip_route?.sip_username ?? ''} onChange={(event) => updateSipRouteField('sip_username', event.target.value)} autoComplete="off" />
-                </label>
+                <div className="grid gap-1 text-xs font-medium text-muted-foreground">
+                  <span className="flex items-center gap-1">Usuario SIP <FieldHelp label="Usuario SIP" required={false}>El sistema lo genera con el identificador estable de la ruta para que Asterisk reconozca el endpoint del tenant.</FieldHelp></span>
+                  <div className="flex min-w-0 gap-2">
+                    <input
+                      className={`${FIELD_CLASS} min-w-0 font-mono text-xs`}
+                      value={config?.sip_route?.sip_username ?? ''}
+                      placeholder="Se genera al guardar"
+                      readOnly
+                      aria-label="Usuario SIP generado automáticamente"
+                    />
+                    <button
+                      type="button"
+                      className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-border bg-background text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                      onClick={handleCopySipUsername}
+                      disabled={!config?.sip_route?.sip_username}
+                      aria-label="Copiar usuario SIP"
+                      title="Copiar usuario SIP"
+                    >
+                      <Copy className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                  </div>
+                </div>
                 <label className="grid gap-1 text-xs font-medium text-muted-foreground">
                   <span className="flex items-center gap-1">Contraseña SIP <FieldHelp label="Contraseña SIP" required={!config?.sip_route?.has_sip_password}>Se cifra en el backend y nunca vuelve a mostrarse.</FieldHelp></span>
                   <input type="password" className={FIELD_CLASS} placeholder={config?.sip_route?.has_sip_password ? '••••••••••••••••' : 'Mínimo 8 caracteres'} onChange={(event) => updateSipRouteField('sip_password', event.target.value)} autoComplete="new-password" />

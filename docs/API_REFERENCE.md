@@ -45,7 +45,7 @@ La especificación ejecutable completa está disponible en `/docs` y `/openapi.j
 - Cal.com: configuración, test y slots bajo `/api/v1/integrations/calcom`; bookings viven en CRM.
 - Google Calendar: connect URL, callback, connections y disconnect.
 - WhatsApp: configuración, test y templates.
-- Voz: configuración, test, agentes y ruta SIP saliente por tenant. La respuesta sólo indica si existe contraseña SIP; nunca devuelve el secreto.
+- Voz: configuración, test, agentes y ruta SIP saliente por tenant. El backend deriva `sip_username` del ID de la ruta y no acepta un usuario elegido por el cliente; la respuesta lo devuelve para configuración operativa y sólo indica si existe contraseña SIP, sin devolver el secreto.
 
 ## Administración de automatizaciones y notificaciones
 

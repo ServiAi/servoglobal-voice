@@ -61,7 +61,10 @@ class CrmVoiceActionTests(Integration2ATestCase):
         self.assertTrue(data["has_secret"])
         self.assertTrue(data["has_webhook_secret"])
         self.assertEqual(data["status"], "active")
-        self.assertEqual(data["sip_route"]["sip_username"], "tenant-a")
+        self.assertEqual(
+            data["sip_route"]["sip_username"],
+            f"route-{data['sip_route']['id'].replace('-', '')}",
+        )
         self.assertTrue(data["sip_route"]["has_sip_password"])
         self.assertNotIn("sip_password", data["sip_route"])
 

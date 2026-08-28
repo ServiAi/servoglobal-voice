@@ -223,7 +223,6 @@ class VoiceSipRouteRequest(BaseModel):
     status: str = Field(default="inactive", pattern=r"^(active|inactive)$")
     pbx_host: str = Field(min_length=1, max_length=255)
     pbx_port: int = Field(default=5060, ge=1, le=65535)
-    sip_username: str = Field(min_length=1, max_length=120)
     sip_password: Optional[str] = Field(None, min_length=8, max_length=1000)
     caller_id: str = Field(min_length=7, max_length=32)
     default_country: str = Field(default="CO", pattern=r"^(AR|CL|CO|EC|MX|PA|PE|US)$")

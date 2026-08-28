@@ -4,7 +4,11 @@ import unittest
 from unittest.mock import patch
 
 from _integrations_2a_test_base import Integration2ATestCase, SessionLocal
-from app.models.integrations import TenantVoiceProviderConfig, TenantIntegrationEvent
+from app.models.integrations import (
+    TenantIntegrationEvent,
+    TenantSipRoute,
+    TenantVoiceProviderConfig,
+)
 
 
 class VoiceEndpointTests(Integration2ATestCase):
@@ -13,9 +17,24 @@ class VoiceEndpointTests(Integration2ATestCase):
         self.provider = "ultravox"
 
     def configure_voice(self):
+        payload = self.voice_payload()
         response = self.client.post(
             "/api/v1/integrations/voice/config",
-            json={
+            json=payload,
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(
+            data["sip_route"]["sip_username"],
+            f"route-{data['sip_route']['id'].replace('-', '')}",
+        )
+        self.assertEqual(data["sip_route"]["provision_status"], "pending")
+        self.assertEqual(data["sip_route"]["desired_revision"], 1)
+        self.assertEqual(data["sip_route"]["applied_revision"], 0)
+        return data
+
+    def voice_payload(self):
+        return {
                 "provider": self.provider,
                 "display_name": "My Ultravox",
                 "api_key": "uvx_api_secret_token_12345",
@@ -35,14 +54,30 @@ class VoiceEndpointTests(Integration2ATestCase):
                     "allowed_countries": ["CO"],
                     "max_concurrent_calls": 1,
                 },
-            },
-        )
+            }
+
+    def test_existing_sip_username_is_normalized_on_save(self):
+        data = self.configure_voice()
+        route_id = data["sip_route"]["id"]
+        expected_username = f"route-{route_id.replace('-', '')}"
+
+        with SessionLocal() as db:
+            route = db.get(TenantSipRoute, route_id)
+            route.sip_username = "legacy-user"
+            route.provision_status = "active"
+            route.applied_revision = route.desired_revision
+            db.commit()
+
+        payload = self.voice_payload()
+        payload["sip_route"].pop("sip_password")
+        payload["sip_route"]["sip_username"] = "user-controlled-value"
+        response = self.client.post("/api/v1/integrations/voice/config", json=payload)
+
         self.assertEqual(response.status_code, 200)
-        data = response.json()
-        self.assertEqual(data["sip_route"]["provision_status"], "pending")
-        self.assertEqual(data["sip_route"]["desired_revision"], 1)
-        self.assertEqual(data["sip_route"]["applied_revision"], 0)
-        return data
+        route = response.json()["sip_route"]
+        self.assertEqual(route["sip_username"], expected_username)
+        self.assertEqual(route["desired_revision"], 2)
+        self.assertEqual(route["provision_status"], "pending")
 
     def test_voice_test_endpoint_canonical_works(self):
         self.configure_voice()

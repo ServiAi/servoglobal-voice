@@ -96,7 +96,7 @@ Ejecute pruebas focalizadas durante el desarrollo y la suite completa antes de m
 
 1. Aplique `202608210001_asterisk_route_provisioning.py` y confirme una sola head de Alembic.
 2. Instale `phonenumbers` desde `backend/requirements.txt`.
-3. Configure en Integraciones la ruta SIP del tenant: host/puerto PBX, usuario y contraseña SIP, Caller ID autorizado, país predeterminado, países habilitados y concurrencia. La contraseña queda cifrada y no vuelve a mostrarse.
+3. Configure en Integraciones la ruta SIP del tenant: host/puerto PBX, contraseña SIP, Caller ID autorizado, país predeterminado, países habilitados y concurrencia. El backend genera un usuario inmutable `route-<uuid>` que coincide con el endpoint PJSIP; la interfaz lo muestra en solo lectura. La contraseña queda cifrada y no vuelve a mostrarse.
 4. Configure `ASTERISK_PROVISIONER_SHARED_SECRET` en el backend con un secreto aleatorio dedicado. Instale en el PBX el agente `python -m app.workers.asterisk_provisioner` usando las plantillas de `ops/asterisk/`. El agente consulta el estado deseado, genera atómicamente `/etc/asterisk/pjsip.d/serviglobal-tenants.conf`, recarga PJSIP, verifica cada endpoint y reporta la revisión. En caso de error restaura el include anterior.
 
 5. La plantilla base `ultravox-tenant` permanece definida manualmente una sola vez en `pjsip.conf`. Añada después de ella este include:
