@@ -35,12 +35,13 @@ PostgreSQL es la base principal. Alembic administra el esquema. Los dominios per
 ### Llamada a CRM
 
 1. La landing o el CRM solicita/inicia una llamada.
-2. Ultravox ejecuta la llamada y envía eventos.
-3. El backend normaliza y persiste la llamada de forma idempotente; el worker consulta el estado del proveedor como respaldo cuando falta el evento terminal.
-4. Los servicios CRM resuelven contacto/lead, contexto y etapa.
-5. `VoiceCapacityService` centraliza los estados que ocupan un canal SIP, registra saturaciones y cierres de respaldo en `tenant_integration_events`, y calcula la capacidad actual aislada por tenant.
-6. El dashboard separa el rendimiento reportado por Ultravox de la capacidad SIP actual; sus contadores de capacidad respetan el período, mientras ocupación y cupos son una fotografía en vivo.
-7. El dashboard y timeline consultan la información ya persistida.
+2. Cada ruta tenant usa el mismo identificador `route-<uuid>` como usuario SIP y nombre de endpoint PJSIP; el backend lo deriva y la UI no permite sustituirlo.
+3. Ultravox ejecuta la llamada y envía eventos.
+4. El backend normaliza y persiste la llamada de forma idempotente; el worker consulta el estado del proveedor como respaldo cuando falta el evento terminal.
+5. Los servicios CRM resuelven contacto/lead, contexto y etapa.
+6. `VoiceCapacityService` centraliza los estados que ocupan un canal SIP, registra saturaciones y cierres de respaldo en `tenant_integration_events`, y calcula la capacidad actual aislada por tenant.
+7. El dashboard separa el rendimiento reportado por Ultravox de la capacidad SIP actual; sus contadores de capacidad respetan el período, mientras ocupación y cupos son una fotografía en vivo.
+8. El dashboard y timeline consultan la información ya persistida.
 
 ### Email
 

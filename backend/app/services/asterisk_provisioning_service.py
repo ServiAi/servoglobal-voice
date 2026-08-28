@@ -14,7 +14,10 @@ from app.schemas.asterisk_provisioning import (
     AsteriskDesiredRoute,
     AsteriskDesiredStateResponse,
 )
-from app.services.voice_sip_route_service import VoiceSipRouteService
+from app.services.voice_sip_route_service import (
+    VoiceSipRouteService,
+    sip_username_for_route,
+)
 
 
 class AsteriskProvisioningService:
@@ -24,10 +27,7 @@ class AsteriskProvisioningService:
 
     @staticmethod
     def route_key(route_id: str) -> str:
-        compact = route_id.replace("-", "").lower()
-        if len(compact) != 32 or any(char not in "0123456789abcdef" for char in compact):
-            raise ValueError("invalid_route_id")
-        return f"route-{compact}"
+        return sip_username_for_route(route_id)
 
     def desired_state(self) -> AsteriskDesiredStateResponse:
         routes = list(self.db.scalars(select(TenantSipRoute).order_by(TenantSipRoute.id)))

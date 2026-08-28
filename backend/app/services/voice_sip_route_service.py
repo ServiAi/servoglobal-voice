@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from uuid import uuid4
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -15,8 +16,16 @@ from app.services.voice_phone_service import (
 
 
 HOST_RE = re.compile(r"^[A-Za-z0-9.-]+$")
-SIP_USERNAME_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
 SIP_PASSWORD_FORBIDDEN = frozenset("\r\n;#[]")
+
+
+def sip_username_for_route(route_id: str) -> str:
+    compact = route_id.replace("-", "").lower()
+    if len(compact) != 32 or any(
+        char not in "0123456789abcdef" for char in compact
+    ):
+        raise ValueError("invalid_route_id")
+    return f"route-{compact}"
 
 
 class VoiceSipRouteService:
@@ -64,12 +73,9 @@ class VoiceSipRouteService:
         body: VoiceSipRouteRequest,
     ) -> TenantSipRoute:
         host = body.pbx_host.strip().lower()
-        username = body.sip_username.strip()
         countries = sorted(set(body.allowed_countries))
         if not HOST_RE.fullmatch(host):
             raise ValueError("PBX host must be a hostname or IP address without protocol or port.")
-        if not SIP_USERNAME_RE.fullmatch(username):
-            raise ValueError("SIP username contains unsupported characters.")
         if body.sip_password and (
             any(char in SIP_PASSWORD_FORBIDDEN for char in body.sip_password)
             or not body.sip_password.isascii()
@@ -83,11 +89,6 @@ class VoiceSipRouteService:
 
         route = self.get_route(tenant_id)
         is_new = route is None
-        username_owner = self.db.scalar(
-            select(TenantSipRoute).where(TenantSipRoute.sip_username == username)
-        )
-        if username_owner is not None and username_owner.tenant_id != tenant_id:
-            raise ValueError("SIP username is already assigned to another tenant.")
         previous_pjsip_state = None if is_new else (
             route.status,
             route.sip_username,
@@ -95,11 +96,13 @@ class VoiceSipRouteService:
             False,
         )
         if route is None:
+            route_id = str(uuid4())
             route = TenantSipRoute(
+                id=route_id,
                 tenant_id=tenant_id,
                 provider_config_id=provider_config.id,
                 pbx_host=host,
-                sip_username=username,
+                sip_username=sip_username_for_route(route_id),
                 caller_id="",
             )
             self.db.add(route)
@@ -114,7 +117,7 @@ class VoiceSipRouteService:
         route.status = body.status
         route.pbx_host = host
         route.pbx_port = body.pbx_port
-        route.sip_username = username
+        route.sip_username = sip_username_for_route(route.id)
         route.caller_id = normalize_caller_id(
             body.caller_id, default_country=body.default_country
         )

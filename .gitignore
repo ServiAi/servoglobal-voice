@@ -105,3 +105,6 @@ opencode.jsonc
 .claude/
 AGENTS.md
 CLAUDE.md
+pjsip.conf
+extensions.conf
+output/

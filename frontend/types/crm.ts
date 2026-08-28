@@ -666,7 +666,6 @@ export type VoiceSipRouteRequest = {
   status: 'active' | 'inactive';
   pbx_host: string;
   pbx_port: number;
-  sip_username: string;
   sip_password?: string | null;
   caller_id: string;
   default_country: VoiceOutboundCountry;
@@ -678,6 +677,7 @@ export type VoiceOutboundCountry = 'AR' | 'CL' | 'CO' | 'EC' | 'MX' | 'PA' | 'PE
 
 export type VoiceSipRouteResponse = Omit<VoiceSipRouteRequest, 'sip_password'> & {
   id: string;
+  sip_username: string;
   has_sip_password: boolean;
   provision_status: 'pending' | 'active' | 'failed' | 'disabled';
   desired_revision: number;
