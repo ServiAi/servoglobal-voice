@@ -647,11 +647,33 @@ class VoiceExperienceTests(Integration2ATestCase):
         missing_label["consent"]["label"] = ""
         bad_color = self._payload()
         bad_color["theme"]["primary_color"] = "red"
-        for payload in (insecure, missing_label, bad_color):
+        bad_background = self._payload()
+        bad_background["theme"]["background_color"] = "not-a-color"
+        bad_scheme = self._payload()
+        bad_scheme["theme"]["color_scheme"] = "blue"
+        for payload in (insecure, missing_label, bad_color, bad_background, bad_scheme):
             self.assertEqual(
                 self.client.post("/api/v1/voice/experiences", json=payload).status_code,
                 422,
             )
+
+    def test_legacy_theme_missing_color_scheme_reads_with_defaults(self) -> None:
+        self._enable_feature()
+        experience_id = self._create().json()["id"]
+        with SessionLocal() as db:
+            experience = db.get(TenantVoiceExperience, experience_id)
+            legacy_theme = dict(experience.theme_json)
+            legacy_theme.pop("color_scheme", None)
+            legacy_theme.pop("background_color", None)
+            experience.theme_json = legacy_theme
+            db.commit()
+
+        response = self.client.get(f"/api/v1/voice/experiences/{experience_id}")
+
+        self.assertEqual(response.status_code, 200, response.text)
+        theme = response.json()["theme"]
+        self.assertEqual(theme["color_scheme"], "light")
+        self.assertIsNone(theme["background_color"])
 
     def test_read_and_write_roles(self) -> None:
         self._enable_feature()

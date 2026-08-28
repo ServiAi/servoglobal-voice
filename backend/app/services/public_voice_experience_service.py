@@ -136,19 +136,19 @@ class PublicVoiceExperienceService:
     @staticmethod
     def _content(payload: dict) -> PublicVoiceContent:
         return PublicVoiceContent.model_validate(
-            {key: payload.get(key) for key in PublicVoiceContent.model_fields}
+            {key: payload[key] for key in PublicVoiceContent.model_fields if key in payload}
         )
 
     @staticmethod
     def _theme(payload: dict) -> PublicVoiceTheme:
         return PublicVoiceTheme.model_validate(
-            {key: payload.get(key) for key in PublicVoiceTheme.model_fields}
+            {key: payload[key] for key in PublicVoiceTheme.model_fields if key in payload}
         )
 
     @staticmethod
     def _consent(payload: dict) -> PublicVoiceConsent:
         return PublicVoiceConsent.model_validate(
-            {key: payload.get(key) for key in PublicVoiceConsent.model_fields}
+            {key: payload[key] for key in PublicVoiceConsent.model_fields if key in payload}
         )
 
     @staticmethod

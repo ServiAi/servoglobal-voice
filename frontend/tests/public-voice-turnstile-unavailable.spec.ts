@@ -20,7 +20,7 @@ test.beforeAll(async () => {
         title: 'Secure context', description: null, submit_label: 'Continue',
         call_label: 'Call', success_message: 'Ready',
       },
-      theme: { logo_url: null, primary_color: '#0f766e', layout: 'card' },
+      theme: { logo_url: null, primary_color: '#0f766e', background_color: null, color_scheme: 'light', layout: 'card' },
       consent: { required: false, label: null, privacy_url: null },
       fields: [],
       capabilities: { submissions: true, calls: false },

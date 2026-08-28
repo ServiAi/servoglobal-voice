@@ -1046,6 +1046,27 @@
         "privateNotice": "Las experiencias publicadas tienen una página pública. Ábrela o copia su enlace desde cada tarjeta.",
         "status": { "draft": "Borrador", "published": "Publicada", "unpublished": "Despublicada", "archived": "Archivada" }
       },
+      "share": {
+        "trigger": "Compartir / Incrustar",
+        "title": "Compartir / Incrustar",
+        "description": "Comparte el enlace público o incrusta el formulario directamente en tu sitio.",
+        "tabs": { "link": "Enlace", "inline": "Inline", "floating": "Flotante", "modal": "Emergente" },
+        "format": { "html": "HTML", "react": "React", "iframe": "iframe" },
+        "copyCode": "Copiar código",
+        "codeCopied": "Código copiado",
+        "link": { "copy": "Copiar enlace", "copied": "Enlace copiado" },
+        "floating": {
+          "buttonText": "Texto del botón",
+          "position": "Posición",
+          "positions": { "bottomRight": "Inferior derecha", "bottomLeft": "Inferior izquierda" },
+          "defaultText": "Habla con nosotros"
+        },
+        "modal": {
+          "selectorLabel": "Selector del elemento que abre el formulario",
+          "selectorPlaceholder": "#reservar-demo",
+          "selectorHelp": "Escribe el selector CSS del botón o enlace de tu sitio que debe abrir el formulario."
+        }
+      },
       "actions": { "publish": "Publicar", "unpublish": "Despublicar", "archive": "Archivar", "delete": "Eliminar" },
       "confirm": {
         "publish": { "title": "¿Publicar esta experiencia?", "description": "Se creará una versión inmutable y la experiencia quedará disponible en su enlace público." },
@@ -1073,6 +1094,9 @@
           "logoUrl": "Pega una URL pública HTTPS del logo que quieres mostrar. Déjalo vacío para usar la presentación predeterminada.",
           "color": "Escoge visualmente el color principal de botones y acentos.",
           "colorHex": "Escribe el mismo color en formato hexadecimal de seis dígitos, por ejemplo #0891B2.",
+          "backgroundColor": "Escoge visualmente el color de fondo detrás del formulario. Déjalo vacío para usar el predeterminado del modo elegido.",
+          "backgroundColorHex": "Escribe el mismo color en formato hexadecimal de seis dígitos, por ejemplo #F4F7F6.",
+          "colorScheme": "Elige si el formulario se muestra en modo claro u oscuro. Las experiencias antiguas usan claro por defecto.",
           "layout": "Selecciona cómo se organizarán el contenido y el formulario en la pantalla del cliente."
         },
         "consent": {
@@ -1119,7 +1143,7 @@
         "context": { "title": "Esquema de contexto", "description": "Define qué datos se muestran, precargan o recopilan." },
         "basic": { "title": "Información básica", "description": "Identifica el borrador y su idioma predeterminado.", "name": "Nombre interno", "locale": "Idioma predeterminado" },
         "content": { "title": "Contenido", "description": "Redacta los textos visibles de la experiencia.", "fields": { "title": "Título", "description": "Descripción", "submit_label": "Botón de envío", "call_label": "Botón de llamada", "success_message": "Mensaje de éxito" } },
-        "appearance": { "title": "Apariencia", "description": "Usa una identidad clara y comprueba el resultado en la vista previa.", "logoUrl": "URL HTTPS del logo", "color": "Color", "colorHex": "Color hexadecimal", "layout": "Composición", "layouts": { "centered": "Centrada", "split": "Dividida", "card": "Tarjeta" } },
+        "appearance": { "title": "Apariencia", "description": "Usa una identidad clara y comprueba el resultado en la vista previa.", "logoUrl": "URL HTTPS del logo", "color": "Color", "colorHex": "Color hexadecimal", "backgroundColor": "Color de fondo", "backgroundColorHex": "Color de fondo hexadecimal", "colorScheme": "Modo de color", "colorSchemes": { "light": "Claro", "dark": "Oscuro" }, "layout": "Composición", "layouts": { "centered": "Centrada", "split": "Dividida", "card": "Tarjeta" } },
         "consent": { "title": "Consentimiento", "description": "Configura el texto legal mostrado antes de continuar.", "required": "Requerir consentimiento", "requiredHint": "La persona debe marcarlo para continuar.", "label": "Texto de consentimiento", "privacyUrl": "URL HTTPS de privacidad" },
         "behavior": { "title": "Comportamiento", "description": "Configura cómo se inicia la conversación después de registrar el contexto.", "mode": "Modo de llamada", "modes": { "webrtc": "Hablar en el navegador (WebRTC)", "callback": "Solicitar llamada al teléfono" }, "phoneField": "Campo de teléfono", "phoneFieldPlaceholder": "Selecciona un campo obligatorio", "defaultCountry": "País predeterminado", "countries": { "CO": "Colombia", "MX": "México", "AR": "Argentina", "PA": "Panamá", "CL": "Chile", "EC": "Ecuador", "PE": "Perú", "US": "Estados Unidos" }, "language": "Idioma de llamada", "languages": { "es": "Español", "en": "Inglés" }, "auto_start": "Inicio automático", "auto_startHint": "Marca la intención de iniciar al completar el contexto.", "show_microphone_help": "Mostrar ayuda de micrófono", "show_microphone_helpHint": "Incluye instrucciones visibles para la persona." }
       },

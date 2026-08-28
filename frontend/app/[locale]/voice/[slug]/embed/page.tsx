@@ -1,6 +1,5 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { getTranslations } from 'next-intl/server';
 
 import { PublicVoiceExperience } from '@/components/public/voice/PublicVoiceExperience';
 import { fetchPublicVoiceExperience } from '@/lib/api/public-voice-experiences';
@@ -13,15 +12,10 @@ interface PageProps {
 }
 
 export async function generateMetadata(): Promise<Metadata> {
-  const t = await getTranslations('publicVoiceExperience.metadata');
-  return {
-    title: t('title'),
-    description: t('description'),
-    robots: { index: false, follow: false },
-  };
+  return { robots: { index: false, follow: false } };
 }
 
-export default async function PublicVoiceExperiencePage({ params }: PageProps) {
+export default async function VoiceExperienceEmbedPage({ params }: PageProps) {
   const { locale, slug } = await params;
   const [result, messages] = await Promise.all([
     fetchPublicVoiceExperience(slug),
@@ -31,6 +25,6 @@ export default async function PublicVoiceExperiencePage({ params }: PageProps) {
   if (!result.ok) notFound();
 
   return (
-    <PublicVoiceExperience experience={result.data} locale={locale} messages={messages} />
+    <PublicVoiceExperience experience={result.data} locale={locale} messages={messages} embed />
   );
 }

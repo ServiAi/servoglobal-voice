@@ -36,6 +36,8 @@ class PublicVoiceContent(_PublicModel):
 class PublicVoiceTheme(_PublicModel):
     logo_url: str | None
     primary_color: str | None = Field(None, pattern=r"^#[0-9A-Fa-f]{6}$")
+    background_color: str | None = Field(None, pattern=r"^#[0-9A-Fa-f]{6}$")
+    color_scheme: Literal["light", "dark"] = "light"
     layout: Literal["centered", "split", "card"]
 
 

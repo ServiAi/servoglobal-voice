@@ -617,6 +617,67 @@ export function VoiceExperienceBuilder({
           {validationMessage('theme.primary_color')}
         </label>
       </div>
+      <div className="grid gap-4 sm:grid-cols-[auto_1fr] sm:items-end">
+        <label className="grid gap-2 text-sm font-semibold text-foreground">
+          <span className="flex items-center gap-1.5">
+            {t('form.appearance.backgroundColor')}
+            <FieldHelp label={t('form.appearance.backgroundColor')} required={false}>{t('help.appearance.backgroundColor')}</FieldHelp>
+          </span>
+          <input
+            type="color"
+            className="h-11 w-20 cursor-pointer rounded-md border border-input bg-background p-1 disabled:cursor-not-allowed"
+            value={form.theme.background_color ?? '#F4F7F6'}
+            disabled={!editable}
+            onChange={(event) =>
+              updateRoot('theme', { ...form.theme, background_color: event.target.value })
+            }
+          />
+        </label>
+        <label className="grid gap-2 text-sm font-semibold text-foreground">
+          <span className="flex items-center gap-1.5">
+            {t('form.appearance.backgroundColorHex')}
+            <FieldHelp align="right" label={t('form.appearance.backgroundColorHex')} required={false}>{t('help.appearance.backgroundColorHex')}</FieldHelp>
+          </span>
+          <input
+            className={FIELD_CLASS}
+            value={form.theme.background_color ?? ''}
+            disabled={!editable}
+            placeholder="#F4F7F6"
+            onChange={(event) =>
+              updateRoot('theme', { ...form.theme, background_color: event.target.value || null })
+            }
+          />
+          {validationMessage('theme.background_color')}
+        </label>
+      </div>
+      <fieldset disabled={!editable}>
+        <legend className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
+          {t('form.appearance.colorScheme')}
+          <FieldHelp label={t('form.appearance.colorScheme')} required={false}>{t('help.appearance.colorScheme')}</FieldHelp>
+        </legend>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          {(['light', 'dark'] as const).map((scheme) => (
+            <label
+              key={scheme}
+              className={`cursor-pointer rounded-lg border p-4 text-sm transition ${
+                form.theme.color_scheme === scheme
+                  ? 'border-primary/60 bg-primary/[0.06] text-foreground'
+                  : 'border-border text-muted-foreground hover:border-primary/30'
+              }`}
+            >
+              <input
+                type="radio"
+                name="colorScheme"
+                value={scheme}
+                checked={form.theme.color_scheme === scheme}
+                onChange={() => updateRoot('theme', { ...form.theme, color_scheme: scheme })}
+                className="sr-only"
+              />
+              <span className="font-semibold">{t(`form.appearance.colorSchemes.${scheme}`)}</span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
       <fieldset disabled={!editable}>
         <legend className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
           {t('form.appearance.layout')}

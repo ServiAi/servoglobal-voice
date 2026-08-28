@@ -26,9 +26,13 @@ export type VoiceExperienceContent = {
   success_message: string;
 };
 
+export type VoiceExperienceColorScheme = 'light' | 'dark';
+
 export type VoiceExperienceTheme = {
   logo_url?: string | null;
   primary_color?: string | null;
+  background_color?: string | null;
+  color_scheme: VoiceExperienceColorScheme;
   layout: VoiceExperienceLayout;
 };
 

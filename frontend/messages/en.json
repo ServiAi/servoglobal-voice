@@ -1042,6 +1042,27 @@
       "accessDenied": { "title": "Restricted access", "description": "Your role cannot manage voice experiences." },
       "notFound": { "title": "Experience not found", "description": "This experience does not exist or is no longer available.", "back": "Back to experiences" },
       "list": { "eyebrow": "Private inventory", "count": "{count, plural, =0 {No experiences} one {# experience} other {# experiences}}", "empty": "No experiences yet", "emptyAction": "Create a draft and define the context it will collect.", "unknownAgent": "Unavailable agent", "locale": "Locale", "versions": "Versions", "updated": "Updated {date}", "open": "Open editor", "openPublic": "Open public page", "copyLink": "Copy link", "linkCopied": "Link copied", "copyFailed": "The link could not be copied. Open the public page and copy the browser address instead.", "readyTitle": "Ready to share", "readyDescription": "Open the public page to verify it or copy the link to share it.", "privateNotice": "Published experiences have a public page. Open it or copy its link from each card.", "status": { "draft": "Draft", "published": "Published", "unpublished": "Unpublished", "archived": "Archived" } },
+      "share": {
+        "trigger": "Share / Embed",
+        "title": "Share / Embed",
+        "description": "Share the public link or embed the form directly on your site.",
+        "tabs": { "link": "Link", "inline": "Inline", "floating": "Floating", "modal": "Modal" },
+        "format": { "html": "HTML", "react": "React", "iframe": "iframe" },
+        "copyCode": "Copy code",
+        "codeCopied": "Code copied",
+        "link": { "copy": "Copy link", "copied": "Link copied" },
+        "floating": {
+          "buttonText": "Button text",
+          "position": "Position",
+          "positions": { "bottomRight": "Bottom right", "bottomLeft": "Bottom left" },
+          "defaultText": "Talk with us"
+        },
+        "modal": {
+          "selectorLabel": "Selector of the element that opens the form",
+          "selectorPlaceholder": "#book-demo",
+          "selectorHelp": "Enter the CSS selector of the button or link on your site that should open the form."
+        }
+      },
       "actions": { "publish": "Publish", "unpublish": "Unpublish", "archive": "Archive", "delete": "Delete" },
       "confirm": { "publish": { "title": "Publish this experience?", "description": "An immutable version will be created and the experience will become available at its public link." }, "unpublish": { "title": "Unpublish this experience?", "description": "The public link will become unavailable and the experience will return to draft state. History is not deleted." }, "archive": { "title": "Archive this experience?", "description": "It will become read-only without deleting its history." }, "delete": { "title": "Permanently delete this experience?", "description": "The experience, its versions, and associated context data and sessions will be permanently deleted. CRM audit records will be kept. This action cannot be undone.", "confirmLabel": "Delete permanently" } },
       "errors": { "loadTitle": "We could not load voice experiences", "generic": "A controlled error occurred. Please try again.", "conflict": "This operation conflicts with the current state.", "validation": "Review the highlighted fields.", "accessDenied": "You do not have permission for this action.", "notFound": "The resource is no longer available.", "schemaMustBeActiveToPublish": "You can save the draft, but the schema must be active before publishing.", "backend": { "maximumReached": "You reached the maximum number of voice experiences.", "slugConflict": "A unique identifier could not be assigned. Please try again.", "alreadyPublished": "The experience is already published.", "activeSchemaRequired": "You can only publish with an active context schema.", "concurrentPublication": "Another concurrent publication finished first. Refresh and try again.", "publishedRequired": "You can only unpublish a published experience.", "unpublishBeforeArchive": "Unpublish the experience before archiving it.", "schemaAgentMismatch": "The context schema does not belong to the selected agent.", "archivedImmutable": "Archived experiences cannot be changed.", "deleteRequiresArchived": "You can only delete archived experiences.", "agentChangeBlocked": "You cannot change the agent once publication history exists.", "deleteHistoryBlocked": "You cannot delete an experience with publication history; the history must be kept.", "schemaDeleteReferenced": "This schema cannot be deleted because an experience or publication history still references it.", "versionDeleteArchived": "Individual versions of an archived experience cannot be deleted.", "versionDeleteCurrent": "The current public version cannot be deleted.", "versionDeleteLatest": "The latest version cannot be deleted.", "versionDeleteReferenced": "The version has associated forms, sessions, or calls and cannot be deleted." } },
@@ -1064,6 +1085,9 @@
           "logoUrl": "Paste a public HTTPS URL for the logo to display. Leave it blank to use the default presentation.",
           "color": "Visually choose the primary color used for buttons and accents.",
           "colorHex": "Enter the same color as a six-digit hexadecimal value, for example #0891B2.",
+          "backgroundColor": "Visually choose the background color behind the form. Leave it blank to use the selected mode's default.",
+          "backgroundColorHex": "Enter the same color as a six-digit hexadecimal value, for example #F4F7F6.",
+          "colorScheme": "Choose whether the form is shown in light or dark mode. Older experiences default to light.",
           "layout": "Choose how the content and form are arranged on the customer's screen."
         },
         "consent": {
@@ -1103,7 +1127,7 @@
         "context": { "title": "Context schema", "description": "Define which data is shown, prefilled, or collected." },
         "basic": { "title": "Basic information", "description": "Identify the draft and its default locale.", "name": "Internal name", "locale": "Default locale" },
         "content": { "title": "Content", "description": "Write the visible experience copy.", "fields": { "title": "Title", "description": "Description", "submit_label": "Submit button", "call_label": "Call button", "success_message": "Success message" } },
-        "appearance": { "title": "Appearance", "description": "Apply a clear identity and check it in the preview.", "logoUrl": "HTTPS logo URL", "color": "Color", "colorHex": "Hex color", "layout": "Layout", "layouts": { "centered": "Centered", "split": "Split", "card": "Card" } },
+        "appearance": { "title": "Appearance", "description": "Apply a clear identity and check it in the preview.", "logoUrl": "HTTPS logo URL", "color": "Color", "colorHex": "Hex color", "backgroundColor": "Background color", "backgroundColorHex": "Background color hex", "colorScheme": "Color mode", "colorSchemes": { "light": "Light", "dark": "Dark" }, "layout": "Layout", "layouts": { "centered": "Centered", "split": "Split", "card": "Card" } },
         "consent": { "title": "Consent", "description": "Configure the legal copy shown before continuing.", "required": "Require consent", "requiredHint": "The person must check it before continuing.", "label": "Consent copy", "privacyUrl": "HTTPS privacy URL" },
         "behavior": { "title": "Behavior", "description": "Configure how the conversation starts after context is recorded.", "mode": "Call mode", "modes": { "webrtc": "Talk in the browser (WebRTC)", "callback": "Request a phone call" }, "phoneField": "Phone field", "phoneFieldPlaceholder": "Select a required field", "defaultCountry": "Default country", "countries": { "CO": "Colombia", "MX": "Mexico", "AR": "Argentina", "PA": "Panama", "CL": "Chile", "EC": "Ecuador", "PE": "Peru", "US": "United States" }, "language": "Call language", "languages": { "es": "Spanish", "en": "English" }, "auto_start": "Auto start", "auto_startHint": "Marks the intent to start after completing context.", "show_microphone_help": "Show microphone help", "show_microphone_helpHint": "Includes visible instructions for the person." }
       },
