@@ -125,6 +125,7 @@ export function VoiceExperiencePreview({ form, contextFields, locale }: Props) {
         ))}
       </div>
 
+      <div className="rounded-lg p-4 sm:p-6" style={{ backgroundColor: tokens.pageBg }}>
       <div
         role="tabpanel"
         className={`grid gap-6 rounded-lg p-5 shadow-lg sm:p-7 ${layoutClass}`}
@@ -233,6 +234,7 @@ export function VoiceExperiencePreview({ form, contextFields, locale }: Props) {
             )}
           </div>
         ) : null}
+      </div>
       </div>
 
       <p className="mt-3 flex items-center justify-center gap-1.5 text-[11px] text-slate-400">
