@@ -1047,6 +1047,12 @@
         "title": "Share / Embed",
         "description": "Share the public link or embed the form directly on your site.",
         "tabs": { "link": "Link", "inline": "Inline", "floating": "Floating", "modal": "Modal" },
+        "scenario": {
+          "link": "Share the URL directly via WhatsApp, email, or social media. The customer opens a dedicated full page for the voice experience, no code changes needed on your site.",
+          "inline": "Embed the form inside a section of your page (e.g. your contact page). It blends into your existing layout and is visible without any extra interaction.",
+          "floating": "Shows a fixed floating button in a corner of your site, visible on every page. Clicking it opens the assistant in a popup.",
+          "modal": "Opens as a popup when a button or link that already exists on your site is clicked (e.g. \"Book a demo\"). Useful when you want to control the trigger yourself."
+        },
         "format": { "html": "HTML", "react": "React", "iframe": "iframe" },
         "copyCode": "Copy code",
         "codeCopied": "Code copied",

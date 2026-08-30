@@ -1051,6 +1051,12 @@
         "title": "Compartir / Incrustar",
         "description": "Comparte el enlace público o incrusta el formulario directamente en tu sitio.",
         "tabs": { "link": "Enlace", "inline": "Inline", "floating": "Flotante", "modal": "Emergente" },
+        "scenario": {
+          "link": "Comparte la URL directamente por WhatsApp, correo o redes sociales. El cliente abre una página completa dedicada a la experiencia de voz, sin tocar el código de tu sitio.",
+          "inline": "Incrusta el formulario dentro de una sección de tu página (por ejemplo, la página de contacto). Queda integrado en el diseño existente y visible sin ninguna interacción adicional.",
+          "floating": "Muestra un botón flotante fijo en una esquina de tu sitio, visible en todas las páginas. Al hacer clic, abre el asistente en una ventana emergente.",
+          "modal": "Se abre como ventana emergente al hacer clic en un botón o enlace que ya existe en tu sitio (por ejemplo, «Reservar demo»). Útil cuando quieres controlar tú mismo el disparador."
+        },
         "format": { "html": "HTML", "react": "React", "iframe": "iframe" },
         "copyCode": "Copiar código",
         "codeCopied": "Código copiado",
