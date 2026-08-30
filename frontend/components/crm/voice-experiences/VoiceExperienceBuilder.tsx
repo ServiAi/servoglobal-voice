@@ -193,6 +193,9 @@ export function VoiceExperienceBuilder({
   ) => {
     setForm((current) => ({ ...current, [key]: value }));
     setSaveState('idle');
+    // Editing must always preview the live draft, never a frozen historical version.
+    setSelectedVersionId(null);
+    setSelectedVersionSchema(null);
   };
 
   const validationMessage = (path: string) =>
