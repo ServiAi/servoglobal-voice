@@ -58,10 +58,8 @@ export function VoiceExperiencePreview({ form, contextFields, locale }: Props) {
   const visibleFields = getPreCallVisibleContextFields(contextFields);
   const layoutClass =
     form.theme.layout === 'split'
-      ? 'lg:grid-cols-[0.8fr_1.2fr]'
-      : form.theme.layout === 'card'
-        ? 'max-w-xl mx-auto'
-        : 'max-w-2xl mx-auto';
+      ? 'max-w-5xl lg:grid-cols-[0.78fr_1.22fr]'
+      : 'max-w-2xl';
 
   const states: PreviewState[] = ['form', 'confirmation', 'beforeCall'];
 
@@ -126,17 +124,23 @@ export function VoiceExperiencePreview({ form, contextFields, locale }: Props) {
       </div>
 
       <div
-        role="tabpanel"
-        className={`grid gap-6 rounded-lg p-5 shadow-lg sm:p-7 ${layoutClass}`}
-        style={{ borderTop: `4px solid ${accent}`, backgroundColor: tokens.cardBg, color: tokens.fg }}
+        data-testid="voice-experience-preview-page"
+        className="rounded-lg p-4 sm:p-6"
+        style={{ backgroundColor: tokens.pageBg }}
       >
+        <div
+          role="tabpanel"
+          className={`mx-auto grid overflow-hidden rounded-[2rem] border shadow-[0_24px_80px_-36px_rgba(15,23,42,0.38)] ${layoutClass}`}
+          style={{ backgroundColor: tokens.cardBg, color: tokens.fg, borderColor: tokens.border }}
+        >
         {state === 'form' ? (
           <>
-            <div className="space-y-4">
+            <div className="relative overflow-hidden p-5 sm:p-7" style={{ backgroundColor: tokens.headerTint }}>
+              <div className="absolute inset-y-0 left-0 w-1.5" style={{ backgroundColor: accent }} />
               {renderHeader()}
             </div>
 
-            <div className="space-y-3">
+            <div className="space-y-3 p-5 sm:p-7" style={{ backgroundColor: tokens.cardBg }}>
               {visibleFields.map((field) => (
                 <label key={field.id} className="block text-xs font-semibold" style={{ color: tokens.fg }}>
                   {field.label}
@@ -153,7 +157,10 @@ export function VoiceExperiencePreview({ form, contextFields, locale }: Props) {
                 </p>
               ) : null}
               {form.consent.required ? (
-                <label className="flex items-start gap-2 text-xs leading-5" style={{ color: tokens.mutedFg }}>
+                <label
+                  className="flex items-start gap-2 rounded-xl border p-4 text-xs leading-5"
+                  style={{ backgroundColor: tokens.headerTint, borderColor: tokens.border, color: tokens.mutedFg }}
+                >
                   <input type="checkbox" disabled className="mt-0.5 size-4 rounded border-slate-300" />
                   <span>
                     {form.consent.label}
@@ -173,7 +180,7 @@ export function VoiceExperiencePreview({ form, contextFields, locale }: Props) {
               <button
                 type="button"
                 disabled
-                className="min-h-11 w-full rounded-md px-4 text-sm font-bold text-white opacity-90"
+                className="min-h-11 w-full rounded-xl px-4 text-sm font-bold text-white opacity-90"
                 style={{ backgroundColor: accent }}
               >
                 {form.content.submit_label}
@@ -183,7 +190,7 @@ export function VoiceExperiencePreview({ form, contextFields, locale }: Props) {
         ) : null}
 
         {state === 'confirmation' ? (
-          <div className="col-span-full mx-auto flex max-w-md flex-col items-center gap-4 py-6 text-center">
+          <div className="col-span-full mx-auto flex max-w-md flex-col items-center gap-4 p-6 text-center sm:p-8">
             <span
               className="flex size-12 items-center justify-center rounded-full text-white"
               style={{ backgroundColor: accent }}
@@ -207,7 +214,7 @@ export function VoiceExperiencePreview({ form, contextFields, locale }: Props) {
         ) : null}
 
         {state === 'beforeCall' ? (
-          <div className="col-span-full mx-auto flex max-w-md flex-col items-center gap-4 py-6 text-center">
+          <div className="col-span-full mx-auto flex max-w-md flex-col items-center gap-4 p-6 text-center sm:p-8">
             {renderHeader()}
             {form.call_settings.show_microphone_help ? (
               <p className="flex items-start gap-2 rounded-md p-3 text-xs" style={{ backgroundColor: tokens.headerTint, color: tokens.mutedFg }}>
@@ -233,6 +240,7 @@ export function VoiceExperiencePreview({ form, contextFields, locale }: Props) {
             )}
           </div>
         ) : null}
+        </div>
       </div>
 
       <p className="mt-3 flex items-center justify-center gap-1.5 text-[11px] text-slate-400">

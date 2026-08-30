@@ -373,6 +373,45 @@ class VoiceExperienceTests(Integration2ATestCase):
                 409,
             )
 
+    def test_unarchive_requires_archived_status(self) -> None:
+        self._enable_feature()
+        experience_id = self._create().json()["id"]
+        response = self.client.post(
+            f"/api/v1/voice/experiences/{experience_id}/unarchive"
+        )
+        self.assertEqual(response.status_code, 409)
+
+    def test_unarchive_without_history_returns_to_draft(self) -> None:
+        self._enable_feature()
+        experience_id = self._create().json()["id"]
+        self.client.post(f"/api/v1/voice/experiences/{experience_id}/archive")
+        response = self.client.post(
+            f"/api/v1/voice/experiences/{experience_id}/unarchive"
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertEqual(body["status"], "draft")
+        self.assertIsNone(body["archived_at"])
+        # The experience is mutable and publishable again.
+        self.assertEqual(
+            self.client.put(
+                f"/api/v1/voice/experiences/{experience_id}", json=self._payload()
+            ).status_code,
+            200,
+        )
+
+    def test_unarchive_with_publication_history_returns_to_unpublished(self) -> None:
+        self._enable_feature()
+        experience_id = self._create().json()["id"]
+        self.client.post(f"/api/v1/voice/experiences/{experience_id}/publish")
+        self.client.post(f"/api/v1/voice/experiences/{experience_id}/unpublish")
+        self.client.post(f"/api/v1/voice/experiences/{experience_id}/archive")
+        response = self.client.post(
+            f"/api/v1/voice/experiences/{experience_id}/unarchive"
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["status"], "unpublished")
+
     def test_delete_requires_archived_status(self) -> None:
         self._enable_feature()
         experience_id = self._create().json()["id"]
@@ -449,7 +488,7 @@ class VoiceExperienceTests(Integration2ATestCase):
             404,
         )
 
-    def test_version_list_marks_only_old_unreferenced_versions_deletable(self) -> None:
+    def test_version_list_marks_all_unreferenced_versions_deletable(self) -> None:
         self._enable_feature()
         experience_id = self._create().json()["id"]
         for _ in range(3):
@@ -460,12 +499,12 @@ class VoiceExperienceTests(Integration2ATestCase):
             f"/api/v1/voice/experiences/{experience_id}/versions"
         ).json()
         self.assertEqual([item["version"] for item in versions], [3, 2, 1])
-        self.assertFalse(versions[0]["can_delete"])
-        self.assertEqual(versions[0]["delete_block_reason"], "latest")
+        self.assertTrue(versions[0]["can_delete"])
+        self.assertIsNone(versions[0]["delete_block_reason"])
         self.assertTrue(versions[1]["can_delete"])
         self.assertIsNone(versions[1]["delete_block_reason"])
 
-    def test_delete_old_unreferenced_version(self) -> None:
+    def test_delete_latest_unreferenced_version(self) -> None:
         self._enable_feature()
         experience_id = self._create().json()["id"]
         for _ in range(3):
@@ -474,29 +513,29 @@ class VoiceExperienceTests(Integration2ATestCase):
         versions = self.client.get(
             f"/api/v1/voice/experiences/{experience_id}/versions"
         ).json()
-        old_version = next(item for item in versions if item["version"] == 1)
+        selected_version = next(item for item in versions if item["version"] == 3)
 
         response = self.client.delete(
-            f"/api/v1/voice/experiences/{experience_id}/versions/{old_version['id']}"
+            f"/api/v1/voice/experiences/{experience_id}/versions/{selected_version['id']}"
         )
         self.assertEqual(response.status_code, 204, response.text)
         remaining = self.client.get(
             f"/api/v1/voice/experiences/{experience_id}/versions"
         ).json()
-        self.assertEqual([item["version"] for item in remaining], [3, 2])
+        self.assertEqual([item["version"] for item in remaining], [2, 1])
         with SessionLocal() as db:
             event = db.scalar(
                 select(TenantIntegrationEvent).where(
                     TenantIntegrationEvent.tenant_id == self.tenant.id,
                     TenantIntegrationEvent.event_type
                     == "voice_experience_version_deleted",
-                    TenantIntegrationEvent.resource_id == old_version["id"],
+                    TenantIntegrationEvent.resource_id == selected_version["id"],
                 )
             )
             self.assertIsNotNone(event)
-            self.assertEqual(event.metadata_json["version"], 1)
+            self.assertEqual(event.metadata_json["version"], 3)
 
-    def test_delete_current_or_latest_version_is_rejected(self) -> None:
+    def test_current_version_is_protected_until_unpublished(self) -> None:
         self._enable_feature()
         experience_id = self._create().json()["id"]
         self.client.post(f"/api/v1/voice/experiences/{experience_id}/publish")
@@ -515,7 +554,7 @@ class VoiceExperienceTests(Integration2ATestCase):
             self.client.delete(
                 f"/api/v1/voice/experiences/{experience_id}/versions/{current['id']}"
             ).status_code,
-            409,
+            204,
         )
 
     def test_delete_referenced_version_is_rejected(self) -> None:

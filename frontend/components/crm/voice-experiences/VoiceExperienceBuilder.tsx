@@ -15,6 +15,7 @@ import {
   Mic2,
   PanelLeft,
   RadioTower,
+  RotateCcw,
   Save,
   ShieldCheck,
   Sparkles,
@@ -29,6 +30,7 @@ import {
   fetchVoiceContextSchemaAction,
   fetchVoiceExperienceVersionsAction,
   publishVoiceExperienceAction,
+  unarchiveVoiceExperienceAction,
   unpublishVoiceExperienceAction,
   updateVoiceExperienceAction,
 } from '@/app/[locale]/crm/settings/voice-experiences/actions';
@@ -193,6 +195,9 @@ export function VoiceExperienceBuilder({
   ) => {
     setForm((current) => ({ ...current, [key]: value }));
     setSaveState('idle');
+    // Editing must always preview the live draft, never a frozen historical version.
+    setSelectedVersionId(null);
+    setSelectedVersionSchema(null);
   };
 
   const validationMessage = (path: string) =>
@@ -1065,6 +1070,22 @@ export function VoiceExperienceBuilder({
                   destructive
                   busy={submitting}
                   onConfirm={() => transitionExperience(archiveVoiceExperienceAction)}
+                />
+              ) : null}
+              {canEdit && experience?.status === 'archived' ? (
+                <ActionDialog
+                  trigger={
+                    <Button type="button" variant="outline" size="sm" disabled={submitting}>
+                      <RotateCcw className="mr-2 size-4" aria-hidden="true" />
+                      {t('actions.unarchive')}
+                    </Button>
+                  }
+                  title={t('confirm.unarchive.title')}
+                  description={t('confirm.unarchive.description')}
+                  confirmLabel={t('actions.unarchive')}
+                  cancelLabel={t('common.cancel')}
+                  busy={submitting}
+                  onConfirm={() => transitionExperience(unarchiveVoiceExperienceAction)}
                 />
               ) : null}
               {canEdit && canDeleteExperience ? (

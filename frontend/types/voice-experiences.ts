@@ -80,7 +80,7 @@ export type VoiceExperienceVersionResponse = VoiceExperienceWriteRequest & {
   published_at: string;
   created_at: string;
   can_delete: boolean;
-  delete_block_reason: 'current' | 'latest' | 'referenced' | 'archived' | null;
+  delete_block_reason: 'current' | 'referenced' | 'archived' | null;
 };
 
 export type VoiceContextFieldOption = {
