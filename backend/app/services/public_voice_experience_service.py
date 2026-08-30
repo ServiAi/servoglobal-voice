@@ -53,15 +53,21 @@ class PublicVoiceExperienceService:
             if key in version.call_settings_json
         }
         calls_available = True
-        if call_settings.get("mode", "webrtc") == "callback":
+        raw_mode = call_settings.get("mode", "webrtc")
+        if raw_mode in ("callback", "both"):
             try:
                 route = VoiceSipRouteService(self.db).get_active_route(
                     snapshot.experience.tenant_id
                 )
                 call_settings["allowed_countries"] = list(route.allowed_countries_json)
             except Exception:
-                calls_available = False
                 call_settings["allowed_countries"] = []
+                if raw_mode == "callback":
+                    calls_available = False
+                else:
+                    # Callback needs an active outbound route; WebRTC does not,
+                    # so degrade to WebRTC-only instead of hiding calls entirely.
+                    call_settings["mode"] = "webrtc"
 
         return PublicVoiceExperienceResponse(
             slug=version.slug,

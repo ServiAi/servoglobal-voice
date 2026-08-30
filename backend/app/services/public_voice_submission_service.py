@@ -105,7 +105,7 @@ class PublicVoiceSubmissionService:
                     raise ExperienceVersionChanged
                 call_settings = snapshot.version.call_settings_json
                 allowed_countries = None
-                if call_settings.get("mode") == "callback":
+                if call_settings.get("mode") in ("callback", "both"):
                     route = VoiceSipRouteService(db).get_route(
                         snapshot.experience.tenant_id
                     )
@@ -118,7 +118,7 @@ class PublicVoiceSubmissionService:
                     raise SubmissionValidationFailed(errors)
                 answers = dict(payload.answers)
                 phone_key = call_settings.get("phone_field_key")
-                if call_settings.get("mode") == "callback" and isinstance(
+                if call_settings.get("mode") in ("callback", "both") and isinstance(
                     answers.get(phone_key), str
                 ):
                     phone_kwargs = {"default_country": call_settings.get("default_country")}
@@ -342,7 +342,7 @@ def validate_submission(
             errors.append(PublicFieldError(key=key, code="invalid_format"))
         elif field.field_type == "phone":
             call_settings = snapshot.version.call_settings_json
-            if call_settings.get("mode") == "callback" and key == call_settings.get(
+            if call_settings.get("mode") in ("callback", "both") and key == call_settings.get(
                 "phone_field_key"
             ):
                 try:

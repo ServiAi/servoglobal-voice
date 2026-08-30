@@ -227,6 +227,27 @@ export function VoiceExperiencePreview({ form, contextFields, locale }: Props) {
                 <Zap className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
                 {t('preview.autoStartActive')}
               </p>
+            ) : form.call_settings.mode === 'both' ? (
+              <div className="grid w-full gap-2 sm:grid-cols-2">
+                <button
+                  type="button"
+                  disabled
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md px-4 text-sm font-bold text-white opacity-90"
+                  style={{ backgroundColor: accent }}
+                >
+                  <Mic2 className="size-4" aria-hidden="true" />
+                  {t('form.behavior.modes.webrtc')}
+                </button>
+                <button
+                  type="button"
+                  disabled
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md border px-4 text-sm font-bold opacity-90"
+                  style={{ borderColor: tokens.border, color: tokens.fg }}
+                >
+                  <PhoneCall className="size-4" aria-hidden="true" />
+                  {t('form.behavior.modes.callback')}
+                </button>
+              </div>
             ) : (
               <button
                 type="button"

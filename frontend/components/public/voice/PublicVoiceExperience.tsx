@@ -4,7 +4,7 @@ import { Turnstile } from '@marsidev/react-turnstile';
 import type { TurnstileInstance } from '@marsidev/react-turnstile';
 import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties, FormEvent, ReactNode } from 'react';
-import { Check, LockKeyhole, ShieldCheck } from 'lucide-react';
+import { Check, LockKeyhole, Mic, PhoneCall, ShieldCheck } from 'lucide-react';
 
 import { submitPublicVoiceExperience } from '@/lib/api/public-voice-submissions';
 import { PublicVoiceCall } from './PublicVoiceCall';
@@ -38,6 +38,12 @@ export interface PublicVoiceMessages {
   callEnded: string;
   callbackLoading: string;
   callbackAccepted: string;
+  chooseModeTitle: string;
+  chooseModeWebrtc: string;
+  chooseModeWebrtcHint: string;
+  chooseModeCallback: string;
+  chooseModeCallbackHint: string;
+  changeContactMode: string;
   errors: Record<string, string>;
 }
 
@@ -197,6 +203,7 @@ export function PublicVoiceExperience({ experience, locale, messages, embed = fa
   const [contextToken, setContextToken] = useState<string | null>(null);
   const [errorCode, setErrorCode] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [selectedCallMode, setSelectedCallMode] = useState<'webrtc' | 'callback' | null>(null);
 
   useEffect(() => {
     if (testMode) setTurnstileToken(`playwright-${crypto.randomUUID()}`);
@@ -330,22 +337,69 @@ export function PublicVoiceExperience({ experience, locale, messages, embed = fa
                   <h2 className="mt-5 text-xl font-semibold">{messages.successTitle}</h2>
                   <p className="mt-2 text-sm leading-6" style={{ color: tokens.mutedFg }}>{experience.content.success_message}</p>
                   {contextToken && experience.capabilities.calls ? (
-                    experience.call_settings.mode === 'callback' ? (
-                      <PublicVoiceCallback
-                        slug={experience.slug}
-                        contextToken={contextToken}
-                        callLabel={experience.content.call_label}
-                        messages={messages}
-                      />
+                    experience.call_settings.mode === 'both' && !selectedCallMode ? (
+                      <div className="mt-7 grid gap-3 text-left sm:grid-cols-2" role="group" aria-label={messages.chooseModeTitle}>
+                        <p className="text-sm font-semibold sm:col-span-2" style={{ color: tokens.fg }}>{messages.chooseModeTitle}</p>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedCallMode('webrtc')}
+                          className="rounded-2xl border border-slate-200 bg-white p-4 text-left transition hover:border-[var(--voice-accent)] hover:shadow-sm"
+                        >
+                          <Mic className="size-5" style={{ color: 'var(--voice-accent)' }} aria-hidden="true" />
+                          <p className="mt-2 text-sm font-semibold" style={{ color: tokens.fg }}>{messages.chooseModeWebrtc}</p>
+                          <p className="mt-1 text-xs leading-5" style={{ color: tokens.mutedFg }}>{messages.chooseModeWebrtcHint}</p>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedCallMode('callback')}
+                          className="rounded-2xl border border-slate-200 bg-white p-4 text-left transition hover:border-[var(--voice-accent)] hover:shadow-sm"
+                        >
+                          <PhoneCall className="size-5" style={{ color: 'var(--voice-accent)' }} aria-hidden="true" />
+                          <p className="mt-2 text-sm font-semibold" style={{ color: tokens.fg }}>{messages.chooseModeCallback}</p>
+                          <p className="mt-1 text-xs leading-5" style={{ color: tokens.mutedFg }}>{messages.chooseModeCallbackHint}</p>
+                        </button>
+                      </div>
+                    ) : (experience.call_settings.mode === 'callback' ||
+                        (experience.call_settings.mode === 'both' && selectedCallMode === 'callback')) ? (
+                      <>
+                        <PublicVoiceCallback
+                          slug={experience.slug}
+                          contextToken={contextToken}
+                          callLabel={experience.content.call_label}
+                          messages={messages}
+                        />
+                        {experience.call_settings.mode === 'both' ? (
+                          <button
+                            type="button"
+                            onClick={() => setSelectedCallMode(null)}
+                            className="mt-3 text-sm font-semibold underline underline-offset-4"
+                            style={{ color: tokens.mutedFg }}
+                          >
+                            {messages.changeContactMode}
+                          </button>
+                        ) : null}
+                      </>
                     ) : (
-                      <PublicVoiceCall
-                        slug={experience.slug}
-                        contextToken={contextToken}
-                        callLabel={experience.content.call_label}
-                        autoStart={experience.call_settings.auto_start}
-                        showMicrophoneHelp={experience.call_settings.show_microphone_help}
-                        messages={messages}
-                      />
+                      <>
+                        <PublicVoiceCall
+                          slug={experience.slug}
+                          contextToken={contextToken}
+                          callLabel={experience.content.call_label}
+                          autoStart={experience.call_settings.auto_start}
+                          showMicrophoneHelp={experience.call_settings.show_microphone_help}
+                          messages={messages}
+                        />
+                        {experience.call_settings.mode === 'both' ? (
+                          <button
+                            type="button"
+                            onClick={() => setSelectedCallMode(null)}
+                            className="mt-3 text-sm font-semibold underline underline-offset-4"
+                            style={{ color: tokens.mutedFg }}
+                          >
+                            {messages.changeContactMode}
+                          </button>
+                        ) : null}
+                      </>
                     )
                   ) : null}
                 </div>

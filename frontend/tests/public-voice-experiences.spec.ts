@@ -87,6 +87,12 @@ const callbackExperience: PublicVoiceExperienceData = {
   },
 };
 
+const bothModeExperience: PublicVoiceExperienceData = {
+  ...callbackExperience,
+  slug: 'both-demo',
+  call_settings: { ...callbackExperience.call_settings, mode: 'both' },
+};
+
 let apiServer: Server;
 // Egress guardrail: every request the runtime makes lands here, on 127.0.0.1:43119.
 // If SSR ever reached staging instead of the mock, this list would stay empty and
@@ -178,7 +184,9 @@ test.beforeAll(async () => {
       ? unsafeExperience
       : request.url?.endsWith('/callback-demo')
         ? callbackExperience
-        : experience;
+        : request.url?.endsWith('/both-demo')
+          ? bothModeExperience
+          : experience;
     response.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
     response.end(JSON.stringify(data));
   });
@@ -266,6 +274,29 @@ test('requests one outbound callback without microphone access', async ({ page }
   await expect(page.getByText('Request received. We will call you shortly.')).toBeVisible();
   expect(callbackRequests).toBe(start + 1);
   expect(mockRequests.some((url) => url.endsWith('/callback-requests'))).toBe(true);
+});
+
+test('both mode lets the visitor choose between WebRTC and a callback request', async ({ page }) => {
+  const start = callbackRequests;
+  await page.goto('/en/voice/both-demo');
+  await completeRequiredFields(page);
+  await page.getByLabel('Phone').fill('3211234567');
+  await page.getByRole('button', { name: 'Continue' }).click();
+
+  await expect(page.getByText('How would you like us to contact you?')).toBeVisible();
+  const webrtcOption = page.getByRole('button', { name: /Talk now from the browser/ });
+  const callbackOption = page.getByRole('button', { name: /Request a call back/ });
+  await expect(webrtcOption).toBeVisible();
+  await expect(callbackOption).toBeVisible();
+
+  await callbackOption.click();
+  await page.getByRole('button', { name: 'Start call' }).click();
+  await expect(page.getByText('Request received. We will call you shortly.')).toBeVisible();
+  expect(callbackRequests).toBe(start + 1);
+
+  await page.getByRole('button', { name: 'Choose a different contact method' }).click();
+  await expect(page.getByText('How would you like us to contact you?')).toBeVisible();
+  await expect(webrtcOption).toBeVisible();
 });
 
 test('preflights microphone, starts one fake WebRTC call, and leaks neither capability', async ({ page, context }) => {
