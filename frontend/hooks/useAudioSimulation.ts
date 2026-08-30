@@ -7,7 +7,7 @@ export function useAudioSimulation() {
   const [volumeLevels, setVolumeLevels] = useState<number[]>(new Array(5).fill(10));
   const [duration, setDuration] = useState(0);
   
-  // Timer for call duration
+  // Timer for call 
   useEffect(() => {
     let interval: NodeJS.Timeout;
     if (demoState === 'connected') {
