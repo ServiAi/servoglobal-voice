@@ -114,4 +114,4 @@ class VoiceExperienceVersionResponse(_StrictModel):
     published_at: datetime
     created_at: datetime
     can_delete: bool = False
-    delete_block_reason: Literal["current", "latest", "referenced", "archived"] | None = None
+    delete_block_reason: Literal["current", "referenced", "archived"] | None = None
