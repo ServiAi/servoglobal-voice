@@ -99,6 +99,10 @@ export function ShareEmbedDialog({ trigger, publicPath, embedPath }: Props) {
           ))}
         </div>
 
+        <p className="rounded-lg bg-muted/40 p-3 text-xs leading-relaxed text-muted-foreground">
+          {t(`scenario.${activeTab}`)}
+        </p>
+
         {activeTab === 'link' ? (
           <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/30 p-3">
             <code className="flex-1 truncate text-xs text-foreground">{publicUrl}</code>
