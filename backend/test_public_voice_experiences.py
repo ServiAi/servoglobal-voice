@@ -298,6 +298,53 @@ class PublicVoiceExperienceTests(Integration2ATestCase):
                 self.assertEqual(response.status_code, 404)
                 self.assertEqual(response.json(), {"detail": "Not found"})
 
+    def test_both_mode_requires_a_valid_phone_field(self) -> None:
+        payload = self._payload()
+        payload["call_settings"]["mode"] = "both"
+        payload["call_settings"]["phone_field_key"] = "missing_phone"
+        response = self.client.post("/api/v1/voice/experiences", json=payload)
+        self.assertEqual(response.status_code, 422, response.text)
+
+    def test_both_mode_without_active_route_degrades_to_webrtc_only(self) -> None:
+        with SessionLocal() as db:
+            db.add(
+                TenantVoiceContextField(
+                    tenant_id=self.tenant.id,
+                    schema_id=self.schema_id,
+                    key="phone",
+                    label="Phone",
+                    description=None,
+                    field_type="phone",
+                    collection_mode="ask_if_missing",
+                    required=True,
+                    position=5,
+                    sensitivity="standard",
+                    validation_json={},
+                    options_json=[],
+                )
+            )
+            db.commit()
+        payload = self._payload()
+        payload["call_settings"]["mode"] = "both"
+        payload["call_settings"]["phone_field_key"] = "phone"
+        created = self.client.post("/api/v1/voice/experiences", json=payload)
+        self.assertEqual(created.status_code, 201, created.text)
+        published = self.client.post(
+            f"/api/v1/voice/experiences/{created.json()['id']}/publish"
+        )
+        self.assertEqual(published.status_code, 200, published.text)
+        app.dependency_overrides.pop(get_current_auth_context, None)
+
+        # No outbound SIP route is configured for this tenant, so callback is
+        # unavailable, but WebRTC does not need one and should still work.
+        response = self._get(published.json()["slug"])
+
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertEqual(body["call_settings"]["mode"], "webrtc")
+        self.assertEqual(body["call_settings"]["allowed_countries"], [])
+        self.assertEqual(body["capabilities"], {"submissions": True, "calls": True})
+
     def test_published_without_reference_fails_closed(self) -> None:
         published = self._publish()
         with SessionLocal() as db:

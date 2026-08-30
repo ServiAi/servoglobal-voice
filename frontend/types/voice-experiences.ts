@@ -46,7 +46,7 @@ export type VoiceExperienceCallSettings = {
   auto_start: boolean;
   show_microphone_help: boolean;
   language: string;
-  mode: 'webrtc' | 'callback';
+  mode: 'webrtc' | 'callback' | 'both';
   phone_field_key: string | null;
   default_country: 'AR' | 'CL' | 'CO' | 'EC' | 'MX' | 'PA' | 'PE' | 'US';
 };

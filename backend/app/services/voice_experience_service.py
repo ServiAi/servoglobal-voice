@@ -514,7 +514,7 @@ class VoiceExperienceService:
     @staticmethod
     def _validate_callback_settings(body, schema) -> None:
         settings = body.call_settings
-        if settings.mode != "callback":
+        if settings.mode not in ("callback", "both"):
             return
         field = next(
             (item for item in schema.fields if item.key == settings.phone_field_key),

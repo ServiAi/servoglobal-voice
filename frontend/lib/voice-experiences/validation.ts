@@ -70,7 +70,10 @@ export function validateVoiceExperience(form: VoiceExperienceWriteRequest): Vali
   requireText(errors, 'content.success_message', form.content.success_message, 1000);
   if (!LOCALE_PATTERN.test(form.default_locale)) errors.default_locale = 'invalid';
   if (!LOCALE_PATTERN.test(form.call_settings.language)) errors['call_settings.language'] = 'invalid';
-  if (form.call_settings.mode === 'callback' && !form.call_settings.phone_field_key) {
+  if (
+    (form.call_settings.mode === 'callback' || form.call_settings.mode === 'both') &&
+    !form.call_settings.phone_field_key
+  ) {
     errors['call_settings.phone_field_key'] = 'required';
   }
   if (form.theme.primary_color && !COLOR_PATTERN.test(form.theme.primary_color)) {

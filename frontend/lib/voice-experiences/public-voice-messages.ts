@@ -26,6 +26,12 @@ export async function buildPublicVoiceMessages(): Promise<PublicVoiceMessages> {
     callEnded: t('callEnded'),
     callbackLoading: t('callbackLoading'),
     callbackAccepted: t('callbackAccepted'),
+    chooseModeTitle: t('chooseModeTitle'),
+    chooseModeWebrtc: t('chooseModeWebrtc'),
+    chooseModeWebrtcHint: t('chooseModeWebrtcHint'),
+    chooseModeCallback: t('chooseModeCallback'),
+    chooseModeCallbackHint: t('chooseModeCallbackHint'),
+    changeContactMode: t('changeContactMode'),
     errors: {
       required: t('errors.required'),
       unknown_field: t('errors.unknown_field'),

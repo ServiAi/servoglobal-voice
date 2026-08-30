@@ -56,7 +56,7 @@ class PublicVoiceCallSettings(_PublicModel):
     auto_start: bool = False
     show_microphone_help: bool = True
     language: str = Field(default="es", min_length=2, max_length=16)
-    mode: Literal["webrtc", "callback"] = "webrtc"
+    mode: Literal["webrtc", "callback", "both"] = "webrtc"
     phone_field_key: str | None = None
     default_country: Literal["AR", "CL", "CO", "EC", "MX", "PA", "PE", "US"] = "CO"
     allowed_countries: list[

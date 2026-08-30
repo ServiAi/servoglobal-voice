@@ -792,17 +792,18 @@ export function VoiceExperienceBuilder({
           disabled={!editable}
           onChange={(event) => updateRoot('call_settings', {
             ...form.call_settings,
-            mode: event.target.value as 'webrtc' | 'callback',
-            phone_field_key: event.target.value === 'callback'
-              ? form.call_settings.phone_field_key
-              : null,
+            mode: event.target.value as 'webrtc' | 'callback' | 'both',
+            phone_field_key: event.target.value === 'webrtc'
+              ? null
+              : form.call_settings.phone_field_key,
           })}
         >
           <option value="webrtc">{t('form.behavior.modes.webrtc')}</option>
           <option value="callback">{t('form.behavior.modes.callback')}</option>
+          <option value="both">{t('form.behavior.modes.both')}</option>
         </select>
       </label>
-      {form.call_settings.mode === 'callback' ? (
+      {form.call_settings.mode === 'callback' || form.call_settings.mode === 'both' ? (
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="grid gap-2 text-sm font-semibold text-foreground">
             <span className="flex items-center gap-1.5">
@@ -866,7 +867,7 @@ export function VoiceExperienceBuilder({
         </select>
         {validationMessage('call_settings.language')}
       </label>
-      {form.call_settings.mode === 'webrtc' ? <div className="grid gap-3 sm:grid-cols-2">
+      {form.call_settings.mode === 'webrtc' || form.call_settings.mode === 'both' ? <div className="grid gap-3 sm:grid-cols-2">
         {(['auto_start', 'show_microphone_help'] as const).map((key) => (
           <label key={key} className="flex items-start gap-3 rounded-lg border border-border p-4 text-sm text-foreground">
             <input

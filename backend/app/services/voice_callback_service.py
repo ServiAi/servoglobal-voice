@@ -98,7 +98,7 @@ class PublicVoiceCallbackService:
                         or experience.status != "published"
                         or experience.published_version_id != context_session.experience_version_id
                         or version is None
-                        or version.call_settings_json.get("mode") != "callback"
+                        or version.call_settings_json.get("mode") not in ("callback", "both")
                     ):
                         raise PublicCallFailure(404, "experience_unavailable")
 

@@ -160,6 +160,32 @@ class PublicVoiceCallbackTests(Integration2ATestCase):
             self.assertEqual(call.status, "queued")
             self.assertEqual(call.provider_call_id, "provider-callback-1")
 
+    def test_both_mode_allows_callback_request(self) -> None:
+        payload = self._experience_payload()
+        payload["call_settings"]["mode"] = "both"
+        created = self.client.post("/api/v1/voice/experiences", json=payload)
+        self.assertEqual(created.status_code, 201, created.text)
+        published = self.client.post(
+            f"/api/v1/voice/experiences/{created.json()['id']}/publish"
+        )
+        self.assertEqual(published.status_code, 200, published.text)
+        slug = published.json()["slug"]
+        app.dependency_overrides.pop(get_current_auth_context, None)
+
+        submission = self.client.post(
+            f"/api/v1/public/voice-experiences/{slug}/submissions",
+            json=self._body(),
+        )
+        self.assertEqual(submission.status_code, 200, submission.text)
+        token = submission.json()["context_token"]
+
+        response = self.client.post(
+            f"/api/v1/public/voice-experiences/{slug}/callback-requests",
+            json={"context_token": token},
+        )
+        self.assertEqual(response.status_code, 202, response.text)
+        self.assertEqual(response.json(), {"status": "accepted"})
+
     def test_capacity_rejection_is_recorded_after_rollback_without_pii(self) -> None:
         app.dependency_overrides.pop(get_current_auth_context, None)
         submission = self._post()
