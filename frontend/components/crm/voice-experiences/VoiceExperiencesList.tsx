@@ -14,6 +14,7 @@ import {
   Mic2,
   Plus,
   RadioTower,
+  RotateCcw,
   Share2,
   ShieldAlert,
   Sparkles,
@@ -23,6 +24,7 @@ import { useTranslations } from 'next-intl';
 import {
   archiveVoiceExperienceAction,
   deleteVoiceExperienceAction,
+  unarchiveVoiceExperienceAction,
 } from '@/app/[locale]/crm/settings/voice-experiences/actions';
 import { canDeleteArchivedExperience } from '@/lib/voice-experiences/deletion';
 import { getVoiceExperienceErrorKey } from '@/lib/voice-experiences/error-messages';
@@ -336,6 +338,27 @@ export function VoiceExperiencesList({
                         destructive
                         busy={isPending}
                         onConfirm={() => mutate(experience.id, archiveVoiceExperienceAction)}
+                      />
+                    ) : null}
+                    {canEdit && experience.status === 'archived' ? (
+                      <ActionDialog
+                        trigger={
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            disabled={isPending}
+                            aria-label={t('actions.unarchive')}
+                          >
+                            <RotateCcw className="size-4" aria-hidden="true" />
+                          </Button>
+                        }
+                        title={t('confirm.unarchive.title')}
+                        description={t('confirm.unarchive.description')}
+                        confirmLabel={t('actions.unarchive')}
+                        cancelLabel={t('common.cancel')}
+                        busy={isPending}
+                        onConfirm={() => mutate(experience.id, unarchiveVoiceExperienceAction)}
                       />
                     ) : null}
                     {canEdit && canDelete ? (

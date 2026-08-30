@@ -19,6 +19,7 @@ import {
   fetchVoiceExperienceVersions,
   forkVoiceContextSchemaVersion,
   publishVoiceExperience,
+  unarchiveVoiceExperience,
   unpublishVoiceExperience,
   updateVoiceContextField,
   updateVoiceContextSchemaMeta,
@@ -98,6 +99,17 @@ export async function archiveVoiceExperienceAction(
 ): Promise<FetchResult<VoiceExperienceResponse>> {
   const result = await withAccessToken((token) =>
     archiveVoiceExperience(token, experienceId)
+  );
+  if (result.ok) revalidateVoiceExperiences(locale);
+  return result;
+}
+
+export async function unarchiveVoiceExperienceAction(
+  locale: string,
+  experienceId: string
+): Promise<FetchResult<VoiceExperienceResponse>> {
+  const result = await withAccessToken((token) =>
+    unarchiveVoiceExperience(token, experienceId)
   );
   if (result.ok) revalidateVoiceExperiences(locale);
   return result;

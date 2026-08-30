@@ -255,6 +255,26 @@ class VoiceExperienceService:
         self.db.refresh(experience)
         return experience
 
+    def unarchive_experience(
+        self, tenant_id: str, experience_id: str, user_id: str | None = None
+    ) -> TenantVoiceExperience:
+        experience = self._locked_experience(tenant_id, experience_id)
+        if experience.status != "archived":
+            raise VoiceExperienceConflictError(
+                "Only an archived voice experience can be reactivated."
+            )
+        agent, _ = self._require_relations(
+            tenant_id, experience.agent_config_id, experience.context_schema_id
+        )
+        experience.status = "unpublished" if self._has_versions(experience.id) else "draft"
+        experience.archived_at = None
+        self.db.commit()
+        self._record_event(
+            experience, agent.provider, "voice_experience_unarchived", user_id
+        )
+        self.db.refresh(experience)
+        return experience
+
     def delete_experience(
         self, tenant_id: str, experience_id: str, user_id: str | None = None
     ) -> None:

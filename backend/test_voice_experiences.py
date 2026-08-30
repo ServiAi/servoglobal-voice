@@ -373,6 +373,45 @@ class VoiceExperienceTests(Integration2ATestCase):
                 409,
             )
 
+    def test_unarchive_requires_archived_status(self) -> None:
+        self._enable_feature()
+        experience_id = self._create().json()["id"]
+        response = self.client.post(
+            f"/api/v1/voice/experiences/{experience_id}/unarchive"
+        )
+        self.assertEqual(response.status_code, 409)
+
+    def test_unarchive_without_history_returns_to_draft(self) -> None:
+        self._enable_feature()
+        experience_id = self._create().json()["id"]
+        self.client.post(f"/api/v1/voice/experiences/{experience_id}/archive")
+        response = self.client.post(
+            f"/api/v1/voice/experiences/{experience_id}/unarchive"
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertEqual(body["status"], "draft")
+        self.assertIsNone(body["archived_at"])
+        # The experience is mutable and publishable again.
+        self.assertEqual(
+            self.client.put(
+                f"/api/v1/voice/experiences/{experience_id}", json=self._payload()
+            ).status_code,
+            200,
+        )
+
+    def test_unarchive_with_publication_history_returns_to_unpublished(self) -> None:
+        self._enable_feature()
+        experience_id = self._create().json()["id"]
+        self.client.post(f"/api/v1/voice/experiences/{experience_id}/publish")
+        self.client.post(f"/api/v1/voice/experiences/{experience_id}/unpublish")
+        self.client.post(f"/api/v1/voice/experiences/{experience_id}/archive")
+        response = self.client.post(
+            f"/api/v1/voice/experiences/{experience_id}/unarchive"
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["status"], "unpublished")
+
     def test_delete_requires_archived_status(self) -> None:
         self._enable_feature()
         experience_id = self._create().json()["id"]
