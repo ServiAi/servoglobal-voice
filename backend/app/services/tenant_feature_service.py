@@ -6,11 +6,17 @@ from sqlalchemy.orm import Session
 
 from app.models.identity import Tenant
 from app.models.tenant_features import TenantFeatureGrant
-from app.schemas.tenant_features import VoiceExperienceLimits
+from app.schemas.tenant_features import EmptyLimits, VoiceExperienceLimits
 
 
 VOICE_EXPERIENCES = "voice_experiences"
-SUPPORTED_FEATURES = frozenset({VOICE_EXPERIENCES})
+WHATSAPP_BUSINESS_CALLING = "whatsapp_business_calling"
+SUPPORTED_FEATURES = frozenset({VOICE_EXPERIENCES, WHATSAPP_BUSINESS_CALLING})
+
+_LIMITS_SCHEMAS = {
+    VOICE_EXPERIENCES: VoiceExperienceLimits,
+    WHATSAPP_BUSINESS_CALLING: EmptyLimits,
+}
 
 _UNIQUE_CONSTRAINT_NAME = "uq_tenant_feature_grants_tenant_feature_key"
 
@@ -76,7 +82,7 @@ class TenantFeatureService:
     ) -> TenantFeatureGrant:
         self._validate_feature_key(feature_key)
         self._require_tenant(tenant_id)
-        validated_limits = VoiceExperienceLimits.model_validate(limits).model_dump()
+        validated_limits = _LIMITS_SCHEMAS[feature_key].model_validate(limits).model_dump()
         grant = self.db.scalar(
             select(TenantFeatureGrant).where(
                 TenantFeatureGrant.tenant_id == tenant_id,

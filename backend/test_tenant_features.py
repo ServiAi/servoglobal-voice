@@ -29,6 +29,7 @@ from app.services.tenant_feature_service import (
     TenantFeatureDisabledError,
     UnknownTenantFeatureError,
     VOICE_EXPERIENCES,
+    WHATSAPP_BUSINESS_CALLING,
     _UNIQUE_CONSTRAINT_NAME,
     _is_feature_grant_unique_violation,
 )
@@ -187,6 +188,12 @@ class TenantFeatureTests(unittest.TestCase):
             json=payload or self._payload(),
         )
 
+    def _put_calling(self, tenant_id: str, enabled: bool = True):
+        return self.client.put(
+            f"/api/v1/admin/tenants/{tenant_id}/features/whatsapp-business-calling",
+            json={"enabled": enabled},
+        )
+
     # ---- P1: authorization -------------------------------------------------
 
     def test_internal_user_can_list_features_for_any_tenant(self) -> None:
@@ -318,6 +325,30 @@ class TenantFeatureTests(unittest.TestCase):
         )
         self.assertNotIn(self.internal_user_id, response.text)
         self.assertNotIn("internal@example.com", response.text)
+
+    # ---- whatsapp_business_calling feature ---------------------------------
+
+    def test_whatsapp_business_calling_can_be_toggled(self) -> None:
+        response = self._put_calling(self.tenant_a_id)
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["feature_key"], WHATSAPP_BUSINESS_CALLING)
+        self.assertTrue(body["enabled"])
+        self.assertEqual(body["limits"], {})
+        with SessionLocal() as db:
+            self.assertTrue(
+                TenantFeatureService(db).is_enabled(self.tenant_a_id, WHATSAPP_BUSINESS_CALLING)
+            )
+
+    def test_whatsapp_business_calling_is_isolated_between_tenants(self) -> None:
+        self.assertEqual(self._put_calling(self.tenant_a_id, True).status_code, 200)
+        self.assertEqual(self._put_calling(self.tenant_b_id, False).status_code, 200)
+
+        with SessionLocal() as db:
+            service = TenantFeatureService(db)
+            self.assertTrue(service.is_enabled(self.tenant_a_id, WHATSAPP_BUSINESS_CALLING))
+            self.assertFalse(service.is_enabled(self.tenant_b_id, WHATSAPP_BUSINESS_CALLING))
 
     # ---- P2: IntegrityError handling ---------------------------------------
 

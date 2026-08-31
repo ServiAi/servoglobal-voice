@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.models.crm import CrmWhatsAppMessage
 from app.models.integrations import TenantWhatsAppTemplate
 from app.schemas.integrations import WhatsAppTemplateCreateRequest, WhatsAppTemplateUpdateRequest
+from app.services.tenant_feature_service import TenantFeatureService, WHATSAPP_BUSINESS_CALLING
 
 
 DEFAULT_WHATSAPP_TEMPLATES = [
@@ -71,6 +72,13 @@ def _build_meta_components(
     if buttons:
         components.append({"type": "BUTTONS", "buttons": buttons})
     return components
+
+
+def _ensure_voice_call_allowed(db: Session, tenant_id: str, buttons: list[dict[str, Any]]) -> None:
+    if not any(button.get("type") == "VOICE_CALL" for button in buttons):
+        return
+    if not TenantFeatureService(db).is_enabled(tenant_id, WHATSAPP_BUSINESS_CALLING):
+        raise ValueError("VOICE_CALL button requires WhatsApp Business Calling to be enabled for this tenant")
 
 
 @dataclass(frozen=True)
@@ -307,6 +315,7 @@ class WhatsAppTemplateService:
             raise ValueError(f"A template with key '{template_key}' already exists")
 
         buttons = [button.model_dump(exclude_none=True) for button in request.buttons]
+        _ensure_voice_call_allowed(self.db, tenant_id, buttons)
         components = _build_meta_components(
             header_text=request.header_text, body=request.body, footer_text=request.footer_text, buttons=buttons
         )
@@ -356,6 +365,7 @@ class WhatsAppTemplateService:
             if request.buttons is not None
             else (template.buttons_json or [])
         )
+        _ensure_voice_call_allowed(self.db, tenant_id, buttons)
 
         template.body = body
         template.header_json = {"text": header_text} if header_text else None

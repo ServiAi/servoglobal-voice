@@ -19,6 +19,16 @@ class VoiceExperiencesFeatureUpdate(BaseModel):
     limits: VoiceExperienceLimits
 
 
+class EmptyLimits(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class WhatsAppBusinessCallingFeatureUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool
+
+
 class TenantFeatureResponse(BaseModel):
     feature_key: str
     enabled: bool

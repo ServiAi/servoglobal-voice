@@ -365,6 +365,7 @@ export type WhatsAppConfigResponse = {
   default_language: string;
   has_secret: boolean;
   has_webhook_secret: boolean;
+  voice_calling_enabled: boolean;
   last_health_check_at?: string | null;
   last_error_message?: string | null;
 };
@@ -398,10 +399,13 @@ export type WhatsAppTemplateSyncResponse = {
 };
 
 export type WhatsAppTemplateButtonItem = {
-  type: 'QUICK_REPLY' | 'URL' | 'PHONE_NUMBER';
+  type: 'QUICK_REPLY' | 'URL' | 'PHONE_NUMBER' | 'VOICE_CALL' | 'FLOW';
   text: string;
   url?: string | null;
   phone_number?: string | null;
+  flow_id?: string | null;
+  flow_action?: string | null;
+  navigate_screen?: string | null;
 };
 
 export type WhatsAppTemplateCreateRequest = {

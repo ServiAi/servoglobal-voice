@@ -67,6 +67,7 @@ export function WhatsAppIntegrationCard({ accessToken, initialConfig, templates 
             templates={templates}
             mode={mode}
             tenantId={tenantId}
+            voiceCallingEnabled={!!config?.voice_calling_enabled}
             disabled={!isActive || !config?.has_secret}
             onSuccess={(text) => notify('success', text)}
             onError={(text) => notify('error', text)}
