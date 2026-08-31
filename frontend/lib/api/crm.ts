@@ -17,6 +17,7 @@ import type {
   ResendIntegrationConfigRequest,
   ResendIntegrationConfigResponse,
   IntegrationAvailabilityResponse,
+  IntegrationCatalogStatusResponse,
   ResendTestEmailRequest,
   WhatsAppActionRequest,
   WhatsAppActionResponse,
@@ -424,6 +425,10 @@ export function fetchTenantIntegrations(accessToken: string) {
 
 export function fetchIntegrationAvailability(accessToken: string) {
   return requestIntegrationEndpoint<IntegrationAvailabilityResponse[]>('GET', 'availability', accessToken);
+}
+
+export function fetchIntegrationCatalogStatuses(accessToken: string) {
+  return requestIntegrationEndpoint<IntegrationCatalogStatusResponse[]>('GET', 'statuses', accessToken);
 }
 
 export function fetchBookingConfig(accessToken: string) {

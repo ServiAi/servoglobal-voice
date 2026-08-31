@@ -740,6 +740,89 @@
       "error": "Requiere atención",
       "notConfigured": "Sin configurar"
     },
+    "integrationsCatalog": {
+      "eyebrow": "Ecosistema conectado",
+      "title": "Integraciones",
+      "description": "Conecta las herramientas que utiliza tu organización y administra cada canal en su propio espacio.",
+      "available": "{count, plural, =0 {Sin integraciones disponibles} one {# integración disponible} other {# integraciones disponibles}}",
+      "controlsLabel": "Búsqueda y filtros de integraciones",
+      "searchLabel": "Buscar una integración",
+      "searchPlaceholder": "Buscar una integración...",
+      "filtersLabel": "Filtrar por estado",
+      "filters": {
+        "all": "Todas",
+        "connected": "Conectadas",
+        "notConfigured": "Sin configurar",
+        "error": "Problemas"
+      },
+      "results": "{count, plural, =0 {Ningún resultado} one {# resultado} other {# resultados}}",
+      "loadError": "No fue posible obtener el estado actualizado de todas las integraciones. Revisa las tarjetas marcadas o recarga la página.",
+      "categories": {
+        "communication": "Comunicación",
+        "voice": "Voz y telefonía",
+        "scheduling": "Agenda y reservas",
+        "crm": "CRM y ventas",
+        "automation": "Automatización",
+        "productivity": "Datos y productividad"
+      },
+      "providers": {
+        "whatsapp": { "name": "WhatsApp", "description": "Mensajería mediante WhatsApp Business Cloud API." },
+        "resend": { "name": "Resend", "description": "Email transaccional para las comunicaciones de tu organización." },
+        "voice": { "name": "Voz", "description": "Configuración de agentes virtuales, telefonía y rutas SIP." },
+        "calcom": { "name": "Cal.com", "description": "Reservas, disponibilidad y reglas de agenda." },
+        "google_calendar": { "name": "Google Calendar", "description": "Conexión de calendarios y sincronización de disponibilidad." }
+      },
+      "actions": {
+        "manage": "Administrar",
+        "configure": "Configurar",
+        "review": "Revisar"
+      },
+      "empty": {
+        "searchTitle": "No encontramos integraciones para “{query}”.",
+        "all": "No hay integraciones disponibles.",
+        "connected": "No hay integraciones conectadas.",
+        "not_configured": "Todas las integraciones disponibles ya están configuradas.",
+        "error": "No hay integraciones con problemas.",
+        "description": "Prueba otro término o cambia los filtros."
+      },
+      "whatsapp": {
+        "navigationLabel": "Secciones de WhatsApp",
+        "navigation": {
+          "overview": "Resumen",
+          "account": "Cuenta",
+          "templates": "Templates",
+          "test": "Pruebas"
+        },
+        "overview": {
+          "title": "Resumen",
+          "description": "Consulta el estado de WhatsApp y accede rápidamente a sus funciones principales.",
+          "summaryLabel": "Resumen de WhatsApp",
+          "status": "Estado",
+          "account": "Cuenta",
+          "templates": "Templates",
+          "configured": "Configurada",
+          "notConfigured": "Sin configurar"
+        },
+        "quickActions": {
+          "title": "Acciones rápidas",
+          "account": "Administrar cuenta",
+          "templates": "Ver templates",
+          "test": "Enviar prueba"
+        },
+        "account": {
+          "title": "Cuenta de WhatsApp",
+          "description": "Configura las credenciales y datos de WhatsApp Business para esta organización."
+        },
+        "templates": {
+          "title": "Templates",
+          "description": "Crea y administra las plantillas de mensajes de WhatsApp Business."
+        },
+        "test": {
+          "title": "Pruebas",
+          "description": "Valida la conexión y envía un mensaje real con una plantilla aprobada."
+        }
+      }
+    },
     "notifications": {
       "title": "Automatizaciones y notificaciones",
       "description": "Configura cuándo, cómo y a quién se envían las notificaciones de tu organización.",

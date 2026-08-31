@@ -740,6 +740,89 @@
       "error": "Needs attention",
       "notConfigured": "Not configured"
     },
+    "integrationsCatalog": {
+      "eyebrow": "Connected ecosystem",
+      "title": "Integrations",
+      "description": "Connect the tools your organization uses and manage each channel in its own workspace.",
+      "available": "{count, plural, =0 {No integrations available} one {# integration available} other {# integrations available}}",
+      "controlsLabel": "Integration search and filters",
+      "searchLabel": "Search integrations",
+      "searchPlaceholder": "Search an integration...",
+      "filtersLabel": "Filter by status",
+      "filters": {
+        "all": "All",
+        "connected": "Connected",
+        "notConfigured": "Not configured",
+        "error": "Issues"
+      },
+      "results": "{count, plural, =0 {No results} one {# result} other {# results}}",
+      "loadError": "The latest status of every integration could not be loaded. Review the marked cards or reload the page.",
+      "categories": {
+        "communication": "Communication",
+        "voice": "Voice and telephony",
+        "scheduling": "Scheduling and bookings",
+        "crm": "CRM and sales",
+        "automation": "Automation",
+        "productivity": "Data and productivity"
+      },
+      "providers": {
+        "whatsapp": { "name": "WhatsApp", "description": "Messaging through the WhatsApp Business Cloud API." },
+        "resend": { "name": "Resend", "description": "Transactional email for your organization's communications." },
+        "voice": { "name": "Voice", "description": "Virtual agents, telephony, and SIP route configuration." },
+        "calcom": { "name": "Cal.com", "description": "Bookings, availability, and scheduling rules." },
+        "google_calendar": { "name": "Google Calendar", "description": "Calendar connections and availability synchronization." }
+      },
+      "actions": {
+        "manage": "Manage",
+        "configure": "Configure",
+        "review": "Review"
+      },
+      "empty": {
+        "searchTitle": "We couldn't find integrations for “{query}”.",
+        "all": "No integrations are available.",
+        "connected": "No integrations are connected.",
+        "not_configured": "Every available integration is already configured.",
+        "error": "No integrations need attention.",
+        "description": "Try another term or change the filters."
+      },
+      "whatsapp": {
+        "navigationLabel": "WhatsApp sections",
+        "navigation": {
+          "overview": "Overview",
+          "account": "Account",
+          "templates": "Templates",
+          "test": "Tests"
+        },
+        "overview": {
+          "title": "Overview",
+          "description": "Review WhatsApp status and quickly access its main features.",
+          "summaryLabel": "WhatsApp summary",
+          "status": "Status",
+          "account": "Account",
+          "templates": "Templates",
+          "configured": "Configured",
+          "notConfigured": "Not configured"
+        },
+        "quickActions": {
+          "title": "Quick actions",
+          "account": "Manage account",
+          "templates": "View templates",
+          "test": "Send a test"
+        },
+        "account": {
+          "title": "WhatsApp account",
+          "description": "Configure WhatsApp Business credentials and account data for this organization."
+        },
+        "templates": {
+          "title": "Templates",
+          "description": "Create and manage WhatsApp Business message templates."
+        },
+        "test": {
+          "title": "Tests",
+          "description": "Validate the connection and send a real message with an approved template."
+        }
+      }
+    },
     "notifications": {
       "title": "Automations and notifications",
       "description": "Configure when, how and to whom your organization's notifications are sent.",

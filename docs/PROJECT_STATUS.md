@@ -7,7 +7,7 @@ Actualizado: 2026-08-31. Fuente: código, migraciones y pruebas del repositorio.
 | Landing e i18n | Operativa | Landing bilingüe, pricing, demos, formularios y contenido SEO. |
 | Auth0 y tenants | Operativa | Login, contexto privado, onboarding, administración, membresías y agentes. |
 | Dashboard | Operativa | KPIs, tendencias, distribuciones, heatmap, llamadas recientes, uso y ahorro. |
-| CRM | Operativa | Pipeline, leads, detalle, timeline, notas, tareas y dashboard comercial con paneles separados de rendimiento Ultravox y capacidad SIP por tenant. |
+| CRM | Operativa | Pipeline, leads, detalle, timeline, notas, tareas, dashboard comercial y catálogo bilingüe de integraciones con búsqueda, filtros, estados resumidos y configuración por ruta. |
 | Ingesta Ultravox | Operativa | Eventos, llamadas, estados, resumen, costos y correlación CRM. |
 | Resend | Operativa | Configuración tenant, prueba, templates, preview, envío y trazabilidad. |
 | Composer y assets | Operativa | Markdown/MDX seguro, resumen de llamada, adjuntos local/S3 y formularios públicos. |

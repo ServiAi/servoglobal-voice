@@ -337,9 +337,16 @@ export type ResendIntegrationConfigResponse = {
 
 export type IntegrationProvider = 'resend' | 'voice' | 'whatsapp' | 'calcom' | 'google_calendar';
 
+export type IntegrationStatus = 'active' | 'configured' | 'not_configured' | 'error';
+
 export type IntegrationAvailabilityResponse = {
   provider: IntegrationProvider;
   enabled: boolean;
+};
+
+export type IntegrationCatalogStatusResponse = {
+  provider: IntegrationProvider;
+  status: IntegrationStatus;
 };
 
 export type ResendTestEmailRequest = {
