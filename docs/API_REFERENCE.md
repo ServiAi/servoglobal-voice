@@ -44,7 +44,7 @@ La especificación ejecutable completa está disponible en `/docs` y `/openapi.j
 - Resend: configuración, test, templates y assets bajo `/api/v1/integrations/resend`.
 - Cal.com: configuración, test y slots bajo `/api/v1/integrations/calcom`; bookings viven en CRM.
 - Google Calendar: connect URL, callback, connections y disconnect.
-- WhatsApp: configuración, test y templates.
+- WhatsApp: configuración, test, sync masivo de templates aprobados en Meta y ciclo de vida completo de templates propios (`GET|POST /whatsapp/templates`, `GET|PATCH|DELETE /whatsapp/templates/{id}`, `GET .../preview`, `POST .../submit`, `POST .../sync-status`); replicado bajo `/api/v1/admin/tenants/{tenant_id}/integrations/whatsapp/templates...` para `platform_admin`.
 - Voz: configuración, test, agentes y ruta SIP saliente por tenant. El backend deriva `sip_username` del ID de la ruta y no acepta un usuario elegido por el cliente; la respuesta lo devuelve para configuración operativa y sólo indica si existe contraseña SIP, sin devolver el secreto.
 
 ## Administración de automatizaciones y notificaciones
@@ -81,7 +81,7 @@ Validaciones relevantes:
 - Nombres de reglas duplicados producen conflicto.
 - Capacidad y evento deben formar una pareja registrada; las rutas, operadores, valores y formatos se validan contra el mismo contrato que consume el runtime.
 - `conditions_mode` admite `all` y `any`. Una regla sin condiciones coincide en ambos modos.
-- Una plantilla WhatsApp debe estar activa, sincronizada desde Meta y `APPROVED`.
+- Una plantilla WhatsApp debe tener `status="approved"` (sincronizada desde Meta o creada en la app, enviada y aprobada).
 - Todos los parámetros requeridos por la plantilla deben tener un mapeo efectivo.
 - Una regla con entregas asociadas no se elimina; el servicio devuelve `rule_has_deliveries`.
 - El dry-run sólo acepta payloads conformes al contrato del evento y nunca persiste `DomainEvent` o `NotificationDelivery`.

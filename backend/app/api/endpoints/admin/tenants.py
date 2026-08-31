@@ -41,8 +41,13 @@ from app.schemas.integrations import (
     ResendTestEmailResponse,
     WhatsAppConfigRequest,
     WhatsAppConfigResponse,
+    WhatsAppTemplateCreateRequest,
+    WhatsAppTemplateDetailResponse,
+    WhatsAppTemplatePreviewResponse,
     WhatsAppTemplateResponse,
+    WhatsAppTemplateSubmitResponse,
     WhatsAppTemplateSyncResponse,
+    WhatsAppTemplateUpdateRequest,
     WhatsAppTestMessageRequest,
     WhatsAppTestMessageResponse,
     WhatsAppTestRequest,
@@ -53,7 +58,7 @@ from app.schemas.integrations import (
     VoiceAgentConfigResponse,
 )
 from app.schemas.crm import BookingCreateRequest, BookingResponse
-from app.api.endpoints.integrations import _resend_response
+from app.api.endpoints.integrations import _resend_response, _whatsapp_template_detail
 from app.services.booking_config_service import BookingConfigService
 from app.services.booking_service import BookingService
 from app.services.email_config_service import EmailConfigService
@@ -850,7 +855,8 @@ def list_tenant_whatsapp_templates_admin(
         OnboardingService(db).get_tenant(tenant_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    templates = WhatsAppTemplateService(db).list_templates(tenant_id)
+    service = WhatsAppTemplateService(db)
+    templates = service.list_templates(tenant_id)
     return [
         WhatsAppTemplateResponse(
             id=template.id,
@@ -860,11 +866,139 @@ def list_tenant_whatsapp_templates_admin(
             category=template.category,
             language=template.language,
             body=template.body,
-            variables=template.variables_json or {},
+            variables=service.variables_payload(template),
             status=template.status,
         )
         for template in templates
     ]
+
+
+@router.post(
+    "/tenants/{tenant_id}/integrations/whatsapp/templates",
+    response_model=WhatsAppTemplateDetailResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_tenant_whatsapp_template_admin(
+    tenant_id: str,
+    body: WhatsAppTemplateCreateRequest,
+    db: Session = Depends(get_current_internal_db),
+) -> Any:
+    try:
+        OnboardingService(db).get_tenant(tenant_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    service = WhatsAppTemplateService(db)
+    try:
+        template = service.create_draft(tenant_id, body, None)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    return _whatsapp_template_detail(service, template)
+
+
+@router.get(
+    "/tenants/{tenant_id}/integrations/whatsapp/templates/{template_id}",
+    response_model=WhatsAppTemplateDetailResponse,
+)
+def get_tenant_whatsapp_template_admin(
+    tenant_id: str,
+    template_id: str,
+    db: Session = Depends(get_current_internal_db),
+) -> Any:
+    service = WhatsAppTemplateService(db)
+    try:
+        template = service.get_owned(tenant_id, template_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    return _whatsapp_template_detail(service, template)
+
+
+@router.patch(
+    "/tenants/{tenant_id}/integrations/whatsapp/templates/{template_id}",
+    response_model=WhatsAppTemplateDetailResponse,
+)
+def update_tenant_whatsapp_template_admin(
+    tenant_id: str,
+    template_id: str,
+    body: WhatsAppTemplateUpdateRequest,
+    db: Session = Depends(get_current_internal_db),
+) -> Any:
+    service = WhatsAppTemplateService(db)
+    try:
+        template = service.update_draft(tenant_id, template_id, body)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    return _whatsapp_template_detail(service, template)
+
+
+@router.delete(
+    "/tenants/{tenant_id}/integrations/whatsapp/templates/{template_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def delete_tenant_whatsapp_template_admin(
+    tenant_id: str,
+    template_id: str,
+    db: Session = Depends(get_current_internal_db),
+) -> None:
+    try:
+        WhatsAppTemplateService(db).delete_draft(tenant_id, template_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+
+
+@router.get(
+    "/tenants/{tenant_id}/integrations/whatsapp/templates/{template_id}/preview",
+    response_model=WhatsAppTemplatePreviewResponse,
+)
+def preview_tenant_whatsapp_template_admin(
+    tenant_id: str,
+    template_id: str,
+    db: Session = Depends(get_current_internal_db),
+) -> Any:
+    try:
+        return WhatsAppTemplateService(db).preview(tenant_id, template_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+
+
+@router.post(
+    "/tenants/{tenant_id}/integrations/whatsapp/templates/{template_id}/submit",
+    response_model=WhatsAppTemplateSubmitResponse,
+)
+def submit_tenant_whatsapp_template_admin(
+    tenant_id: str,
+    template_id: str,
+    db: Session = Depends(get_current_internal_db),
+) -> Any:
+    try:
+        result = WhatsAppConfigService(db).submit_template(tenant_id, template_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    if result.status == "failed":
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY, detail=result.error_message or "WhatsApp template submission failed."
+        )
+    return result
+
+
+@router.post(
+    "/tenants/{tenant_id}/integrations/whatsapp/templates/{template_id}/sync-status",
+    response_model=WhatsAppTemplateSubmitResponse,
+)
+def sync_tenant_whatsapp_template_status_admin(
+    tenant_id: str,
+    template_id: str,
+    db: Session = Depends(get_current_internal_db),
+) -> Any:
+    try:
+        result = WhatsAppConfigService(db).sync_template_status(tenant_id, template_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    if result.status == "failed":
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=result.error_message or "WhatsApp template status sync failed.",
+        )
+    return result
 
 
 # --- Admin Voice Config ---

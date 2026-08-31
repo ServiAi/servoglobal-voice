@@ -219,6 +219,59 @@ class WhatsAppTemplateResponse(BaseModel):
     status: str
 
 
+class WhatsAppTemplateButtonItem(BaseModel):
+    type: str = Field(..., pattern=r"^(QUICK_REPLY|URL|PHONE_NUMBER)$")
+    text: str = Field(..., min_length=1, max_length=25)
+    url: Optional[str] = Field(None, max_length=2000)
+    phone_number: Optional[str] = Field(None, max_length=32)
+
+
+class WhatsAppTemplateCreateRequest(BaseModel):
+    template_key: str = Field(..., min_length=1, max_length=80)
+    name: str = Field(..., min_length=1, max_length=120)
+    category: str = Field(..., min_length=1, max_length=40)
+    language: str = Field(default="es", max_length=16)
+    header_text: Optional[str] = Field(None, max_length=60)
+    body: str = Field(..., min_length=1, max_length=1024)
+    footer_text: Optional[str] = Field(None, max_length=60)
+    buttons: list[WhatsAppTemplateButtonItem] = Field(default_factory=list)
+
+
+class WhatsAppTemplateUpdateRequest(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=120)
+    header_text: Optional[str] = Field(None, max_length=60)
+    body: Optional[str] = Field(None, min_length=1, max_length=1024)
+    footer_text: Optional[str] = Field(None, max_length=60)
+    buttons: Optional[list[WhatsAppTemplateButtonItem]] = None
+
+
+class WhatsAppTemplateDetailResponse(WhatsAppTemplateResponse):
+    meta_status: Optional[str] = None
+    provider_template_id: Optional[str] = None
+    source: str = "tenant_authored"
+    parameter_format: str = "POSITIONAL"
+    header_text: Optional[str] = None
+    footer_text: Optional[str] = None
+    buttons: list[WhatsAppTemplateButtonItem] = Field(default_factory=list)
+    rejection_reason: Optional[str] = None
+    last_synced_at: Optional[datetime] = None
+
+
+class WhatsAppTemplatePreviewResponse(BaseModel):
+    header_text: Optional[str] = None
+    body: str
+    footer_text: Optional[str] = None
+    buttons: list[WhatsAppTemplateButtonItem] = Field(default_factory=list)
+    variables: dict[str, str] = Field(default_factory=dict)
+
+
+class WhatsAppTemplateSubmitResponse(BaseModel):
+    status: str
+    meta_status: Optional[str] = None
+    provider_template_id: Optional[str] = None
+    error_message: Optional[str] = None
+
+
 class VoiceSipRouteRequest(BaseModel):
     status: str = Field(default="inactive", pattern=r"^(active|inactive)$")
     pbx_host: str = Field(min_length=1, max_length=255)

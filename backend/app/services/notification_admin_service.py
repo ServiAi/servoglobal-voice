@@ -450,20 +450,12 @@ class NotificationAdminService:
         template_key: Optional[str],
         variable_mapping: dict[str, NotificationVariableSpec],
     ) -> None:
-        template = self.db.scalar(
-            select(TenantWhatsAppTemplate).where(
-                TenantWhatsAppTemplate.tenant_id == tenant_id,
-                TenantWhatsAppTemplate.template_key == template_key,
+        try:
+            template = WhatsAppTemplateService(self.db).get_synced_template(
+                tenant_id, template_key=template_key, provider_template_name=None
             )
-        )
-        metadata = (template.variables_json or {}) if template is not None else {}
-        if (
-            template is None
-            or template.status != "active"
-            or metadata.get("source") != "meta_sync"
-            or metadata.get("meta_status") != "APPROVED"
-        ):
-            raise NotificationAdminError(code="whatsapp_template_not_approved", kind="unprocessable")
+        except ValueError:
+            raise NotificationAdminError(code="whatsapp_template_not_approved", kind="unprocessable") from None
 
         try:
             required_keys = WhatsAppTemplateService(self.db).get_approved_parameter_keys(template)

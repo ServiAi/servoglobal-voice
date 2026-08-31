@@ -96,7 +96,7 @@ class NotificationAdminTests(unittest.TestCase):
                     language="es",
                     body="Tu reserva ha sido confirmada: {{1}}",
                     variables_json=dict(_APPROVED_VARIABLES_JSON),
-                    status="active",
+                    status="approved",
                 )
             )
             db.commit()
@@ -161,7 +161,7 @@ class NotificationAdminTests(unittest.TestCase):
                 "language": "es",
                 "body": "Tu reserva ha sido confirmada: {{1}}",
                 "variables_json": dict(_APPROVED_VARIABLES_JSON),
-                "status": "active",
+                "status": "approved",
                 **overrides,
             }
             existing = db.scalar(
@@ -455,7 +455,7 @@ class NotificationAdminTests(unittest.TestCase):
         self._seed_template(
             tenant_id=self.tenant_id,
             template_key="draft_template",
-            variables_json={"source": "meta_sync", "meta_status": "DRAFT", "parameters": [{"key": "1", "label": "Variable 1"}]},
+            status="pending",
         )
         self._as("tenant_admin")
         response = self.client.post(
@@ -495,6 +495,25 @@ class NotificationAdminTests(unittest.TestCase):
             variable_mapping_json={
                 "1": {"source": "literal", "value": "Hola"},
                 "2": {"source": "literal", "value": "Adios"},
+            },
+        )
+        self.assertIsNone(rule["configuration_error"])
+
+    def test_create_rule_accepts_named_tenant_authored_approved_template(self):
+        self._seed_template(
+            tenant_id=self.tenant_id,
+            template_key="named_template",
+            source="tenant_authored",
+            parameter_format="NAMED",
+            variables_json={},
+            components_json={"components": [], "variable_keys": ["nombre", "fecha_cita"]},
+        )
+        rule = self._create_rule(
+            name="Regla con plantilla NAMED",
+            template_key="named_template",
+            variable_mapping_json={
+                "nombre": {"source": "literal", "value": "Juan"},
+                "fecha_cita": {"source": "literal", "value": "2026-09-01"},
             },
         )
         self.assertIsNone(rule["configuration_error"])

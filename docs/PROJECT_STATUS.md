@@ -1,6 +1,6 @@
 # Estado funcional del proyecto
 
-Actualizado: 2026-08-21. Fuente: código, migraciones y pruebas del repositorio.
+Actualizado: 2026-08-31. Fuente: código, migraciones y pruebas del repositorio.
 
 | Área | Estado | Implementación actual |
 | --- | --- | --- |
@@ -13,7 +13,7 @@ Actualizado: 2026-08-21. Fuente: código, migraciones y pruebas del repositorio.
 | Composer y assets | Operativa | Markdown/MDX seguro, resumen de llamada, adjuntos local/S3 y formularios públicos. |
 | Cal.com | Operativa | Slots, booking, cancelación, reprogramación y webhook. |
 | Google Calendar | Parcial | OAuth foundation, listado y desconexión; creación directa de eventos deshabilitada. |
-| WhatsApp Cloud | Operativa | Configuración, plantillas, envío CRM, mensajes, estados y webhook. |
+| WhatsApp Cloud | Operativa | Configuración, envío CRM, mensajes, estados, webhook y ciclo de vida completo de plantillas: sync desde Meta, builder propio (crear/editar/previsualizar/eliminar), envío a revisión y sincronización de estado (`draft → pending → approved / rejected`). |
 | Automatizaciones y notificaciones | Operativa en código | Contratos versionados de eventos, builder dinámico, dry-run sin envío, reglas, destinatarios, entregas, planificación, reintentos, recuperación y worker PostgreSQL. El despliegue del proceso worker debe verificarse por entorno. |
 | Voz CRM | Operativa en código | Configuración de proveedor/agentes, rutas SIP cifradas por tenant, aprovisionamiento automático y versionado de endpoints PJSIP, llamadas WebRTC y callbacks salientes mediante IDT, webhook y booking tools. El agente local del PBX debe instalarse por entorno. |
 | Voice Context Experiences | Runtime público WebRTC implementado en código | Feature flag, snapshots, submissions y context session one-shot; launch Ultravox tenant-scoped con recovery-first, leases, recovery por `joined`/`ended`, webhook firmado/deduplicado, billing real por `billedDuration`, CRM monotónico, concurrencia PostgreSQL y preflight de micrófono. `submissions=true`; `calls=true`. Ver `docs-local/fase-4/VOICE_EXPERIENCE_WEBRTC_RUNTIME.md`. |
@@ -22,13 +22,14 @@ Actualizado: 2026-08-21. Fuente: código, migraciones y pruebas del repositorio.
 
 ## Persistencia
 
-Las migraciones cubren identidad, analítica, riesgo Auth0, planes/uso, CRM base y contexto de llamadas, Resend/email/formularios, Cal.com/Google Calendar, WhatsApp, voz, disponibilidad de integraciones, notificaciones, grants tenant, context submissions, runtime WebRTC y rutas SIP/callbacks salientes. La migración más reciente es `202608210001_asterisk_route_provisioning.py` y la cadena debe conservar una única head.
+Las migraciones cubren identidad, analítica, riesgo Auth0, planes/uso, CRM base y contexto de llamadas, Resend/email/formularios, Cal.com/Google Calendar, WhatsApp, voz, disponibilidad de integraciones, notificaciones, grants tenant, context submissions, runtime WebRTC y rutas SIP/callbacks salientes. La migración más reciente es `202608310001_whatsapp_template_lifecycle.py` y la cadena debe conservar una única head.
 
 ## Continuidad: automatizaciones y notificaciones
 
 - La página tenant es `frontend/app/[locale]/crm/settings/notifications/page.tsx` y carga resumen, catálogo, capacidades, reglas, destinatarios, entregas y plantillas WhatsApp en paralelo.
 - `NotificationsWorkspace` organiza cuatro pestañas: resumen, reglas, destinatarios y entregas. Los roles `platform_admin` y `tenant_admin` pueden escribir; analistas y viewers sólo consultan.
-- Las reglas WhatsApp sólo pueden crearse con plantillas activas sincronizadas desde Meta con estado `APPROVED`. El registro central relaciona capacidad/evento con campos tipados, operadores, formatos, rutas de destinatario, ejemplo seguro y versión.
+- Las reglas WhatsApp sólo pueden crearse con plantillas en `status="approved"`, ya sea importadas por sync desde Meta (`source="meta_sync"`, variables `POSITIONAL`) o creadas en la app y aprobadas (`source="tenant_authored"`, variables `NAMED`). El registro central relaciona capacidad/evento con campos tipados, operadores, formatos, rutas de destinatario, ejemplo seguro y versión.
+- Las dos plantillas semilla (`lead_follow_up`, `meeting_reminder`) ya no aparecen como "activas" por defecto: inician como `draft` y deben enviarse a Meta y aprobarse antes de poder usarse en una regla o envío de plantilla real.
 - El modal carga eventos según capacidad, genera condiciones y variables desde el contrato, conserva `all`/`any`, detecta rutas obsoletas y ofrece un dry-run que no crea entregas ni envía WhatsApp.
 - Todos los campos del formulario de reglas tienen ayuda contextual bilingüe. `FieldHelp` abre desde el ícono de ayuda y cierra tanto al pulsarlo nuevamente como al hacer clic fuera.
 - Los diálogos largos conservan tres zonas: encabezado, cuerpo desplazable y footer separado; no volver a introducir footers sticky dentro del área desplazable.
@@ -40,6 +41,8 @@ Las migraciones cubren identidad, analítica, riesgo Auth0, planes/uso, CRM base
 - Habilitar Google Calendar `events.insert` sólo en un sprint dedicado con callback, scopes y pruebas completas.
 - Evolucionar el builder de formularios y la UI de submissions si el producto lo requiere.
 - Mantener separados futuros cambios de WhatsApp y voz.
+- WhatsApp: sin webhook `message_template_status_update` de Meta en este MVP; el cambio de estado de una plantilla enviada sólo se refleja con el botón manual "Sincronizar". Fast-follow natural: suscribir `whatsapp_webhook.py` a ese campo.
+- Fase B (Voz) del Template Management aún no arranca: vínculo agente de voz ↔ plantilla WhatsApp con mapeo de variables, y la nueva Voice Tool para disparar el envío en medio de una llamada. Se ramifica desde `develop` sólo después de mergear la Fase A (backend/frontend de creación, envío y sync de plantillas).
 - Verificar por entorno los prerequisitos Ultravox tenant (API key, webhook secret, agente compatible con `user_context` y eventos webhook) antes de habilitar el runtime público.
 - Etapa 0 (`fix/voice-experience-functional-alignment`): `get_current_published_version()` es fail-closed por `published_version_id`; `PUT` bloquea cambio de agente con historial; `DELETE` elimina definitivamente experiencias archivadas junto con versiones, submissions, valores, sesiones y runtime asociados; `/api/v1/calls` quedó tipado y sanitizado. Pendiente: endurecer `/api/v1/call-outbound` con el mismo criterio.
 - Callback saliente multitenant: cada tenant configura una ruta SIP cifrada y Caller ID autorizado; el backend genera el usuario SIP estable `route-<uuid>` para que coincida con el endpoint PJSIP y la interfaz lo mantiene en solo lectura. Las experiencias publicadas pueden solicitar una llamada idempotente usando sólo el token de contexto. El backend normaliza E.164 para CO, MX, AR, PA, CL, EC, PE y US, y el worker inicia Ultravox con la credencial SIP del tenant. `call.ended` libera inmediatamente la capacidad y el worker reconcilia con Ultravox los estados activos cuando falta el webhook, con cierre máximo de seguridad configurable. El dashboard muestra ocupación, cupos, saturaciones y liberaciones con eventos sanitizados por tenant; sólo administradores enlazan a la configuración, mientras analyst/viewer permanecen en lectura. El agente local de Asterisk reconcilia un include PJSIP administrado y reporta cada revisión; una ruta pendiente o fallida no puede originar llamadas. WebRTC permanece independiente.

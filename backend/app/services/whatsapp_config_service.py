@@ -9,6 +9,7 @@ from app.models.integrations import TenantWhatsAppConfig
 from app.schemas.integrations import (
     WhatsAppConfigRequest,
     WhatsAppConfigResponse,
+    WhatsAppTemplateSubmitResponse,
     WhatsAppTemplateSyncResponse,
     WhatsAppTestResponse,
 )
@@ -184,3 +185,112 @@ class WhatsAppConfigService:
             },
         )
         return WhatsAppTemplateSyncResponse(status="success", **result.__dict__)
+
+    def submit_template(self, tenant_id: str, template_id: str) -> WhatsAppTemplateSubmitResponse:
+        config, client_config = self.get_active_client_config(tenant_id)
+        business_account_id = (config.business_account_id or "").strip()
+        if not business_account_id:
+            raise ValueError("Business Account ID / WABA ID is required to submit templates.")
+        templates = WhatsAppTemplateService(self.db)
+        template = templates.get_owned(tenant_id, template_id)
+        if template.status not in ("draft", "rejected"):
+            raise ValueError("Only draft or rejected templates can be submitted")
+        components = (template.components_json or {}).get("components") or []
+
+        try:
+            if template.provider_template_id:
+                payload = self.client.update_message_template(
+                    client_config, provider_template_id=template.provider_template_id, components=components
+                )
+            else:
+                payload = self.client.create_message_template(
+                    client_config,
+                    waba_id=business_account_id,
+                    name=template.provider_template_name,
+                    category=template.category.upper(),
+                    language=template.language,
+                    components=components,
+                    parameter_format=template.parameter_format,
+                )
+        except WhatsAppCloudClientError as exc:
+            message = sanitize_whatsapp_error(str(exc)) or "WhatsApp template submission failed"
+            self.events.record_event(
+                tenant_id=tenant_id,
+                provider=self.provider,
+                event_type="whatsapp_template_submit",
+                status="failed",
+                resource_type="tenant_whatsapp_template",
+                resource_id=template.id,
+                message=message,
+            )
+            return WhatsAppTemplateSubmitResponse(status="failed", error_message=message)
+
+        template.provider_template_id = str(payload.get("id") or template.provider_template_id or "") or None
+        template.meta_status = str(payload.get("status") or "PENDING").upper()
+        template.status = "pending"
+        template.last_synced_at = datetime.now(timezone.utc)
+        self.db.commit()
+        self.events.record_event(
+            tenant_id=tenant_id,
+            provider=self.provider,
+            event_type="whatsapp_template_submit",
+            status="success",
+            resource_type="tenant_whatsapp_template",
+            resource_id=template.id,
+        )
+        return WhatsAppTemplateSubmitResponse(
+            status="success",
+            meta_status=template.meta_status,
+            provider_template_id=template.provider_template_id,
+        )
+
+    def sync_template_status(self, tenant_id: str, template_id: str) -> WhatsAppTemplateSubmitResponse:
+        _, client_config = self.get_active_client_config(tenant_id)
+        templates = WhatsAppTemplateService(self.db)
+        template = templates.get_owned(tenant_id, template_id)
+        if not template.provider_template_id:
+            raise ValueError("Template has not been submitted to Meta yet")
+
+        try:
+            payload = self.client.get_message_template_status(
+                client_config, provider_template_id=template.provider_template_id
+            )
+        except WhatsAppCloudClientError as exc:
+            message = sanitize_whatsapp_error(str(exc)) or "WhatsApp template status sync failed"
+            self.events.record_event(
+                tenant_id=tenant_id,
+                provider=self.provider,
+                event_type="whatsapp_template_status_sync",
+                status="failed",
+                resource_type="tenant_whatsapp_template",
+                resource_id=template.id,
+                message=message,
+            )
+            return WhatsAppTemplateSubmitResponse(status="failed", error_message=message)
+
+        meta_status = str(payload.get("status") or "").upper()
+        template.meta_status = meta_status or template.meta_status
+        if meta_status == "APPROVED":
+            template.status = "approved"
+            template.rejection_reason = None
+        elif meta_status == "REJECTED":
+            template.status = "rejected"
+            template.rejection_reason = sanitize_whatsapp_error(str(payload.get("rejected_reason") or "")) or None
+        else:
+            template.status = "pending"
+        template.last_synced_at = datetime.now(timezone.utc)
+        self.db.commit()
+        self.events.record_event(
+            tenant_id=tenant_id,
+            provider=self.provider,
+            event_type="whatsapp_template_status_sync",
+            status="success",
+            resource_type="tenant_whatsapp_template",
+            resource_id=template.id,
+            metadata={"meta_status": meta_status, "status": template.status},
+        )
+        return WhatsAppTemplateSubmitResponse(
+            status="success",
+            meta_status=template.meta_status,
+            provider_template_id=template.provider_template_id,
+        )

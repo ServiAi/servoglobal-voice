@@ -5,6 +5,7 @@ import { AlertCircle, CheckCircle2, MessageSquare } from 'lucide-react';
 import type { WhatsAppConfigResponse, WhatsAppTemplateResponse } from '@/types/crm';
 import { WhatsAppConfigForm } from './WhatsAppConfigForm';
 import { WhatsAppTestForm } from './WhatsAppTestForm';
+import { WhatsAppTemplateManager } from './whatsapp-templates/WhatsAppTemplateManager';
 
 type Props = {
   accessToken: string;
@@ -60,6 +61,17 @@ export function WhatsAppIntegrationCard({ accessToken, initialConfig, templates 
             onError={(text) => notify('error', text)}
           />
         </section>
+        <div className="border-t border-border pt-5">
+          <WhatsAppTemplateManager
+            accessToken={accessToken}
+            templates={templates}
+            mode={mode}
+            tenantId={tenantId}
+            disabled={!isActive || !config?.has_secret}
+            onSuccess={(text) => notify('success', text)}
+            onError={(text) => notify('error', text)}
+          />
+        </div>
         <div className="border-t border-border pt-5">
           <WhatsAppTestForm
             accessToken={accessToken}

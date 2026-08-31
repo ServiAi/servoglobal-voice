@@ -147,7 +147,7 @@ class _BaseExecutorTestCase(unittest.TestCase):
             language="es",
             body=body,
             variables_json=variables_json,
-            status="active",
+            status="approved" if approved else "pending",
         )
         self.db.add(template)
         self.db.commit()

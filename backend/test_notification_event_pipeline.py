@@ -128,7 +128,7 @@ class _BasePipelineTestCase(unittest.TestCase):
             language="es",
             body="Hola, tu estado es {{1}}",
             variables_json=variables_json,
-            status="active",
+            status="approved",
         )
         self.db.add(template)
         self.db.commit()

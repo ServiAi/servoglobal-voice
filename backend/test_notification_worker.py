@@ -107,7 +107,7 @@ class _BaseWorkerTestCase(unittest.TestCase):
                 "meta_status": "APPROVED",
                 "source": "meta_sync",
             },
-            status="active",
+            status="approved",
         )
         self.db.add_all([config, template])
         self.db.commit()

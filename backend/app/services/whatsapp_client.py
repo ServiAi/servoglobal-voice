@@ -130,3 +130,52 @@ class WhatsAppCloudClient:
             "text": {"preview_url": False, "body": message},
         }
         return self._request("POST", f"{config.phone_number_id}/messages", config, json=payload)
+
+    def create_message_template(
+        self,
+        config: WhatsAppClientConfig,
+        *,
+        waba_id: str,
+        name: str,
+        category: str,
+        language: str,
+        components: list[dict[str, Any]],
+        parameter_format: str = "NAMED",
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "name": name,
+            "category": category,
+            "language": language,
+            "components": components,
+            "parameter_format": parameter_format,
+        }
+        return self._request("POST", f"{waba_id}/message_templates", config, json=payload)
+
+    def update_message_template(
+        self,
+        config: WhatsAppClientConfig,
+        *,
+        provider_template_id: str,
+        components: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """Editing an already-APPROVED template resets its Meta review status to PENDING."""
+        return self._request("POST", provider_template_id, config, json={"components": components})
+
+    def delete_message_template(self, config: WhatsAppClientConfig, *, waba_id: str, name: str) -> dict[str, Any]:
+        return self._request("DELETE", f"{waba_id}/message_templates", config, params={"name": name})
+
+    def get_message_template_status(self, config: WhatsAppClientConfig, *, provider_template_id: str) -> dict[str, Any]:
+        payload = self._request(
+            "GET",
+            provider_template_id,
+            config,
+            params={"fields": "status,name,id,category,language,rejected_reason"},
+        )
+        return {
+            "status": payload.get("status"),
+            "name": payload.get("name"),
+            "id": payload.get("id"),
+            "category": payload.get("category"),
+            "language": payload.get("language"),
+            "rejected_reason": payload.get("rejected_reason"),
+        }
