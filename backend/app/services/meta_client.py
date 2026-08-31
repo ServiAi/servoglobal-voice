@@ -19,12 +19,12 @@ logger = logging.getLogger(__name__)
 
 
 class MetaClient:
-    """Cliente HTTP para Meta WhatsApp Cloud API (Graph API v23.0)."""
+    """Cliente HTTP para Meta WhatsApp Cloud API."""
 
     def __init__(self):
         self._token          = settings.WHATSAPP_API_TOKEN
         self._phone_id       = settings.WHATSAPP_PHONE_NUMBER_ID
-        self._base_url       = f"https://graph.facebook.com/v23.0/{self._phone_id}/messages"
+        self._base_url       = f"https://graph.facebook.com/{settings.WHATSAPP_GRAPH_VERSION}/{self._phone_id}/messages"
 
     def _headers(self) -> dict:
         return {
