@@ -6,8 +6,9 @@ from typing import Any
 
 import httpx
 
+from app.core.config import settings
 
-WHATSAPP_GRAPH_VERSION = "v19.0"
+WHATSAPP_GRAPH_VERSION = settings.WHATSAPP_GRAPH_VERSION
 
 
 class WhatsAppCloudClientError(RuntimeError):

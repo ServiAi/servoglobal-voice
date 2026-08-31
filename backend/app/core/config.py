@@ -90,6 +90,7 @@ class Settings(BaseSettings):
     WHATSAPP_API_TOKEN: str = ""
     WHATSAPP_PHONE_NUMBER_ID: str = ""
     WHATSAPP_VERIFY_TOKEN: str = "serviglobal_whatsapp_webhook_token"
+    WHATSAPP_GRAPH_VERSION: str = "v25.0"
     META_APP_SECRET: str = ""
 
     # Chatwoot CRM
