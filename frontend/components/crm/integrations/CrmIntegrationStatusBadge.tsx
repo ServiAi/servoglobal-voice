@@ -1,8 +1,7 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-
-type IntegrationStatus = 'active' | 'configured' | 'error' | 'not_configured';
+import type { IntegrationStatus } from '@/types/crm';
 
 const styles: Record<IntegrationStatus, string> = {
   active: 'border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',

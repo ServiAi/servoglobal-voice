@@ -18,6 +18,7 @@ from app.schemas.integrations import (
     GoogleCalendarConnectionResponse,
     GoogleCalendarConnectUrlResponse,
     IntegrationAvailabilityResponse,
+    IntegrationCatalogStatusResponse,
     ResendIntegrationConfigRequest,
     ResendIntegrationConfigResponse,
     ResendTestEmailRequest,
@@ -97,6 +98,16 @@ def _resend_response(
     )
 
 
+def _catalog_status(*, configured: bool, provider_status: str | None, has_error: bool) -> str:
+    if has_error or provider_status in {"error", "failed"}:
+        return "error"
+    if not configured:
+        return "not_configured"
+    if provider_status in {"active", "connected"}:
+        return "active"
+    return "configured"
+
+
 @router.get("", response_model=list[ResendIntegrationConfigResponse])
 def list_integrations(
     context: AuthContext = Depends(require_roles(_READ_ROLES)),
@@ -116,6 +127,68 @@ def list_integration_availability(
     db: Session = Depends(get_db),
 ) -> Any:
     return IntegrationService(db).list_availability(context.tenant.id)
+
+
+@router.get("/statuses", response_model=list[IntegrationCatalogStatusResponse])
+def list_integration_catalog_statuses(
+    context: AuthContext = Depends(require_roles(_READ_ROLES)),
+    db: Session = Depends(get_db),
+) -> Any:
+    tenant_id = context.tenant.id
+    integration_service = IntegrationService(db)
+    enabled = {
+        item["provider"]
+        for item in integration_service.list_availability(tenant_id)
+        if item["enabled"]
+    }
+    statuses: dict[str, str] = {}
+
+    if "resend" in enabled:
+        integration = integration_service.get_integration(tenant_id, "resend")
+        config = EmailConfigService(db).get_config(tenant_id, "resend")
+        statuses["resend"] = _catalog_status(
+            configured=bool(integration or config),
+            provider_status=config.status if config else integration.status if integration else None,
+            has_error=bool(config.last_error_message if config else integration.last_error_message if integration else None),
+        )
+
+    if "whatsapp" in enabled:
+        config = WhatsAppConfigService(db).get_config(tenant_id)
+        statuses["whatsapp"] = _catalog_status(
+            configured=config is not None,
+            provider_status=config.status if config else None,
+            has_error=bool(config and config.last_error_message),
+        )
+
+    if "voice" in enabled:
+        config = VoiceConfigService(db).get_provider_config(tenant_id)
+        statuses["voice"] = _catalog_status(
+            configured=config is not None,
+            provider_status=config.status if config else None,
+            has_error=bool(config and config.last_error_message),
+        )
+
+    if "calcom" in enabled:
+        config = BookingConfigService(db).get_config(tenant_id)
+        statuses["calcom"] = _catalog_status(
+            configured=config is not None,
+            provider_status=config.status if config else None,
+            has_error=bool(config and config.last_error_message),
+        )
+
+    if "google_calendar" in enabled:
+        connections = GoogleCalendarOAuthService(db).list_connections(tenant_id)
+        statuses["google_calendar"] = _catalog_status(
+            configured=bool(connections),
+            provider_status="connected" if any(item.status == "connected" for item in connections) else None,
+            has_error=any(bool(item.last_error_message) or item.status in {"error", "failed"} for item in connections),
+        )
+
+    return [
+        IntegrationCatalogStatusResponse(provider=provider, status=statuses.get(provider, "not_configured"))
+        for provider in integration_service.supported_providers
+        if provider in enabled
+    ]
 
 
 @router.get("/booking/config", response_model=BookingConfigResponse)

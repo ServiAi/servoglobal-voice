@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -29,6 +29,11 @@ class ResendIntegrationConfigResponse(BaseModel):
 class IntegrationAvailabilityResponse(BaseModel):
     provider: str
     enabled: bool
+
+
+class IntegrationCatalogStatusResponse(BaseModel):
+    provider: str
+    status: Literal["active", "configured", "not_configured", "error"]
 
 
 class IntegrationAvailabilityUpdateRequest(BaseModel):
