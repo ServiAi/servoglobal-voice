@@ -13,7 +13,7 @@ Actualizado: 2026-08-31. Fuente: código, migraciones y pruebas del repositorio.
 | Composer y assets | Operativa | Markdown/MDX seguro, resumen de llamada, adjuntos local/S3 y formularios públicos. |
 | Cal.com | Operativa | Slots, booking, cancelación, reprogramación y webhook. |
 | Google Calendar | Parcial | OAuth foundation, listado y desconexión; creación directa de eventos deshabilitada. |
-| WhatsApp Cloud | Operativa | Configuración, envío CRM, mensajes, estados, webhook y ciclo de vida completo de plantillas: sync desde Meta, builder propio (crear/editar/previsualizar/eliminar), envío a revisión y sincronización de estado (`draft → pending → approved / rejected`). Botones CTA: `QUICK_REPLY|URL|PHONE_NUMBER|VOICE_CALL|FLOW`; `VOICE_CALL` gateado por el feature grant `whatsapp_business_calling` (hoy sólo `platform_admin` vía API, sin UI). |
+| WhatsApp Cloud | Operativa en código | Configuración, envío CRM, mensajes, estados, webhook y ciclo de vida completo de plantillas. Flow Studio V1 añade builder visual versionado, generación desde Context Schema, preview, compilación determinista a Flow JSON, creación/upload/validación/publicación en Meta y clonación de versiones publicadas. Botones CTA: `QUICK_REPLY|URL|PHONE_NUMBER|VOICE_CALL|FLOW`; `VOICE_CALL` gateado por el feature grant `whatsapp_business_calling` (hoy sólo `platform_admin` vía API, sin UI). |
 | Automatizaciones y notificaciones | Operativa en código | Contratos versionados de eventos, builder dinámico, dry-run sin envío, reglas, destinatarios, entregas, planificación, reintentos, recuperación y worker PostgreSQL. El despliegue del proceso worker debe verificarse por entorno. |
 | Voz CRM | Operativa en código | Configuración de proveedor/agentes, rutas SIP cifradas por tenant, aprovisionamiento automático y versionado de endpoints PJSIP, llamadas WebRTC y callbacks salientes mediante IDT, webhook y booking tools. El agente local del PBX debe instalarse por entorno. |
 | Voice Context Experiences | Runtime público WebRTC implementado en código | Feature flag, snapshots, submissions y context session one-shot; launch Ultravox tenant-scoped con recovery-first, leases, recovery por `joined`/`ended`, webhook firmado/deduplicado, billing real por `billedDuration`, CRM monotónico, concurrencia PostgreSQL y preflight de micrófono. `submissions=true`; `calls=true`. Ver `docs-local/fase-4/VOICE_EXPERIENCE_WEBRTC_RUNTIME.md`. |
@@ -22,7 +22,7 @@ Actualizado: 2026-08-31. Fuente: código, migraciones y pruebas del repositorio.
 
 ## Persistencia
 
-Las migraciones cubren identidad, analítica, riesgo Auth0, planes/uso, CRM base y contexto de llamadas, Resend/email/formularios, Cal.com/Google Calendar, WhatsApp, voz, disponibilidad de integraciones, notificaciones, grants tenant, context submissions, runtime WebRTC y rutas SIP/callbacks salientes. La migración más reciente es `202608310001_whatsapp_template_lifecycle.py` y la cadena debe conservar una única head.
+Las migraciones cubren identidad, analítica, riesgo Auth0, planes/uso, CRM base y contexto de llamadas, Resend/email/formularios, Cal.com/Google Calendar, WhatsApp, voz, disponibilidad de integraciones, notificaciones, grants tenant, context submissions, runtime WebRTC y rutas SIP/callbacks salientes. La migración más reciente es `202608310002_whatsapp_flow_studio_v1.py` y la cadena debe conservar una única head.
 
 ## Continuidad: automatizaciones y notificaciones
 
@@ -42,6 +42,7 @@ Las migraciones cubren identidad, analítica, riesgo Auth0, planes/uso, CRM base
 - Evolucionar el builder de formularios y la UI de submissions si el producto lo requiere.
 - Mantener separados futuros cambios de WhatsApp y voz.
 - WhatsApp: sin webhook `message_template_status_update` de Meta en este MVP; el cambio de estado de una plantilla enviada sólo se refleja con el botón manual "Sincronizar". Fast-follow natural: suscribir `whatsapp_webhook.py` a ese campo.
+- Flow Studio V1 administra definiciones estáticas y su ciclo de publicación, pero no ingiere respuestas `nfm_reply`, no crea `context_session`, no implementa Data Exchange/endpoint encryption y no conecta Flows con WhatsApp Calling, SIP, Asterisk o Ultravox.
 - Fase B (Voz) del Template Management aún no arranca: vínculo agente de voz ↔ plantilla WhatsApp con mapeo de variables, y la nueva Voice Tool para disparar el envío en medio de una llamada. Se ramifica desde `develop` sólo después de mergear la Fase A (backend/frontend de creación, envío y sync de plantillas).
 - El botón `VOICE_CALL` de un template sólo controla si Meta ofrece la llamada nativa de WhatsApp Business Calling; no dispara ni enruta llamadas hacia los agentes de voz/SIP internos (Sandra, Asterisk, Ultravox). Vincular ese CTA a un agente de voz vía SIP sigue sin diseñarse ni implementarse — mantiene la separación WhatsApp/voz de la línea anterior.
 - Verificar por entorno los prerequisitos Ultravox tenant (API key, webhook secret, agente compatible con `user_context` y eventos webhook) antes de habilitar el runtime público.
