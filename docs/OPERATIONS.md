@@ -33,6 +33,8 @@ Las migraciones de notificaciones son:
 - `202607270001_add_notification_worker_state.py`.
 - `202608050003_notification_rule_event_schemas.py` (modo de condiciones y versión del contrato en reglas).
 
+Flow Studio V1 añade `202608310002_whatsapp_flow_studio_v1.py`. No agrega variables ni secretos: usa `WHATSAPP_GRAPH_VERSION`, el token cifrado y el WABA ID ya configurados por tenant. Después de aplicar la migración, valide con un tenant de pruebas: crear borrador, compilar, validar en Meta, publicar, sincronizar estado y clonar a v2. No use credenciales ni WABA de producción desde pruebas locales.
+
 ## Worker de notificaciones
 
 El worker requiere PostgreSQL y debe ejecutarse como un proceso separado del servidor FastAPI:

@@ -67,6 +67,10 @@ Cada canal conserva configuración, cliente, servicio de negocio, persistencia, 
 
 `TenantWhatsAppTemplate` modela un ciclo de vida propio (`draft → pending → approved | rejected`, más `disabled`) separado del estado crudo de Meta (`meta_status`). Una plantilla llega a `status="approved"` por dos caminos: sincronización masiva de plantillas ya aprobadas en Meta Business Manager (`source="meta_sync"`, variables `POSITIONAL` `{{1}}`), o creación local (`source="tenant_authored"`, variables `NAMED` `{{nombre}}`) seguida de envío a Meta (`WhatsAppConfigService.submit_template`) y sincronización manual de estado (`sync_template_status`). `WhatsAppTemplateService.get_synced_template()` es el único punto de verdad para "¿esta plantilla se puede enviar?": exige `status=="approved"`, sin importar el origen.
 
+Flow Studio V1 permanece dentro de la misma integración y reutiliza `TenantWhatsAppConfig`, el token cifrado y el WABA ID. `TenantWhatsAppFlow` guarda una fila por versión; `published` y `deprecated` son inmutables. El frontend edita únicamente `builder_json` versión 1. `WhatsAppFlowCompiler` lo valida y produce Flow JSON 7.3 canonicalizado con hash SHA-256; `WhatsAppFlowService` aplica ownership tenant, snapshots de Context Schema, versionado, persistencia y eventos; `WhatsAppCloudClient` concentra create, metadata, multipart asset upload, status, publish, deprecate y delete. El navegador nunca llama a Graph API.
+
+La generación desde Context Schema incluye `ask_if_missing` y `prefill_and_confirm`, preserva el binding en el builder y excluye `trust_prefill`, `internal_only` y `collect_during_call` porque V1 es estático. El snapshot evita que cambios futuros del schema alteren una versión existente. No existe todavía ingestión de respuestas, Data Exchange, endpoint encryption ni runtime de voz desde WhatsApp.
+
 ### Automatizaciones y notificaciones
 
 1. Un cambio de reserva o llamada entra a `NotificationEventPipeline`, que crea o reutiliza un `DomainEvent` con identidad idempotente y payload seguro.

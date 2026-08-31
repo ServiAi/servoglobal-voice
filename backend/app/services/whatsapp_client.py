@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import json as jsonlib
 from dataclasses import dataclass
 from typing import Any
 
@@ -42,13 +43,25 @@ class WhatsAppCloudClient:
         config: WhatsAppClientConfig,
         *,
         json: dict[str, Any] | None = None,
+        data: dict[str, Any] | None = None,
+        files: dict[str, Any] | None = None,
         params: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         url = f"https://graph.facebook.com/{WHATSAPP_GRAPH_VERSION}/{path.lstrip('/')}"
-        headers = {"Authorization": f"Bearer {config.access_token}", "Content-Type": "application/json"}
+        headers = {"Authorization": f"Bearer {config.access_token}"}
+        if json is not None and files is None and data is None:
+            headers["Content-Type"] = "application/json"
         try:
             with httpx.Client(timeout=self.timeout) as client:
-                response = client.request(method, url, headers=headers, json=json, params=params)
+                response = client.request(
+                    method,
+                    url,
+                    headers=headers,
+                    json=json,
+                    data=data,
+                    files=files,
+                    params=params,
+                )
         except httpx.HTTPError as exc:
             raise WhatsAppCloudClientError(sanitize_whatsapp_error(str(exc)) or "WhatsApp request failed") from exc
 
@@ -179,3 +192,71 @@ class WhatsAppCloudClient:
             "language": payload.get("language"),
             "rejected_reason": payload.get("rejected_reason"),
         }
+
+    def create_flow(
+        self,
+        config: WhatsAppClientConfig,
+        *,
+        waba_id: str,
+        name: str,
+        categories: list[str],
+        clone_flow_id: str | None = None,
+    ) -> dict[str, Any]:
+        form: dict[str, Any] = {
+            "name": (None, name),
+            "categories": (None, jsonlib.dumps(categories)),
+        }
+        if clone_flow_id:
+            form["clone_flow_id"] = (None, clone_flow_id)
+        return self._request("POST", f"{waba_id}/flows", config, files=form)
+
+    def get_flow(self, config: WhatsAppClientConfig, *, flow_id: str) -> dict[str, Any]:
+        return self._request(
+            "GET",
+            flow_id,
+            config,
+            params={"fields": "id,name,categories,status,validation_errors,json_version,health_status"},
+        )
+
+    def update_flow_metadata(
+        self,
+        config: WhatsAppClientConfig,
+        *,
+        flow_id: str,
+        name: str,
+        categories: list[str],
+    ) -> dict[str, Any]:
+        return self._request(
+            "POST",
+            flow_id,
+            config,
+            data={"name": name, "categories": jsonlib.dumps(categories)},
+        )
+
+    def upload_flow_json(
+        self,
+        config: WhatsAppClientConfig,
+        *,
+        flow_id: str,
+        flow_json: dict[str, Any],
+    ) -> dict[str, Any]:
+        content = jsonlib.dumps(flow_json, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        return self._request(
+            "POST",
+            f"{flow_id}/assets",
+            config,
+            data={"name": "flow.json", "asset_type": "FLOW_JSON"},
+            files={"file": ("flow.json", content, "application/json")},
+        )
+
+    def list_flow_assets(self, config: WhatsAppClientConfig, *, flow_id: str) -> dict[str, Any]:
+        return self._request("GET", f"{flow_id}/assets", config)
+
+    def publish_flow(self, config: WhatsAppClientConfig, *, flow_id: str) -> dict[str, Any]:
+        return self._request("POST", f"{flow_id}/publish", config)
+
+    def deprecate_flow(self, config: WhatsAppClientConfig, *, flow_id: str) -> dict[str, Any]:
+        return self._request("POST", f"{flow_id}/deprecate", config)
+
+    def delete_flow(self, config: WhatsAppClientConfig, *, flow_id: str) -> dict[str, Any]:
+        return self._request("DELETE", flow_id, config)

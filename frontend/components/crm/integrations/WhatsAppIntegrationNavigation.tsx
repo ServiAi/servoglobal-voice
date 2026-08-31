@@ -17,9 +17,11 @@ export function WhatsAppIntegrationNavigation({ locale, status }: Props) {
     { key: 'overview', href: base },
     { key: 'account', href: `${base}/account` },
     { key: 'templates', href: `${base}/templates` },
+    { key: 'flows', href: `${base}/flows` },
     { key: 'test', href: `${base}/test` },
   ] as const;
-  const current = links.find((item) => item.href === pathname) ?? links[0];
+  const isActive = (href: string) => pathname === href || (href !== base && pathname.startsWith(`${href}/`));
+  const current = links.find((item) => isActive(item.href)) ?? links[0];
 
   return (
     <div className="space-y-5">
@@ -39,9 +41,9 @@ export function WhatsAppIntegrationNavigation({ locale, status }: Props) {
         </div>
         <CrmIntegrationStatusBadge status={status} />
       </header>
-      <nav aria-label={t('whatsapp.navigationLabel')} className="grid grid-cols-2 gap-2 rounded-xl border border-border bg-card p-2 sm:grid-cols-4">
+      <nav aria-label={t('whatsapp.navigationLabel')} className="grid grid-cols-2 gap-2 rounded-xl border border-border bg-card p-2 sm:grid-cols-5">
         {links.map((item) => {
-          const active = item.href === pathname;
+          const active = isActive(item.href);
           return <Link key={item.key} href={item.href} aria-current={active ? 'page' : undefined} className={`flex min-h-10 items-center justify-center rounded-lg px-3 text-center text-sm font-medium outline-none transition focus-visible:ring-2 focus-visible:ring-ring ${active ? 'bg-primary text-primary-foreground shadow-xs' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}>{t(`whatsapp.navigation.${item.key}`)}</Link>;
         })}
       </nav>
