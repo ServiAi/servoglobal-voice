@@ -193,6 +193,51 @@ class TenantWhatsAppTemplate(Base, TimestampMixin):
     tenant = relationship("Tenant")
 
 
+class TenantWhatsAppFlow(Base, TimestampMixin):
+    __tablename__ = "tenant_whatsapp_flows"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "flow_key", "version", name="uq_tenant_whatsapp_flows_tenant_key_version"),
+        Index("ix_tenant_whatsapp_flows_tenant_status", "tenant_id", "status"),
+        Index("ix_tenant_whatsapp_flows_tenant_provider", "tenant_id", "provider_flow_id"),
+        Index("ix_tenant_whatsapp_flows_tenant_key", "tenant_id", "flow_key"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
+    flow_key: Mapped[str] = mapped_column(String(80), nullable=False)
+    version: Mapped[int] = mapped_column(sa.Integer, nullable=False, default=1)
+    parent_flow_id: Mapped[str | None] = mapped_column(
+        ForeignKey("tenant_whatsapp_flows.id", ondelete="SET NULL"), nullable=True
+    )
+    name: Mapped[str] = mapped_column(String(160), nullable=False)
+    categories_json: Mapped[list] = mapped_column(sa.JSON, nullable=False, default=list)
+    source_mode: Mapped[str] = mapped_column(String(24), nullable=False, default="visual")
+    context_schema_id: Mapped[str | None] = mapped_column(
+        ForeignKey("tenant_voice_context_schemas.id", ondelete="SET NULL"), nullable=True
+    )
+    context_schema_snapshot_json: Mapped[dict | None] = mapped_column(sa.JSON, nullable=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="draft")
+    meta_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    provider_flow_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    builder_schema_version: Mapped[int] = mapped_column(sa.Integer, nullable=False, default=1)
+    builder_json: Mapped[dict] = mapped_column(sa.JSON, nullable=False, default=dict)
+    compiled_flow_json: Mapped[dict | None] = mapped_column(sa.JSON, nullable=True)
+    compiled_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    synced_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    validation_errors_json: Mapped[list] = mapped_column(sa.JSON, nullable=False, default=list)
+    created_by_user_id: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    deprecated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    tenant = relationship("Tenant")
+    parent_flow = relationship("TenantWhatsAppFlow", remote_side=[id])
+    context_schema = relationship("TenantVoiceContextSchema")
+    created_by_user = relationship("User")
+
+
 class TenantEmailConfig(Base, TimestampMixin):
     __tablename__ = "tenant_email_configs"
     __table_args__ = (

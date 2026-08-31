@@ -12,6 +12,7 @@ from app.models.integrations import (
     TenantSipRoute,
     TenantVoiceAgentConfig,
     TenantWhatsAppConfig,
+    TenantWhatsAppFlow,
     TenantWhatsAppTemplate,
 )
 from app.models.crm import (
@@ -71,6 +72,7 @@ __all__ = [
     "TenantVoiceRuntimeCall",
     "VoicePublicRateLimitWindow",
     "TenantWhatsAppConfig",
+    "TenantWhatsAppFlow",
     "TenantWhatsAppTemplate",
     "TenantMembership",
     "TenantUsageAlert",
