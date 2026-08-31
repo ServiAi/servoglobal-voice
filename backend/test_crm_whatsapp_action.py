@@ -49,7 +49,7 @@ class CrmWhatsAppActionTests(Integration2ATestCase):
                     "meta_status": "APPROVED",
                     "source": "meta_sync",
                 },
-                status="active",
+                status="approved",
             )
             db.add(template)
             db.commit()

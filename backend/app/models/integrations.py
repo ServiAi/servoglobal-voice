@@ -171,8 +171,24 @@ class TenantWhatsAppTemplate(Base, TimestampMixin):
     category: Mapped[str] = mapped_column(String(40), nullable=False, default="transactional")
     language: Mapped[str] = mapped_column(String(16), nullable=False, default="es")
     body: Mapped[str] = mapped_column(Text, nullable=False)
+    # Deprecated: kept for backward-compatible reads; approval state now lives in the typed columns below.
     variables_json: Mapped[dict] = mapped_column(sa.JSON, nullable=False, default=dict)
+    # Internal lifecycle: draft | pending | approved | rejected | disabled.
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="active")
+    # Raw status string as returned by Meta: PENDING/APPROVED/REJECTED/PAUSED/DISABLED.
+    meta_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    provider_template_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    source: Mapped[str] = mapped_column(String(20), nullable=False, default="tenant_authored")
+    parameter_format: Mapped[str] = mapped_column(String(16), nullable=False, default="POSITIONAL")
+    header_json: Mapped[dict | None] = mapped_column(sa.JSON, nullable=True)
+    footer_text: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    buttons_json: Mapped[list] = mapped_column(sa.JSON, nullable=False, default=list)
+    components_json: Mapped[dict] = mapped_column(sa.JSON, nullable=False, default=dict)
+    rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_by_user_id: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
 
     tenant = relationship("Tenant")
 

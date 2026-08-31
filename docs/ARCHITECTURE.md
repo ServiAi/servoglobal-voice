@@ -65,6 +65,8 @@ PostgreSQL es la base principal. Alembic administra el esquema. Los dominios per
 
 Cada canal conserva configuración, cliente, servicio de negocio, persistencia, endpoints y pruebas propios. Comparten identidad tenant, timeline CRM y eventos de integración, sin compartir secretos ni payloads completos.
 
+`TenantWhatsAppTemplate` modela un ciclo de vida propio (`draft → pending → approved | rejected`, más `disabled`) separado del estado crudo de Meta (`meta_status`). Una plantilla llega a `status="approved"` por dos caminos: sincronización masiva de plantillas ya aprobadas en Meta Business Manager (`source="meta_sync"`, variables `POSITIONAL` `{{1}}`), o creación local (`source="tenant_authored"`, variables `NAMED` `{{nombre}}`) seguida de envío a Meta (`WhatsAppConfigService.submit_template`) y sincronización manual de estado (`sync_template_status`). `WhatsAppTemplateService.get_synced_template()` es el único punto de verdad para "¿esta plantilla se puede enviar?": exige `status=="approved"`, sin importar el origen.
+
 ### Automatizaciones y notificaciones
 
 1. Un cambio de reserva o llamada entra a `NotificationEventPipeline`, que crea o reutiliza un `DomainEvent` con identidad idempotente y payload seguro.
@@ -79,7 +81,7 @@ El evaluador admite composición `all`/`any` y rutas seguras sobre diccionarios;
 
 ### Invariantes de la UI de notificaciones
 
-- Una regla WhatsApp ejecutable necesita una plantilla Meta sincronizada, activa y `APPROVED`, además de todos sus parámetros obligatorios mapeados.
+- Una regla WhatsApp ejecutable necesita una plantilla con `status="approved"` (importada por sync desde Meta o creada en la app, enviada y aprobada), además de todos sus parámetros obligatorios mapeados.
 - Campos y operadores se seleccionan desde el contrato del evento. Números, booleanos, enums y fechas usan controles tipados; los operadores de existencia no conservan un valor residual.
 - Cambiar la capacidad limpia el evento dependiente. Las reglas antiguas con rutas fuera del contrato quedan visibles como configuración obsoleta y no se guardan hasta corregirlas.
 - Las variables de plantilla se generan desde los parámetros Meta y las rutas del evento; el preview y la prueba muestran sólo datos sintéticos o introducidos por el administrador y destinatarios enmascarados.

@@ -397,6 +397,59 @@ export type WhatsAppTemplateSyncResponse = {
   error_message?: string | null;
 };
 
+export type WhatsAppTemplateButtonItem = {
+  type: 'QUICK_REPLY' | 'URL' | 'PHONE_NUMBER';
+  text: string;
+  url?: string | null;
+  phone_number?: string | null;
+};
+
+export type WhatsAppTemplateCreateRequest = {
+  template_key: string;
+  name: string;
+  category: string;
+  language?: string;
+  header_text?: string | null;
+  body: string;
+  footer_text?: string | null;
+  buttons?: WhatsAppTemplateButtonItem[];
+};
+
+export type WhatsAppTemplateUpdateRequest = {
+  name?: string;
+  header_text?: string | null;
+  body?: string;
+  footer_text?: string | null;
+  buttons?: WhatsAppTemplateButtonItem[];
+};
+
+export type WhatsAppTemplateDetailResponse = WhatsAppTemplateResponse & {
+  meta_status?: string | null;
+  provider_template_id?: string | null;
+  source: string;
+  parameter_format: string;
+  header_text?: string | null;
+  footer_text?: string | null;
+  buttons: WhatsAppTemplateButtonItem[];
+  rejection_reason?: string | null;
+  last_synced_at?: string | null;
+};
+
+export type WhatsAppTemplatePreviewResponse = {
+  header_text?: string | null;
+  body: string;
+  footer_text?: string | null;
+  buttons: WhatsAppTemplateButtonItem[];
+  variables: Record<string, string>;
+};
+
+export type WhatsAppTemplateSubmitResponse = {
+  status: string;
+  meta_status?: string | null;
+  provider_template_id?: string | null;
+  error_message?: string | null;
+};
+
 export type WhatsAppTestMessageRequest = {
   to_phone: string;
   template_key?: string | null;

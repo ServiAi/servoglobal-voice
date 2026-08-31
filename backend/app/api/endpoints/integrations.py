@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.api.auth.deps import AuthContext, require_roles
 from app.db.session import get_db
-from app.models.integrations import TenantEmailTemplate
+from app.models.integrations import TenantEmailTemplate, TenantWhatsAppTemplate
 from app.schemas.integrations import (
     BookingConfigRequest,
     BookingConfigResponse,
@@ -24,8 +24,13 @@ from app.schemas.integrations import (
     ResendTestEmailResponse,
     WhatsAppConfigRequest,
     WhatsAppConfigResponse,
+    WhatsAppTemplateCreateRequest,
+    WhatsAppTemplateDetailResponse,
+    WhatsAppTemplatePreviewResponse,
     WhatsAppTemplateResponse,
+    WhatsAppTemplateSubmitResponse,
     WhatsAppTemplateSyncResponse,
+    WhatsAppTemplateUpdateRequest,
     WhatsAppTestMessageRequest,
     WhatsAppTestMessageResponse,
     WhatsAppTestRequest,
@@ -345,7 +350,8 @@ def list_whatsapp_templates(
     context: AuthContext = Depends(require_enabled_integration("whatsapp", _READ_ROLES)),
     db: Session = Depends(get_db),
 ) -> Any:
-    templates = WhatsAppTemplateService(db).list_templates(context.tenant.id)
+    service = WhatsAppTemplateService(db)
+    templates = service.list_templates(context.tenant.id)
     return [
         WhatsAppTemplateResponse(
             id=template.id,
@@ -355,11 +361,138 @@ def list_whatsapp_templates(
             category=template.category,
             language=template.language,
             body=template.body,
-            variables=template.variables_json or {},
+            variables=service.variables_payload(template),
             status=template.status,
         )
         for template in templates
     ]
+
+
+def _whatsapp_template_detail(
+    service: WhatsAppTemplateService, template: TenantWhatsAppTemplate
+) -> WhatsAppTemplateDetailResponse:
+    return WhatsAppTemplateDetailResponse(
+        id=template.id,
+        template_key=template.template_key,
+        provider_template_name=template.provider_template_name,
+        name=template.name,
+        category=template.category,
+        language=template.language,
+        body=template.body,
+        variables=service.variables_payload(template),
+        status=template.status,
+        meta_status=template.meta_status,
+        provider_template_id=template.provider_template_id,
+        source=template.source,
+        parameter_format=template.parameter_format,
+        header_text=(template.header_json or {}).get("text"),
+        footer_text=template.footer_text,
+        buttons=template.buttons_json or [],
+        rejection_reason=template.rejection_reason,
+        last_synced_at=template.last_synced_at,
+    )
+
+
+@router.post("/whatsapp/templates", response_model=WhatsAppTemplateDetailResponse, status_code=status.HTTP_201_CREATED)
+def create_whatsapp_template(
+    body: WhatsAppTemplateCreateRequest,
+    context: AuthContext = Depends(require_enabled_integration("whatsapp", _WRITE_ROLES)),
+    db: Session = Depends(get_db),
+) -> Any:
+    service = WhatsAppTemplateService(db)
+    try:
+        template = service.create_draft(context.tenant.id, body, context.user.id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    return _whatsapp_template_detail(service, template)
+
+
+@router.get("/whatsapp/templates/{template_id}", response_model=WhatsAppTemplateDetailResponse)
+def get_whatsapp_template(
+    template_id: str,
+    context: AuthContext = Depends(require_enabled_integration("whatsapp", _READ_ROLES)),
+    db: Session = Depends(get_db),
+) -> Any:
+    service = WhatsAppTemplateService(db)
+    try:
+        template = service.get_owned(context.tenant.id, template_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    return _whatsapp_template_detail(service, template)
+
+
+@router.patch("/whatsapp/templates/{template_id}", response_model=WhatsAppTemplateDetailResponse)
+def update_whatsapp_template(
+    template_id: str,
+    body: WhatsAppTemplateUpdateRequest,
+    context: AuthContext = Depends(require_enabled_integration("whatsapp", _WRITE_ROLES)),
+    db: Session = Depends(get_db),
+) -> Any:
+    service = WhatsAppTemplateService(db)
+    try:
+        template = service.update_draft(context.tenant.id, template_id, body)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    return _whatsapp_template_detail(service, template)
+
+
+@router.delete("/whatsapp/templates/{template_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_whatsapp_template(
+    template_id: str,
+    context: AuthContext = Depends(require_enabled_integration("whatsapp", _WRITE_ROLES)),
+    db: Session = Depends(get_db),
+) -> None:
+    try:
+        WhatsAppTemplateService(db).delete_draft(context.tenant.id, template_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+
+
+@router.get("/whatsapp/templates/{template_id}/preview", response_model=WhatsAppTemplatePreviewResponse)
+def preview_whatsapp_template(
+    template_id: str,
+    context: AuthContext = Depends(require_enabled_integration("whatsapp", _READ_ROLES)),
+    db: Session = Depends(get_db),
+) -> Any:
+    try:
+        return WhatsAppTemplateService(db).preview(context.tenant.id, template_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+
+
+@router.post("/whatsapp/templates/{template_id}/submit", response_model=WhatsAppTemplateSubmitResponse)
+def submit_whatsapp_template(
+    template_id: str,
+    context: AuthContext = Depends(require_enabled_integration("whatsapp", _WRITE_ROLES)),
+    db: Session = Depends(get_db),
+) -> Any:
+    try:
+        result = WhatsAppConfigService(db).submit_template(context.tenant.id, template_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    if result.status == "failed":
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY, detail=result.error_message or "WhatsApp template submission failed."
+        )
+    return result
+
+
+@router.post("/whatsapp/templates/{template_id}/sync-status", response_model=WhatsAppTemplateSubmitResponse)
+def sync_whatsapp_template_status(
+    template_id: str,
+    context: AuthContext = Depends(require_enabled_integration("whatsapp", _WRITE_ROLES)),
+    db: Session = Depends(get_db),
+) -> Any:
+    try:
+        result = WhatsAppConfigService(db).sync_template_status(context.tenant.id, template_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    if result.status == "failed":
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=result.error_message or "WhatsApp template status sync failed.",
+        )
+    return result
 
 
 @router.get("/resend/templates", response_model=list[EmailTemplateItem])

@@ -309,7 +309,7 @@ class AdminTenantIntegrationTests(unittest.TestCase):
                 language="es",
                 body="Hola",
                 variables_json={"parameters": [], "meta_status": "APPROVED", "source": "meta_sync"},
-                status="active",
+                status="approved",
             ))
             db.commit()
         with patch(

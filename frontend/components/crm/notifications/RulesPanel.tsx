@@ -94,19 +94,11 @@ function HelpLabel({ label, help, required = false }: { label: string; help: str
 }
 
 function approvedTemplateParameters(template: WhatsAppTemplateResponse): TemplateParameter[] | null {
-  const variables = template.variables as {
-    source?: string;
-    meta_status?: string;
-    parameters?: TemplateParameter[];
-  };
-  if (
-    template.status !== 'active' ||
-    variables?.source !== 'meta_sync' ||
-    variables?.meta_status !== 'APPROVED'
-  ) {
+  if (template.status !== 'approved') {
     return null;
   }
-  return Array.isArray(variables.parameters) ? variables.parameters : [];
+  const variables = template.variables as { parameters?: TemplateParameter[] };
+  return Array.isArray(variables?.parameters) ? variables.parameters : [];
 }
 
 function isApprovedTemplate(template: WhatsAppTemplateResponse): boolean {

@@ -37,15 +37,11 @@ export function WhatsAppTestForm({ accessToken, templates: initialTemplates, dis
   const [busy, setBusy] = useState<'connection' | 'sync' | 'message' | null>(null);
   const [syncResult, setSyncResult] = useState<WhatsAppTemplateSyncResponse | null>(null);
   const [messageResult, setMessageResult] = useState<string | null>(null);
-  const approvedTemplates = templates.filter((template) => (
-    template.status === 'active'
-    && template.variables?.source === 'meta_sync'
-    && template.variables?.meta_status === 'APPROVED'
-  ));
+  const approvedTemplates = templates.filter((template) => template.status === 'approved');
 
   useEffect(() => {
     setTemplates(initialTemplates);
-    const firstApproved = initialTemplates.find((template) => template.variables?.source === 'meta_sync' && template.variables?.meta_status === 'APPROVED');
+    const firstApproved = initialTemplates.find((template) => template.status === 'approved');
     setTemplateKey((current) => current || firstApproved?.template_key || '');
   }, [initialTemplates]);
 
@@ -84,7 +80,7 @@ export function WhatsAppTestForm({ accessToken, templates: initialTemplates, dis
     setSyncResult(result.data);
     if (refreshed.ok) {
       setTemplates(refreshed.data);
-      const firstApproved = refreshed.data.find((template) => template.variables?.source === 'meta_sync' && template.variables?.meta_status === 'APPROVED');
+      const firstApproved = refreshed.data.find((template) => template.status === 'approved');
       setTemplateKey(firstApproved?.template_key ?? '');
     }
     onSuccess('Plantillas aprobadas sincronizadas desde Meta.');
