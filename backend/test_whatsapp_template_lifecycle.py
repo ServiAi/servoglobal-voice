@@ -5,6 +5,7 @@ from sqlalchemy import select
 from _integrations_2a_test_base import Integration2ATestCase, SessionLocal
 from app.models.crm import CrmWhatsAppMessage
 from app.models.integrations import TenantIntegrationEvent, TenantWhatsAppTemplate
+from app.models.tenant_features import TenantFeatureGrant
 from app.services.whatsapp_client import WhatsAppCloudClient
 from app.services.whatsapp_config_service import WhatsAppConfigService
 from app.services.whatsapp_template_service import WhatsAppTemplateService
@@ -136,6 +137,78 @@ class WhatsAppTemplateDraftCrudTests(Integration2ATestCase):
         body = response.json()
         self.assertIn("[nombre]", body["body"])
         self.assertIn("[fecha_cita]", body["body"])
+
+
+class WhatsAppTemplateButtonTypeTests(Integration2ATestCase):
+    def _enable_voice_calling(self):
+        with SessionLocal() as db:
+            db.add(
+                TenantFeatureGrant(
+                    tenant_id=self.tenant.id,
+                    feature_key="whatsapp_business_calling",
+                    enabled=True,
+                )
+            )
+            db.commit()
+
+    def test_create_draft_accepts_url_phone_and_flow_buttons(self):
+        payload = _create_template_payload(
+            buttons=[
+                {"type": "URL", "text": "Ver detalle", "url": "https://example.com/{{1}}"},
+                {"type": "PHONE_NUMBER", "text": "Llamar", "phone_number": "+573001112233"},
+                {"type": "FLOW", "text": "Agendar", "flow_id": "flow-123"},
+            ]
+        )
+
+        response = self.client.post("/api/v1/integrations/whatsapp/templates", json=payload)
+
+        self.assertEqual(response.status_code, 201, response.text)
+        buttons_by_type = {button["type"]: button for button in response.json()["buttons"]}
+        self.assertEqual(buttons_by_type["URL"]["url"], "https://example.com/{{1}}")
+        self.assertEqual(buttons_by_type["PHONE_NUMBER"]["phone_number"], "+573001112233")
+        self.assertEqual(buttons_by_type["FLOW"]["flow_id"], "flow-123")
+
+    def test_create_draft_rejects_voice_call_button_without_capability(self):
+        payload = _create_template_payload(
+            buttons=[{"type": "VOICE_CALL", "text": "Hablar con un asesor"}]
+        )
+
+        response = self.client.post("/api/v1/integrations/whatsapp/templates", json=payload)
+
+        self.assertEqual(response.status_code, 422)
+        self.assertIn("WhatsApp Business Calling", response.json()["detail"])
+
+    def test_create_draft_allows_voice_call_button_with_capability_enabled(self):
+        self._enable_voice_calling()
+        payload = _create_template_payload(
+            buttons=[{"type": "VOICE_CALL", "text": "Hablar con un asesor"}]
+        )
+
+        response = self.client.post("/api/v1/integrations/whatsapp/templates", json=payload)
+
+        self.assertEqual(response.status_code, 201, response.text)
+        self.assertEqual(response.json()["buttons"][0]["type"], "VOICE_CALL")
+
+    def test_update_draft_rejects_voice_call_button_without_capability(self):
+        created = self.client.post("/api/v1/integrations/whatsapp/templates", json=_create_template_payload()).json()
+
+        response = self.client.patch(
+            f"/api/v1/integrations/whatsapp/templates/{created['id']}",
+            json={"buttons": [{"type": "VOICE_CALL", "text": "Hablar con un asesor"}]},
+        )
+
+        self.assertEqual(response.status_code, 422)
+
+    def test_config_reports_voice_calling_enabled_flag(self):
+        response = self.client.get("/api/v1/integrations/whatsapp/config")
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.json()["voice_calling_enabled"])
+
+        self._enable_voice_calling()
+
+        response = self.client.get("/api/v1/integrations/whatsapp/config")
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["voice_calling_enabled"])
 
 
 class WhatsAppTemplateSubmitAndSyncTests(Integration2ATestCase):

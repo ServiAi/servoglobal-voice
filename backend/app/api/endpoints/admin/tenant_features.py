@@ -10,11 +10,13 @@ from app.models.tenant_features import TenantFeatureGrant
 from app.schemas.tenant_features import (
     TenantFeatureResponse,
     VoiceExperiencesFeatureUpdate,
+    WhatsAppBusinessCallingFeatureUpdate,
 )
 from app.services.tenant_feature_service import (
     TenantFeatureService,
     TenantFeatureTenantNotFoundError,
     VOICE_EXPERIENCES,
+    WHATSAPP_BUSINESS_CALLING,
 )
 
 
@@ -60,6 +62,29 @@ def set_voice_experiences_feature(
             feature_key=VOICE_EXPERIENCES,
             enabled=body.enabled,
             limits=body.limits.model_dump(),
+            enabled_by_user_id=user.id,
+        )
+    except TenantFeatureTenantNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return _response(grant)
+
+
+@router.put(
+    "/{tenant_id}/features/whatsapp-business-calling",
+    response_model=TenantFeatureResponse,
+)
+def set_whatsapp_business_calling_feature(
+    tenant_id: str,
+    body: WhatsAppBusinessCallingFeatureUpdate,
+    user: User = Depends(get_current_internal_user),
+    db: Session = Depends(get_db),
+) -> TenantFeatureResponse:
+    try:
+        grant = TenantFeatureService(db).set_feature(
+            tenant_id=tenant_id,
+            feature_key=WHATSAPP_BUSINESS_CALLING,
+            enabled=body.enabled,
+            limits={},
             enabled_by_user_id=user.id,
         )
     except TenantFeatureTenantNotFoundError as exc:

@@ -44,7 +44,7 @@ La especificación ejecutable completa está disponible en `/docs` y `/openapi.j
 - Resend: configuración, test, templates y assets bajo `/api/v1/integrations/resend`.
 - Cal.com: configuración, test y slots bajo `/api/v1/integrations/calcom`; bookings viven en CRM.
 - Google Calendar: connect URL, callback, connections y disconnect.
-- WhatsApp: configuración, test, sync masivo de templates aprobados en Meta y ciclo de vida completo de templates propios (`GET|POST /whatsapp/templates`, `GET|PATCH|DELETE /whatsapp/templates/{id}`, `GET .../preview`, `POST .../submit`, `POST .../sync-status`); replicado bajo `/api/v1/admin/tenants/{tenant_id}/integrations/whatsapp/templates...` para `platform_admin`.
+- WhatsApp: configuración, test, sync masivo de templates aprobados en Meta y ciclo de vida completo de templates propios (`GET|POST /whatsapp/templates`, `GET|PATCH|DELETE /whatsapp/templates/{id}`, `GET .../preview`, `POST .../submit`, `POST .../sync-status`); replicado bajo `/api/v1/admin/tenants/{tenant_id}/integrations/whatsapp/templates...` para `platform_admin`. Los botones de un template admiten `QUICK_REPLY|URL|PHONE_NUMBER|VOICE_CALL|FLOW`; `VOICE_CALL` sólo se acepta (backend, 422 si no) y sólo debe ofrecerse en UI cuando `GET .../whatsapp/config` responde `voice_calling_enabled: true`, feature controlada por `platform_admin` vía `PUT /api/v1/admin/tenants/{tenant_id}/features/whatsapp-business-calling`.
 - Voz: configuración, test, agentes y ruta SIP saliente por tenant. El backend deriva `sip_username` del ID de la ruta y no acepta un usuario elegido por el cliente; la respuesta lo devuelve para configuración operativa y sólo indica si existe contraseña SIP, sin devolver el secreto.
 
 ## Administración de automatizaciones y notificaciones

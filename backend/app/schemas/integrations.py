@@ -165,6 +165,7 @@ class WhatsAppConfigResponse(BaseModel):
     default_language: str = "es"
     has_secret: bool
     has_webhook_secret: bool = False
+    voice_calling_enabled: bool = False
     last_health_check_at: Optional[datetime] = None
     last_error_message: Optional[str] = None
 
@@ -220,10 +221,13 @@ class WhatsAppTemplateResponse(BaseModel):
 
 
 class WhatsAppTemplateButtonItem(BaseModel):
-    type: str = Field(..., pattern=r"^(QUICK_REPLY|URL|PHONE_NUMBER)$")
+    type: str = Field(..., pattern=r"^(QUICK_REPLY|URL|PHONE_NUMBER|VOICE_CALL|FLOW)$")
     text: str = Field(..., min_length=1, max_length=25)
     url: Optional[str] = Field(None, max_length=2000)
     phone_number: Optional[str] = Field(None, max_length=32)
+    flow_id: Optional[str] = Field(None, max_length=120)
+    flow_action: Optional[str] = Field(None, max_length=32)
+    navigate_screen: Optional[str] = Field(None, max_length=120)
 
 
 class WhatsAppTemplateCreateRequest(BaseModel):

@@ -31,6 +31,7 @@ type Props = {
   templates: WhatsAppTemplateResponse[];
   mode?: 'tenant' | 'admin';
   tenantId?: string;
+  voiceCallingEnabled?: boolean;
   disabled?: boolean;
   onError: (message: string) => void;
   onSuccess: (message: string) => void;
@@ -76,7 +77,7 @@ const EMPTY_FORM: DraftForm = {
   buttons: [],
 };
 
-export function WhatsAppTemplateManager({ accessToken, templates: initialTemplates, mode = 'tenant', tenantId, disabled, onError, onSuccess }: Props) {
+export function WhatsAppTemplateManager({ accessToken, templates: initialTemplates, mode = 'tenant', tenantId, voiceCallingEnabled = false, disabled, onError, onSuccess }: Props) {
   const [templates, setTemplates] = useState(initialTemplates);
   const [form, setForm] = useState<DraftForm | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -339,27 +340,79 @@ export function WhatsAppTemplateManager({ accessToken, templates: initialTemplat
 
           <div className="space-y-2">
             <span className="flex items-center gap-1 text-sm font-medium text-muted-foreground">
-              Botones de respuesta rápida (opcional)
-              <FieldHelp label="Botones" required={false}>Hasta 3 botones que el destinatario puede tocar para responder.</FieldHelp>
+              Botones (opcional)
+              <FieldHelp label="Botones" required={false}>
+                Hasta 3 botones que el destinatario puede tocar: respuesta rápida, abrir un enlace, llamar por teléfono, llamar por WhatsApp (si está habilitado) o abrir un WhatsApp Flow.
+              </FieldHelp>
             </span>
-            {form.buttons.map((button, index) => (
-              <div key={index} className="flex items-center gap-2">
-                <input
-                  className={`${FIELD_CLASS} flex-1`}
-                  placeholder="Texto del botón"
-                  maxLength={25}
-                  value={button.text}
-                  onChange={(e) => {
-                    const buttons = [...form.buttons];
-                    buttons[index] = { ...buttons[index], text: e.target.value };
-                    setForm({ ...form, buttons });
-                  }}
-                />
-                <Button type="button" variant="ghost" size="sm" onClick={() => setForm({ ...form, buttons: form.buttons.filter((_, i) => i !== index) })}>
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-            ))}
+            {form.buttons.map((button, index) => {
+              const showVoiceCall = voiceCallingEnabled || button.type === 'VOICE_CALL';
+              const updateButton = (patch: Partial<WhatsAppTemplateButtonItem>) => {
+                const buttons = [...form.buttons];
+                buttons[index] = { ...buttons[index], ...patch };
+                setForm({ ...form, buttons });
+              };
+              return (
+                <div key={index} className="space-y-2 rounded-md border border-border/60 p-2">
+                  <div className="flex items-center gap-2">
+                    <select
+                      className={`${FIELD_CLASS} flex-1`}
+                      value={button.type}
+                      onChange={(e) => {
+                        const buttons = [...form.buttons];
+                        buttons[index] = { type: e.target.value as WhatsAppTemplateButtonItem['type'], text: buttons[index].text };
+                        setForm({ ...form, buttons });
+                      }}
+                    >
+                      <option value="QUICK_REPLY">Respuesta rápida</option>
+                      <option value="URL">Abrir enlace</option>
+                      <option value="PHONE_NUMBER">Llamada telefónica</option>
+                      {showVoiceCall && <option value="VOICE_CALL">Llamada por WhatsApp</option>}
+                      <option value="FLOW">Abrir WhatsApp Flow</option>
+                    </select>
+                    <Button type="button" variant="ghost" size="sm" onClick={() => setForm({ ...form, buttons: form.buttons.filter((_, i) => i !== index) })}>
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      className={`${FIELD_CLASS} flex-1`}
+                      placeholder="Texto del botón"
+                      maxLength={25}
+                      value={button.text}
+                      onChange={(e) => updateButton({ text: e.target.value })}
+                    />
+                    {button.type === 'URL' && (
+                      <input
+                        className={`${FIELD_CLASS} flex-1`}
+                        placeholder="https://ejemplo.com"
+                        maxLength={2000}
+                        value={button.url ?? ''}
+                        onChange={(e) => updateButton({ url: e.target.value })}
+                      />
+                    )}
+                    {button.type === 'PHONE_NUMBER' && (
+                      <input
+                        className={`${FIELD_CLASS} flex-1`}
+                        placeholder="+573001112233"
+                        maxLength={32}
+                        value={button.phone_number ?? ''}
+                        onChange={(e) => updateButton({ phone_number: e.target.value })}
+                      />
+                    )}
+                    {button.type === 'FLOW' && (
+                      <input
+                        className={`${FIELD_CLASS} flex-1`}
+                        placeholder="ID del Flow"
+                        maxLength={120}
+                        value={button.flow_id ?? ''}
+                        onChange={(e) => updateButton({ flow_id: e.target.value })}
+                      />
+                    )}
+                  </div>
+                </div>
+              );
+            })}
             {form.buttons.length < 3 && (
               <Button
                 type="button"

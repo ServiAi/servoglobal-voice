@@ -14,6 +14,7 @@ from app.schemas.integrations import (
     WhatsAppTestResponse,
 )
 from app.services.integration_event_service import IntegrationEventService
+from app.services.tenant_feature_service import TenantFeatureService, WHATSAPP_BUSINESS_CALLING
 from app.services.whatsapp_template_service import WhatsAppTemplateService
 from app.services.secret_manager_service import SecretManager
 from app.services.whatsapp_client import (
@@ -43,11 +44,14 @@ class WhatsAppConfigService:
 
     def get_response(self, tenant_id: str) -> WhatsAppConfigResponse:
         config = self.get_config(tenant_id)
+        voice_calling_enabled = TenantFeatureService(self.db).is_enabled(tenant_id, WHATSAPP_BUSINESS_CALLING)
         if config is None:
-            return WhatsAppConfigResponse(status="inactive", has_secret=False)
-        return self.to_response(config)
+            return WhatsAppConfigResponse(status="inactive", has_secret=False, voice_calling_enabled=voice_calling_enabled)
+        return self.to_response(config, voice_calling_enabled=voice_calling_enabled)
 
-    def to_response(self, config: TenantWhatsAppConfig) -> WhatsAppConfigResponse:
+    def to_response(self, config: TenantWhatsAppConfig, voice_calling_enabled: bool | None = None) -> WhatsAppConfigResponse:
+        if voice_calling_enabled is None:
+            voice_calling_enabled = TenantFeatureService(self.db).is_enabled(config.tenant_id, WHATSAPP_BUSINESS_CALLING)
         return WhatsAppConfigResponse(
             status=config.status,
             phone_number_id=config.phone_number_id,
@@ -56,6 +60,7 @@ class WhatsAppConfigService:
             default_language=config.default_language,
             has_secret=bool(config.access_token_encrypted),
             has_webhook_secret=bool(config.webhook_verify_token_encrypted),
+            voice_calling_enabled=voice_calling_enabled,
             last_health_check_at=config.last_health_check_at,
             last_error_message=config.last_error_message,
         )
