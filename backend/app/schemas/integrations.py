@@ -26,6 +26,31 @@ class ResendIntegrationConfigResponse(BaseModel):
     last_error_message: Optional[str] = None
 
 
+class ChatwootConfigRequest(BaseModel):
+    base_url: str = Field(default="https://crm.serviglobal-ia.com", max_length=255)
+    account_id: int = Field(..., gt=0)
+    default_inbox_id: Optional[int] = Field(None, gt=0)
+    status: str = "active"
+    api_token: Optional[str] = Field(None, max_length=2000)
+
+
+class ChatwootConfigResponse(BaseModel):
+    provider: str = "chatwoot"
+    status: str
+    base_url: Optional[str] = None
+    account_id: Optional[int] = None
+    default_inbox_id: Optional[int] = None
+    has_secret: bool
+    webhook_url: Optional[str] = None
+    last_health_check_at: Optional[datetime] = None
+    last_error_message: Optional[str] = None
+
+
+class ChatwootTestResponse(BaseModel):
+    status: str
+    error_message: Optional[str] = None
+
+
 class IntegrationAvailabilityResponse(BaseModel):
     provider: str
     enabled: bool

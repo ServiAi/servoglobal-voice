@@ -11,7 +11,7 @@ from app.services.secret_manager_service import SecretManager
 
 
 class IntegrationService:
-    supported_providers = ("resend", "voice", "whatsapp", "calcom", "google_calendar")
+    supported_providers = ("resend", "voice", "whatsapp", "calcom", "google_calendar", "chatwoot")
 
     def __init__(self, db: Session, secret_manager: SecretManager | None = None) -> None:
         self.db = db

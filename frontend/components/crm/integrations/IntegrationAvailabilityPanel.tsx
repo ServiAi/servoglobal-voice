@@ -11,6 +11,7 @@ const LABELS: Record<IntegrationProvider, string> = {
   whatsapp: 'WhatsApp',
   calcom: 'Reservas (Cal.com)',
   google_calendar: 'Google Calendar',
+  chatwoot: 'Chatwoot',
 };
 
 type Props = {

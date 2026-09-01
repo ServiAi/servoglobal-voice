@@ -126,7 +126,7 @@ class LegacyPublicCallEndpointTests(unittest.TestCase):
                 return_value=_StubCallContext(),
             ),
             patch("app.api.endpoints.voice.TenantUsageService"),
-            patch("app.api.endpoints.voice.notification_service"),
+            patch("app.api.endpoints.voice.run_demo_start_notification_task"),
             patch("app.api.endpoints.voice.create_call_session", call_session),
         )
 

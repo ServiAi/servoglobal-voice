@@ -20,4 +20,20 @@ for (const locale of ['es', 'en'] as const) {
     const accessibility = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze();
     expect(accessibility.violations, JSON.stringify(accessibility.violations, null, 2)).toEqual([]);
   });
+
+  test(`${locale} chatwoot integration page shows the tenant-scoped webhook URL after saving`, async ({ page }) => {
+    await page.goto(`/${locale}/crm/settings/integrations/chatwoot`);
+
+    await expect(page.getByRole('heading', { name: 'Chatwoot' })).toBeVisible();
+    await page.getByLabel(/Account ID/).fill('17');
+    await page.getByLabel(/Access token/).fill('cw_test_token_1234567890');
+    await page.getByRole('button', { name: /Guardar/ }).click();
+
+    await expect(page.getByRole('button', { name: /Probar conexión|Test connection/ })).toBeEnabled();
+    const webhookField = page.locator('input[readonly]');
+    await expect(webhookField).toHaveValue(/\/api\/v1\/webhooks\/chatwoot\//);
+
+    const accessibility = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze();
+    expect(accessibility.violations, JSON.stringify(accessibility.violations, null, 2)).toEqual([]);
+  });
 }

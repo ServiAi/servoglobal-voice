@@ -770,7 +770,8 @@
         "resend": { "name": "Resend", "description": "Transactional email for your organization's communications." },
         "voice": { "name": "Voice", "description": "Virtual agents, telephony, and SIP route configuration." },
         "calcom": { "name": "Cal.com", "description": "Bookings, availability, and scheduling rules." },
-        "google_calendar": { "name": "Google Calendar", "description": "Calendar connections and availability synchronization." }
+        "google_calendar": { "name": "Google Calendar", "description": "Calendar connections and availability synchronization." },
+        "chatwoot": { "name": "Chatwoot", "description": "Conversations, internal notes, and human handoff, per tenant." }
       },
       "actions": {
         "manage": "Manage",

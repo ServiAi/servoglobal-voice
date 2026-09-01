@@ -13,7 +13,7 @@ from app.services.crm_call_context_service import CrmCallContextService
 from app.services.crm_contact_service import CrmContactService
 from app.services.crm_lead_resolver_service import CrmLeadResolverService
 from app.services.voice_service import create_call_session, create_sip_call_via_pbx
-from app.services.notification_service import notification_service
+from app.services.notification_service import run_demo_start_notification_task
 from app.services.tenant_usage_service import TenantUsageService
 from app.api.deps import verify_turnstile
 
@@ -237,7 +237,7 @@ async def create_call(
 
         # Registrar el inicio de la demo en el CRM
         if context:
-            background_tasks.add_task(notification_service.notify_demo_start, dict(context))
+            background_tasks.add_task(run_demo_start_notification_task, tenant.id, dict(context))
 
         return {"joinUrl": join_url}
     except HTTPException:
@@ -325,7 +325,7 @@ async def create_outbound_call(
             )
             
         # Registrar el inicio de la demo en el CRM
-        background_tasks.add_task(notification_service.notify_demo_start, dict(context))
+        background_tasks.add_task(run_demo_start_notification_task, tenant.id, dict(context))
         
         return result
     except HTTPException:

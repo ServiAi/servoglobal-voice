@@ -93,11 +93,6 @@ class Settings(BaseSettings):
     WHATSAPP_GRAPH_VERSION: str = "v25.0"
     META_APP_SECRET: str = ""
 
-    # Chatwoot CRM
-    CHATWOOT_API_TOKEN: str = ""
-    CHATWOOT_ACCOUNT_ID: int = 1
-    CHATWOOT_INBOX_ID: int = 1    # ID del inbox WhatsApp en Chatwoot
-
     # Tenant integrations
     INTEGRATIONS_ENCRYPTION_KEY: str = ""
     ASTERISK_PROVISIONER_SHARED_SECRET: str = ""
