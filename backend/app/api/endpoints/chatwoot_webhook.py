@@ -14,6 +14,16 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/webhooks/chatwoot", tags=["Chatwoot Webhook"])
 
 
+def _extract_account_id(payload: dict) -> int | None:
+    """El objeto 'account' no siempre viene en el nivel superior: eventos como
+    message_created/message_updated lo traen ahi, pero otros (p. ej.
+    conversation_typing_on/off) solo lo anidan dentro de 'conversation'."""
+    account = payload.get("account")
+    if not isinstance(account, dict):
+        account = (payload.get("conversation") or {}).get("account")
+    return account.get("id") if isinstance(account, dict) else None
+
+
 @router.post("/{webhook_key}")
 async def chatwoot_webhook(webhook_key: str, request: Request, db: Session = Depends(get_db)):
     """
@@ -36,16 +46,20 @@ async def chatwoot_webhook(webhook_key: str, request: Request, db: Session = Dep
     if config is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
 
-    payload_account_id = (payload.get("account") or {}).get("id")
+    payload_account_id = _extract_account_id(payload)
     if payload_account_id != config.account_id:
+        message = (
+            f"account_id mismatch: payload={payload_account_id!r} "
+            f"expected={config.account_id} event={payload.get('event')!r}"
+        )
         IntegrationEventService(db).record_event(
             tenant_id=config.tenant_id,
             provider="chatwoot",
             event_type="webhook_rejected",
             status="rejected",
-            message="account_id mismatch",
+            message=message,
         )
-        logger.warning("Chatwoot webhook: account_id mismatch tenant_id=%s", config.tenant_id)
+        logger.warning("Chatwoot webhook: %s tenant_id=%s", message, config.tenant_id)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Account mismatch")
 
     event_type = payload.get("event")
