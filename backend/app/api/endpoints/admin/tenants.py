@@ -34,6 +34,7 @@ from app.schemas.integrations import (
     CalComTestResponse,
     GoogleCalendarConnectionResponse,
     IntegrationAvailabilityResponse,
+    IntegrationCatalogStatusResponse,
     IntegrationAvailabilityUpdateRequest,
     ResendIntegrationConfigRequest,
     ResendIntegrationConfigResponse,
@@ -58,7 +59,7 @@ from app.schemas.integrations import (
     VoiceAgentConfigResponse,
 )
 from app.schemas.crm import BookingCreateRequest, BookingResponse
-from app.api.endpoints.integrations import _resend_response, _whatsapp_template_detail
+from app.api.endpoints.integrations import _integration_catalog_statuses, _resend_response, _whatsapp_template_detail
 from app.services.booking_config_service import BookingConfigService
 from app.services.booking_service import BookingService
 from app.services.email_config_service import EmailConfigService
@@ -522,6 +523,25 @@ def list_tenant_integration_availability_admin(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return IntegrationService(db).list_availability(tenant_id)
+
+
+@router.get(
+    "/tenants/{tenant_id}/integrations/statuses",
+    response_model=list[IntegrationCatalogStatusResponse],
+)
+def list_tenant_integration_catalog_statuses_admin(
+    tenant_id: str,
+    db: Session = Depends(get_current_internal_db),
+) -> Any:
+    try:
+        OnboardingService(db).get_tenant(tenant_id)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found") from None
+    return _integration_catalog_statuses(
+        db,
+        tenant_id,
+        {"resend", "whatsapp", "voice", "calcom", "google_calendar"},
+    )
 
 
 @router.patch(

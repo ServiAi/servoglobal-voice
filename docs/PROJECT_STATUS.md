@@ -1,11 +1,11 @@
 # Estado funcional del proyecto
 
-Actualizado: 2026-08-31. Fuente: código, migraciones y pruebas del repositorio.
+Actualizado: 2026-09-01. Fuente: código, migraciones y pruebas del repositorio.
 
 | Área | Estado | Implementación actual |
 | --- | --- | --- |
 | Landing e i18n | Operativa | Landing bilingüe, pricing, demos, formularios y contenido SEO. |
-| Auth0 y tenants | Operativa | Login, contexto privado, onboarding, administración, membresías y agentes. |
+| Auth0 y tenants | Operativa | Login, contexto privado, onboarding, administración, membresías y agentes. El administrador de tenants usa un catálogo compacto de integraciones y carga cada configuración en una ruta independiente. |
 | Dashboard | Operativa | KPIs, tendencias, distribuciones, heatmap, llamadas recientes, uso y ahorro. |
 | CRM | Operativa | Pipeline, leads, detalle, timeline, notas, tareas, dashboard comercial y catálogo bilingüe de integraciones con búsqueda, filtros, estados resumidos y configuración por ruta. |
 | Ingesta Ultravox | Operativa | Eventos, llamadas, estados, resumen, costos y correlación CRM. |

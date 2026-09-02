@@ -744,6 +744,21 @@
       "eyebrow": "Ecosistema conectado",
       "title": "Integraciones",
       "description": "Conecta las herramientas que utiliza tu organización y administra cada canal en su propio espacio.",
+      "admin": {
+        "eyebrow": "Configuración por tenant",
+        "description": "Controla el acceso del tenant y administra cada integración en su propio espacio, sin cargar todos los formularios a la vez.",
+        "back": "Volver al tenant",
+        "availability": {
+          "title": "Acceso del tenant",
+          "description": "Las integraciones deshabilitadas se ocultan y sus endpoints quedan bloqueados para esta empresa.",
+          "enabled": "Habilitada",
+          "disabled": "Deshabilitada",
+          "enable": "Habilitar",
+          "disable": "Deshabilitar",
+          "updating": "Actualizando",
+          "loadError": "No fue posible cargar la disponibilidad de integraciones para este tenant."
+        }
+      },
       "available": "{count, plural, =0 {Sin integraciones disponibles} one {# integración disponible} other {# integraciones disponibles}}",
       "controlsLabel": "Búsqueda y filtros de integraciones",
       "searchLabel": "Buscar una integración",

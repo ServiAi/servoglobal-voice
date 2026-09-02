@@ -8,13 +8,14 @@ type Props = {
   name: string;
   description: string;
   children: ReactNode;
+  integrationsPath?: string;
 };
 
-export function IntegrationDetailShell({ locale, integrationsLabel, name, description, children }: Props) {
+export function IntegrationDetailShell({ locale, integrationsLabel, name, description, children, integrationsPath = '/crm/settings/integrations' }: Props) {
   return (
     <div className="mx-auto flex max-w-7xl flex-col gap-6">
       <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground">
-        <Link href={`/${locale}/crm/settings/integrations`} className="rounded-sm outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">{integrationsLabel}</Link>
+        <Link href={`/${locale}${integrationsPath}`} className="rounded-sm outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">{integrationsLabel}</Link>
         <ChevronRight className="size-4" aria-hidden="true" />
         <span aria-current="page" className="font-medium text-foreground">{name}</span>
       </nav>

@@ -12,9 +12,11 @@ type Props = {
   section: 'account' | 'templates' | 'test';
   initialConfig?: WhatsAppConfigResponse;
   templates?: WhatsAppTemplateResponse[];
+  mode?: 'tenant' | 'admin';
+  tenantId?: string;
 };
 
-export function WhatsAppSection({ accessToken, section, initialConfig, templates = [] }: Props) {
+export function WhatsAppSection({ accessToken, section, initialConfig, templates = [], mode = 'tenant', tenantId }: Props) {
   const router = useRouter();
   const [config, setConfig] = useState(initialConfig);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -30,6 +32,8 @@ export function WhatsAppSection({ accessToken, section, initialConfig, templates
         <WhatsAppConfigForm
           accessToken={accessToken}
           config={config}
+          mode={mode}
+          tenantId={tenantId}
           onSaved={(nextConfig) => {
             setConfig(nextConfig);
             notify('success', 'Configuración WhatsApp guardada.');
@@ -42,6 +46,8 @@ export function WhatsAppSection({ accessToken, section, initialConfig, templates
         <WhatsAppTemplateManager
           accessToken={accessToken}
           templates={templates}
+          mode={mode}
+          tenantId={tenantId}
           voiceCallingEnabled={!!config?.voice_calling_enabled}
           disabled={disabled}
           onSuccess={(text) => notify('success', text)}
@@ -52,6 +58,8 @@ export function WhatsAppSection({ accessToken, section, initialConfig, templates
         <WhatsAppTestForm
           accessToken={accessToken}
           templates={templates}
+          mode={mode}
+          tenantId={tenantId}
           disabled={disabled}
           onSuccess={(text) => notify('success', text)}
           onError={(text) => notify('error', text)}

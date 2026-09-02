@@ -42,6 +42,7 @@ La especificación ejecutable completa está disponible en `/docs` y `/openapi.j
 ## Integraciones destacadas
 
 - `GET /api/v1/integrations/availability` lista los providers habilitados para el tenant; `GET /api/v1/integrations/statuses` devuelve únicamente `{provider, status}` para el catálogo (`active|configured|not_configured|error`), sin credenciales, IDs de recursos, listas ni PII.
+- `GET /api/v1/admin/tenants/{tenant_id}/integrations/statuses` ofrece el mismo contrato compacto al administrador interno para Resend, WhatsApp, voz, Cal.com y Google Calendar. Exige acceso interno, conserva visibles las integraciones aunque estén deshabilitadas y no devuelve secretos, configuración ni PII.
 - Resend: configuración, test, templates y assets bajo `/api/v1/integrations/resend`.
 - Cal.com: configuración, test y slots bajo `/api/v1/integrations/calcom`; bookings viven en CRM.
 - Google Calendar: connect URL, callback, connections y disconnect.

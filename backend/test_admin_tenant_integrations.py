@@ -106,6 +106,28 @@ class AdminTenantIntegrationTests(unittest.TestCase):
         whatsapp = next(item for item in availability.json() if item["provider"] == "whatsapp")
         self.assertFalse(whatsapp["enabled"])
 
+    def test_platform_admin_can_fetch_compact_statuses_for_configurable_integrations(self):
+        self.assertEqual(self._configure(self.tenant.id).status_code, 200)
+        self.client.patch(
+            f"/api/v1/admin/tenants/{self.tenant.id}/integrations/availability/resend",
+            json={"enabled": False},
+        )
+
+        response = self.client.get(
+            f"/api/v1/admin/tenants/{self.tenant.id}/integrations/statuses"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        statuses = {item["provider"]: item["status"] for item in response.json()}
+        self.assertEqual(
+            set(statuses),
+            {"resend", "whatsapp", "voice", "calcom", "google_calendar"},
+        )
+        self.assertEqual(statuses["resend"], "active")
+        self.assertTrue(all(set(item) == {"provider", "status"} for item in response.json()))
+        self.assertNotIn("comercial@mail.serviglobal-ia.com", response.text)
+        self.assertNotIn("re_secret_test", response.text)
+
     def test_integrations_default_to_enabled_and_can_be_reenabled_without_losing_config(self):
         initial = self.client.get(f"/api/v1/admin/tenants/{self.tenant.id}/integrations/availability")
         self.assertEqual(initial.status_code, 200)
@@ -231,6 +253,11 @@ class AdminTenantIntegrationTests(unittest.TestCase):
         self.assertEqual(response.status_code, 403)
         self.assertIn("Internal platform access required", response.json()["detail"])
 
+        response = self.client.get(
+            f"/api/v1/admin/tenants/{self.tenant.id}/integrations/statuses"
+        )
+        self.assertEqual(response.status_code, 403)
+
         response = self.client.post(
             f"/api/v1/admin/tenants/{self.tenant.id}/integrations/resend/config",
             json={
@@ -246,6 +273,11 @@ class AdminTenantIntegrationTests(unittest.TestCase):
         unknown_id = "nonexistent-tenant-id"
         
         response = self.client.get(f"/api/v1/admin/tenants/{unknown_id}/integrations")
+        self.assertEqual(response.status_code, 404)
+
+        response = self.client.get(
+            f"/api/v1/admin/tenants/{unknown_id}/integrations/statuses"
+        )
         self.assertEqual(response.status_code, 404)
         
         response = self.client.post(

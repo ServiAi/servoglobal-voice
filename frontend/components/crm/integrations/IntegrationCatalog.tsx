@@ -13,11 +13,12 @@ type Props = {
   enabledProviders: IntegrationProvider[];
   statuses: IntegrationCatalogStatusResponse[];
   loadError: boolean;
+  basePath?: string;
 };
 
 const normalize = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase();
 
-export function IntegrationCatalog({ locale, enabledProviders, statuses, loadError }: Props) {
+export function IntegrationCatalog({ locale, enabledProviders, statuses, loadError, basePath }: Props) {
   const t = useTranslations('crm.integrationsCatalog');
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
@@ -73,7 +74,8 @@ export function IntegrationCatalog({ locale, enabledProviders, statuses, loadErr
               {categoryItems.map((item) => {
                 const status = (statusByProvider.get(item.provider) ?? (loadError ? 'error' : 'not_configured')) as IntegrationStatus;
                 const action = status === 'error' ? 'review' : status === 'not_configured' ? 'configure' : 'manage';
-                return <IntegrationCatalogCard key={item.provider} {...item} locale={locale} name={t(`providers.${item.provider}.name`)} description={t(`providers.${item.provider}.description`)} categoryLabel={t(`categories.${item.category}`)} status={status} actionLabel={t(`actions.${action}`)} />;
+                const href = basePath ? `${basePath}/${item.href.split('/').at(-1)}` : item.href;
+                return <IntegrationCatalogCard key={item.provider} {...item} href={href} locale={locale} name={t(`providers.${item.provider}.name`)} description={t(`providers.${item.provider}.description`)} categoryLabel={t(`categories.${item.category}`)} status={status} actionLabel={t(`actions.${action}`)} />;
               })}
             </div>
           </section>
