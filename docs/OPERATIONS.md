@@ -11,7 +11,7 @@ Variables base:
 
 - Backend: `DATABASE_URL`, `PORT`, Auth0, Ultravox y `INTEGRATIONS_ENCRYPTION_KEY`.
 - Frontend: `NEXT_PUBLIC_API_URL`, Auth0 y Turnstile cuando se use la demo pública.
-- Integraciones opcionales: Cal.com, Google Calendar, Resend/storage, WhatsApp, Chatwoot y secretos de webhooks/herramientas internas.
+- Integraciones opcionales: Cal.com, Google Calendar, Resend/storage, WhatsApp y secretos de webhooks/herramientas internas. Chatwoot ya no usa variables de entorno globales (`CHATWOOT_API_TOKEN`/`CHATWOOT_ACCOUNT_ID`/`CHATWOOT_INBOX_ID` fueron retiradas); se configura por tenant en `Settings → Integrations → Chatwoot`.
 - Worker de notificaciones: `NOTIFICATION_WORKER_BATCH_SIZE`, `NOTIFICATION_WORKER_POLL_SECONDS`, `NOTIFICATION_WORKER_LEASE_SECONDS`, `NOTIFICATION_WORKER_MAX_ATTEMPTS`, tiempos de retry/jitter y parámetros de recuperación. Los defaults y rangos válidos están en `backend/app/core/config.py`.
 
 Los nombres vigentes y placeholders están en los archivos `.env.example`. Nunca copie valores reales a documentación, logs o commits.
@@ -170,6 +170,16 @@ El repositorio contiene Dockerfiles separados para frontend y backend. El despli
 6. Si el entorno usa automatizaciones, despliegue y supervise también el proceso `app.workers.notification_worker`; desplegar sólo FastAPI no procesa la cola pendiente.
 
 `NEXT_PUBLIC_API_URL` es build-time: cambiarla exige reconstruir el frontend.
+
+### Migración de Chatwoot a multi-tenant
+
+Chatwoot dejó de configurarse por variables de entorno globales; ahora es una integración por tenant (`TenantChatwootConfig`, migración `202609010001_chatwoot_multitenant_v1.py`). Antes de desplegar este cambio a un entorno que ya usaba el Chatwoot global:
+
+1. Aplique la migración y confirme una sola head de Alembic.
+2. Cree manualmente el `TenantChatwootConfig` del tenant que hoy depende del Chatwoot global (`Settings → Integrations → Chatwoot`), copiando los valores que antes vivían en `.env`: URL de la instancia, `account_id`, inbox por defecto y el access token de Chatwoot. No hay migración automática de datos ni fallback en código a los valores anteriores.
+3. Pruebe la conexión (`Probar conexión`) y confirme `has_secret: true`.
+4. Copie la `webhook_url` mostrada en la tarjeta y configúrela en Chatwoot → Settings → Integrations → Webhooks para esa Account, reemplazando la URL anterior (`/api/v1/chatwoot/webhook`, retirada).
+5. Envíe un mensaje entrante real desde esa Account y confirme en `tenant_integration_events` (`provider="chatwoot"`) que se registra `webhook_received` para el tenant correcto.
 
 ## Checklist de seguridad
 

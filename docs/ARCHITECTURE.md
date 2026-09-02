@@ -22,7 +22,7 @@ El subsistema de notificaciones separa administración (`notification_admin_serv
 
 ### Datos
 
-PostgreSQL es la base principal. Alembic administra el esquema. Los dominios persistentes son identidad/tenant, llamadas/analítica, CRM, billing/uso, integraciones y notificaciones. Notificaciones usa `tenant_capabilities`, `tenant_notification_rules`, `tenant_notification_recipients`, `domain_events` y `notification_deliveries`. Los binarios de email se almacenan mediante `StorageService` en disco local o S3 compatible; la DB guarda metadata.
+PostgreSQL es la base principal. Alembic administra el esquema. Los dominios persistentes son identidad/tenant, llamadas/analítica, CRM, billing/uso, integraciones y notificaciones. Notificaciones usa `tenant_capabilities`, `tenant_notification_rules`, `tenant_notification_recipients`, `domain_events` y `notification_deliveries`. Los binarios de email se almacenan mediante `StorageService` en disco local o S3 compatible; la DB guarda metadata. Chatwoot es multi-tenant vía `tenant_chatwoot_configs` (una Account por tenant, token cifrado, `webhook_key` único) y `tenant_chatwoot_inboxes` (inboxes adicionales opcionales); no hay tabla ni configuración global.
 
 ## Límites de confianza
 
@@ -30,7 +30,7 @@ PostgreSQL es la base principal. Alembic administra el esquema. Los dominios per
 - Las rutas tenant derivan `tenant_id` del contexto autenticado.
 - Las rutas `/api/v1/admin/...` requieren autorización de plataforma y pueden seleccionar tenant explícitamente.
 - La familia `/api/v1/admin/notifications` es una excepción nominal: también admite roles tenant. Toda operación sobre recursos deriva el tenant de `AuthContext`; el catálogo común sigue autenticado y ningún endpoint acepta `tenant_id` del body o query.
-- Webhooks verifican firma o secreto cuando el proveedor lo soporta.
+- Webhooks verifican firma o secreto cuando el proveedor lo soporta. Chatwoot no firma sus webhooks salientes: el aislamiento por tenant usa un `webhook_key` opaco en la URL (`POST /api/v1/webhooks/chatwoot/{webhook_key}`) más un cross-check de `payload.account.id` contra la Account configurada.
 - Herramientas internas de voz usan secreto compartido y nunca aceptan un tenant arbitrario sin resolver contexto seguro.
 - Los secretos por tenant se cifran; las respuestas sólo indican presencia mediante campos como `has_secret`.
 

@@ -13,6 +13,9 @@ from app.schemas.integrations import (
     BookingConfigRequest,
     BookingConfigResponse,
     CalComTestResponse,
+    ChatwootConfigRequest,
+    ChatwootConfigResponse,
+    ChatwootTestResponse,
     EmailTemplateItem,
     EmailTemplateUpsertRequest,
     GoogleCalendarConnectionResponse,
@@ -46,6 +49,7 @@ from app.schemas.integrations import (
 )
 from app.services.booking_config_service import BookingConfigService
 from app.services.booking_service import BookingService
+from app.services.chatwoot_config_service import ChatwootConfigService
 from app.services.email_config_service import EmailConfigService
 from app.services.email_send_service import EmailSendService
 from app.services.email_template_service import EmailTemplateService
@@ -182,6 +186,14 @@ def list_integration_catalog_statuses(
             configured=bool(connections),
             provider_status="connected" if any(item.status == "connected" for item in connections) else None,
             has_error=any(bool(item.last_error_message) or item.status in {"error", "failed"} for item in connections),
+        )
+
+    if "chatwoot" in enabled:
+        config = ChatwootConfigService(db).get_config(tenant_id)
+        statuses["chatwoot"] = _catalog_status(
+            configured=config is not None,
+            provider_status=config.status if config else None,
+            has_error=bool(config and config.last_error_message),
         )
 
     return [
@@ -683,3 +695,33 @@ def update_voice_agent(
         return service.response(agent)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+
+
+# --- Chatwoot Integration Config ---
+
+@router.get("/chatwoot/config", response_model=ChatwootConfigResponse)
+def get_chatwoot_config(
+    context: AuthContext = Depends(require_enabled_integration("chatwoot", _READ_ROLES)),
+    db: Session = Depends(get_db),
+) -> Any:
+    return ChatwootConfigService(db).get_response(context.tenant.id)
+
+
+@router.post("/chatwoot/config", response_model=ChatwootConfigResponse)
+def configure_chatwoot(
+    body: ChatwootConfigRequest,
+    context: AuthContext = Depends(require_enabled_integration("chatwoot", _WRITE_ROLES)),
+    db: Session = Depends(get_db),
+) -> Any:
+    try:
+        return ChatwootConfigService(db).upsert_config(context.tenant.id, body)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+
+
+@router.post("/chatwoot/test", response_model=ChatwootTestResponse)
+def test_chatwoot(
+    context: AuthContext = Depends(require_enabled_integration("chatwoot", _WRITE_ROLES)),
+    db: Session = Depends(get_db),
+) -> Any:
+    return ChatwootConfigService(db).test_connection(context.tenant.id)

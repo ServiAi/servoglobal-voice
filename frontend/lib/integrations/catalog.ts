@@ -30,6 +30,7 @@ export const integrationCatalog: IntegrationCatalogItem[] = [
   { provider: 'voice', category: 'voice', href: '/crm/settings/integrations/voice', icon: 'phone' },
   { provider: 'calcom', category: 'scheduling', href: '/crm/settings/integrations/calcom', icon: 'calendar' },
   { provider: 'google_calendar', category: 'scheduling', href: '/crm/settings/integrations/google-calendar', icon: 'calendar' },
+  { provider: 'chatwoot', category: 'crm', href: '/crm/settings/integrations/chatwoot', icon: 'message' },
 ];
 
 export function resolveIntegrationStatus(

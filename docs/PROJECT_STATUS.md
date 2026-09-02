@@ -18,11 +18,11 @@ Actualizado: 2026-08-31. Fuente: código, migraciones y pruebas del repositorio.
 | Voz CRM | Operativa en código | Configuración de proveedor/agentes, rutas SIP cifradas por tenant, aprovisionamiento automático y versionado de endpoints PJSIP, llamadas WebRTC y callbacks salientes mediante IDT, webhook y booking tools. El agente local del PBX debe instalarse por entorno. |
 | Voice Context Experiences | Runtime público WebRTC implementado en código | Feature flag, snapshots, submissions y context session one-shot; launch Ultravox tenant-scoped con recovery-first, leases, recovery por `joined`/`ended`, webhook firmado/deduplicado, billing real por `billedDuration`, CRM monotónico, concurrencia PostgreSQL y preflight de micrófono. `submissions=true`; `calls=true`. Ver `docs-local/fase-4/VOICE_EXPERIENCE_WEBRTC_RUNTIME.md`. |
 | Planes y consumo | Operativa | Límites, alertas, resumen administrativo y comparación de ahorro. |
-| Chatwoot | Legado/compatible | Webhook y acciones existentes; conservar compatibilidad al modificar CRM/mensajería. |
+| Chatwoot | Multi-tenant (Sprint 1) | Una Account de Chatwoot por tenant vía `TenantChatwootConfig`/`TenantChatwootInbox` (modo "external"), token cifrado, catálogo/config/test en `Settings → Integrations → Chatwoot`. Webhook tenant-aware en `POST /api/v1/webhooks/chatwoot/{webhook_key}` (resuelve tenant por key, valida `account_id`); ya no responde automáticamente a mensajes entrantes (placeholder retirado). El motor legacy global (`chatwoot_service`) fue eliminado. Auto-provisioning ("Managed" vía Platform API) y vínculo a agentes de voz quedan pendientes. |
 
 ## Persistencia
 
-Las migraciones cubren identidad, analítica, riesgo Auth0, planes/uso, CRM base y contexto de llamadas, Resend/email/formularios, Cal.com/Google Calendar, WhatsApp, voz, disponibilidad de integraciones, notificaciones, grants tenant, context submissions, runtime WebRTC y rutas SIP/callbacks salientes. La migración más reciente es `202608310002_whatsapp_flow_studio_v1.py` y la cadena debe conservar una única head.
+Las migraciones cubren identidad, analítica, riesgo Auth0, planes/uso, CRM base y contexto de llamadas, Resend/email/formularios, Cal.com/Google Calendar, WhatsApp, voz, disponibilidad de integraciones, notificaciones, grants tenant, context submissions, runtime WebRTC, rutas SIP/callbacks salientes y configuración multi-tenant de Chatwoot. La migración más reciente es `202609010001_chatwoot_multitenant_v1.py` y la cadena debe conservar una única head.
 
 ## Continuidad: automatizaciones y notificaciones
 

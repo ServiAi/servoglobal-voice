@@ -68,7 +68,7 @@ class IntegrationCatalogStatusesTests(unittest.TestCase):
         response = self.client.get("/api/v1/integrations/statuses")
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(response.json()), 5)
+        self.assertEqual(len(response.json()), 6)
         self.assertTrue(all(item["status"] == "not_configured" for item in response.json()))
         self.assertTrue(all(set(item) == {"provider", "status"} for item in response.json()))
 
@@ -87,7 +87,16 @@ class IntegrationCatalogStatusesTests(unittest.TestCase):
         statuses = {item["provider"]: item["status"] for item in response.json()}
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(statuses, {"resend": "active", "voice": "configured", "whatsapp": "error", "google_calendar": "active"})
+        self.assertEqual(
+            statuses,
+            {
+                "resend": "active",
+                "voice": "configured",
+                "whatsapp": "error",
+                "google_calendar": "active",
+                "chatwoot": "not_configured",
+            },
+        )
         self.assertNotIn("sanitized failure", response.text)
         self.assertNotIn("encrypted", response.text)
 

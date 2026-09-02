@@ -1,9 +1,12 @@
 import logging
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.db.session import get_db
+from app.services.identity_service import IdentityService
 
 
 logger = logging.getLogger(__name__)
@@ -45,14 +48,18 @@ class BookingNotificationRequest(BaseModel):
 
 
 @router.post("/booking")
-async def send_booking_notifications(request: BookingNotificationRequest):
+async def send_booking_notifications(request: BookingNotificationRequest, db: Session = Depends(get_db)):
     """
     Dispara las dos plantillas de notificacion de cita.
     """
     from app.services.notification_service import notification_service
 
+    tenant = IdentityService(db).bootstrap_tenant()
+
     try:
         results = await notification_service.notify_new_booking(
+            db=db,
+            tenant_id=tenant.id,
             client_phone=request.client_phone,
             client_name=request.client_name,
             date_str=request.date_str,

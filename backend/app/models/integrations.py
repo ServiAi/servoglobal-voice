@@ -543,6 +543,49 @@ class TenantSipRoute(Base, TimestampMixin):
     provider_config = relationship("TenantVoiceProviderConfig")
 
 
+class TenantChatwootConfig(Base, TimestampMixin):
+    __tablename__ = "tenant_chatwoot_configs"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "provider", name="uq_tenant_chatwoot_configs_tenant_provider"),
+        UniqueConstraint("webhook_key", name="uq_tenant_chatwoot_configs_webhook_key"),
+        Index("ix_tenant_chatwoot_configs_tenant_provider", "tenant_id", "provider"),
+        Index("ix_tenant_chatwoot_configs_tenant_status", "tenant_id", "status"),
+        Index("ix_tenant_chatwoot_configs_account_id", "account_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False)
+    provider: Mapped[str] = mapped_column(String(40), nullable=False, default="chatwoot")
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="inactive")
+    base_url: Mapped[str] = mapped_column(String(255), nullable=False, default="https://crm.serviglobal-ia.com")
+    account_id: Mapped[int] = mapped_column(sa.Integer, nullable=False)
+    default_inbox_id: Mapped[int | None] = mapped_column(sa.Integer, nullable=True)
+    api_token_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
+    webhook_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    last_health_check_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    tenant = relationship("Tenant")
+
+
+class TenantChatwootInbox(Base, TimestampMixin):
+    __tablename__ = "tenant_chatwoot_inboxes"
+    __table_args__ = (
+        Index("ix_tenant_chatwoot_inboxes_tenant_config", "tenant_id", "chatwoot_config_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False)
+    chatwoot_config_id: Mapped[str] = mapped_column(ForeignKey("tenant_chatwoot_configs.id"), nullable=False)
+    chatwoot_inbox_id: Mapped[int] = mapped_column(sa.Integer, nullable=False)
+    channel: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    name: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    is_default: Mapped[bool] = mapped_column(sa.Boolean, nullable=False, default=False)
+
+    tenant = relationship("Tenant")
+    chatwoot_config = relationship("TenantChatwootConfig")
+
+
 class TenantVoiceAgentConfig(Base, TimestampMixin):
     __tablename__ = "tenant_voice_agent_configs"
     __table_args__ = (

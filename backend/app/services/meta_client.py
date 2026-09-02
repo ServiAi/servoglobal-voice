@@ -50,7 +50,7 @@ class MetaClient:
         Envía un mensaje de texto libre a un número de WhatsApp.
 
         Úsalo solo cuando NO hay una conversación activa en Chatwoot
-        (en ese caso prefiere chatwoot_service.send_message para registrar en CRM).
+        (en ese caso prefiere ChatwootClient.send_message para registrar en CRM).
 
         Args:
             to:   Teléfono en formato +573201234567

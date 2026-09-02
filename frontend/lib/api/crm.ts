@@ -19,6 +19,9 @@ import type {
   IntegrationAvailabilityResponse,
   IntegrationCatalogStatusResponse,
   ResendTestEmailRequest,
+  ChatwootConfigRequest,
+  ChatwootConfigResponse,
+  ChatwootTestResponse,
   WhatsAppActionRequest,
   WhatsAppActionResponse,
   WhatsAppConfigRequest,
@@ -493,6 +496,18 @@ export function disconnectGoogleCalendar(accessToken: string, connectionId: stri
     accessToken,
     { connection_id: connectionId }
   );
+}
+
+export function fetchChatwootConfig(accessToken: string) {
+  return requestIntegrationEndpoint<ChatwootConfigResponse>('GET', 'chatwoot/config', accessToken);
+}
+
+export function configureChatwootIntegration(accessToken: string, payload: ChatwootConfigRequest) {
+  return requestIntegrationEndpoint<ChatwootConfigResponse>('POST', 'chatwoot/config', accessToken, undefined, payload);
+}
+
+export function testChatwootIntegration(accessToken: string) {
+  return requestIntegrationEndpoint<ChatwootTestResponse>('POST', 'chatwoot/test', accessToken);
 }
 
 export function configureResendIntegration(accessToken: string, payload: ResendIntegrationConfigRequest) {

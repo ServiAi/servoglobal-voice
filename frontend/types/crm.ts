@@ -335,7 +335,32 @@ export type ResendIntegrationConfigResponse = {
   last_error_message?: string | null;
 };
 
-export type IntegrationProvider = 'resend' | 'voice' | 'whatsapp' | 'calcom' | 'google_calendar';
+export type IntegrationProvider = 'resend' | 'voice' | 'whatsapp' | 'calcom' | 'google_calendar' | 'chatwoot';
+
+export type ChatwootConfigRequest = {
+  base_url?: string;
+  account_id: number;
+  default_inbox_id?: number | null;
+  status?: string;
+  api_token?: string | null;
+};
+
+export type ChatwootConfigResponse = {
+  provider: 'chatwoot';
+  status: 'active' | 'inactive' | 'error' | string;
+  base_url?: string | null;
+  account_id?: number | null;
+  default_inbox_id?: number | null;
+  has_secret: boolean;
+  webhook_url?: string | null;
+  last_health_check_at?: string | null;
+  last_error_message?: string | null;
+};
+
+export type ChatwootTestResponse = {
+  status: string;
+  error_message?: string | null;
+};
 
 export type IntegrationStatus = 'active' | 'configured' | 'not_configured' | 'error';
 
