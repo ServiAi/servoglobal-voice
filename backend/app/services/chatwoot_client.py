@@ -30,6 +30,9 @@ class ChatwootClientError(RuntimeError):
 def sanitize_chatwoot_error(value: str | None) -> str | None:
     if not value:
         return None
+    stripped = value.lstrip().lower()
+    if stripped.startswith("<!doctype html") or stripped.startswith("<html"):
+        return "Chatwoot devolvio una pagina HTML en vez de una respuesta de API. Verifica base_url y account_id."
     text = re.sub(r"api_access_token[\"']?\s*[:=]\s*[\"']?[\w.\-]+", "api_access_token=[REDACTED]", value)
     text = re.sub(r"\+?\d[\d\s().-]{6,}\d", "[REDACTED_PHONE]", text)
     text = re.sub(r"[\w.\-+]+@[\w.\-]+\.\w+", "[REDACTED_EMAIL]", text)

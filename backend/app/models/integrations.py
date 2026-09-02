@@ -556,6 +556,7 @@ class TenantChatwootConfig(Base, TimestampMixin):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
     tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False)
     provider: Mapped[str] = mapped_column(String(40), nullable=False, default="chatwoot")
+    mode: Mapped[str] = mapped_column(String(20), nullable=False, default="external")
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="inactive")
     base_url: Mapped[str] = mapped_column(String(255), nullable=False, default="https://crm.serviglobal-ia.com")
     account_id: Mapped[int] = mapped_column(sa.Integer, nullable=False)

@@ -1,9 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { AlertCircle, CheckCircle2, Copy, Eye, EyeOff, Loader2, MessageCircle, Send } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Copy, Eye, EyeOff, Loader2, MessageCircle, Send, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { testChatwootIntegration } from '@/lib/api/crm';
+import { provisionChatwootIntegration, testChatwootIntegration } from '@/lib/api/crm';
 import type { ChatwootConfigResponse } from '@/types/crm';
 import { ChatwootConfigForm } from './ChatwootConfigForm';
 import { FieldHelp } from './FieldHelp';
@@ -18,6 +18,7 @@ export function ChatwootIntegrationCard({ accessToken, initialConfig }: Props) {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [showWebhookUrl, setShowWebhookUrl] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [provisioning, setProvisioning] = useState(false);
   const isActive = config?.status === 'active';
 
   const notify = (type: 'success' | 'error', text: string) => {
@@ -43,6 +44,18 @@ export function ChatwootIntegrationCard({ accessToken, initialConfig }: Props) {
     notify('success', 'Conexión con Chatwoot verificada correctamente.');
   };
 
+  const handleProvision = async () => {
+    setProvisioning(true);
+    const result = await provisionChatwootIntegration(accessToken, {});
+    setProvisioning(false);
+    if (!result.ok) {
+      notify('error', result.detail);
+      return;
+    }
+    setConfig(result.data);
+    notify('success', 'Cuenta de Chatwoot creada y configurada automáticamente.');
+  };
+
   const copyWebhookUrl = async () => {
     if (!fullWebhookUrl) return;
     try {
@@ -65,13 +78,38 @@ export function ChatwootIntegrationCard({ accessToken, initialConfig }: Props) {
             <p className="text-sm text-muted-foreground">Conversaciones y handoff a humanos por tenant</p>
           </div>
         </div>
-        <span className={`inline-flex items-center gap-2 self-start rounded-md border px-3 py-1.5 text-xs font-semibold md:self-auto ${isActive ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300'}`}>
-          {isActive ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
-          {isActive ? 'Activa' : config?.status ?? 'Sin configurar'}
-        </span>
+        <div className="flex items-center gap-2 self-start md:self-auto">
+          {config?.mode === 'managed' && (
+            <span className="inline-flex items-center rounded-md border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary">
+              Managed
+            </span>
+          )}
+          <span className={`inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs font-semibold ${isActive ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300'}`}>
+            {isActive ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
+            {isActive ? 'Activa' : config?.status ?? 'Sin configurar'}
+          </span>
+        </div>
       </div>
 
       <div className="space-y-6 p-5">
+        {!isActive && (
+          <div className="flex flex-col gap-3 rounded-lg border border-primary/20 bg-primary/5 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="flex items-center gap-1 text-sm font-medium text-foreground">
+                Crear la cuenta automáticamente
+                <FieldHelp label="Crear la cuenta automáticamente" required={false}>
+                  Crea una Account, un Agent Bot y un inbox nuevos en Chatwoot para este tenant sin salir de esta pantalla. Requiere que la plataforma tenga habilitado el aprovisionamiento automático (modo &quot;managed&quot;); si no está disponible, usa el formulario manual de abajo.
+                </FieldHelp>
+              </p>
+              <p className="text-xs text-muted-foreground">Alternativa a llenar el formulario manual con datos de una Account existente.</p>
+            </div>
+            <Button type="button" onClick={handleProvision} disabled={provisioning} className="gap-2 sm:shrink-0">
+              {provisioning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+              Crear automáticamente
+            </Button>
+          </div>
+        )}
+
         <ChatwootConfigForm
           accessToken={accessToken}
           config={config}

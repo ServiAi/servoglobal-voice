@@ -6,13 +6,16 @@ from datetime import UTC, datetime
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.models.integrations import TenantChatwootConfig
 from app.schemas.integrations import ChatwootConfigRequest, ChatwootConfigResponse, ChatwootTestResponse
 from app.services.chatwoot_client import ChatwootClient, ChatwootClientConfig, ChatwootClientError, sanitize_chatwoot_error
+from app.services.chatwoot_platform_client import ChatwootPlatformClient, ChatwootPlatformError
 from app.services.integration_event_service import IntegrationEventService
 from app.services.secret_manager_service import SecretManager
 
 _WEBHOOK_PATH = "/api/v1/webhooks/chatwoot"
+_DEFAULT_PLATFORM_BASE_URL = "https://crm.serviglobal-ia.com"
 
 
 class ChatwootConfigService:
@@ -47,6 +50,7 @@ class ChatwootConfigService:
 
     def to_response(self, config: TenantChatwootConfig) -> ChatwootConfigResponse:
         return ChatwootConfigResponse(
+            mode=config.mode,
             status=config.status,
             base_url=config.base_url,
             account_id=config.account_id,
@@ -138,3 +142,97 @@ class ChatwootConfigService:
             resource_id=config.id,
         )
         return ChatwootTestResponse(status="success")
+
+    def provision_managed_account(self, tenant_id: str, *, account_name: str) -> ChatwootConfigResponse:
+        """Crea una Account, un usuario administrator dedicado, un inbox 'api' y el
+        webhook de cuenta en Chatwoot vía Platform API, dejando al tenant operativo
+        sin que el operador pegue credenciales a mano. Requiere CHATWOOT_PLATFORM_API_TOKEN
+        y BACKEND_PUBLIC_BASE_URL.
+
+        No usa Agent Bots: verificado contra la instancia real que su access_token
+        no tiene permiso ni para crear un contacto ("Access to this endpoint is not
+        authorized for bots"). El usuario administrator es el mismo tipo de credencial
+        que el operador crea a mano hoy en modo "external"."""
+        existing = self.get_config(tenant_id)
+        if existing is not None and existing.status == "active":
+            raise ValueError("Chatwoot integration is already configured for this tenant")
+        if not settings.CHATWOOT_PLATFORM_API_TOKEN:
+            raise ValueError("CHATWOOT_PLATFORM_API_TOKEN is not configured")
+        if not settings.BACKEND_PUBLIC_BASE_URL:
+            raise ValueError("BACKEND_PUBLIC_BASE_URL is not configured")
+
+        is_new = existing is None
+        webhook_key = existing.webhook_key if existing else secrets.token_urlsafe(32)
+        config = existing or TenantChatwootConfig(tenant_id=tenant_id, provider=self.provider, webhook_key=webhook_key)
+
+        webhook_url = f"{settings.BACKEND_PUBLIC_BASE_URL.rstrip('/')}{_WEBHOOK_PATH}/{webhook_key}"
+        platform = ChatwootPlatformClient(_DEFAULT_PLATFORM_BASE_URL, settings.CHATWOOT_PLATFORM_API_TOKEN)
+
+        account_id: int | None = None
+        try:
+            account = platform.create_account(name=account_name)
+            account_id = int(account["id"])
+            user_password = secrets.token_urlsafe(24) + "Aa1!"
+            user = platform.create_user(
+                name=f"{account_name} (managed)",
+                email=f"chatwoot-managed+{account_id}@serviglobal-ia.com",
+                password=user_password,
+            )
+            user_id = int(user["id"])
+            user_token = str(user["access_token"])
+            platform.link_account_user(account_id=account_id, user_id=user_id, role="administrator")
+            inbox = platform.create_api_inbox(
+                account_id=account_id, user_token=user_token, name=account_name, webhook_url=webhook_url
+            )
+            inbox_id = int(inbox.get("id") or (inbox.get("inbox") or {}).get("id"))
+            platform.create_account_webhook(account_id=account_id, user_token=user_token, url=webhook_url)
+        except (ChatwootPlatformError, KeyError, TypeError, ValueError) as exc:
+            message = sanitize_chatwoot_error(str(exc)) or "Chatwoot auto-provisioning failed"
+            if is_new and account_id is None:
+                # Nada se llego a crear en Chatwoot (fallo en create_account): no hay
+                # account_id valido que persistir (columna NOT NULL), y no tiene sentido
+                # dejar un registro "error" sin ninguna Account real detras.
+                raise ValueError(message) from exc
+            if is_new:
+                self.db.add(config)
+            config.mode = "managed"
+            config.status = "error"
+            config.base_url = _DEFAULT_PLATFORM_BASE_URL
+            if account_id is not None:
+                config.account_id = account_id
+            config.last_error_message = message
+            config.last_health_check_at = datetime.now(UTC)
+            self.db.commit()
+            self.db.refresh(config)
+            self.events.record_event(
+                tenant_id=tenant_id,
+                provider=self.provider,
+                event_type="chatwoot_managed_provision",
+                status="failed",
+                resource_type="tenant_chatwoot_config",
+                resource_id=config.id,
+                message=message,
+            )
+            raise ValueError(message) from exc
+
+        if is_new:
+            self.db.add(config)
+        config.mode = "managed"
+        config.status = "active"
+        config.base_url = _DEFAULT_PLATFORM_BASE_URL
+        config.account_id = account_id
+        config.default_inbox_id = inbox_id
+        config.api_token_encrypted = self.secret_manager.encrypt_secret(user_token)
+        config.last_error_message = None
+        config.last_health_check_at = datetime.now(UTC)
+        self.db.commit()
+        self.db.refresh(config)
+        self.events.record_event(
+            tenant_id=tenant_id,
+            provider=self.provider,
+            event_type="chatwoot_managed_provision",
+            status="success",
+            resource_type="tenant_chatwoot_config",
+            resource_id=config.id,
+        )
+        return self.to_response(config)

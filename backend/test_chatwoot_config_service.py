@@ -3,8 +3,10 @@ from __future__ import annotations
 from sqlalchemy import select
 
 from _integrations_2a_test_base import Integration2ATestCase, SessionLocal
+from app.core.config import settings
 from app.models.integrations import TenantChatwootConfig, TenantIntegrationEvent
 from app.services.chatwoot_client import ChatwootClient, ChatwootClientError
+from app.services.chatwoot_platform_client import ChatwootPlatformError
 
 
 class ChatwootConfigServiceTests(Integration2ATestCase):
@@ -139,6 +141,132 @@ class ChatwootConfigServiceTests(Integration2ATestCase):
         self.assertEqual(result.status, "failed")
         with SessionLocal() as db:
             config = db.scalar(select(TenantChatwootConfig).where(TenantChatwootConfig.tenant_id == self.tenant.id))
+        self.assertIsNotNone(config.last_error_message)
+
+    def test_chatwoot_provision_requires_platform_token(self):
+        original_token = settings.CHATWOOT_PLATFORM_API_TOKEN
+        settings.CHATWOOT_PLATFORM_API_TOKEN = ""
+        try:
+            response = self.client.post("/api/v1/integrations/chatwoot/provision", json={})
+        finally:
+            settings.CHATWOOT_PLATFORM_API_TOKEN = original_token
+        self.assertEqual(response.status_code, 422)
+        self.assertIn("CHATWOOT_PLATFORM_API_TOKEN", response.json()["detail"])
+
+    def test_chatwoot_provision_managed_creates_active_config(self):
+        class _FakePlatformClient:
+            def __init__(self, base_url, token):
+                pass
+
+            def create_account(self, *, name):
+                return {"id": 42, "name": name}
+
+            def create_user(self, *, name, email, password):
+                return {"id": 5, "access_token": "user_access_token_123"}
+
+            def link_account_user(self, *, account_id, user_id, role="administrator"):
+                return {"account_id": account_id, "user_id": user_id, "role": role}
+
+            def create_api_inbox(self, *, account_id, user_token, name, webhook_url):
+                return {"id": 99, "name": name}
+
+            def create_account_webhook(self, *, account_id, user_token, url):
+                return {"payload": {"webhook": {"id": 1, "url": url}}}
+
+        import app.services.chatwoot_config_service as module
+
+        original_client = module.ChatwootPlatformClient
+        original_token = settings.CHATWOOT_PLATFORM_API_TOKEN
+        original_backend_url = settings.BACKEND_PUBLIC_BASE_URL
+        module.ChatwootPlatformClient = _FakePlatformClient
+        settings.CHATWOOT_PLATFORM_API_TOKEN = "platform_token_test"
+        settings.BACKEND_PUBLIC_BASE_URL = "https://api.serviglobal-ia.com"
+        try:
+            response = self.client.post(
+                "/api/v1/integrations/chatwoot/provision", json={"account_name": "Clinica ABC"}
+            )
+        finally:
+            module.ChatwootPlatformClient = original_client
+            settings.CHATWOOT_PLATFORM_API_TOKEN = original_token
+            settings.BACKEND_PUBLIC_BASE_URL = original_backend_url
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["mode"], "managed")
+        self.assertEqual(body["status"], "active")
+        self.assertEqual(body["account_id"], 42)
+        self.assertEqual(body["default_inbox_id"], 99)
+        self.assertTrue(body["has_secret"])
+
+        with SessionLocal() as db:
+            config = db.scalar(select(TenantChatwootConfig).where(TenantChatwootConfig.tenant_id == self.tenant.id))
+        self.assertEqual(config.mode, "managed")
+        self.assertNotIn("user_access_token_123", config.api_token_encrypted)
+
+    def test_chatwoot_provision_fails_without_persisting_when_account_creation_fails(self):
+        class _FailingAtAccountPlatformClient:
+            def __init__(self, base_url, token):
+                pass
+
+            def create_account(self, *, name):
+                raise ChatwootPlatformError("Chatwoot platform request failed (401)")
+
+        import app.services.chatwoot_config_service as module
+
+        original_client = module.ChatwootPlatformClient
+        original_token = settings.CHATWOOT_PLATFORM_API_TOKEN
+        original_backend_url = settings.BACKEND_PUBLIC_BASE_URL
+        module.ChatwootPlatformClient = _FailingAtAccountPlatformClient
+        settings.CHATWOOT_PLATFORM_API_TOKEN = "platform_token_test"
+        settings.BACKEND_PUBLIC_BASE_URL = "https://api.serviglobal-ia.com"
+        try:
+            response = self.client.post(
+                "/api/v1/integrations/chatwoot/provision", json={"account_name": "Clinica ABC"}
+            )
+        finally:
+            module.ChatwootPlatformClient = original_client
+            settings.CHATWOOT_PLATFORM_API_TOKEN = original_token
+            settings.BACKEND_PUBLIC_BASE_URL = original_backend_url
+
+        self.assertEqual(response.status_code, 422)
+        with SessionLocal() as db:
+            config = db.scalar(select(TenantChatwootConfig).where(TenantChatwootConfig.tenant_id == self.tenant.id))
+        self.assertIsNone(config)
+
+    def test_chatwoot_provision_marks_error_but_keeps_account_id_on_later_step_failure(self):
+        class _FailingPlatformClient:
+            def __init__(self, base_url, token):
+                pass
+
+            def create_account(self, *, name):
+                return {"id": 42, "name": name}
+
+            def create_user(self, *, name, email, password):
+                raise ChatwootPlatformError("Chatwoot platform request failed (401)")
+
+        import app.services.chatwoot_config_service as module
+
+        original_client = module.ChatwootPlatformClient
+        original_token = settings.CHATWOOT_PLATFORM_API_TOKEN
+        original_backend_url = settings.BACKEND_PUBLIC_BASE_URL
+        module.ChatwootPlatformClient = _FailingPlatformClient
+        settings.CHATWOOT_PLATFORM_API_TOKEN = "platform_token_test"
+        settings.BACKEND_PUBLIC_BASE_URL = "https://api.serviglobal-ia.com"
+        try:
+            response = self.client.post(
+                "/api/v1/integrations/chatwoot/provision", json={"account_name": "Clinica ABC"}
+            )
+        finally:
+            module.ChatwootPlatformClient = original_client
+            settings.CHATWOOT_PLATFORM_API_TOKEN = original_token
+            settings.BACKEND_PUBLIC_BASE_URL = original_backend_url
+
+        self.assertEqual(response.status_code, 422)
+        with SessionLocal() as db:
+            config = db.scalar(select(TenantChatwootConfig).where(TenantChatwootConfig.tenant_id == self.tenant.id))
+        self.assertEqual(config.mode, "managed")
+        self.assertEqual(config.status, "error")
+        self.assertEqual(config.account_id, 42)
         self.assertIsNotNone(config.last_error_message)
 
 

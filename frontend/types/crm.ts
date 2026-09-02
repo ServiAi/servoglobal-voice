@@ -347,6 +347,7 @@ export type ChatwootConfigRequest = {
 
 export type ChatwootConfigResponse = {
   provider: 'chatwoot';
+  mode: 'external' | 'managed' | string;
   status: 'active' | 'inactive' | 'error' | string;
   base_url?: string | null;
   account_id?: number | null;
@@ -355,6 +356,10 @@ export type ChatwootConfigResponse = {
   webhook_url?: string | null;
   last_health_check_at?: string | null;
   last_error_message?: string | null;
+};
+
+export type ChatwootProvisionRequest = {
+  account_name?: string;
 };
 
 export type ChatwootTestResponse = {
