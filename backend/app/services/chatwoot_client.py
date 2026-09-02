@@ -64,10 +64,15 @@ class ChatwootClient:
         return f"{base}/api/v1/accounts/{self.config.account_id}/{path}"
 
     def get_account_profile(self) -> dict:
-        """Golpea un endpoint liviano para validar que la Account/token son validos."""
+        """Golpea un endpoint liviano para validar que la Account/token son validos.
+
+        Chatwoot no expone /api/v1/accounts/{id}/profile (el profile es global,
+        no esta anidado bajo account); se usa el endpoint de Account en su lugar
+        para validar token + account_id juntos.
+        """
         with httpx.Client(timeout=self.timeout) as client:
             try:
-                resp = client.get(self._url("profile"), headers=self._headers())
+                resp = client.get(self._url(""), headers=self._headers())
             except httpx.HTTPError as exc:
                 raise ChatwootClientError(sanitize_chatwoot_error(str(exc)) or "Chatwoot request failed") from exc
             if resp.status_code >= 400:
