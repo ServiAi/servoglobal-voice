@@ -44,7 +44,9 @@ class ChatwootConfigResponse(BaseModel):
     status: str
     base_url: Optional[str] = None
     account_id: Optional[int] = None
+    account_name: Optional[str] = None
     default_inbox_id: Optional[int] = None
+    default_inbox_name: Optional[str] = None
     has_secret: bool
     webhook_url: Optional[str] = None
     last_health_check_at: Optional[datetime] = None

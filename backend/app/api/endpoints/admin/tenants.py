@@ -612,6 +612,21 @@ def provision_tenant_chatwoot_admin(
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
 
 
+@router.post(
+    "/tenants/{tenant_id}/integrations/chatwoot/disconnect",
+    response_model=ChatwootConfigResponse,
+)
+def disconnect_tenant_chatwoot_admin(
+    tenant_id: str,
+    db: Session = Depends(get_current_internal_db),
+) -> Any:
+    try:
+        OnboardingService(db).get_tenant(tenant_id)
+        return ChatwootConfigService(db).disconnect(tenant_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+
+
 @router.patch(
     "/tenants/{tenant_id}/integrations/availability/{provider}",
     response_model=IntegrationAvailabilityResponse,

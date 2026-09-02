@@ -25,11 +25,15 @@ for (const locale of ['es', 'en'] as const) {
     await page.goto(`/${locale}/crm/settings/integrations/chatwoot`);
 
     await expect(page.getByRole('heading', { name: 'Chatwoot' })).toBeVisible();
+    await page.getByRole('radio', { name: /Connect existing Chatwoot/ }).check();
     await page.getByLabel(/Account ID/).fill('17');
     await page.getByLabel(/Access token/).fill('cw_test_token_1234567890');
     await page.getByRole('button', { name: /Guardar/ }).click();
 
-    await expect(page.getByRole('button', { name: /Probar conexión|Test connection/ })).toBeEnabled();
+    await expect(page.getByRole('button', { name: 'Manage connection' })).toBeVisible();
+    await page.getByRole('button', { name: 'Manage connection' }).click();
+
+    await expect(page.getByRole('button', { name: 'Test connection' })).toBeEnabled();
     const webhookField = page.locator('input[readonly]');
     await expect(webhookField).toHaveValue(/\/api\/v1\/webhooks\/chatwoot\//);
 

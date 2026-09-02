@@ -746,3 +746,14 @@ def provision_chatwoot(
         return ChatwootConfigService(db).provision_managed_account(context.tenant.id, account_name=account_name)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+
+
+@router.post("/chatwoot/disconnect", response_model=ChatwootConfigResponse)
+def disconnect_chatwoot(
+    context: AuthContext = Depends(require_enabled_integration("chatwoot", _WRITE_ROLES)),
+    db: Session = Depends(get_db),
+) -> Any:
+    try:
+        return ChatwootConfigService(db).disconnect(context.tenant.id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
