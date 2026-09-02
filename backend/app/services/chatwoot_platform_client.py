@@ -10,8 +10,15 @@ tenant una vez que la Account ya existe).
 
 La Platform API usa un token de Super Admin (`CHATWOOT_PLATFORM_API_TOKEN`,
 global, no por tenant) contra `/platform/api/v1/*`. Crear recursos dentro de
-la Account (inbox, asociar el Agent Bot) requiere en cambio el
-`access_token` del Agent Bot recien creado contra `/api/v1/accounts/*`.
+la Account (inbox, webhook) requiere en cambio el `access_token` de un
+usuario real de esa Account contra `/api/v1/accounts/*`.
+
+Nota (verificado contra la instancia real): los tokens de Agent Bot NO
+sirven para nada en `/api/v1/accounts/*` — Chatwoot responde
+"Access to this endpoint is not authorized for bots" incluso para acciones
+tan basicas como crear un contacto. Por eso el aprovisionamiento crea un
+Usuario real (via Platform API) y lo vincula como administrator, en vez de
+usar un Agent Bot.
 """
 
 from __future__ import annotations
@@ -33,7 +40,7 @@ class ChatwootPlatformClient:
         self.platform_token = platform_token
         self.timeout = timeout
 
-    def _request(self, method: str, path: str, *, headers: dict, json: dict) -> dict:
+    def _request(self, method: str, path: str, *, headers: dict, json: dict | None) -> dict:
         url = f"{self.base_url}{path}"
         with httpx.Client(timeout=self.timeout) as client:
             try:
@@ -56,37 +63,48 @@ class ChatwootPlatformClient:
     def _platform_headers(self) -> dict:
         return {"api_access_token": self.platform_token, "Content-Type": "application/json"}
 
+    def _user_headers(self, user_token: str) -> dict:
+        return {"api_access_token": user_token, "Content-Type": "application/json"}
+
     def create_account(self, *, name: str) -> dict:
         """POST /platform/api/v1/accounts -> {"id": int, "name": str}."""
         return self._request(
             "POST", "/platform/api/v1/accounts", headers=self._platform_headers(), json={"name": name}
         )
 
-    def create_agent_bot(self, *, name: str, account_id: int, outgoing_url: str) -> dict:
-        """POST /platform/api/v1/agent_bots -> incluye "access_token" del bot para esa Account."""
+    def create_user(self, *, name: str, email: str, password: str) -> dict:
+        """POST /platform/api/v1/users -> incluye "access_token" del usuario, ya confirmado."""
         return self._request(
             "POST",
-            "/platform/api/v1/agent_bots",
+            "/platform/api/v1/users",
             headers=self._platform_headers(),
-            json={"name": name, "account_id": account_id, "outgoing_url": outgoing_url, "bot_type": 0},
+            json={"name": name, "email": email, "password": password},
         )
 
-    def create_api_inbox(self, *, account_id: int, agent_bot_token: str, name: str, webhook_url: str) -> dict:
+    def link_account_user(self, *, account_id: int, user_id: int, role: str = "administrator") -> dict:
+        """POST /platform/api/v1/accounts/{account_id}/account_users."""
+        return self._request(
+            "POST",
+            f"/platform/api/v1/accounts/{account_id}/account_users",
+            headers=self._platform_headers(),
+            json={"user_id": user_id, "role": role},
+        )
+
+    def create_api_inbox(self, *, account_id: int, user_token: str, name: str, webhook_url: str) -> dict:
         """POST /api/v1/accounts/{account_id}/inboxes con canal tipo 'api'."""
-        headers = {"api_access_token": agent_bot_token, "Content-Type": "application/json"}
         return self._request(
             "POST",
             f"/api/v1/accounts/{account_id}/inboxes",
-            headers=headers,
+            headers=self._user_headers(user_token),
             json={"name": name, "channel": {"type": "api", "webhook_url": webhook_url}},
         )
 
-    def set_inbox_agent_bot(self, *, account_id: int, agent_bot_token: str, inbox_id: int, agent_bot_id: int) -> None:
-        """POST /api/v1/accounts/{account_id}/inboxes/{inbox_id}/set_agent_bot."""
-        headers = {"api_access_token": agent_bot_token, "Content-Type": "application/json"}
-        self._request(
+    def create_account_webhook(self, *, account_id: int, user_token: str, url: str) -> dict:
+        """POST /api/v1/accounts/{account_id}/webhooks — mismo mecanismo que el operador
+        configura a mano en modo 'external' (Settings -> Integrations -> Webhooks)."""
+        return self._request(
             "POST",
-            f"/api/v1/accounts/{account_id}/inboxes/{inbox_id}/set_agent_bot",
-            headers=headers,
-            json={"agent_bot": agent_bot_id},
+            f"/api/v1/accounts/{account_id}/webhooks",
+            headers=self._user_headers(user_token),
+            json={"url": url, "subscriptions": ["message_created"]},
         )

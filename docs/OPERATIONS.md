@@ -183,12 +183,16 @@ Chatwoot dejó de configurarse por variables de entorno globales; ahora es una i
 
 ### Auto-provisioning "managed" (Chatwoot Platform API)
 
-`POST /api/v1/integrations/chatwoot/provision` (`ChatwootPlatformClient`, `backend/app/services/chatwoot_platform_client.py`) fue implementado contra la documentación pública de la Platform API de Chatwoot (`platform/api/v1/accounts`, `platform/api/v1/agent_bots`, `api/v1/accounts/{id}/inboxes` con canal `api`, `.../set_agent_bot`) pero **no ha sido probado end-to-end contra una instancia real** — el equipo no tenía a mano el token de Platform API al momento de escribir el código. Antes de ofrecerlo a un tenant real:
+`POST /api/v1/integrations/chatwoot/provision` (`ChatwootPlatformClient`, `backend/app/services/chatwoot_platform_client.py`) crea, vía la Platform API de Chatwoot: una Account (`platform/api/v1/accounts`), un usuario `administrator` dedicado (`platform/api/v1/users` + `platform/api/v1/accounts/{id}/account_users`), un inbox tipo `api` (`api/v1/accounts/{id}/inboxes`) y el webhook de cuenta (`api/v1/accounts/{id}/webhooks`, el mismo mecanismo que "external" configura a mano en Settings → Integrations → Webhooks).
 
-1. Configure `CHATWOOT_PLATFORM_API_TOKEN` (token de Super Admin/Platform App) y `BACKEND_PUBLIC_BASE_URL` en `backend/.env`.
-2. Ejecute `POST /api/v1/integrations/chatwoot/provision` contra un tenant de prueba y confirme en la instancia de Chatwoot que se creó la Account, el Agent Bot (con permisos suficientes para crear el inbox — esto es lo menos verificado del flujo) y el inbox tipo `api`.
-3. Si el Agent Bot no tiene permisos para crear el inbox (`create_api_inbox` fallará con 401/403), la config queda en `status="error"` conservando `account_id`/`platform_agent_bot_id` para diagnóstico manual vía el Rails console o la UI de Chatwoot, sin reintento automático.
-4. Envíe un mensaje real y confirme que llega a `outgoing_url` (el mismo webhook tenant-aware que "external") antes de marcar el modo como soportado en producción.
+**No usa Agent Bots.** La primera versión sí los usaba y se descartó tras probar contra la instancia real (2026-09-02): un token de Agent Bot devuelve `"Access to this endpoint is not authorized for bots"` para cualquier endpoint de `/api/v1/accounts/*`, incluyendo crear un contacto — es decir, no sirve ni para el aprovisionamiento ni para el uso en runtime que hace `ChatwootClient`. El token que se guarda como `api_token_encrypted` es el del usuario `administrator` creado para la ocasión (mismo tipo de credencial que el operador crea a mano en modo "external").
+
+Validado end-to-end contra `crm.serviglobal-ia.com` el 2026-09-02 (Account, usuario, inbox y webhook creados correctamente; `GET /api/v1/accounts/{id}` y `POST .../contacts` confirmados con el token del usuario). La corrida de validación dejó datos de prueba reales pendientes de limpieza manual (la Platform API no expone borrado de Accounts):
+
+- Accounts `id=2` ("ServiGlobal QA Test - DELETE ME") e `id=3` ("ServiGlobal E2E Diagnostic - DELETE ME"), con sus inboxes, webhooks, un contacto de prueba y los usuarios `administrator` asociados.
+- Dos Agent Bots huérfanos en la Account `id=2` (del diseño descartado), sin uso ni referencia en el código actual.
+
+Límpielos a mano (UI de Chatwoot o Rails console) o suspenda esas Accounts (`PATCH /platform/api/v1/accounts/{id}` con `status: suspended`) antes de considerar la instancia lista para tenants reales.
 
 ## Checklist de seguridad
 

@@ -21,12 +21,7 @@ def upgrade() -> None:
         "tenant_chatwoot_configs",
         sa.Column("mode", sa.String(length=20), nullable=False, server_default="external"),
     )
-    op.add_column(
-        "tenant_chatwoot_configs",
-        sa.Column("platform_agent_bot_id", sa.Integer(), nullable=True),
-    )
 
 
 def downgrade() -> None:
-    op.drop_column("tenant_chatwoot_configs", "platform_agent_bot_id")
     op.drop_column("tenant_chatwoot_configs", "mode")

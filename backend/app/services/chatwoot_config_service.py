@@ -144,9 +144,15 @@ class ChatwootConfigService:
         return ChatwootTestResponse(status="success")
 
     def provision_managed_account(self, tenant_id: str, *, account_name: str) -> ChatwootConfigResponse:
-        """Crea una Account, Agent Bot e inbox 'api' en Chatwoot vía Platform API
-        y deja el tenant listo para operar sin que el operador pegue credenciales
-        a mano. Requiere CHATWOOT_PLATFORM_API_TOKEN y BACKEND_PUBLIC_BASE_URL."""
+        """Crea una Account, un usuario administrator dedicado, un inbox 'api' y el
+        webhook de cuenta en Chatwoot vía Platform API, dejando al tenant operativo
+        sin que el operador pegue credenciales a mano. Requiere CHATWOOT_PLATFORM_API_TOKEN
+        y BACKEND_PUBLIC_BASE_URL.
+
+        No usa Agent Bots: verificado contra la instancia real que su access_token
+        no tiene permiso ni para crear un contacto ("Access to this endpoint is not
+        authorized for bots"). El usuario administrator es el mismo tipo de credencial
+        que el operador crea a mano hoy en modo "external"."""
         existing = self.get_config(tenant_id)
         if existing is not None and existing.status == "active":
             raise ValueError("Chatwoot integration is already configured for this tenant")
@@ -166,18 +172,20 @@ class ChatwootConfigService:
         try:
             account = platform.create_account(name=account_name)
             account_id = int(account["id"])
-            bot = platform.create_agent_bot(
-                name=f"{account_name} Bot", account_id=account_id, outgoing_url=webhook_url
+            user_password = secrets.token_urlsafe(24) + "Aa1!"
+            user = platform.create_user(
+                name=f"{account_name} (managed)",
+                email=f"chatwoot-managed+{account_id}@serviglobal-ia.com",
+                password=user_password,
             )
-            agent_bot_id = int(bot["id"])
-            agent_bot_token = str(bot["access_token"])
+            user_id = int(user["id"])
+            user_token = str(user["access_token"])
+            platform.link_account_user(account_id=account_id, user_id=user_id, role="administrator")
             inbox = platform.create_api_inbox(
-                account_id=account_id, agent_bot_token=agent_bot_token, name=account_name, webhook_url=webhook_url
+                account_id=account_id, user_token=user_token, name=account_name, webhook_url=webhook_url
             )
             inbox_id = int(inbox.get("id") or (inbox.get("inbox") or {}).get("id"))
-            platform.set_inbox_agent_bot(
-                account_id=account_id, agent_bot_token=agent_bot_token, inbox_id=inbox_id, agent_bot_id=agent_bot_id
-            )
+            platform.create_account_webhook(account_id=account_id, user_token=user_token, url=webhook_url)
         except (ChatwootPlatformError, KeyError, TypeError, ValueError) as exc:
             message = sanitize_chatwoot_error(str(exc)) or "Chatwoot auto-provisioning failed"
             if is_new and account_id is None:
@@ -214,8 +222,7 @@ class ChatwootConfigService:
         config.base_url = _DEFAULT_PLATFORM_BASE_URL
         config.account_id = account_id
         config.default_inbox_id = inbox_id
-        config.platform_agent_bot_id = agent_bot_id
-        config.api_token_encrypted = self.secret_manager.encrypt_secret(agent_bot_token)
+        config.api_token_encrypted = self.secret_manager.encrypt_secret(user_token)
         config.last_error_message = None
         config.last_health_check_at = datetime.now(UTC)
         self.db.commit()

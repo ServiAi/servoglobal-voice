@@ -561,7 +561,6 @@ class TenantChatwootConfig(Base, TimestampMixin):
     base_url: Mapped[str] = mapped_column(String(255), nullable=False, default="https://crm.serviglobal-ia.com")
     account_id: Mapped[int] = mapped_column(sa.Integer, nullable=False)
     default_inbox_id: Mapped[int | None] = mapped_column(sa.Integer, nullable=True)
-    platform_agent_bot_id: Mapped[int | None] = mapped_column(sa.Integer, nullable=True)
     api_token_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
     webhook_key: Mapped[str] = mapped_column(String(64), nullable=False)
     last_health_check_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

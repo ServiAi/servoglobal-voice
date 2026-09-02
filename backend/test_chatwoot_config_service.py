@@ -161,15 +161,17 @@ class ChatwootConfigServiceTests(Integration2ATestCase):
             def create_account(self, *, name):
                 return {"id": 42, "name": name}
 
-            def create_agent_bot(self, *, name, account_id, outgoing_url):
-                self.outgoing_url = outgoing_url
-                return {"id": 7, "access_token": "bot_access_token_123", "account_id": account_id}
+            def create_user(self, *, name, email, password):
+                return {"id": 5, "access_token": "user_access_token_123"}
 
-            def create_api_inbox(self, *, account_id, agent_bot_token, name, webhook_url):
+            def link_account_user(self, *, account_id, user_id, role="administrator"):
+                return {"account_id": account_id, "user_id": user_id, "role": role}
+
+            def create_api_inbox(self, *, account_id, user_token, name, webhook_url):
                 return {"id": 99, "name": name}
 
-            def set_inbox_agent_bot(self, *, account_id, agent_bot_token, inbox_id, agent_bot_id):
-                return None
+            def create_account_webhook(self, *, account_id, user_token, url):
+                return {"payload": {"webhook": {"id": 1, "url": url}}}
 
         import app.services.chatwoot_config_service as module
 
@@ -199,8 +201,7 @@ class ChatwootConfigServiceTests(Integration2ATestCase):
         with SessionLocal() as db:
             config = db.scalar(select(TenantChatwootConfig).where(TenantChatwootConfig.tenant_id == self.tenant.id))
         self.assertEqual(config.mode, "managed")
-        self.assertEqual(config.platform_agent_bot_id, 7)
-        self.assertNotIn("bot_access_token_123", config.api_token_encrypted)
+        self.assertNotIn("user_access_token_123", config.api_token_encrypted)
 
     def test_chatwoot_provision_fails_without_persisting_when_account_creation_fails(self):
         class _FailingAtAccountPlatformClient:
@@ -240,7 +241,7 @@ class ChatwootConfigServiceTests(Integration2ATestCase):
             def create_account(self, *, name):
                 return {"id": 42, "name": name}
 
-            def create_agent_bot(self, *, name, account_id, outgoing_url):
+            def create_user(self, *, name, email, password):
                 raise ChatwootPlatformError("Chatwoot platform request failed (401)")
 
         import app.services.chatwoot_config_service as module
