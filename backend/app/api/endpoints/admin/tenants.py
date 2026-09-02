@@ -32,6 +32,10 @@ from app.schemas.integrations import (
     BookingConfigRequest,
     BookingConfigResponse,
     CalComTestResponse,
+    ChatwootConfigRequest,
+    ChatwootConfigResponse,
+    ChatwootProvisionRequest,
+    ChatwootTestResponse,
     GoogleCalendarConnectionResponse,
     IntegrationAvailabilityResponse,
     IntegrationCatalogStatusResponse,
@@ -61,6 +65,7 @@ from app.schemas.integrations import (
 from app.schemas.crm import BookingCreateRequest, BookingResponse
 from app.api.endpoints.integrations import _integration_catalog_statuses, _resend_response, _whatsapp_template_detail
 from app.services.booking_config_service import BookingConfigService
+from app.services.chatwoot_config_service import ChatwootConfigService
 from app.services.booking_service import BookingService
 from app.services.email_config_service import EmailConfigService
 from app.services.email_send_service import EmailSendService
@@ -540,8 +545,71 @@ def list_tenant_integration_catalog_statuses_admin(
     return _integration_catalog_statuses(
         db,
         tenant_id,
-        {"resend", "whatsapp", "voice", "calcom", "google_calendar"},
+        {"resend", "whatsapp", "voice", "calcom", "google_calendar", "chatwoot"},
     )
+
+
+@router.get(
+    "/tenants/{tenant_id}/integrations/chatwoot/config",
+    response_model=ChatwootConfigResponse,
+)
+def get_tenant_chatwoot_config_admin(
+    tenant_id: str,
+    db: Session = Depends(get_current_internal_db),
+) -> Any:
+    try:
+        OnboardingService(db).get_tenant(tenant_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return ChatwootConfigService(db).get_response(tenant_id)
+
+
+@router.post(
+    "/tenants/{tenant_id}/integrations/chatwoot/config",
+    response_model=ChatwootConfigResponse,
+)
+def configure_tenant_chatwoot_admin(
+    tenant_id: str,
+    body: ChatwootConfigRequest,
+    db: Session = Depends(get_current_internal_db),
+) -> Any:
+    try:
+        OnboardingService(db).get_tenant(tenant_id)
+        return ChatwootConfigService(db).upsert_config(tenant_id, body)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+
+
+@router.post(
+    "/tenants/{tenant_id}/integrations/chatwoot/test",
+    response_model=ChatwootTestResponse,
+)
+def test_tenant_chatwoot_admin(
+    tenant_id: str,
+    db: Session = Depends(get_current_internal_db),
+) -> Any:
+    try:
+        OnboardingService(db).get_tenant(tenant_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return ChatwootConfigService(db).test_connection(tenant_id)
+
+
+@router.post(
+    "/tenants/{tenant_id}/integrations/chatwoot/provision",
+    response_model=ChatwootConfigResponse,
+)
+def provision_tenant_chatwoot_admin(
+    tenant_id: str,
+    body: ChatwootProvisionRequest,
+    db: Session = Depends(get_current_internal_db),
+) -> Any:
+    try:
+        tenant = OnboardingService(db).get_tenant(tenant_id)
+        account_name = (body.account_name or tenant.name).strip()
+        return ChatwootConfigService(db).provision_managed_account(tenant_id, account_name=account_name)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
 
 
 @router.patch(

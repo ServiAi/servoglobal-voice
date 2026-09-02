@@ -4,20 +4,22 @@ import type { FormEvent } from 'react';
 import { useState } from 'react';
 import { Save, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { configureChatwootIntegration } from '@/lib/api/crm';
+import { configureAdminTenantChatwoot, configureChatwootIntegration } from '@/lib/api/crm';
 import type { ChatwootConfigResponse } from '@/types/crm';
 import { FieldHelp } from './FieldHelp';
 
 type Props = {
   accessToken: string;
   config?: ChatwootConfigResponse;
+  mode?: 'tenant' | 'admin';
+  tenantId?: string;
   onSaved: (config: ChatwootConfigResponse) => void;
   onError: (message: string) => void;
 };
 
 const FIELD_CLASS = 'min-h-10 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/60 focus:ring-2 focus:ring-primary/15 disabled:cursor-not-allowed disabled:opacity-60';
 
-export function ChatwootConfigForm({ accessToken, config, onSaved, onError }: Props) {
+export function ChatwootConfigForm({ accessToken, config, mode = 'tenant', tenantId, onSaved, onError }: Props) {
   const [baseUrl, setBaseUrl] = useState(config?.base_url ?? 'https://crm.serviglobal-ia.com');
   const [accountId, setAccountId] = useState(config?.account_id ? String(config.account_id) : '');
   const [defaultInboxId, setDefaultInboxId] = useState(config?.default_inbox_id ? String(config.default_inbox_id) : '');
@@ -36,7 +38,9 @@ export function ChatwootConfigForm({ accessToken, config, onSaved, onError }: Pr
       api_token: apiToken || null,
     };
 
-    const result = await configureChatwootIntegration(accessToken, payload);
+    const result = mode === 'admin' && tenantId
+      ? await configureAdminTenantChatwoot(accessToken, tenantId, payload)
+      : await configureChatwootIntegration(accessToken, payload);
 
     setSaving(false);
     if (!result.ok) {

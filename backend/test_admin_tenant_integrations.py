@@ -121,12 +121,35 @@ class AdminTenantIntegrationTests(unittest.TestCase):
         statuses = {item["provider"]: item["status"] for item in response.json()}
         self.assertEqual(
             set(statuses),
-            {"resend", "whatsapp", "voice", "calcom", "google_calendar"},
+            {"resend", "whatsapp", "voice", "calcom", "google_calendar", "chatwoot"},
         )
         self.assertEqual(statuses["resend"], "active")
         self.assertTrue(all(set(item) == {"provider", "status"} for item in response.json()))
         self.assertNotIn("comercial@mail.serviglobal-ia.com", response.text)
         self.assertNotIn("re_secret_test", response.text)
+
+    def test_platform_admin_can_configure_chatwoot_for_specific_tenant(self):
+        response = self.client.post(
+            f"/api/v1/admin/tenants/{self.tenant.id}/integrations/chatwoot/config",
+            json={
+                "base_url": "https://crm.serviglobal-ia.com",
+                "account_id": 17,
+                "default_inbox_id": 35,
+                "status": "active",
+                "api_token": "cw_secret_token_1234567890",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["has_secret"])
+        self.assertNotIn("cw_secret_token_1234567890", response.text)
+
+        fetched = self.client.get(
+            f"/api/v1/admin/tenants/{self.tenant.id}/integrations/chatwoot/config"
+        )
+        self.assertEqual(fetched.status_code, 200)
+        self.assertEqual(fetched.json()["account_id"], 17)
+        self.assertNotIn("api_token", fetched.json())
 
     def test_integrations_default_to_enabled_and_can_be_reenabled_without_losing_config(self):
         initial = self.client.get(f"/api/v1/admin/tenants/{self.tenant.id}/integrations/availability")
