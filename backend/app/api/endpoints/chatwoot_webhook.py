@@ -3,9 +3,11 @@ from __future__ import annotations
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
+from app.models.integrations import TenantIntegrationEvent
 from app.services.chatwoot_config_service import ChatwootConfigService
 from app.services.integration_event_service import IntegrationEventService
 
@@ -34,6 +36,10 @@ async def chatwoot_webhook(webhook_key: str, request: Request, db: Session = Dep
       1. `webhook_key` opaco en la URL (unico por tenant, no adivinable).
       2. Cross-check de `payload.account.id` contra la Account configurada
          para ese tenant.
+
+    Chatwoot puede reintentar la entrega del mismo evento (timeouts, errores
+    transitorios de red); un `message_created` ya procesado se detecta por
+    el id estable del mensaje y no se vuelve a registrar ni loguear.
     """
     try:
         payload = await request.json()
@@ -72,9 +78,26 @@ async def chatwoot_webhook(webhook_key: str, request: Request, db: Session = Dep
     conversation = payload.get("conversation") or {}
     conversation_id = conversation.get("id")
     message_content = (payload.get("content") or "").strip()
+    message_id = payload.get("id")
 
     if not conversation_id or not message_content:
         return {"status": "ignored", "reason": "missing conversation_id or content"}
+
+    if message_id is not None:
+        # Chatwoot puede reintentar la entrega del mismo webhook (timeouts,
+        # errores transitorios); el id del mensaje es estable entre reintentos
+        # y es lo que usamos para no procesar/loguear el mismo evento dos veces.
+        duplicate = db.scalar(
+            select(TenantIntegrationEvent.id).where(
+                TenantIntegrationEvent.tenant_id == config.tenant_id,
+                TenantIntegrationEvent.provider == "chatwoot",
+                TenantIntegrationEvent.event_type == "webhook_received",
+                TenantIntegrationEvent.resource_type == "message",
+                TenantIntegrationEvent.resource_id == str(message_id),
+            )
+        )
+        if duplicate is not None:
+            return {"status": "ignored", "reason": "duplicate"}
 
     logger.info(
         "Chatwoot webhook mensaje entrante tenant_id=%s conversation_id=%s",
@@ -86,8 +109,9 @@ async def chatwoot_webhook(webhook_key: str, request: Request, db: Session = Dep
         provider="chatwoot",
         event_type="webhook_received",
         status="success",
-        resource_type="conversation",
-        resource_id=str(conversation_id),
+        resource_type="message",
+        resource_id=str(message_id) if message_id is not None else str(conversation_id),
+        metadata={"conversation_id": conversation_id},
     )
 
     return {"status": "ok"}
