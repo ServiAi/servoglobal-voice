@@ -744,6 +744,21 @@
       "eyebrow": "Connected ecosystem",
       "title": "Integrations",
       "description": "Connect the tools your organization uses and manage each channel in its own workspace.",
+      "admin": {
+        "eyebrow": "Tenant configuration",
+        "description": "Control tenant access and manage each integration in its own workspace without loading every form at once.",
+        "back": "Back to tenant",
+        "availability": {
+          "title": "Tenant access",
+          "description": "Disabled integrations are hidden and their endpoints remain blocked for this company.",
+          "enabled": "Enabled",
+          "disabled": "Disabled",
+          "enable": "Enable",
+          "disable": "Disable",
+          "updating": "Updating",
+          "loadError": "Integration availability could not be loaded for this tenant."
+        }
+      },
       "available": "{count, plural, =0 {No integrations available} one {# integration available} other {# integrations available}}",
       "controlsLabel": "Integration search and filters",
       "searchLabel": "Search integrations",

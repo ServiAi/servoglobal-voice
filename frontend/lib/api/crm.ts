@@ -579,6 +579,15 @@ export function fetchAdminTenantIntegrationAvailability(accessToken: string, ten
   );
 }
 
+export function fetchAdminTenantIntegrationStatuses(accessToken: string, tenantId: string) {
+  return requestBackendEndpoint<IntegrationCatalogStatusResponse[]>(
+    'GET',
+    'admin',
+    `tenants/${tenantId}/integrations/statuses`,
+    accessToken
+  );
+}
+
 export function updateAdminTenantIntegrationAvailability(
   accessToken: string,
   tenantId: string,

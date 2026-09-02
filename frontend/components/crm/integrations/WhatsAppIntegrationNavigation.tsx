@@ -7,17 +7,17 @@ import { useTranslations } from 'next-intl';
 import type { IntegrationStatus } from '@/types/crm';
 import { CrmIntegrationStatusBadge } from './CrmIntegrationStatusBadge';
 
-type Props = { locale: string; status: IntegrationStatus };
+type Props = { locale: string; status: IntegrationStatus; basePath?: string; includeFlows?: boolean };
 
-export function WhatsAppIntegrationNavigation({ locale, status }: Props) {
+export function WhatsAppIntegrationNavigation({ locale, status, basePath = '/crm/settings/integrations/whatsapp', includeFlows = true }: Props) {
   const pathname = usePathname();
   const t = useTranslations('crm.integrationsCatalog');
-  const base = `/${locale}/crm/settings/integrations/whatsapp`;
+  const base = `/${locale}${basePath}`;
   const links = [
     { key: 'overview', href: base },
     { key: 'account', href: `${base}/account` },
     { key: 'templates', href: `${base}/templates` },
-    { key: 'flows', href: `${base}/flows` },
+    ...(includeFlows ? [{ key: 'flows' as const, href: `${base}/flows` }] : []),
     { key: 'test', href: `${base}/test` },
   ] as const;
   const isActive = (href: string) => pathname === href || (href !== base && pathname.startsWith(`${href}/`));
@@ -26,7 +26,7 @@ export function WhatsAppIntegrationNavigation({ locale, status }: Props) {
   return (
     <div className="space-y-5">
       <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground">
-        <Link href={`/${locale}/crm/settings/integrations`} className="rounded-sm outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">{t('title')}</Link>
+        <Link href={base.replace(/\/whatsapp$/, '')} className="rounded-sm outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">{t('title')}</Link>
         <ChevronRight className="size-4" aria-hidden="true" />
         <Link href={base} className="rounded-sm outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">WhatsApp</Link>
         {current.key !== 'overview' ? <><ChevronRight className="size-4" aria-hidden="true" /><span aria-current="page" className="font-medium text-foreground">{t(`whatsapp.navigation.${current.key}`)}</span></> : null}
@@ -41,7 +41,7 @@ export function WhatsAppIntegrationNavigation({ locale, status }: Props) {
         </div>
         <CrmIntegrationStatusBadge status={status} />
       </header>
-      <nav aria-label={t('whatsapp.navigationLabel')} className="grid grid-cols-2 gap-2 rounded-xl border border-border bg-card p-2 sm:grid-cols-5">
+      <nav aria-label={t('whatsapp.navigationLabel')} className={`grid grid-cols-2 gap-2 rounded-xl border border-border bg-card p-2 ${includeFlows ? 'sm:grid-cols-5' : 'sm:grid-cols-4'}`}>
         {links.map((item) => {
           const active = isActive(item.href);
           return <Link key={item.key} href={item.href} aria-current={active ? 'page' : undefined} className={`flex min-h-10 items-center justify-center rounded-lg px-3 text-center text-sm font-medium outline-none transition focus-visible:ring-2 focus-visible:ring-ring ${active ? 'bg-primary text-primary-foreground shadow-xs' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}>{t(`whatsapp.navigation.${item.key}`)}</Link>;

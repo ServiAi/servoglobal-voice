@@ -133,21 +133,20 @@ def list_integration_availability(
     return IntegrationService(db).list_availability(context.tenant.id)
 
 
-@router.get("/statuses", response_model=list[IntegrationCatalogStatusResponse])
-def list_integration_catalog_statuses(
-    context: AuthContext = Depends(require_roles(_READ_ROLES)),
-    db: Session = Depends(get_db),
-) -> Any:
-    tenant_id = context.tenant.id
+def _integration_catalog_statuses(
+    db: Session,
+    tenant_id: str,
+    providers: set[str] | None = None,
+) -> list[IntegrationCatalogStatusResponse]:
     integration_service = IntegrationService(db)
-    enabled = {
+    selected = providers if providers is not None else {
         item["provider"]
         for item in integration_service.list_availability(tenant_id)
         if item["enabled"]
     }
     statuses: dict[str, str] = {}
 
-    if "resend" in enabled:
+    if "resend" in selected:
         integration = integration_service.get_integration(tenant_id, "resend")
         config = EmailConfigService(db).get_config(tenant_id, "resend")
         statuses["resend"] = _catalog_status(
@@ -156,7 +155,7 @@ def list_integration_catalog_statuses(
             has_error=bool(config.last_error_message if config else integration.last_error_message if integration else None),
         )
 
-    if "whatsapp" in enabled:
+    if "whatsapp" in selected:
         config = WhatsAppConfigService(db).get_config(tenant_id)
         statuses["whatsapp"] = _catalog_status(
             configured=config is not None,
@@ -164,7 +163,7 @@ def list_integration_catalog_statuses(
             has_error=bool(config and config.last_error_message),
         )
 
-    if "voice" in enabled:
+    if "voice" in selected:
         config = VoiceConfigService(db).get_provider_config(tenant_id)
         statuses["voice"] = _catalog_status(
             configured=config is not None,
@@ -172,7 +171,7 @@ def list_integration_catalog_statuses(
             has_error=bool(config and config.last_error_message),
         )
 
-    if "calcom" in enabled:
+    if "calcom" in selected:
         config = BookingConfigService(db).get_config(tenant_id)
         statuses["calcom"] = _catalog_status(
             configured=config is not None,
@@ -180,7 +179,7 @@ def list_integration_catalog_statuses(
             has_error=bool(config and config.last_error_message),
         )
 
-    if "google_calendar" in enabled:
+    if "google_calendar" in selected:
         connections = GoogleCalendarOAuthService(db).list_connections(tenant_id)
         statuses["google_calendar"] = _catalog_status(
             configured=bool(connections),
@@ -188,7 +187,7 @@ def list_integration_catalog_statuses(
             has_error=any(bool(item.last_error_message) or item.status in {"error", "failed"} for item in connections),
         )
 
-    if "chatwoot" in enabled:
+    if "chatwoot" in selected:
         config = ChatwootConfigService(db).get_config(tenant_id)
         statuses["chatwoot"] = _catalog_status(
             configured=config is not None,
@@ -199,8 +198,16 @@ def list_integration_catalog_statuses(
     return [
         IntegrationCatalogStatusResponse(provider=provider, status=statuses.get(provider, "not_configured"))
         for provider in integration_service.supported_providers
-        if provider in enabled
+        if provider in selected
     ]
+
+
+@router.get("/statuses", response_model=list[IntegrationCatalogStatusResponse])
+def list_integration_catalog_statuses(
+    context: AuthContext = Depends(require_roles(_READ_ROLES)),
+    db: Session = Depends(get_db),
+) -> Any:
+    return _integration_catalog_statuses(db, context.tenant.id)
 
 
 @router.get("/booking/config", response_model=BookingConfigResponse)

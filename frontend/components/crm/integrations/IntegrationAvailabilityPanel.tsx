@@ -2,6 +2,8 @@
 
 import { useState } from 'react';
 import { Loader2 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { updateAdminTenantIntegrationAvailability } from '@/lib/api/crm';
 import type { IntegrationAvailabilityResponse, IntegrationProvider } from '@/types/crm';
 
@@ -21,6 +23,8 @@ type Props = {
 };
 
 export function IntegrationAvailabilityPanel({ accessToken, tenantId, initialItems }: Props) {
+  const router = useRouter();
+  const t = useTranslations('crm.integrationsCatalog.admin.availability');
   const [items, setItems] = useState(initialItems);
   const [updating, setUpdating] = useState<IntegrationProvider | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -35,13 +39,14 @@ export function IntegrationAvailabilityPanel({ accessToken, tenantId, initialIte
       return;
     }
     setItems((current) => current.map((item) => (item.provider === provider ? result.data : item)));
+    router.refresh();
   };
 
   return (
     <section className="rounded-xl border border-border bg-card p-5 shadow-xs" aria-labelledby="integration-access-title">
       <div className="mb-4">
-        <h2 id="integration-access-title" className="text-lg font-semibold text-foreground">Acceso del tenant</h2>
-        <p className="text-sm text-muted-foreground">Las integraciones deshabilitadas se ocultan y sus endpoints quedan bloqueados para esta empresa.</p>
+        <h2 id="integration-access-title" className="text-lg font-semibold text-foreground">{t('title')}</h2>
+        <p className="text-sm text-muted-foreground">{t('description')}</p>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         {items.map((item) => {
@@ -50,10 +55,10 @@ export function IntegrationAvailabilityPanel({ accessToken, tenantId, initialIte
             <label key={item.provider} className="flex cursor-pointer items-center justify-between gap-3 rounded-lg border border-border p-3">
               <span>
                 <span className="block text-sm font-medium text-foreground">{LABELS[item.provider]}</span>
-                <span className="block text-xs text-muted-foreground">{item.enabled ? 'Habilitada' : 'Deshabilitada'}</span>
+                <span className="block text-xs text-muted-foreground">{t(item.enabled ? 'enabled' : 'disabled')}</span>
               </span>
               {isUpdating ? (
-                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" aria-label="Actualizando" />
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" aria-label={t('updating')} />
               ) : (
                 <input
                   type="checkbox"
@@ -62,7 +67,7 @@ export function IntegrationAvailabilityPanel({ accessToken, tenantId, initialIte
                   onChange={(event) => update(item.provider, event.target.checked)}
                   disabled={updating !== null}
                   className="h-5 w-9 cursor-pointer accent-primary"
-                  aria-label={`${item.enabled ? 'Deshabilitar' : 'Habilitar'} ${LABELS[item.provider]}`}
+                  aria-label={`${t(item.enabled ? 'disable' : 'enable')} ${LABELS[item.provider]}`}
                 />
               )}
             </label>
