@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class ResendIntegrationConfigRequest(BaseModel):
@@ -374,6 +374,16 @@ class VoiceProviderConfigResponse(BaseModel):
     sip_route: Optional[VoiceSipRouteResponse] = None
 
 
+# Triggers de handoff a humano soportados hoy. "customer_request" lo dispara
+# una tool explicita que el agente invoca; "lead_score" se revisa cuando el
+# agente invoca cualquier tool de voz (no hay analisis en vivo de la llamada
+# fuera de esos puntos). Sentimiento/tool-failure/"no puedo resolver" quedan
+# para una fase posterior.
+HANDOFF_TRIGGER_CUSTOMER_REQUEST = "customer_request"
+HANDOFF_TRIGGER_LEAD_SCORE = "lead_score"
+VALID_HANDOFF_TRIGGERS = {HANDOFF_TRIGGER_CUSTOMER_REQUEST, HANDOFF_TRIGGER_LEAD_SCORE}
+
+
 class VoiceAgentConfigRequest(BaseModel):
     provider_config_id: Optional[str] = None
     provider: str = Field(default="ultravox", max_length=40)
@@ -387,6 +397,19 @@ class VoiceAgentConfigRequest(BaseModel):
     default_system_prompt: Optional[str] = None
     default_tools_json: dict[str, Any] = Field(default_factory=dict)
     status: str = Field(default="active", max_length=32)
+    handoff_enabled: bool = False
+    handoff_chatwoot_inbox_id: Optional[int] = Field(None, gt=0)
+    handoff_chatwoot_team_id: Optional[int] = Field(None, gt=0)
+    handoff_triggers: list[str] = Field(default_factory=list)
+    handoff_lead_score_threshold: int = Field(default=80, ge=0, le=100)
+
+    @field_validator("handoff_triggers")
+    @classmethod
+    def _validate_handoff_triggers(cls, value: list[str]) -> list[str]:
+        invalid = set(value) - VALID_HANDOFF_TRIGGERS
+        if invalid:
+            raise ValueError(f"Unsupported handoff triggers: {sorted(invalid)}")
+        return value
 
 
 class VoiceAgentConfigResponse(BaseModel):
@@ -400,6 +423,22 @@ class VoiceAgentConfigResponse(BaseModel):
     default_timezone: str
     default_voice: Optional[str] = None
     status: str
+    handoff_enabled: bool = False
+    handoff_chatwoot_inbox_id: Optional[int] = None
+    handoff_chatwoot_team_id: Optional[int] = None
+    handoff_triggers: list[str] = Field(default_factory=list)
+    handoff_lead_score_threshold: int = 80
+
+
+class ChatwootInboxSummary(BaseModel):
+    id: int
+    name: str
+    channel_type: Optional[str] = None
+
+
+class ChatwootTeamSummary(BaseModel):
+    id: int
+    name: str
 
 
 class VoiceCallActionRequest(BaseModel):

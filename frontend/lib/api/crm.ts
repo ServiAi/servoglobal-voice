@@ -21,7 +21,9 @@ import type {
   ResendTestEmailRequest,
   ChatwootConfigRequest,
   ChatwootConfigResponse,
+  ChatwootInboxSummary,
   ChatwootProvisionRequest,
+  ChatwootTeamSummary,
   ChatwootTestResponse,
   WhatsAppActionRequest,
   WhatsAppActionResponse,
@@ -548,6 +550,26 @@ export function provisionAdminTenantChatwoot(
 ) {
   return requestBackendEndpoint<ChatwootConfigResponse>(
     'POST', 'admin', `tenants/${tenantId}/integrations/chatwoot/provision`, accessToken, undefined, payload
+  );
+}
+
+export function fetchChatwootInboxes(accessToken: string) {
+  return requestIntegrationEndpoint<ChatwootInboxSummary[]>('GET', 'chatwoot/inboxes', accessToken);
+}
+
+export function fetchChatwootTeams(accessToken: string) {
+  return requestIntegrationEndpoint<ChatwootTeamSummary[]>('GET', 'chatwoot/teams', accessToken);
+}
+
+export function fetchAdminTenantChatwootInboxes(accessToken: string, tenantId: string) {
+  return requestBackendEndpoint<ChatwootInboxSummary[]>(
+    'GET', 'admin', `tenants/${tenantId}/integrations/chatwoot/inboxes`, accessToken
+  );
+}
+
+export function fetchAdminTenantChatwootTeams(accessToken: string, tenantId: string) {
+  return requestBackendEndpoint<ChatwootTeamSummary[]>(
+    'GET', 'admin', `tenants/${tenantId}/integrations/chatwoot/teams`, accessToken
   );
 }
 

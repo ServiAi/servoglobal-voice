@@ -46,6 +46,9 @@ class VoiceAgentService:
             if not provider_config or provider_config.tenant_id != tenant_id:
                 raise ValueError("Provider config does not exist or does not belong to this tenant.")
 
+        if body.handoff_enabled and not body.handoff_chatwoot_inbox_id:
+            raise ValueError("handoff_chatwoot_inbox_id is required when handoff_enabled is true.")
+
         if agent_config_id:
             agent = self.validate_agent_belongs_to_tenant(tenant_id, agent_config_id)
         else:
@@ -64,6 +67,11 @@ class VoiceAgentService:
         agent.default_system_prompt = body.default_system_prompt
         agent.default_tools_json = body.default_tools_json
         agent.status = body.status
+        agent.handoff_enabled = body.handoff_enabled
+        agent.handoff_chatwoot_inbox_id = body.handoff_chatwoot_inbox_id
+        agent.handoff_chatwoot_team_id = body.handoff_chatwoot_team_id
+        agent.handoff_triggers = body.handoff_triggers
+        agent.handoff_lead_score_threshold = body.handoff_lead_score_threshold
 
         self._sync_analytics_agent(tenant_id, agent)
 
@@ -141,4 +149,9 @@ class VoiceAgentService:
             default_timezone=agent.default_timezone,
             default_voice=agent.default_voice,
             status=agent.status,
+            handoff_enabled=agent.handoff_enabled,
+            handoff_chatwoot_inbox_id=agent.handoff_chatwoot_inbox_id,
+            handoff_chatwoot_team_id=agent.handoff_chatwoot_team_id,
+            handoff_triggers=agent.handoff_triggers,
+            handoff_lead_score_threshold=agent.handoff_lead_score_threshold,
         )
