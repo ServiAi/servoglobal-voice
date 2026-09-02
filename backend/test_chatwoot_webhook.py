@@ -72,6 +72,37 @@ class ChatwootWebhookTests(Integration2ATestCase):
         self.assertIsNotNone(event)
         self.assertEqual(event.resource_id, "123")
 
+    def test_retried_message_created_delivery_is_not_processed_twice(self):
+        webhook_key = self._configure(account_id=17)
+        payload = {
+            "id": 9001,
+            "event": "message_created",
+            "message_type": "incoming",
+            "account": {"id": 17},
+            "conversation": {"id": 123},
+            "content": "Hola, quiero info",
+        }
+
+        first = self.client.post(f"/api/v1/webhooks/chatwoot/{webhook_key}", json=payload)
+        second = self.client.post(f"/api/v1/webhooks/chatwoot/{webhook_key}", json=payload)
+
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(first.json()["status"], "ok")
+        self.assertEqual(second.status_code, 200)
+        self.assertEqual(second.json(), {"status": "ignored", "reason": "duplicate"})
+
+        with SessionLocal() as db:
+            events = list(
+                db.scalars(
+                    select(TenantIntegrationEvent).where(
+                        TenantIntegrationEvent.event_type == "webhook_received",
+                        TenantIntegrationEvent.resource_id == "9001",
+                    )
+                )
+            )
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].resource_type, "message")
+
     def test_non_incoming_message_is_ignored(self):
         webhook_key = self._configure(account_id=17)
         response = self.client.post(
