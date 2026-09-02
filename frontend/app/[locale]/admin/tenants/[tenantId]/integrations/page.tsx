@@ -16,6 +16,7 @@ const ADMIN_CONFIGURABLE_PROVIDERS: IntegrationProvider[] = [
   'voice',
   'calcom',
   'google_calendar',
+  'chatwoot',
 ];
 
 export default async function AdminTenantIntegrationsPage({ params }: Props) {

@@ -3,7 +3,12 @@
 import { useState } from 'react';
 import { AlertCircle, CheckCircle2, Copy, Eye, EyeOff, Loader2, MessageCircle, Send, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { provisionChatwootIntegration, testChatwootIntegration } from '@/lib/api/crm';
+import {
+  provisionAdminTenantChatwoot,
+  provisionChatwootIntegration,
+  testAdminTenantChatwoot,
+  testChatwootIntegration,
+} from '@/lib/api/crm';
 import type { ChatwootConfigResponse } from '@/types/crm';
 import { ChatwootConfigForm } from './ChatwootConfigForm';
 import { FieldHelp } from './FieldHelp';
@@ -11,9 +16,11 @@ import { FieldHelp } from './FieldHelp';
 type Props = {
   accessToken: string;
   initialConfig?: ChatwootConfigResponse;
+  mode?: 'tenant' | 'admin';
+  tenantId?: string;
 };
 
-export function ChatwootIntegrationCard({ accessToken, initialConfig }: Props) {
+export function ChatwootIntegrationCard({ accessToken, initialConfig, mode = 'tenant', tenantId }: Props) {
   const [config, setConfig] = useState(initialConfig);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [showWebhookUrl, setShowWebhookUrl] = useState(false);
@@ -31,7 +38,9 @@ export function ChatwootIntegrationCard({ accessToken, initialConfig }: Props) {
 
   const handleTest = async () => {
     setTesting(true);
-    const result = await testChatwootIntegration(accessToken);
+    const result = mode === 'admin' && tenantId
+      ? await testAdminTenantChatwoot(accessToken, tenantId)
+      : await testChatwootIntegration(accessToken);
     setTesting(false);
     if (!result.ok) {
       notify('error', result.detail);
@@ -46,7 +55,9 @@ export function ChatwootIntegrationCard({ accessToken, initialConfig }: Props) {
 
   const handleProvision = async () => {
     setProvisioning(true);
-    const result = await provisionChatwootIntegration(accessToken, {});
+    const result = mode === 'admin' && tenantId
+      ? await provisionAdminTenantChatwoot(accessToken, tenantId, {})
+      : await provisionChatwootIntegration(accessToken, {});
     setProvisioning(false);
     if (!result.ok) {
       notify('error', result.detail);
@@ -113,6 +124,8 @@ export function ChatwootIntegrationCard({ accessToken, initialConfig }: Props) {
         <ChatwootConfigForm
           accessToken={accessToken}
           config={config}
+          mode={mode}
+          tenantId={tenantId}
           onSaved={(nextConfig) => {
             setConfig(nextConfig);
             notify('success', 'Configuración de Chatwoot guardada.');

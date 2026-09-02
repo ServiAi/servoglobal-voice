@@ -515,6 +515,38 @@ export function provisionChatwootIntegration(accessToken: string, payload: Chatw
   return requestIntegrationEndpoint<ChatwootConfigResponse>('POST', 'chatwoot/provision', accessToken, undefined, payload);
 }
 
+export function fetchAdminTenantChatwootConfig(accessToken: string, tenantId: string) {
+  return requestBackendEndpoint<ChatwootConfigResponse>(
+    'GET', 'admin', `tenants/${tenantId}/integrations/chatwoot/config`, accessToken
+  );
+}
+
+export function configureAdminTenantChatwoot(
+  accessToken: string,
+  tenantId: string,
+  payload: ChatwootConfigRequest
+) {
+  return requestBackendEndpoint<ChatwootConfigResponse>(
+    'POST', 'admin', `tenants/${tenantId}/integrations/chatwoot/config`, accessToken, undefined, payload
+  );
+}
+
+export function testAdminTenantChatwoot(accessToken: string, tenantId: string) {
+  return requestBackendEndpoint<ChatwootTestResponse>(
+    'POST', 'admin', `tenants/${tenantId}/integrations/chatwoot/test`, accessToken
+  );
+}
+
+export function provisionAdminTenantChatwoot(
+  accessToken: string,
+  tenantId: string,
+  payload: ChatwootProvisionRequest
+) {
+  return requestBackendEndpoint<ChatwootConfigResponse>(
+    'POST', 'admin', `tenants/${tenantId}/integrations/chatwoot/provision`, accessToken, undefined, payload
+  );
+}
+
 export function configureResendIntegration(accessToken: string, payload: ResendIntegrationConfigRequest) {
   return requestIntegrationEndpoint<ResendIntegrationConfigResponse>('POST', 'resend/config', accessToken, undefined, payload);
 }
