@@ -96,6 +96,35 @@ class ChatwootWebhookTests(Integration2ATestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["status"], "ignored")
 
+    def test_event_without_top_level_account_uses_nested_conversation_account(self):
+        # conversation_typing_on/off (y otros) no traen "account" en el nivel
+        # superior, solo anidado dentro de "conversation" (visto en produccion).
+        webhook_key = self._configure(account_id=17)
+        response = self.client.post(
+            f"/api/v1/webhooks/chatwoot/{webhook_key}",
+            json={
+                "event": "conversation_typing_off",
+                "user": {"id": 1, "name": "Agente"},
+                "conversation": {"id": 15, "account": {"id": 17, "name": "Tenant"}},
+                "is_private": False,
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["status"], "ignored")
+        with SessionLocal() as db:
+            rejected = db.scalar(
+                select(TenantIntegrationEvent).where(TenantIntegrationEvent.event_type == "webhook_rejected")
+            )
+        self.assertIsNone(rejected)
+
+    def test_event_without_any_account_still_rejected(self):
+        webhook_key = self._configure(account_id=17)
+        response = self.client.post(
+            f"/api/v1/webhooks/chatwoot/{webhook_key}",
+            json={"event": "conversation_typing_off", "conversation": {"id": 15}},
+        )
+        self.assertEqual(response.status_code, 401)
+
 
 if __name__ == "__main__":
     import unittest
