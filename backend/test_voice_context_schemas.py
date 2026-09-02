@@ -887,8 +887,11 @@ class VoiceContextSchemaTests(Integration2ATestCase):
         return IntegrityError("statement", {}, original)
 
     def test_alembic_has_single_expected_head(self) -> None:
+        # No fijar el revision id exacto: cambia con cada migracion nueva y
+        # el punto de este test es detectar ramas/heads duplicados, no un
+        # head especifico.
         heads = ScriptDirectory.from_config(Config("alembic.ini")).get_heads()
-        self.assertEqual(heads, ["202609020002"])
+        self.assertEqual(len(heads), 1, f"Expected a single Alembic head, got: {heads}")
 
 
 if __name__ == "__main__":

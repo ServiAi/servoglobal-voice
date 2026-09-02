@@ -5,6 +5,9 @@ import { AlertCircle, CheckCircle2, Copy, Phone, Plus, Edit2, RotateCw, Router }
 import { Button } from '@/components/ui/button';
 import { FieldHelp } from './FieldHelp';
 import type {
+  ChatwootInboxSummary,
+  ChatwootTeamSummary,
+  HandoffTrigger,
   VoiceProviderConfigRequest,
   VoiceProviderConfigResponse,
   VoiceAgentConfigRequest,
@@ -22,7 +25,16 @@ import {
   fetchAdminTenantVoiceAgents,
   createAdminTenantVoiceAgent,
   updateAdminTenantVoiceAgent,
+  fetchChatwootInboxes,
+  fetchChatwootTeams,
+  fetchAdminTenantChatwootInboxes,
+  fetchAdminTenantChatwootTeams,
 } from '@/lib/api/crm';
+
+const HANDOFF_TRIGGER_OPTIONS: { value: HandoffTrigger; label: string; help: string }[] = [
+  { value: 'customer_request', label: 'Cliente solicita humano', help: 'El agente invoca esta señal cuando detecta que el cliente pide hablar con una persona.' },
+  { value: 'lead_score', label: 'Lead score alto', help: 'Se revisa cada vez que el agente usa una herramienta de voz (agenda, este handoff); no hay análisis continuo durante toda la llamada.' },
+];
 
 type Props = {
   accessToken: string;
@@ -80,7 +92,15 @@ export function VoiceIntegrationCard({
     default_timezone: 'America/Bogota',
     default_voice: 'standard-female',
     status: 'active',
+    handoff_enabled: false,
+    handoff_chatwoot_inbox_id: null,
+    handoff_chatwoot_team_id: null,
+    handoff_triggers: [],
+    handoff_lead_score_threshold: 80,
   });
+
+  const [chatwootInboxes, setChatwootInboxes] = useState<ChatwootInboxSummary[]>([]);
+  const [chatwootTeams, setChatwootTeams] = useState<ChatwootTeamSummary[]>([]);
 
   const [configForm, setConfigForm] = useState<VoiceProviderConfigRequest>({
     provider: 'ultravox',
@@ -126,6 +146,21 @@ export function VoiceIntegrationCard({
     }
     load();
   }, [accessToken, initialAgents.length, mode, tenantId]);
+
+  // Carga inboxes/teams de Chatwoot para el selector de handoff. Falla en
+  // silencio si Chatwoot no está configurado: el formulario simplemente
+  // muestra las listas vacías y el operador no puede activar el handoff.
+  useEffect(() => {
+    async function load() {
+      const [inboxesRes, teamsRes] =
+        mode === 'admin' && tenantId
+          ? await Promise.all([fetchAdminTenantChatwootInboxes(accessToken, tenantId), fetchAdminTenantChatwootTeams(accessToken, tenantId)])
+          : await Promise.all([fetchChatwootInboxes(accessToken), fetchChatwootTeams(accessToken)]);
+      if (inboxesRes.ok) setChatwootInboxes(inboxesRes.data);
+      if (teamsRes.ok) setChatwootTeams(teamsRes.data);
+    }
+    load();
+  }, [accessToken, mode, tenantId]);
 
   const updateConfigField = (key: keyof VoiceProviderConfigRequest, value: string) => {
     setConfigForm((curr) => ({ ...curr, [key]: value }));
@@ -220,6 +255,11 @@ export function VoiceIntegrationCard({
       default_timezone: 'America/Bogota',
       default_voice: 'standard-female',
       status: 'active',
+      handoff_enabled: false,
+      handoff_chatwoot_inbox_id: null,
+      handoff_chatwoot_team_id: null,
+      handoff_triggers: [],
+      handoff_lead_score_threshold: 80,
     });
     setShowAgentForm(true);
   };
@@ -235,6 +275,11 @@ export function VoiceIntegrationCard({
       default_timezone: agent.default_timezone,
       default_voice: agent.default_voice,
       status: agent.status,
+      handoff_enabled: agent.handoff_enabled,
+      handoff_chatwoot_inbox_id: agent.handoff_chatwoot_inbox_id,
+      handoff_chatwoot_team_id: agent.handoff_chatwoot_team_id,
+      handoff_triggers: agent.handoff_triggers,
+      handoff_lead_score_threshold: agent.handoff_lead_score_threshold,
     });
     setShowAgentForm(true);
   };
@@ -246,6 +291,10 @@ export function VoiceIntegrationCard({
     }
     if (!agentForm.display_name.trim()) {
       notify('error', 'El nombre para mostrar es obligatorio.');
+      return;
+    }
+    if (agentForm.handoff_enabled && !agentForm.handoff_chatwoot_inbox_id) {
+      notify('error', 'Selecciona un inbox de Chatwoot para activar el handoff a humano.');
       return;
     }
 
@@ -711,6 +760,102 @@ export function VoiceIntegrationCard({
                     </select>
                   </label>
                 </div>
+              </div>
+
+              <div className="rounded-lg border border-border bg-muted/30 p-3.5">
+                <label className="flex items-center gap-1 text-sm font-semibold text-foreground">
+                  <input
+                    type="checkbox"
+                    className="mr-1"
+                    checked={agentForm.handoff_enabled ?? false}
+                    onChange={(e) => setAgentForm((curr) => ({ ...curr, handoff_enabled: e.target.checked }))}
+                  />
+                  Human Handoff
+                  <FieldHelp label="Human Handoff" required={false}>
+                    Cuando se dispara un trigger habilitado, el agente crea o reutiliza una conversación de Chatwoot para este lead, la asigna al team elegido y deja una nota privada explicando el motivo. Requiere Chatwoot configurado y activo para este tenant.
+                  </FieldHelp>
+                </label>
+
+                {agentForm.handoff_enabled && (
+                  <div className="mt-3 space-y-3 pl-6">
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <label className="grid gap-1 text-xs font-medium text-muted-foreground">
+                        <span className="flex items-center gap-1">Chatwoot Inbox * <FieldHelp label="Chatwoot Inbox" required>Inbox donde se crea la conversación cuando se dispara el handoff.</FieldHelp></span>
+                        <select
+                          className={FIELD_CLASS}
+                          value={agentForm.handoff_chatwoot_inbox_id ?? ''}
+                          onChange={(e) => setAgentForm((curr) => ({ ...curr, handoff_chatwoot_inbox_id: e.target.value ? Number(e.target.value) : null }))}
+                        >
+                          <option value="">Selecciona un inbox...</option>
+                          {chatwootInboxes.map((inbox) => (
+                            <option key={inbox.id} value={inbox.id}>{inbox.name}</option>
+                          ))}
+                        </select>
+                      </label>
+
+                      <label className="grid gap-1 text-xs font-medium text-muted-foreground">
+                        <span className="flex items-center gap-1">Team <FieldHelp label="Team de Chatwoot" required={false}>Team al que se asigna la conversación. Si se omite, queda sin asignar.</FieldHelp></span>
+                        <select
+                          className={FIELD_CLASS}
+                          value={agentForm.handoff_chatwoot_team_id ?? ''}
+                          onChange={(e) => setAgentForm((curr) => ({ ...curr, handoff_chatwoot_team_id: e.target.value ? Number(e.target.value) : null }))}
+                        >
+                          <option value="">Sin asignar</option>
+                          {chatwootTeams.map((team) => (
+                            <option key={team.id} value={team.id}>{team.name}</option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+
+                    {chatwootInboxes.length === 0 && (
+                      <p className="text-xs text-amber-600 dark:text-amber-400">
+                        No hay inboxes de Chatwoot disponibles. Configura y activa Chatwoot para este tenant primero.
+                      </p>
+                    )}
+
+                    <div>
+                      <span className="text-xs font-medium text-muted-foreground">Trigger</span>
+                      <div className="mt-1.5 space-y-1.5">
+                        {HANDOFF_TRIGGER_OPTIONS.map((option) => {
+                          const checked = (agentForm.handoff_triggers ?? []).includes(option.value);
+                          return (
+                            <label key={option.value} className="flex items-center gap-1 text-xs text-foreground">
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={(e) =>
+                                  setAgentForm((curr) => ({
+                                    ...curr,
+                                    handoff_triggers: e.target.checked
+                                      ? [...(curr.handoff_triggers ?? []), option.value]
+                                      : (curr.handoff_triggers ?? []).filter((t) => t !== option.value),
+                                  }))
+                                }
+                              />
+                              <span className="font-medium">{option.label}</span>
+                              <FieldHelp label={option.label} required={false}>{option.help}</FieldHelp>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {(agentForm.handoff_triggers ?? []).includes('lead_score') && (
+                      <label className="grid max-w-[180px] gap-1 text-xs font-medium text-muted-foreground">
+                        <span className="flex items-center gap-1">Umbral de lead score <FieldHelp label="Umbral de lead score" required={false}>El handoff se dispara cuando el score del lead (0-100) sea mayor o igual a este valor.</FieldHelp></span>
+                        <input
+                          type="number"
+                          min={0}
+                          max={100}
+                          className={FIELD_CLASS}
+                          value={agentForm.handoff_lead_score_threshold ?? 80}
+                          onChange={(e) => setAgentForm((curr) => ({ ...curr, handoff_lead_score_threshold: Number(e.target.value) }))}
+                        />
+                      </label>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="flex justify-end gap-2 pt-2 border-t border-border mt-3">

@@ -15,7 +15,9 @@ from app.schemas.integrations import (
     CalComTestResponse,
     ChatwootConfigRequest,
     ChatwootConfigResponse,
+    ChatwootInboxSummary,
     ChatwootProvisionRequest,
+    ChatwootTeamSummary,
     ChatwootTestResponse,
     EmailTemplateItem,
     EmailTemplateUpsertRequest,
@@ -50,6 +52,7 @@ from app.schemas.integrations import (
 )
 from app.services.booking_config_service import BookingConfigService
 from app.services.booking_service import BookingService
+from app.services.chatwoot_client import ChatwootClientError, sanitize_chatwoot_error
 from app.services.chatwoot_config_service import ChatwootConfigService
 from app.services.email_config_service import EmailConfigService
 from app.services.email_send_service import EmailSendService
@@ -757,3 +760,25 @@ def disconnect_chatwoot(
         return ChatwootConfigService(db).disconnect(context.tenant.id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+
+
+@router.get("/chatwoot/inboxes", response_model=list[ChatwootInboxSummary])
+async def list_chatwoot_inboxes(
+    context: AuthContext = Depends(require_enabled_integration("chatwoot", _READ_ROLES)),
+    db: Session = Depends(get_db),
+) -> Any:
+    try:
+        return await ChatwootConfigService(db).list_inboxes(context.tenant.id)
+    except (ValueError, ChatwootClientError) as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=sanitize_chatwoot_error(str(exc))) from exc
+
+
+@router.get("/chatwoot/teams", response_model=list[ChatwootTeamSummary])
+async def list_chatwoot_teams(
+    context: AuthContext = Depends(require_enabled_integration("chatwoot", _READ_ROLES)),
+    db: Session = Depends(get_db),
+) -> Any:
+    try:
+        return await ChatwootConfigService(db).list_teams(context.tenant.id)
+    except (ValueError, ChatwootClientError) as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=sanitize_chatwoot_error(str(exc))) from exc

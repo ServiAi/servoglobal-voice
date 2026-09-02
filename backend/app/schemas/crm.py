@@ -338,6 +338,13 @@ class VoiceBookingRequest(BaseModel):
     attendee_phone: Optional[str] = None
 
 
+class VoiceHandoffRequest(BaseModel):
+    call_context_id: Optional[str] = None
+    agent_id: Optional[str] = None
+    did: Optional[str] = None
+    reason: Optional[str] = None
+
+
 class LeadDetailResponse(BaseModel):
     id: str
     status: str

@@ -971,5 +971,8 @@ class VoiceExperienceTests(Integration2ATestCase):
                 service.publish_experience(self.tenant.id, experience_id, self.user.id)
 
     def test_alembic_has_one_head(self) -> None:
+        # No fijar el revision id exacto: cambia con cada migracion nueva y
+        # el punto de este test es detectar ramas/heads duplicados, no un
+        # head especifico.
         heads = ScriptDirectory.from_config(Config("alembic.ini")).get_heads()
-        self.assertEqual(heads, ["202609020002"])
+        self.assertEqual(len(heads), 1, f"Expected a single Alembic head, got: {heads}")

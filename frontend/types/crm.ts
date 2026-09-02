@@ -800,6 +800,8 @@ export type VoiceProviderConfigResponse = {
   sip_route?: VoiceSipRouteResponse | null;
 };
 
+export type HandoffTrigger = 'customer_request' | 'lead_score';
+
 export type VoiceAgentConfigRequest = {
   provider_config_id?: string | null;
   provider?: string;
@@ -813,6 +815,11 @@ export type VoiceAgentConfigRequest = {
   default_system_prompt?: string | null;
   default_tools_json?: Record<string, unknown>;
   status?: string;
+  handoff_enabled?: boolean;
+  handoff_chatwoot_inbox_id?: number | null;
+  handoff_chatwoot_team_id?: number | null;
+  handoff_triggers?: HandoffTrigger[];
+  handoff_lead_score_threshold?: number;
 };
 
 export type VoiceAgentConfigResponse = {
@@ -826,6 +833,22 @@ export type VoiceAgentConfigResponse = {
   default_timezone: string;
   default_voice?: string | null;
   status: string;
+  handoff_enabled: boolean;
+  handoff_chatwoot_inbox_id?: number | null;
+  handoff_chatwoot_team_id?: number | null;
+  handoff_triggers: HandoffTrigger[];
+  handoff_lead_score_threshold: number;
+};
+
+export type ChatwootInboxSummary = {
+  id: number;
+  name: string;
+  channel_type?: string | null;
+};
+
+export type ChatwootTeamSummary = {
+  id: number;
+  name: string;
 };
 
 export type VoiceCallActionRequest = {

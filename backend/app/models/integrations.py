@@ -612,5 +612,11 @@ class TenantVoiceAgentConfig(Base, TimestampMixin):
     default_tools_json: Mapped[dict] = mapped_column(sa.JSON, nullable=False, default=dict)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="active")
 
+    handoff_enabled: Mapped[bool] = mapped_column(sa.Boolean, nullable=False, default=False)
+    handoff_chatwoot_inbox_id: Mapped[int | None] = mapped_column(sa.Integer, nullable=True)
+    handoff_chatwoot_team_id: Mapped[int | None] = mapped_column(sa.Integer, nullable=True)
+    handoff_triggers: Mapped[list] = mapped_column(sa.JSON, nullable=False, default=list)
+    handoff_lead_score_threshold: Mapped[int] = mapped_column(sa.Integer, nullable=False, default=80)
+
     tenant = relationship("Tenant")
     provider_config = relationship("TenantVoiceProviderConfig")

@@ -8,7 +8,13 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models.integrations import TenantChatwootConfig
-from app.schemas.integrations import ChatwootConfigRequest, ChatwootConfigResponse, ChatwootTestResponse
+from app.schemas.integrations import (
+    ChatwootConfigRequest,
+    ChatwootConfigResponse,
+    ChatwootInboxSummary,
+    ChatwootTeamSummary,
+    ChatwootTestResponse,
+)
 from app.services.chatwoot_client import ChatwootClient, ChatwootClientConfig, ChatwootClientError, sanitize_chatwoot_error
 from app.services.chatwoot_platform_client import ChatwootPlatformClient, ChatwootPlatformError
 from app.services.integration_event_service import IntegrationEventService
@@ -286,3 +292,20 @@ class ChatwootConfigService:
             resource_id=config.id,
         )
         return self.to_response(config)
+
+    async def list_inboxes(self, tenant_id: str) -> list[ChatwootInboxSummary]:
+        """Usado para poblar el selector de inbox del handoff de voz->humano."""
+        _, client_config = self.get_active_client_config(tenant_id)
+        inboxes = await ChatwootClient(client_config).list_inboxes()
+        return [
+            ChatwootInboxSummary(
+                id=inbox["id"], name=inbox.get("name") or f"Inbox {inbox['id']}", channel_type=inbox.get("channel_type")
+            )
+            for inbox in inboxes
+        ]
+
+    async def list_teams(self, tenant_id: str) -> list[ChatwootTeamSummary]:
+        """Usado para poblar el selector de team del handoff de voz->humano."""
+        _, client_config = self.get_active_client_config(tenant_id)
+        teams = await ChatwootClient(client_config).list_teams()
+        return [ChatwootTeamSummary(id=team["id"], name=team.get("name") or f"Team {team['id']}") for team in teams]

@@ -253,3 +253,32 @@ class ChatwootClient:
             except Exception as e:
                 logger.error("[Chatwoot] Error obteniendo conversacion %s: %s", conversation_id, e)
                 return None
+
+    async def assign_team(self, conversation_id: int, team_id: int) -> bool:
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            try:
+                resp = await client.post(
+                    self._url(f"conversations/{conversation_id}/assignments"),
+                    headers=self._headers(),
+                    json={"team_id": team_id},
+                )
+                resp.raise_for_status()
+                return True
+            except Exception as e:
+                logger.error("[Chatwoot] Error asignando team a conv=%s: %s", conversation_id, e)
+                return False
+
+    async def list_inboxes(self) -> list[dict]:
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            resp = await client.get(self._url("inboxes"), headers=self._headers())
+            if resp.status_code >= 400:
+                raise ChatwootClientError(sanitize_chatwoot_error(resp.text) or "Chatwoot request failed")
+            return resp.json().get("payload", [])
+
+    async def list_teams(self) -> list[dict]:
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            resp = await client.get(self._url("teams"), headers=self._headers())
+            if resp.status_code >= 400:
+                raise ChatwootClientError(sanitize_chatwoot_error(resp.text) or "Chatwoot request failed")
+            data = resp.json()
+            return data if isinstance(data, list) else []
