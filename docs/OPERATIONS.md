@@ -187,12 +187,12 @@ Chatwoot dejó de configurarse por variables de entorno globales; ahora es una i
 
 **No usa Agent Bots.** La primera versión sí los usaba y se descartó tras probar contra la instancia real (2026-09-02): un token de Agent Bot devuelve `"Access to this endpoint is not authorized for bots"` para cualquier endpoint de `/api/v1/accounts/*`, incluyendo crear un contacto — es decir, no sirve ni para el aprovisionamiento ni para el uso en runtime que hace `ChatwootClient`. El token que se guarda como `api_token_encrypted` es el del usuario `administrator` creado para la ocasión (mismo tipo de credencial que el operador crea a mano en modo "external").
 
-Validado end-to-end contra `crm.serviglobal-ia.com` el 2026-09-02 (Account, usuario, inbox y webhook creados correctamente; `GET /api/v1/accounts/{id}` y `POST .../contacts` confirmados con el token del usuario). La corrida de validación dejó datos de prueba reales pendientes de limpieza manual (la Platform API no expone borrado de Accounts):
+Validado end-to-end contra `crm.serviglobal-ia.com` el 2026-09-02 (Account, usuario, inbox y webhook creados correctamente; `GET /api/v1/accounts/{id}` y `POST .../contacts` confirmados con el token del usuario). La corrida de validación dejó Accounts de prueba reales, ya suspendidas (`status: suspended` vía `PATCH /platform/api/v1/accounts/{id}`, la Platform API no expone borrado):
 
 - Accounts `id=2` ("ServiGlobal QA Test - DELETE ME") e `id=3` ("ServiGlobal E2E Diagnostic - DELETE ME"), con sus inboxes, webhooks, un contacto de prueba y los usuarios `administrator` asociados.
 - Dos Agent Bots huérfanos en la Account `id=2` (del diseño descartado), sin uso ni referencia en el código actual.
 
-Límpielos a mano (UI de Chatwoot o Rails console) o suspenda esas Accounts (`PATCH /platform/api/v1/accounts/{id}` con `status: suspended`) antes de considerar la instancia lista para tenants reales.
+Bórrelas a mano (UI de Chatwoot o Rails console) cuando convenga; mientras tanto están suspendidas, no operativas.
 
 ## Checklist de seguridad
 
