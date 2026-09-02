@@ -151,6 +151,25 @@ class AdminTenantIntegrationTests(unittest.TestCase):
         self.assertEqual(fetched.json()["account_id"], 17)
         self.assertNotIn("api_token", fetched.json())
 
+    def test_platform_admin_can_disconnect_chatwoot_for_specific_tenant(self):
+        self.client.post(
+            f"/api/v1/admin/tenants/{self.tenant.id}/integrations/chatwoot/config",
+            json={
+                "base_url": "https://crm.serviglobal-ia.com",
+                "account_id": 17,
+                "status": "active",
+                "api_token": "cw_secret_token_1234567890",
+            },
+        )
+
+        response = self.client.post(
+            f"/api/v1/admin/tenants/{self.tenant.id}/integrations/chatwoot/disconnect"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["status"], "inactive")
+        self.assertTrue(response.json()["has_secret"])
+
     def test_integrations_default_to_enabled_and_can_be_reenabled_without_losing_config(self):
         initial = self.client.get(f"/api/v1/admin/tenants/{self.tenant.id}/integrations/availability")
         self.assertEqual(initial.status_code, 200)

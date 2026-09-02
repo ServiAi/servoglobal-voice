@@ -118,6 +118,7 @@ class ChatwootConfigServiceTests(Integration2ATestCase):
             config = db.scalar(select(TenantChatwootConfig).where(TenantChatwootConfig.tenant_id == self.tenant.id))
         self.assertIsNotNone(config.last_health_check_at)
         self.assertIsNone(config.last_error_message)
+        self.assertEqual(config.account_name, "Clinica ABC")
 
     def test_chatwoot_test_connection_marks_error_on_failure(self):
         self.client.post("/api/v1/integrations/chatwoot/config", json=self._payload())
@@ -268,6 +269,69 @@ class ChatwootConfigServiceTests(Integration2ATestCase):
         self.assertEqual(config.status, "error")
         self.assertEqual(config.account_id, 42)
         self.assertIsNotNone(config.last_error_message)
+
+    def test_chatwoot_disconnect_deactivates_without_deleting_config(self):
+        self.client.post("/api/v1/integrations/chatwoot/config", json=self._payload())
+
+        response = self.client.post("/api/v1/integrations/chatwoot/disconnect")
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["status"], "inactive")
+        self.assertTrue(body["has_secret"])
+        with SessionLocal() as db:
+            config = db.scalar(select(TenantChatwootConfig).where(TenantChatwootConfig.tenant_id == self.tenant.id))
+        self.assertEqual(config.status, "inactive")
+        self.assertIsNotNone(config.api_token_encrypted)
+        self.assertIsNotNone(config.webhook_key)
+
+    def test_chatwoot_disconnect_without_config_returns_422(self):
+        response = self.client.post("/api/v1/integrations/chatwoot/disconnect")
+        self.assertEqual(response.status_code, 422)
+
+    def test_chatwoot_provision_reactivates_disconnected_managed_config_without_new_account(self):
+        class _FakePlatformClient:
+            def __init__(self, base_url, token):
+                pass
+
+            def create_account(self, *, name):
+                raise AssertionError("no deberia crear una Account nueva al reactivar")
+
+        with SessionLocal() as db:
+            config = TenantChatwootConfig(
+                tenant_id=self.tenant.id,
+                provider="chatwoot",
+                mode="managed",
+                status="inactive",
+                base_url="https://crm.serviglobal-ia.com",
+                account_id=42,
+                account_name="Clinica ABC",
+                default_inbox_id=99,
+                default_inbox_name="Conversaciones",
+                api_token_encrypted="already-encrypted-token",
+                webhook_key="existing-webhook-key",
+            )
+            db.add(config)
+            db.commit()
+
+        import app.services.chatwoot_config_service as module
+
+        original_client = module.ChatwootPlatformClient
+        module.ChatwootPlatformClient = _FakePlatformClient
+        try:
+            response = self.client.post("/api/v1/integrations/chatwoot/provision", json={})
+        finally:
+            module.ChatwootPlatformClient = original_client
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["status"], "active")
+        self.assertEqual(body["account_id"], 42)
+        self.assertEqual(body["account_name"], "Clinica ABC")
+        with SessionLocal() as db:
+            config = db.scalar(select(TenantChatwootConfig).where(TenantChatwootConfig.tenant_id == self.tenant.id))
+        self.assertEqual(config.status, "active")
+        self.assertEqual(config.webhook_key, "existing-webhook-key")
 
 
 if __name__ == "__main__":

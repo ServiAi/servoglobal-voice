@@ -351,7 +351,9 @@ export type ChatwootConfigResponse = {
   status: 'active' | 'inactive' | 'error' | string;
   base_url?: string | null;
   account_id?: number | null;
+  account_name?: string | null;
   default_inbox_id?: number | null;
+  default_inbox_name?: string | null;
   has_secret: boolean;
   webhook_url?: string | null;
   last_health_check_at?: string | null;

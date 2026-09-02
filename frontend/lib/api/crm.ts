@@ -515,6 +515,10 @@ export function provisionChatwootIntegration(accessToken: string, payload: Chatw
   return requestIntegrationEndpoint<ChatwootConfigResponse>('POST', 'chatwoot/provision', accessToken, undefined, payload);
 }
 
+export function disconnectChatwootIntegration(accessToken: string) {
+  return requestIntegrationEndpoint<ChatwootConfigResponse>('POST', 'chatwoot/disconnect', accessToken);
+}
+
 export function fetchAdminTenantChatwootConfig(accessToken: string, tenantId: string) {
   return requestBackendEndpoint<ChatwootConfigResponse>(
     'GET', 'admin', `tenants/${tenantId}/integrations/chatwoot/config`, accessToken
@@ -544,6 +548,12 @@ export function provisionAdminTenantChatwoot(
 ) {
   return requestBackendEndpoint<ChatwootConfigResponse>(
     'POST', 'admin', `tenants/${tenantId}/integrations/chatwoot/provision`, accessToken, undefined, payload
+  );
+}
+
+export function disconnectAdminTenantChatwoot(accessToken: string, tenantId: string) {
+  return requestBackendEndpoint<ChatwootConfigResponse>(
+    'POST', 'admin', `tenants/${tenantId}/integrations/chatwoot/disconnect`, accessToken
   );
 }
 

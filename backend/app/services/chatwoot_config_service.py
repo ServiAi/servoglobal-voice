@@ -54,7 +54,9 @@ class ChatwootConfigService:
             status=config.status,
             base_url=config.base_url,
             account_id=config.account_id,
+            account_name=config.account_name,
             default_inbox_id=config.default_inbox_id,
+            default_inbox_name=config.default_inbox_name,
             has_secret=bool(config.api_token_encrypted),
             webhook_url=f"{_WEBHOOK_PATH}/{config.webhook_key}",
             last_health_check_at=config.last_health_check_at,
@@ -113,7 +115,7 @@ class ChatwootConfigService:
 
         try:
             _, client_config = self.get_active_client_config(tenant_id)
-            ChatwootClient(client_config).get_account_profile()
+            account_payload = ChatwootClient(client_config).get_account_profile()
         except (ValueError, ChatwootClientError) as exc:
             message = sanitize_chatwoot_error(str(exc)) or "Chatwoot test failed"
             config.last_health_check_at = datetime.now(UTC)
@@ -130,6 +132,9 @@ class ChatwootConfigService:
             )
             return ChatwootTestResponse(status="failed", error_message=message)
 
+        account_name = account_payload.get("name") if isinstance(account_payload, dict) else None
+        if isinstance(account_name, str) and account_name:
+            config.account_name = account_name
         config.last_health_check_at = datetime.now(UTC)
         config.last_error_message = None
         self.db.commit()
@@ -156,6 +161,28 @@ class ChatwootConfigService:
         existing = self.get_config(tenant_id)
         if existing is not None and existing.status == "active":
             raise ValueError("Chatwoot integration is already configured for this tenant")
+        if (
+            existing is not None
+            and existing.mode == "managed"
+            and existing.account_id
+            and existing.api_token_encrypted
+        ):
+            # Ya se aprovisiono antes y se desconecto: reactivar en vez de crear
+            # una Account/usuario/inbox duplicados en Chatwoot.
+            existing.status = "active"
+            existing.last_error_message = None
+            existing.last_health_check_at = datetime.now(UTC)
+            self.db.commit()
+            self.db.refresh(existing)
+            self.events.record_event(
+                tenant_id=tenant_id,
+                provider=self.provider,
+                event_type="chatwoot_managed_reactivated",
+                status="success",
+                resource_type="tenant_chatwoot_config",
+                resource_id=existing.id,
+            )
+            return self.to_response(existing)
         if not settings.CHATWOOT_PLATFORM_API_TOKEN:
             raise ValueError("CHATWOOT_PLATFORM_API_TOKEN is not configured")
         if not settings.BACKEND_PUBLIC_BASE_URL:
@@ -181,8 +208,9 @@ class ChatwootConfigService:
             user_id = int(user["id"])
             user_token = str(user["access_token"])
             platform.link_account_user(account_id=account_id, user_id=user_id, role="administrator")
+            inbox_name = "Conversaciones"
             inbox = platform.create_api_inbox(
-                account_id=account_id, user_token=user_token, name=account_name, webhook_url=webhook_url
+                account_id=account_id, user_token=user_token, name=inbox_name, webhook_url=webhook_url
             )
             inbox_id = int(inbox.get("id") or (inbox.get("inbox") or {}).get("id"))
             platform.create_account_webhook(account_id=account_id, user_token=user_token, url=webhook_url)
@@ -221,7 +249,9 @@ class ChatwootConfigService:
         config.status = "active"
         config.base_url = _DEFAULT_PLATFORM_BASE_URL
         config.account_id = account_id
+        config.account_name = account_name
         config.default_inbox_id = inbox_id
+        config.default_inbox_name = inbox_name
         config.api_token_encrypted = self.secret_manager.encrypt_secret(user_token)
         config.last_error_message = None
         config.last_health_check_at = datetime.now(UTC)
@@ -231,6 +261,26 @@ class ChatwootConfigService:
             tenant_id=tenant_id,
             provider=self.provider,
             event_type="chatwoot_managed_provision",
+            status="success",
+            resource_type="tenant_chatwoot_config",
+            resource_id=config.id,
+        )
+        return self.to_response(config)
+
+    def disconnect(self, tenant_id: str) -> ChatwootConfigResponse:
+        """Desactiva la integracion sin borrar la configuracion (Account, token,
+        webhook_key se conservan) para que reconectar despues sea inmediato."""
+        config = self.get_config(tenant_id)
+        if config is None:
+            raise ValueError("Chatwoot integration is not configured for this tenant")
+        config.status = "inactive"
+        config.last_error_message = None
+        self.db.commit()
+        self.db.refresh(config)
+        self.events.record_event(
+            tenant_id=tenant_id,
+            provider=self.provider,
+            event_type="chatwoot_disconnected",
             status="success",
             resource_type="tenant_chatwoot_config",
             resource_id=config.id,
