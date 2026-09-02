@@ -21,6 +21,7 @@ import type {
   ResendTestEmailRequest,
   ChatwootConfigRequest,
   ChatwootConfigResponse,
+  ChatwootProvisionRequest,
   ChatwootTestResponse,
   WhatsAppActionRequest,
   WhatsAppActionResponse,
@@ -508,6 +509,10 @@ export function configureChatwootIntegration(accessToken: string, payload: Chatw
 
 export function testChatwootIntegration(accessToken: string) {
   return requestIntegrationEndpoint<ChatwootTestResponse>('POST', 'chatwoot/test', accessToken);
+}
+
+export function provisionChatwootIntegration(accessToken: string, payload: ChatwootProvisionRequest) {
+  return requestIntegrationEndpoint<ChatwootConfigResponse>('POST', 'chatwoot/provision', accessToken, undefined, payload);
 }
 
 export function configureResendIntegration(accessToken: string, payload: ResendIntegrationConfigRequest) {

@@ -34,8 +34,13 @@ class ChatwootConfigRequest(BaseModel):
     api_token: Optional[str] = Field(None, max_length=2000)
 
 
+class ChatwootProvisionRequest(BaseModel):
+    account_name: Optional[str] = Field(None, max_length=160)
+
+
 class ChatwootConfigResponse(BaseModel):
     provider: str = "chatwoot"
+    mode: str = "external"
     status: str
     base_url: Optional[str] = None
     account_id: Optional[int] = None

@@ -11,7 +11,7 @@ Variables base:
 
 - Backend: `DATABASE_URL`, `PORT`, Auth0, Ultravox y `INTEGRATIONS_ENCRYPTION_KEY`.
 - Frontend: `NEXT_PUBLIC_API_URL`, Auth0 y Turnstile cuando se use la demo pública.
-- Integraciones opcionales: Cal.com, Google Calendar, Resend/storage, WhatsApp y secretos de webhooks/herramientas internas. Chatwoot ya no usa variables de entorno globales (`CHATWOOT_API_TOKEN`/`CHATWOOT_ACCOUNT_ID`/`CHATWOOT_INBOX_ID` fueron retiradas); se configura por tenant en `Settings → Integrations → Chatwoot`.
+- Integraciones opcionales: Cal.com, Google Calendar, Resend/storage, WhatsApp y secretos de webhooks/herramientas internas. Chatwoot ya no usa variables de entorno globales para credenciales por tenant (`CHATWOOT_API_TOKEN`/`CHATWOOT_ACCOUNT_ID`/`CHATWOOT_INBOX_ID` fueron retiradas); se configura por tenant en `Settings → Integrations → Chatwoot`. La excepción es el modo "managed": `CHATWOOT_PLATFORM_API_TOKEN` (token de Super Admin/Platform App de la instancia compartida) y `BACKEND_PUBLIC_BASE_URL` (URL pública de este backend, usada para registrar el `outgoing_url` del Agent Bot) son globales y necesarios sólo para `POST /api/v1/integrations/chatwoot/provision`; sin ellos, el modo "external" (formulario manual) sigue funcionando igual.
 - Worker de notificaciones: `NOTIFICATION_WORKER_BATCH_SIZE`, `NOTIFICATION_WORKER_POLL_SECONDS`, `NOTIFICATION_WORKER_LEASE_SECONDS`, `NOTIFICATION_WORKER_MAX_ATTEMPTS`, tiempos de retry/jitter y parámetros de recuperación. Los defaults y rangos válidos están en `backend/app/core/config.py`.
 
 Los nombres vigentes y placeholders están en los archivos `.env.example`. Nunca copie valores reales a documentación, logs o commits.
@@ -180,6 +180,15 @@ Chatwoot dejó de configurarse por variables de entorno globales; ahora es una i
 3. Pruebe la conexión (`Probar conexión`) y confirme `has_secret: true`.
 4. Copie la `webhook_url` mostrada en la tarjeta y configúrela en Chatwoot → Settings → Integrations → Webhooks para esa Account, reemplazando la URL anterior (`/api/v1/chatwoot/webhook`, retirada).
 5. Envíe un mensaje entrante real desde esa Account y confirme en `tenant_integration_events` (`provider="chatwoot"`) que se registra `webhook_received` para el tenant correcto.
+
+### Auto-provisioning "managed" (Chatwoot Platform API)
+
+`POST /api/v1/integrations/chatwoot/provision` (`ChatwootPlatformClient`, `backend/app/services/chatwoot_platform_client.py`) fue implementado contra la documentación pública de la Platform API de Chatwoot (`platform/api/v1/accounts`, `platform/api/v1/agent_bots`, `api/v1/accounts/{id}/inboxes` con canal `api`, `.../set_agent_bot`) pero **no ha sido probado end-to-end contra una instancia real** — el equipo no tenía a mano el token de Platform API al momento de escribir el código. Antes de ofrecerlo a un tenant real:
+
+1. Configure `CHATWOOT_PLATFORM_API_TOKEN` (token de Super Admin/Platform App) y `BACKEND_PUBLIC_BASE_URL` en `backend/.env`.
+2. Ejecute `POST /api/v1/integrations/chatwoot/provision` contra un tenant de prueba y confirme en la instancia de Chatwoot que se creó la Account, el Agent Bot (con permisos suficientes para crear el inbox — esto es lo menos verificado del flujo) y el inbox tipo `api`.
+3. Si el Agent Bot no tiene permisos para crear el inbox (`create_api_inbox` fallará con 401/403), la config queda en `status="error"` conservando `account_id`/`platform_agent_bot_id` para diagnóstico manual vía el Rails console o la UI de Chatwoot, sin reintento automático.
+4. Envíe un mensaje real y confirme que llega a `outgoing_url` (el mismo webhook tenant-aware que "external") antes de marcar el modo como soportado en producción.
 
 ## Checklist de seguridad
 

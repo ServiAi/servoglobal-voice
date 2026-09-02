@@ -15,6 +15,7 @@ from app.schemas.integrations import (
     CalComTestResponse,
     ChatwootConfigRequest,
     ChatwootConfigResponse,
+    ChatwootProvisionRequest,
     ChatwootTestResponse,
     EmailTemplateItem,
     EmailTemplateUpsertRequest,
@@ -732,3 +733,16 @@ def test_chatwoot(
     db: Session = Depends(get_db),
 ) -> Any:
     return ChatwootConfigService(db).test_connection(context.tenant.id)
+
+
+@router.post("/chatwoot/provision", response_model=ChatwootConfigResponse)
+def provision_chatwoot(
+    body: ChatwootProvisionRequest,
+    context: AuthContext = Depends(require_enabled_integration("chatwoot", _WRITE_ROLES)),
+    db: Session = Depends(get_db),
+) -> Any:
+    account_name = (body.account_name or context.tenant.name).strip()
+    try:
+        return ChatwootConfigService(db).provision_managed_account(context.tenant.id, account_name=account_name)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc

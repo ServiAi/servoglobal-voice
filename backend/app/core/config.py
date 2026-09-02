@@ -107,6 +107,10 @@ class Settings(BaseSettings):
     EMAIL_MAX_ATTACHMENT_BYTES: int = 10485760
     EMAIL_MAX_TOTAL_ATTACHMENTS_BYTES: int = 15728640
     PUBLIC_FORM_BASE_URL: str = "https://staging.serviglobal-ia.com"
+    BACKEND_PUBLIC_BASE_URL: str = ""
+
+    # Chatwoot Platform API (auto-provisioning de Accounts en modo "managed")
+    CHATWOOT_PLATFORM_API_TOKEN: str = ""
 
     # Durable notification worker (Phase 6)
     NOTIFICATION_WORKER_BATCH_SIZE: int = 25
