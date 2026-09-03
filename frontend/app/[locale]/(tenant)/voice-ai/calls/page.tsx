@@ -1,5 +1,6 @@
 import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
+import { getTranslations } from 'next-intl/server';
 import { getAccessToken } from '@/lib/auth/server';
 import { fetchRecentCalls, type DashboardFilters } from '@/lib/api/dashboard';
 import { DashboardFilters as DashboardFiltersUI } from '@/components/dashboard/DashboardFilters';
@@ -25,6 +26,7 @@ export default async function VoiceAiCallsPage({ params, searchParams }: Props) 
     redirect(`/api/auth/login?returnTo=/${locale}/voice-ai/calls`);
   }
 
+  const t = await getTranslations({ locale, namespace: 'crm.voiceAi' });
   const resolvedSearchParams = await searchParams;
   const initialQueryParams = new URLSearchParams();
   Object.entries(resolvedSearchParams).forEach(([key, value]) => {
@@ -44,8 +46,8 @@ export default async function VoiceAiCallsPage({ params, searchParams }: Props) 
   return (
     <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-6">
       <header className="border-b border-border pb-5">
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Llamadas</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Historial de llamadas atendidas por tus agentes de voz.</p>
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">{t('callsTitle')}</h1>
+        <p className="mt-1 text-sm text-muted-foreground">{t('callsSubtitle')}</p>
       </header>
 
       <Suspense fallback={<div className="h-20 animate-pulse rounded-xl border border-border bg-muted/50" />}>
@@ -56,7 +58,7 @@ export default async function VoiceAiCallsPage({ params, searchParams }: Props) 
         <RecentCallsTable data={recentRes.data} />
       ) : (
         <div className="rounded-xl border border-destructive/20 bg-destructive/10 p-4 text-destructive">
-          Error cargando llamadas recientes: {recentRes.detail}
+          {t('callsListError', { detail: recentRes.detail })}
         </div>
       )}
     </div>

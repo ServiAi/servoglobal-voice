@@ -1,5 +1,6 @@
 import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
+import { getTranslations } from 'next-intl/server';
 import { getAccessToken } from '@/lib/auth/server';
 import {
   fetchAgentDistribution,
@@ -38,6 +39,7 @@ export default async function VoiceAiAnalyticsPage({ params, searchParams }: Pro
     redirect(`/api/auth/login?returnTo=/${locale}/voice-ai/analytics`);
   }
 
+  const t = await getTranslations({ locale, namespace: 'crm.voiceAi' });
   const resolvedSearchParams = await searchParams;
   const initialQueryParams = new URLSearchParams();
   Object.entries(resolvedSearchParams).forEach(([key, value]) => {
@@ -64,8 +66,8 @@ export default async function VoiceAiAnalyticsPage({ params, searchParams }: Pro
   return (
     <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-6">
       <header className="border-b border-border pb-5">
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Analítica de voz</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Rendimiento de llamadas, consumo y ahorro de tu organización.</p>
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">{t('analyticsTitle')}</h1>
+        <p className="mt-1 text-sm text-muted-foreground">{t('analyticsSubtitle')}</p>
       </header>
 
       <Suspense fallback={<div className="h-20 animate-pulse rounded-xl border border-border bg-muted/50" />}>
@@ -75,44 +77,44 @@ export default async function VoiceAiAnalyticsPage({ params, searchParams }: Pro
       {kpisRes.ok ? (
         <KpiCards data={kpisRes.data} />
       ) : (
-        <DashboardError message={`Error cargando KPIs: ${kpisRes.detail}`} />
+        <DashboardError message={t('kpisError', { detail: kpisRes.detail })} />
       )}
 
       {usageRes.ok && isUsageLimitStatus(usageRes.data.usage_status) && (
         <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-red-300">
-          El paquete de minutos está agotado. El dashboard queda en modo lectura hasta que un administrador actualice o reactive el plan.
+          {t('usageLimitBanner')}
         </div>
       )}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {usageRes.ok ? <TenantUsageCard usage={usageRes.data} /> : <DashboardError message="Error cargando consumo." />}
-        {usageRes.ok ? <TenantUsageAlerts alerts={usageRes.data.alerts} /> : <DashboardError message="Error cargando alertas." />}
+        {usageRes.ok ? <TenantUsageCard usage={usageRes.data} /> : <DashboardError message={t('usageError')} />}
+        {usageRes.ok ? <TenantUsageAlerts alerts={usageRes.data.alerts} /> : <DashboardError message={t('alertsError')} />}
       </div>
 
       {savingsRes.ok ? (
         <TenantSavingsComparison comparison={savingsRes.data} />
       ) : (
-        <DashboardError message="Error cargando comparativa." />
+        <DashboardError message={t('savingsError')} />
       )}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">
-          {trendsRes.ok ? <TrendsChart data={trendsRes.data} /> : <DashboardError message="Error cargando tendencias." />}
+          {trendsRes.ok ? <TrendsChart data={trendsRes.data} /> : <DashboardError message={t('trendsError')} />}
         </div>
         <div>
-          {statusRes.ok ? <StatusDistributionChart data={statusRes.data} /> : <DashboardError message="Error cargando estados." />}
+          {statusRes.ok ? <StatusDistributionChart data={statusRes.data} /> : <DashboardError message={t('statusError')} />}
         </div>
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {agentRes.ok ? <AgentDistributionChart data={agentRes.data} /> : <DashboardError message="Error cargando agentes." />}
-        {heatmapRes.ok ? <HeatmapChart data={heatmapRes.data} /> : <DashboardError message="Error cargando mapa de calor." />}
+        {agentRes.ok ? <AgentDistributionChart data={agentRes.data} /> : <DashboardError message={t('agentsError')} />}
+        {heatmapRes.ok ? <HeatmapChart data={heatmapRes.data} /> : <DashboardError message={t('heatmapError')} />}
       </div>
 
       {crmDashboardRes.ok ? (
         <CallsPanel data={crmDashboardRes.data} locale={locale} />
       ) : (
-        <DashboardError message="Error cargando rendimiento de llamadas." />
+        <DashboardError message={t('callsError')} />
       )}
     </div>
   );

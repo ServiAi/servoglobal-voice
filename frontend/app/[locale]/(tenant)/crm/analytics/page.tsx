@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation';
+import { getTranslations } from 'next-intl/server';
 import { getAccessToken } from '@/lib/auth/server';
 import { locales, type Locale } from '@/i18n';
 import { fetchCrmDashboard } from '@/lib/api/crm';
@@ -41,9 +42,10 @@ export default async function CrmAnalyticsPage({ params, searchParams }: Props) 
   });
 
   if (!dashboardRes.ok) {
+    const t = await getTranslations({ locale, namespace: 'crm' });
     return (
       <div className="rounded-xl border border-destructive/20 bg-destructive/10 p-6 text-destructive">
-        <h3 className="text-lg font-bold">Error al cargar el rendimiento CRM</h3>
+        <h3 className="text-lg font-bold">{t('analyticsLoadError')}</h3>
         <p className="mt-2 text-sm">{dashboardRes.detail}</p>
       </div>
     );
