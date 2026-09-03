@@ -19,14 +19,14 @@ export default async function TenantLayout({ children, params }: Props) {
   const accessToken = await getAccessToken();
 
   if (!accessToken) {
-    redirect(`/api/auth/login?returnTo=/${locale}/crm`);
+    redirect(`/api/auth/login?returnTo=/${locale}/dashboard`);
   }
 
   const result = await fetchMeProfile(accessToken);
 
   if (!result.ok) {
     if (result.status === 401) {
-      redirect(`/api/auth/login?returnTo=/${locale}/crm`);
+      redirect(`/api/auth/login?returnTo=/${locale}/dashboard`);
     }
     redirect(`/${locale}/dashboard/no-access`);
   }

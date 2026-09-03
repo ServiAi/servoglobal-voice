@@ -52,9 +52,9 @@ for (const locale of locales) {
             const accessibility = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze();
             expect(accessibility.violations, JSON.stringify(accessibility.violations, null, 2)).toEqual([]);
             expect(browserErrors, browserErrors.join('\n')).toEqual([]);
-            // The CRM app is a standalone tool and must never show the
-            // ServiGlobal marketing footer; the top-level dashboard keeps it.
-            await expect(page.locator('footer')).toHaveCount(route === 'dashboard' ? 1 : 0);
+            // The tenant app (dashboard, CRM, etc.) is a standalone tool and
+            // must never show the ServiGlobal marketing footer.
+            await expect(page.locator('footer')).toHaveCount(0);
             if (process.env.QA_VISUAL_SNAPSHOTS === 'true') {
               await expect(page).toHaveScreenshot(`${locale}-${route.replaceAll('/', '-')}-${viewport.name}-${theme}.png`, { fullPage: true });
             }

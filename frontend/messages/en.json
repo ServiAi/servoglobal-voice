@@ -689,6 +689,8 @@
   "crm": {
     "navigation": {
       "ariaLabel": "Main CRM navigation",
+      "homeGroup": "Home",
+      "homeSummary": "Summary",
       "operation": "Operations",
       "analysis": "Analysis",
       "configuration": "Configuration",

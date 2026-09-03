@@ -8,6 +8,7 @@ import {
   BellRing,
   CheckSquare2,
   Gauge,
+  LayoutDashboard,
   Settings,
   Users,
 } from 'lucide-react';
@@ -15,6 +16,12 @@ import { cn } from '@/lib/utils';
 import { useTranslations } from 'next-intl';
 
 const GROUPS = [
+  {
+    label: 'homeGroup',
+    links: [
+      { label: 'homeSummary', path: '/dashboard', icon: LayoutDashboard, exact: true },
+    ],
+  },
   {
     label: 'operation',
     links: [

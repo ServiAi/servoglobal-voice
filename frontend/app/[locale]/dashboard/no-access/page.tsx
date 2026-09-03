@@ -28,7 +28,7 @@ export default async function NoAccessPage({ params }: Props) {
         </p>
         <div className="flex flex-wrap gap-3">
           <form action="/api/auth/login" method="get">
-            <input type="hidden" name="returnTo" value={`/${locale}/crm`} />
+            <input type="hidden" name="returnTo" value={`/${locale}/dashboard`} />
             <button
               type="submit"
               className="inline-flex h-10 items-center justify-center rounded-md bg-cyan-300 px-4 text-sm font-semibold text-zinc-950 transition hover:bg-cyan-200"
