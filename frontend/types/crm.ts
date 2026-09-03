@@ -373,8 +373,17 @@ export type ChatwootInboxCreateRequest = {
   name: string;
 };
 
+export type ChatwootInboxUpdateRequest = {
+  name: string;
+};
+
 export type ChatwootTeamCreateRequest = {
   name: string;
+  description?: string | null;
+};
+
+export type ChatwootTeamUpdateRequest = {
+  name?: string;
   description?: string | null;
 };
 
@@ -389,6 +398,11 @@ export type ChatwootAgentSummary = {
 export type ChatwootAgentInviteRequest = {
   name: string;
   email: string;
+  role?: 'agent' | 'administrator';
+};
+
+export type ChatwootAgentUpdateRequest = {
+  name?: string;
   role?: 'agent' | 'administrator';
 };
 
