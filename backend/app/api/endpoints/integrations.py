@@ -60,7 +60,7 @@ from app.schemas.integrations import (
 from app.services.booking_config_service import BookingConfigService
 from app.services.booking_service import BookingService
 from app.services.chatwoot_client import ChatwootClientError, sanitize_chatwoot_error
-from app.services.chatwoot_config_service import ChatwootConfigService
+from app.services.chatwoot_config_service import ChatwootAccountConflictError, ChatwootConfigService
 from app.services.email_config_service import EmailConfigService
 from app.services.email_send_service import EmailSendService
 from app.services.email_template_service import EmailTemplateService
@@ -733,6 +733,8 @@ def configure_chatwoot(
 ) -> Any:
     try:
         return ChatwootConfigService(db).upsert_config(context.tenant.id, body)
+    except ChatwootAccountConflictError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
 

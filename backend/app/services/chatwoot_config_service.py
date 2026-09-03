@@ -25,6 +25,10 @@ _WEBHOOK_PATH = "/api/v1/webhooks/chatwoot"
 _DEFAULT_PLATFORM_BASE_URL = "https://crm.serviglobal-ia.com"
 
 
+class ChatwootAccountConflictError(ValueError):
+    """La (base_url, account_id) solicitada ya pertenece a otro tenant."""
+
+
 class ChatwootConfigService:
     provider = "chatwoot"
 
@@ -48,6 +52,19 @@ class ChatwootConfigService:
         if not webhook_key:
             return None
         return self.db.scalar(select(TenantChatwootConfig).where(TenantChatwootConfig.webhook_key == webhook_key))
+
+    def assert_account_available_for_tenant(self, tenant_id: str, *, base_url: str, account_id: int) -> None:
+        """La frontera de aislamiento es (base_url, account_id), no solo
+        account_id: dos instancias de Chatwoot distintas pueden reusar el
+        mismo numero. No revela a que tenant pertenece la Account en conflicto."""
+        existing = self.db.scalar(
+            select(TenantChatwootConfig).where(
+                TenantChatwootConfig.base_url == base_url,
+                TenantChatwootConfig.account_id == account_id,
+            )
+        )
+        if existing is not None and existing.tenant_id != tenant_id:
+            raise ChatwootAccountConflictError("This Chatwoot Account is already assigned to another tenant.")
 
     def get_response(self, tenant_id: str) -> ChatwootConfigResponse:
         config = self.get_config(tenant_id)
@@ -75,6 +92,11 @@ class ChatwootConfigService:
         if config is None and not request.api_token:
             raise ValueError("Chatwoot api_token is required for first configuration")
 
+        normalized_base_url = request.base_url.strip().rstrip("/")
+        self.assert_account_available_for_tenant(
+            tenant_id, base_url=normalized_base_url, account_id=request.account_id
+        )
+
         if config is None:
             config = TenantChatwootConfig(
                 tenant_id=tenant_id,
@@ -84,7 +106,7 @@ class ChatwootConfigService:
             self.db.add(config)
 
         config.status = request.status
-        config.base_url = request.base_url.strip().rstrip("/")
+        config.base_url = normalized_base_url
         config.account_id = request.account_id
         config.default_inbox_id = request.default_inbox_id
         config.last_error_message = None

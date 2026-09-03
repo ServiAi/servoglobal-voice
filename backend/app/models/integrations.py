@@ -548,6 +548,11 @@ class TenantChatwootConfig(Base, TimestampMixin):
     __table_args__ = (
         UniqueConstraint("tenant_id", "provider", name="uq_tenant_chatwoot_configs_tenant_provider"),
         UniqueConstraint("webhook_key", name="uq_tenant_chatwoot_configs_webhook_key"),
+        # Aislamiento entre tenants: la misma Account de Chatwoot (identificada
+        # por su instancia + account_id) no puede pertenecer a mas de un
+        # tenant. account_id solo no alcanza porque dos instancias Chatwoot
+        # distintas pueden reusar el mismo account_id.
+        UniqueConstraint("base_url", "account_id", name="uq_tenant_chatwoot_configs_base_url_account_id"),
         Index("ix_tenant_chatwoot_configs_tenant_provider", "tenant_id", "provider"),
         Index("ix_tenant_chatwoot_configs_tenant_status", "tenant_id", "status"),
         Index("ix_tenant_chatwoot_configs_account_id", "account_id"),
