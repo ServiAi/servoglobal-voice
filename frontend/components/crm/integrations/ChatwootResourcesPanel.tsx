@@ -280,7 +280,7 @@ export function ChatwootResourcesPanel({ accessToken, mode = 'tenant', tenantId,
       <h3 className="text-sm font-medium text-muted-foreground">Recursos de Chatwoot</h3>
       <div className="mt-2 grid gap-3 sm:grid-cols-3">
         <div className="space-y-2 rounded-lg border border-border p-3">
-          <h4 className="text-xs font-semibold text-foreground">Inboxes</h4>
+          <h4 className="text-xs font-semibold text-foreground">Inboxes ({inboxes.length})</h4>
           <ul className="space-y-1 text-xs text-muted-foreground">
             {inboxes.length === 0 && <li>Sin inboxes.</li>}
             {inboxes.map((inbox) =>
@@ -326,7 +326,7 @@ export function ChatwootResourcesPanel({ accessToken, mode = 'tenant', tenantId,
         </div>
 
         <div className="space-y-2 rounded-lg border border-border p-3">
-          <h4 className="text-xs font-semibold text-foreground">Teams</h4>
+          <h4 className="text-xs font-semibold text-foreground">Teams ({teams.length})</h4>
           <ul className="space-y-1 text-xs text-muted-foreground">
             {teams.length === 0 && <li>Sin teams.</li>}
             {teams.map((team) =>
@@ -385,7 +385,7 @@ export function ChatwootResourcesPanel({ accessToken, mode = 'tenant', tenantId,
         </div>
 
         <div className="space-y-2 rounded-lg border border-border p-3">
-          <h4 className="text-xs font-semibold text-foreground">Agentes</h4>
+          <h4 className="text-xs font-semibold text-foreground">Agentes ({agents.length})</h4>
           <ul className="space-y-1 text-xs text-muted-foreground">
             {agents.length === 0 && <li>Sin agentes.</li>}
             {agents.map((agent) =>
