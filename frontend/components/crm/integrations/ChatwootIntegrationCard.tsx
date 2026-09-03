@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { AlertCircle, Copy, Eye, EyeOff, Loader2, MessageCircle, Send, Settings2, Sparkles, Unplug } from 'lucide-react';
+import { AlertCircle, Copy, ExternalLink, Eye, EyeOff, Loader2, MessageCircle, Send, Settings2, ShieldCheck, Sparkles, Unplug } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   disconnectAdminTenantChatwoot,
@@ -50,6 +50,9 @@ export function ChatwootIntegrationCard({ accessToken, initialConfig, mode = 'te
   const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, '') ?? '';
   const fullWebhookUrl = config?.webhook_url ? `${apiBaseUrl}${config.webhook_url}` : null;
   const displayUrl = config?.base_url?.replace(/^https?:\/\//, '') ?? null;
+  const openChatwootUrl = config?.base_url && config?.account_id
+    ? `${config.base_url.replace(/\/$/, '')}/app/accounts/${config.account_id}/dashboard`
+    : null;
 
   const handleTest = async () => {
     setTesting(true);
@@ -144,6 +147,16 @@ export function ChatwootIntegrationCard({ accessToken, initialConfig, mode = 'te
       <div className="space-y-6 p-5">
         {isActive ? (
           <>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+                <ShieldCheck className="h-3.5 w-3.5" />
+                Chatwoot Account dedicada
+              </span>
+              <FieldHelp label="Chatwoot Account dedicada" required={false}>
+                Chatwoot es una plataforma compartida por todos los tenants de ServiGlobal, pero esta Account (sus Inboxes, Teams, Agentes y conversaciones) pertenece exclusivamente a este tenant. Ningún otro tenant puede leer ni operar sobre esta Account.
+              </FieldHelp>
+            </div>
+
             <dl className="grid gap-4 sm:grid-cols-3">
               <div>
                 <dt className="text-xs font-medium text-muted-foreground">Account</dt>
@@ -162,6 +175,14 @@ export function ChatwootIntegrationCard({ accessToken, initialConfig, mode = 'te
             </dl>
 
             <div className="flex flex-wrap gap-2">
+              {openChatwootUrl && (
+                <Button asChild type="button" variant="default" className="gap-2">
+                  <a href={openChatwootUrl} target="_blank" rel="noopener noreferrer">
+                    <ExternalLink className="h-4 w-4" />
+                    Abrir Chatwoot
+                  </a>
+                </Button>
+              )}
               <Button type="button" variant="outline" onClick={() => setManageOpen((v) => !v)} className="gap-2">
                 <Settings2 className="h-4 w-4" />
                 {manageOpen ? 'Ocultar conexión' : 'Manage connection'}
@@ -194,30 +215,52 @@ export function ChatwootIntegrationCard({ accessToken, initialConfig, mode = 'te
                   <ChatwootResourcesPanel accessToken={accessToken} mode={mode} tenantId={tenantId} onNotify={notify} />
                 </div>
 
-                {fullWebhookUrl && (
-                  <div>
-                    <span className="flex items-center gap-1 text-sm font-medium text-muted-foreground">
-                      URL de webhook
-                      <FieldHelp label="URL de webhook" required align="right">
-                        Configúrala en Chatwoot → Settings → Integrations → Webhooks para esta Account. Es única por tenant; no la compartas. En modo managed ya quedó registrada automáticamente.
-                      </FieldHelp>
-                    </span>
-                    <div className="mt-2 flex items-center gap-2">
-                      <input
-                        readOnly
-                        type={showWebhookUrl ? 'text' : 'password'}
-                        value={fullWebhookUrl}
-                        className="min-h-10 flex-1 rounded-md border border-border bg-muted/30 px-3 py-2 text-sm text-foreground outline-none"
-                      />
-                      <Button type="button" variant="outline" size="icon" onClick={() => setShowWebhookUrl((v) => !v)} aria-label={showWebhookUrl ? 'Ocultar URL' : 'Mostrar URL'}>
-                        {showWebhookUrl ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </Button>
-                      <Button type="button" variant="outline" size="icon" onClick={copyWebhookUrl} aria-label="Copiar URL">
-                        <Copy className="h-4 w-4" />
-                      </Button>
-                    </div>
+                <details className="rounded-lg border border-border p-3">
+                  <summary className="cursor-pointer text-sm font-medium text-muted-foreground">Avanzado</summary>
+                  <div className="mt-4 space-y-4">
+                    <dl className="grid gap-3 sm:grid-cols-3">
+                      <div>
+                        <dt className="text-xs font-medium text-muted-foreground">Account ID</dt>
+                        <dd className="text-sm text-foreground">{config?.account_id ?? '—'}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-xs font-medium text-muted-foreground">base_url</dt>
+                        <dd className="truncate text-sm text-foreground" title={config?.base_url ?? undefined}>{config?.base_url || '—'}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-xs font-medium text-muted-foreground">Último health check</dt>
+                        <dd className="text-sm text-foreground">
+                          {config?.last_health_check_at ? new Date(config.last_health_check_at).toLocaleString() : 'Nunca'}
+                        </dd>
+                      </div>
+                    </dl>
+
+                    {fullWebhookUrl && (
+                      <div>
+                        <span className="flex items-center gap-1 text-sm font-medium text-muted-foreground">
+                          URL de webhook
+                          <FieldHelp label="URL de webhook" required align="right">
+                            Configúrala en Chatwoot → Settings → Integrations → Webhooks para esta Account. Es única por tenant; no la compartas. En modo managed ya quedó registrada automáticamente.
+                          </FieldHelp>
+                        </span>
+                        <div className="mt-2 flex items-center gap-2">
+                          <input
+                            readOnly
+                            type={showWebhookUrl ? 'text' : 'password'}
+                            value={fullWebhookUrl}
+                            className="min-h-10 flex-1 rounded-md border border-border bg-muted/30 px-3 py-2 text-sm text-foreground outline-none"
+                          />
+                          <Button type="button" variant="outline" size="icon" onClick={() => setShowWebhookUrl((v) => !v)} aria-label={showWebhookUrl ? 'Ocultar URL' : 'Mostrar URL'}>
+                            {showWebhookUrl ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                          </Button>
+                          <Button type="button" variant="outline" size="icon" onClick={copyWebhookUrl} aria-label="Copiar URL">
+                            <Copy className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                )}
+                </details>
               </div>
             )}
           </>
