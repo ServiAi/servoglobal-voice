@@ -436,9 +436,32 @@ class ChatwootInboxSummary(BaseModel):
     channel_type: Optional[str] = None
 
 
+class ChatwootInboxCreateRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=160)
+
+
 class ChatwootTeamSummary(BaseModel):
     id: int
     name: str
+
+
+class ChatwootTeamCreateRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=160)
+    description: Optional[str] = Field(None, max_length=500)
+
+
+class ChatwootAgentSummary(BaseModel):
+    id: int
+    name: str
+    email: str
+    role: str
+    confirmed: bool = True
+
+
+class ChatwootAgentInviteRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=160)
+    email: str = Field(..., min_length=3, max_length=255)
+    role: Literal["agent", "administrator"] = "agent"
 
 
 class VoiceCallActionRequest(BaseModel):

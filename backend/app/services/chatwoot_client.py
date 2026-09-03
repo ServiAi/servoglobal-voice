@@ -282,3 +282,47 @@ class ChatwootClient:
                 raise ChatwootClientError(sanitize_chatwoot_error(resp.text) or "Chatwoot request failed")
             data = resp.json()
             return data if isinstance(data, list) else []
+
+    async def list_agents(self) -> list[dict]:
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            resp = await client.get(self._url("agents"), headers=self._headers())
+            if resp.status_code >= 400:
+                raise ChatwootClientError(sanitize_chatwoot_error(resp.text) or "Chatwoot request failed")
+            data = resp.json()
+            return data.get("payload", []) if isinstance(data, dict) else (data if isinstance(data, list) else [])
+
+    async def create_inbox(self, *, name: str, webhook_url: str) -> dict:
+        """Crea un inbox tipo 'api' con el token propio del tenant (sirve tanto
+        para Accounts managed como external, a diferencia del aprovisionamiento
+        inicial que usa la Platform API)."""
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            resp = await client.post(
+                self._url("inboxes"),
+                headers=self._headers(),
+                json={"name": name, "channel": {"type": "api", "webhook_url": webhook_url}},
+            )
+            if resp.status_code >= 400:
+                raise ChatwootClientError(sanitize_chatwoot_error(resp.text) or "Chatwoot request failed")
+            return resp.json()
+
+    async def create_team(self, *, name: str, description: str | None = None) -> dict:
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            resp = await client.post(
+                self._url("teams"),
+                headers=self._headers(),
+                json={"name": name, "description": description},
+            )
+            if resp.status_code >= 400:
+                raise ChatwootClientError(sanitize_chatwoot_error(resp.text) or "Chatwoot request failed")
+            return resp.json()
+
+    async def invite_agent(self, *, name: str, email: str, role: str = "agent") -> dict:
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            resp = await client.post(
+                self._url("agents"),
+                headers=self._headers(),
+                json={"name": name, "email": email, "role": role},
+            )
+            if resp.status_code >= 400:
+                raise ChatwootClientError(sanitize_chatwoot_error(resp.text) or "Chatwoot request failed")
+            return resp.json()

@@ -13,10 +13,14 @@ from app.schemas.integrations import (
     BookingConfigRequest,
     BookingConfigResponse,
     CalComTestResponse,
+    ChatwootAgentInviteRequest,
+    ChatwootAgentSummary,
     ChatwootConfigRequest,
     ChatwootConfigResponse,
+    ChatwootInboxCreateRequest,
     ChatwootInboxSummary,
     ChatwootProvisionRequest,
+    ChatwootTeamCreateRequest,
     ChatwootTeamSummary,
     ChatwootTestResponse,
     EmailTemplateItem,
@@ -780,5 +784,52 @@ async def list_chatwoot_teams(
 ) -> Any:
     try:
         return await ChatwootConfigService(db).list_teams(context.tenant.id)
+    except (ValueError, ChatwootClientError) as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=sanitize_chatwoot_error(str(exc))) from exc
+
+
+@router.post("/chatwoot/inboxes", response_model=ChatwootInboxSummary)
+async def create_chatwoot_inbox(
+    body: ChatwootInboxCreateRequest,
+    context: AuthContext = Depends(require_enabled_integration("chatwoot", _WRITE_ROLES)),
+    db: Session = Depends(get_db),
+) -> Any:
+    try:
+        return await ChatwootConfigService(db).create_inbox(context.tenant.id, name=body.name)
+    except (ValueError, ChatwootClientError) as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=sanitize_chatwoot_error(str(exc))) from exc
+
+
+@router.get("/chatwoot/agents", response_model=list[ChatwootAgentSummary])
+async def list_chatwoot_agents(
+    context: AuthContext = Depends(require_enabled_integration("chatwoot", _READ_ROLES)),
+    db: Session = Depends(get_db),
+) -> Any:
+    try:
+        return await ChatwootConfigService(db).list_agents(context.tenant.id)
+    except (ValueError, ChatwootClientError) as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=sanitize_chatwoot_error(str(exc))) from exc
+
+
+@router.post("/chatwoot/teams", response_model=ChatwootTeamSummary)
+async def create_chatwoot_team(
+    body: ChatwootTeamCreateRequest,
+    context: AuthContext = Depends(require_enabled_integration("chatwoot", _WRITE_ROLES)),
+    db: Session = Depends(get_db),
+) -> Any:
+    try:
+        return await ChatwootConfigService(db).create_team(context.tenant.id, name=body.name, description=body.description)
+    except (ValueError, ChatwootClientError) as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=sanitize_chatwoot_error(str(exc))) from exc
+
+
+@router.post("/chatwoot/agents", response_model=ChatwootAgentSummary)
+async def invite_chatwoot_agent(
+    body: ChatwootAgentInviteRequest,
+    context: AuthContext = Depends(require_enabled_integration("chatwoot", _WRITE_ROLES)),
+    db: Session = Depends(get_db),
+) -> Any:
+    try:
+        return await ChatwootConfigService(db).invite_agent(context.tenant.id, name=body.name, email=body.email, role=body.role)
     except (ValueError, ChatwootClientError) as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=sanitize_chatwoot_error(str(exc))) from exc

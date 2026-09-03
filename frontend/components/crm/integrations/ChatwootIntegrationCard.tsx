@@ -13,6 +13,7 @@ import {
 } from '@/lib/api/crm';
 import type { ChatwootConfigResponse } from '@/types/crm';
 import { ChatwootConfigForm } from './ChatwootConfigForm';
+import { ChatwootResourcesPanel } from './ChatwootResourcesPanel';
 import { FieldHelp } from './FieldHelp';
 
 type Props = {
@@ -188,6 +189,10 @@ export function ChatwootIntegrationCard({ accessToken, initialConfig, mode = 'te
                   }}
                   onError={(text) => notify('error', text)}
                 />
+
+                <div className="border-t border-border pt-5">
+                  <ChatwootResourcesPanel accessToken={accessToken} mode={mode} tenantId={tenantId} onNotify={notify} />
+                </div>
 
                 {fullWebhookUrl && (
                   <div>

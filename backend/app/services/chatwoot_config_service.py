@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.models.integrations import TenantChatwootConfig
 from app.schemas.integrations import (
+    ChatwootAgentSummary,
     ChatwootConfigRequest,
     ChatwootConfigResponse,
     ChatwootInboxSummary,
@@ -309,3 +310,47 @@ class ChatwootConfigService:
         _, client_config = self.get_active_client_config(tenant_id)
         teams = await ChatwootClient(client_config).list_teams()
         return [ChatwootTeamSummary(id=team["id"], name=team.get("name") or f"Team {team['id']}") for team in teams]
+
+    async def list_agents(self, tenant_id: str) -> list[ChatwootAgentSummary]:
+        _, client_config = self.get_active_client_config(tenant_id)
+        agents = await ChatwootClient(client_config).list_agents()
+        return [
+            ChatwootAgentSummary(
+                id=a["id"], name=a.get("name") or f"Agent {a['id']}", email=a.get("email") or "", role=a.get("role") or "agent",
+                confirmed=a.get("confirmed", True),
+            )
+            for a in agents
+        ]
+
+    async def create_inbox(self, tenant_id: str, *, name: str) -> ChatwootInboxSummary:
+        config, client_config = self.get_active_client_config(tenant_id)
+        if not settings.BACKEND_PUBLIC_BASE_URL:
+            raise ValueError("BACKEND_PUBLIC_BASE_URL is not configured")
+        webhook_url = f"{settings.BACKEND_PUBLIC_BASE_URL.rstrip('/')}{_WEBHOOK_PATH}/{config.webhook_key}"
+        inbox = await ChatwootClient(client_config).create_inbox(name=name, webhook_url=webhook_url)
+        self.events.record_event(
+            tenant_id=tenant_id, provider=self.provider, event_type="chatwoot_inbox_created", status="success",
+            resource_type="inbox", resource_id=str(inbox.get("id")),
+        )
+        return ChatwootInboxSummary(id=inbox["id"], name=inbox.get("name") or name, channel_type=inbox.get("channel_type"))
+
+    async def create_team(self, tenant_id: str, *, name: str, description: str | None = None) -> ChatwootTeamSummary:
+        _, client_config = self.get_active_client_config(tenant_id)
+        team = await ChatwootClient(client_config).create_team(name=name, description=description)
+        self.events.record_event(
+            tenant_id=tenant_id, provider=self.provider, event_type="chatwoot_team_created", status="success",
+            resource_type="team", resource_id=str(team.get("id")),
+        )
+        return ChatwootTeamSummary(id=team["id"], name=team.get("name") or name)
+
+    async def invite_agent(self, tenant_id: str, *, name: str, email: str, role: str = "agent") -> ChatwootAgentSummary:
+        _, client_config = self.get_active_client_config(tenant_id)
+        agent = await ChatwootClient(client_config).invite_agent(name=name, email=email, role=role)
+        self.events.record_event(
+            tenant_id=tenant_id, provider=self.provider, event_type="chatwoot_agent_invited", status="success",
+            resource_type="agent", resource_id=str(agent.get("id")), metadata={"role": role},
+        )
+        return ChatwootAgentSummary(
+            id=agent["id"], name=agent.get("name") or name, email=agent.get("email") or email,
+            role=agent.get("role") or role, confirmed=agent.get("confirmed", False),
+        )
