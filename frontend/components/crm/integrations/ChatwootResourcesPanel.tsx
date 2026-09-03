@@ -81,11 +81,27 @@ export function ChatwootResourcesPanel({ accessToken, mode = 'tenant', tenantId,
               fetchChatwootAgents(accessToken),
             ]);
       setLoading(false);
-      if (inboxesRes.ok) setInboxes(inboxesRes.data);
-      if (teamsRes.ok) setTeams(teamsRes.data);
-      if (agentsRes.ok) setAgents(agentsRes.data);
+      if (inboxesRes.ok) {
+        setInboxes(inboxesRes.data);
+      } else {
+        onNotify('error', `No se pudieron cargar los inboxes: ${inboxesRes.detail}`);
+      }
+      if (teamsRes.ok) {
+        setTeams(teamsRes.data);
+      } else {
+        onNotify('error', `No se pudieron cargar los teams: ${teamsRes.detail}`);
+      }
+      if (agentsRes.ok) {
+        setAgents(agentsRes.data);
+      } else {
+        onNotify('error', `No se pudieron cargar los agentes: ${agentsRes.detail}`);
+      }
     }
     load();
+    // onNotify is redefined on every render of the parent (not memoized);
+    // including it would refetch on every notification instead of only
+    // when the tenant/mode actually changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accessToken, mode, tenantId]);
 
   const handleCreateInbox = async () => {
