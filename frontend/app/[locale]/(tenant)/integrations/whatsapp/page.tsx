@@ -21,7 +21,7 @@ export default async function WhatsAppOverviewPage({ params }: Props) {
   const config = configResult.ok ? configResult.data : undefined;
   const accountConfigured = Boolean(config?.phone_number_id || config?.has_secret);
   const status = resolveIntegrationStatus(configResult.ok, config, accountConfigured);
-  const base = `/${locale}/crm/settings/integrations/whatsapp`;
+  const base = `/${locale}/integrations/whatsapp`;
   const actions = [
     { href: `${base}/account`, icon: KeyRound, label: t('quickActions.account') },
     { href: `${base}/templates`, icon: FileText, label: t('quickActions.templates') },

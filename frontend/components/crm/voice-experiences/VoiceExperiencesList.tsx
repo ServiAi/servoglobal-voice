@@ -153,7 +153,7 @@ export function VoiceExperiencesList({
           <p className="mt-2 text-sm leading-6 text-muted-foreground">{config.description}</p>
           {gateState === 'integration_disabled' || gateState === 'no_agents' ? (
             <Button asChild className="mt-5">
-              <Link href={`/${locale}/crm/settings/integrations`}>
+              <Link href={`/${locale}/integrations`}>
                 {t(gateState === 'no_agents' ? 'noAgents.cta' : 'integrationDisabled.cta')}
                 <ArrowRight className="ml-2 size-4" aria-hidden="true" />
               </Link>

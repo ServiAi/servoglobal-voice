@@ -9,7 +9,7 @@ import { CrmIntegrationStatusBadge } from './CrmIntegrationStatusBadge';
 
 type Props = { locale: string; status: IntegrationStatus; basePath?: string; includeFlows?: boolean };
 
-export function WhatsAppIntegrationNavigation({ locale, status, basePath = '/crm/settings/integrations/whatsapp', includeFlows = true }: Props) {
+export function WhatsAppIntegrationNavigation({ locale, status, basePath = '/integrations/whatsapp', includeFlows = true }: Props) {
   const pathname = usePathname();
   const t = useTranslations('crm.integrationsCatalog');
   const base = `/${locale}${basePath}`;

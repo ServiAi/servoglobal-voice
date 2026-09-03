@@ -13,7 +13,7 @@ export default async function NewWhatsAppFlowPage({ params }: { params: Promise<
   const token = await getIntegrationAccess(locale, 'whatsapp');
   const [profileResult, agentsResult] = await Promise.all([fetchMeProfile(token), fetchVoiceAgents(token)]);
   if (!profileResult.ok || !['platform_admin', 'tenant_admin'].includes(profileResult.profile.role)) {
-    redirect(`/${locale}/crm/settings/integrations/whatsapp/flows`);
+    redirect(`/${locale}/integrations/whatsapp/flows`);
   }
   const agents = agentsResult.ok ? agentsResult.data : [];
   const schemaResults = await Promise.all(agents.map(async (agent) => ({

@@ -45,13 +45,13 @@ const GROUPS = [
   {
     label: 'automationGroup',
     links: [
-      { label: 'notifications', path: '/crm/settings/notifications', icon: BellRing },
+      { label: 'notifications', path: '/automations/notifications', icon: BellRing },
     ],
   },
   {
     label: 'integrationsGroup',
     links: [
-      { label: 'integrations', path: '/crm/settings/integrations', icon: Settings },
+      { label: 'integrations', path: '/integrations', icon: Settings },
     ],
   },
 ] as const;

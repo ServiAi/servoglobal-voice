@@ -14,7 +14,7 @@ import {
   Workflow,
 } from 'lucide-react';
 
-import { updateNotificationCapabilityAction } from '@/app/[locale]/(tenant)/crm/settings/notifications/actions';
+import { updateNotificationCapabilityAction } from '@/app/[locale]/(tenant)/automations/notifications/actions';
 import type {
   NotificationCapabilityItem,
   NotificationCatalogResponse,

@@ -35,7 +35,7 @@ export default async function NewVoiceExperiencePage({
         <p className="mt-2 text-sm">{t(`${state}.description`)}</p>
         {noAgents || integrationDisabled ? (
           <Button asChild className="mt-5">
-            <Link href={`/${locale}/crm/settings/integrations`}>{t(`${state}.cta`)}</Link>
+            <Link href={`/${locale}/integrations`}>{t(`${state}.cta`)}</Link>
           </Button>
         ) : null}
       </div>

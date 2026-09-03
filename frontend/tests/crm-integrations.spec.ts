@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 
 for (const locale of ['es', 'en'] as const) {
   test(`${locale} integration catalog filters and reaches WhatsApp templates in two clicks`, async ({ page }) => {
-    await page.goto(`/${locale}/crm/settings/integrations`);
+    await page.goto(`/${locale}/integrations`);
 
     const search = page.getByRole('searchbox', { name: locale === 'es' ? 'Buscar una integración' : 'Search integrations' });
     await expect(search).toBeVisible();
@@ -11,9 +11,9 @@ for (const locale of ['es', 'en'] as const) {
     await expect(page.getByRole('heading', { name: /term-that-does-not-exist/ })).toBeVisible();
     await search.fill('whatsapp');
     await page.getByRole('link', { name: new RegExp(`^(Administrar|Configurar|Revisar|Manage|Configure|Review): WhatsApp$`) }).click();
-    await expect(page).toHaveURL(new RegExp(`/${locale}/crm/settings/integrations/whatsapp$`));
+    await expect(page).toHaveURL(new RegExp(`/${locale}/integrations/whatsapp$`));
     await page.getByRole('link', { name: 'Templates', exact: true }).first().click();
-    await expect(page).toHaveURL(new RegExp(`/${locale}/crm/settings/integrations/whatsapp/templates$`));
+    await expect(page).toHaveURL(new RegExp(`/${locale}/integrations/whatsapp/templates$`));
 
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     expect(overflow).toBeLessThanOrEqual(1);
@@ -22,7 +22,7 @@ for (const locale of ['es', 'en'] as const) {
   });
 
   test(`${locale} chatwoot integration page shows the tenant-scoped webhook URL after saving`, async ({ page }) => {
-    await page.goto(`/${locale}/crm/settings/integrations/chatwoot`);
+    await page.goto(`/${locale}/integrations/chatwoot`);
 
     await expect(page.getByRole('heading', { name: 'Chatwoot' })).toBeVisible();
     await page.getByRole('radio', { name: /Connect existing Chatwoot/ }).check();

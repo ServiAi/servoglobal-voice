@@ -11,7 +11,7 @@ type Props = {
   integrationsPath?: string;
 };
 
-export function IntegrationDetailShell({ locale, integrationsLabel, name, description, children, integrationsPath = '/crm/settings/integrations' }: Props) {
+export function IntegrationDetailShell({ locale, integrationsLabel, name, description, children, integrationsPath = '/integrations' }: Props) {
   return (
     <div className="mx-auto flex max-w-7xl flex-col gap-6">
       <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground">

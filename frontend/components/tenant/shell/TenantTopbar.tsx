@@ -13,8 +13,8 @@ function getTitleKey(pathname: string) {
   if (pathname.includes('/crm/analytics')) return 'performance';
   if (pathname.endsWith('/dashboard')) return 'homeSummary';
   if (pathname.endsWith('/crm')) return 'crmSummary';
-  if (pathname.includes('/crm/settings/integrations')) return 'integrations';
-  if (pathname.includes('/crm/settings/notifications')) return 'notifications';
+  if (pathname.includes('/integrations')) return 'integrations';
+  if (pathname.includes('/automations/notifications')) return 'notifications';
   if (pathname.includes('/crm/leads/')) return 'leadDetail';
   if (pathname.endsWith('/crm/leads')) return 'leads';
   if (pathname.includes('/crm/tasks')) return 'tasks';

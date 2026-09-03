@@ -11,8 +11,8 @@ const routes = [
   'voice-ai/calls',
   'voice-ai/analytics',
   'voice-ai/telephony',
-  'crm/settings/integrations',
-  'crm/settings/notifications',
+  'integrations',
+  'automations/notifications',
 ];
 const locales = ['es', 'en'] as const;
 const themes = ['light', 'dark'] as const;
