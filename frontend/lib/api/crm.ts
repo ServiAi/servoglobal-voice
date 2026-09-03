@@ -19,10 +19,14 @@ import type {
   IntegrationAvailabilityResponse,
   IntegrationCatalogStatusResponse,
   ResendTestEmailRequest,
+  ChatwootAgentInviteRequest,
+  ChatwootAgentSummary,
   ChatwootConfigRequest,
   ChatwootConfigResponse,
+  ChatwootInboxCreateRequest,
   ChatwootInboxSummary,
   ChatwootProvisionRequest,
+  ChatwootTeamCreateRequest,
   ChatwootTeamSummary,
   ChatwootTestResponse,
   WhatsAppActionRequest,
@@ -576,6 +580,46 @@ export function fetchAdminTenantChatwootTeams(accessToken: string, tenantId: str
 export function disconnectAdminTenantChatwoot(accessToken: string, tenantId: string) {
   return requestBackendEndpoint<ChatwootConfigResponse>(
     'POST', 'admin', `tenants/${tenantId}/integrations/chatwoot/disconnect`, accessToken
+  );
+}
+
+export function createChatwootInbox(accessToken: string, payload: ChatwootInboxCreateRequest) {
+  return requestIntegrationEndpoint<ChatwootInboxSummary>('POST', 'chatwoot/inboxes', accessToken, undefined, payload);
+}
+
+export function createAdminTenantChatwootInbox(accessToken: string, tenantId: string, payload: ChatwootInboxCreateRequest) {
+  return requestBackendEndpoint<ChatwootInboxSummary>(
+    'POST', 'admin', `tenants/${tenantId}/integrations/chatwoot/inboxes`, accessToken, undefined, payload
+  );
+}
+
+export function createChatwootTeam(accessToken: string, payload: ChatwootTeamCreateRequest) {
+  return requestIntegrationEndpoint<ChatwootTeamSummary>('POST', 'chatwoot/teams', accessToken, undefined, payload);
+}
+
+export function createAdminTenantChatwootTeam(accessToken: string, tenantId: string, payload: ChatwootTeamCreateRequest) {
+  return requestBackendEndpoint<ChatwootTeamSummary>(
+    'POST', 'admin', `tenants/${tenantId}/integrations/chatwoot/teams`, accessToken, undefined, payload
+  );
+}
+
+export function fetchChatwootAgents(accessToken: string) {
+  return requestIntegrationEndpoint<ChatwootAgentSummary[]>('GET', 'chatwoot/agents', accessToken);
+}
+
+export function fetchAdminTenantChatwootAgents(accessToken: string, tenantId: string) {
+  return requestBackendEndpoint<ChatwootAgentSummary[]>(
+    'GET', 'admin', `tenants/${tenantId}/integrations/chatwoot/agents`, accessToken
+  );
+}
+
+export function inviteChatwootAgent(accessToken: string, payload: ChatwootAgentInviteRequest) {
+  return requestIntegrationEndpoint<ChatwootAgentSummary>('POST', 'chatwoot/agents', accessToken, undefined, payload);
+}
+
+export function inviteAdminTenantChatwootAgent(accessToken: string, tenantId: string, payload: ChatwootAgentInviteRequest) {
+  return requestBackendEndpoint<ChatwootAgentSummary>(
+    'POST', 'admin', `tenants/${tenantId}/integrations/chatwoot/agents`, accessToken, undefined, payload
   );
 }
 

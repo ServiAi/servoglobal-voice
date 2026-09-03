@@ -369,6 +369,29 @@ export type ChatwootTestResponse = {
   error_message?: string | null;
 };
 
+export type ChatwootInboxCreateRequest = {
+  name: string;
+};
+
+export type ChatwootTeamCreateRequest = {
+  name: string;
+  description?: string | null;
+};
+
+export type ChatwootAgentSummary = {
+  id: number;
+  name: string;
+  email: string;
+  role: string;
+  confirmed: boolean;
+};
+
+export type ChatwootAgentInviteRequest = {
+  name: string;
+  email: string;
+  role?: 'agent' | 'administrator';
+};
+
 export type IntegrationStatus = 'active' | 'configured' | 'not_configured' | 'error';
 
 export type IntegrationAvailabilityResponse = {
