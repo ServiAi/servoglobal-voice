@@ -4,7 +4,9 @@
 
 ### Frontend
 
-Next.js 15 con App Router, React 18, TypeScript, Tailwind y `next-intl`. Se divide en landing pública, dashboard tenant, CRM, configuración de integraciones, automatizaciones/notificaciones y administración de plataforma. Las llamadas privadas pasan por utilidades de autenticación Auth0 y clientes tipados en `frontend/lib/api/`.
+Next.js 15 con App Router, React 18, TypeScript, Tailwind y `next-intl`. Se divide en landing pública y aplicación privada de tenant. Las llamadas privadas pasan por utilidades de autenticación Auth0 y clientes tipados en `frontend/lib/api/`.
+
+La aplicación privada de tenant vive bajo el route group `frontend/app/[locale]/(tenant)/` (no agrega segmento a la URL) y comparte una única capa de autenticación y `TenantShell` (`frontend/components/tenant/shell/`: `TenantShell`, `TenantSidebar`, `TenantTopbar`, `TenantNavigation`, `TenantMobileDrawer`) entre todos sus dominios, en vez de un shell acoplado al CRM. La navegación agrupa por dominio de producto, no por CRM: Inicio (`/dashboard`, resumen ejecutivo del tenant), CRM (`/crm` resumen comercial, `/crm/leads`, `/crm/tasks`, `/crm/analytics` rendimiento comercial completo), Voz IA (`/voice-ai/experiences`, `/voice-ai/calls`, `/voice-ai/analytics`, `/voice-ai/telephony` con `VoiceCapacityPanel`), Automatización (`/automations/notifications`) e Integraciones (`/integrations`, transversal a toda la plataforma). Cada ruta legacy (`/crm/dashboard`, `/crm/settings/integrations(?:/.*)?`, `/crm/settings/notifications`, `/crm/settings/voice-experiences(?:/.*)?`, y el antiguo `/dashboard -> /crm`) conserva un stub `redirect()` a su ubicación nueva, preservando query params.
 
 La UI de notificaciones se compone de `NotificationsWorkspace`, `RulesPanel`, `RecipientsPanel` y `DeliveriesPanel`. Las mutaciones se ejecutan mediante Server Actions para que el bearer token no viaje al cliente. `FieldHelp` es el componente compartido para ayudas contextuales de formularios; usa `<details>`, mantiene interacción por teclado y cierra con un clic externo.
 
