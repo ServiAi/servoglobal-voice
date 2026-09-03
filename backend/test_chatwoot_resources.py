@@ -2,8 +2,11 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, patch
 
+from sqlalchemy import select
+
 from _integrations_2a_test_base import Integration2ATestCase, SessionLocal
 from app.core.config import settings
+from app.models.integrations import TenantChatwootConfig
 from app.schemas.integrations import ChatwootConfigRequest
 from app.services.chatwoot_config_service import ChatwootConfigService
 
@@ -95,6 +98,29 @@ class ChatwootResourcesTests(Integration2ATestCase):
         self.assertEqual(invite_response.status_code, 200)
         self.assertEqual(invite_response.json()["confirmed"], False)
         invite_agent.assert_awaited_once_with(name="Luis", email="luis@example.com", role="agent")
+
+    def test_list_agents_excludes_managed_technical_user(self):
+        with SessionLocal() as db:
+            config = db.scalar(
+                select(TenantChatwootConfig).where(TenantChatwootConfig.tenant_id == self.tenant.id)
+            )
+            config.managed_user_id = 9
+            config.managed_user_email = "chatwoot-managed+17@serviglobal-ia.com"
+            db.commit()
+
+        with patch(
+            "app.services.chatwoot_config_service.ChatwootClient.list_agents",
+            new_callable=AsyncMock,
+            return_value=[
+                {"id": 9, "name": "Clinica ABC (managed)", "email": "chatwoot-managed+17@serviglobal-ia.com", "role": "administrator", "confirmed": True},
+                {"id": 10, "name": "Ana", "email": "ana@example.com", "role": "agent", "confirmed": True},
+            ],
+        ):
+            response = self.client.get("/api/v1/integrations/chatwoot/agents")
+
+        self.assertEqual(response.status_code, 200)
+        agent_ids = [agent["id"] for agent in response.json()]
+        self.assertEqual(agent_ids, [10])
 
     def test_create_resources_require_active_chatwoot_config(self):
         with SessionLocal() as db:

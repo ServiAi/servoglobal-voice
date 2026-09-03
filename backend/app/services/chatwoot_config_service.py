@@ -229,9 +229,10 @@ class ChatwootConfigService:
             account = platform.create_account(name=account_name)
             account_id = int(account["id"])
             user_password = secrets.token_urlsafe(24) + "Aa1!"
+            managed_user_email = f"chatwoot-managed+{account_id}@serviglobal-ia.com"
             user = platform.create_user(
                 name=f"{account_name} (managed)",
-                email=f"chatwoot-managed+{account_id}@serviglobal-ia.com",
+                email=managed_user_email,
                 password=user_password,
             )
             user_id = int(user["id"])
@@ -282,6 +283,8 @@ class ChatwootConfigService:
         config.default_inbox_id = inbox_id
         config.default_inbox_name = inbox_name
         config.api_token_encrypted = self.secret_manager.encrypt_secret(user_token)
+        config.managed_user_id = user_id
+        config.managed_user_email = managed_user_email
         config.last_error_message = None
         config.last_health_check_at = datetime.now(UTC)
         self.db.commit()
@@ -334,7 +337,9 @@ class ChatwootConfigService:
         return [ChatwootTeamSummary(id=team["id"], name=team.get("name") or f"Team {team['id']}") for team in teams]
 
     async def list_agents(self, tenant_id: str) -> list[ChatwootAgentSummary]:
-        _, client_config = self.get_active_client_config(tenant_id)
+        """Excluye al usuario tecnico creado en modo managed (ver managed_user_id):
+        opera la Account pero no es un agente humano y no debe aparecer en la UI."""
+        config, client_config = self.get_active_client_config(tenant_id)
         agents = await ChatwootClient(client_config).list_agents()
         return [
             ChatwootAgentSummary(
@@ -342,6 +347,7 @@ class ChatwootConfigService:
                 confirmed=a.get("confirmed", True),
             )
             for a in agents
+            if a["id"] != config.managed_user_id
         ]
 
     async def create_inbox(self, tenant_id: str, *, name: str) -> ChatwootInboxSummary:

@@ -249,6 +249,8 @@ class ChatwootConfigServiceTests(Integration2ATestCase):
             config = db.scalar(select(TenantChatwootConfig).where(TenantChatwootConfig.tenant_id == self.tenant.id))
         self.assertEqual(config.mode, "managed")
         self.assertNotIn("user_access_token_123", config.api_token_encrypted)
+        self.assertEqual(config.managed_user_id, 5)
+        self.assertEqual(config.managed_user_email, "chatwoot-managed+42@serviglobal-ia.com")
 
     def test_chatwoot_provision_fails_without_persisting_when_account_creation_fails(self):
         class _FailingAtAccountPlatformClient:
