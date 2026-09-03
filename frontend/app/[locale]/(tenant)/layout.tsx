@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation';
 import { fetchMeProfile } from '@/lib/api/me';
 import { getAccessToken } from '@/lib/auth/server';
 import { locales, type Locale } from '@/i18n';
-import { CrmShell } from '@/components/crm/shell/CrmShell';
+import { TenantShell } from '@/components/tenant/shell/TenantShell';
 
 type Props = {
   children: React.ReactNode;
@@ -13,7 +13,7 @@ function normalizeLocale(locale: string): Locale {
   return locales.includes(locale as Locale) ? (locale as Locale) : 'es';
 }
 
-export default async function CrmLayout({ children, params }: Props) {
+export default async function TenantLayout({ children, params }: Props) {
   const { locale: rawLocale } = await params;
   const locale = normalizeLocale(rawLocale);
   const accessToken = await getAccessToken();
@@ -34,12 +34,12 @@ export default async function CrmLayout({ children, params }: Props) {
   const { profile } = result;
 
   return (
-    <CrmShell
+    <TenantShell
       locale={locale}
       tenantName={profile.tenant_name}
       userName={profile.name ?? profile.email}
     >
       {children}
-    </CrmShell>
+    </TenantShell>
   );
 }

@@ -39,13 +39,13 @@ const GROUPS = [
   },
 ] as const;
 
-type CrmNavigationProps = {
+type TenantNavigationProps = {
   collapsed?: boolean;
   locale: string;
   onNavigate?: () => void;
 };
 
-export function CrmNavigation({ collapsed = false, locale, onNavigate }: CrmNavigationProps) {
+export function TenantNavigation({ collapsed = false, locale, onNavigate }: TenantNavigationProps) {
   const pathname = usePathname();
   const t = useTranslations('crm.navigation');
 

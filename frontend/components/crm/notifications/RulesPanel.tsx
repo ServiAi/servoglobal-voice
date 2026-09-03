@@ -13,7 +13,7 @@ import {
   setNotificationRuleEnabledAction,
   testNotificationRuleAction,
   updateNotificationRuleAction,
-} from '@/app/[locale]/crm/settings/notifications/actions';
+} from '@/app/[locale]/(tenant)/crm/settings/notifications/actions';
 import type {
   NotificationCatalogResponse,
   NotificationCondition,

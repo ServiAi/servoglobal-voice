@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { Copy, Plus, RefreshCw, Search } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { cloneWhatsAppFlowAction, syncWhatsAppFlowStatusAction } from '@/app/[locale]/crm/settings/integrations/whatsapp/flows/actions';
+import { cloneWhatsAppFlowAction, syncWhatsAppFlowStatusAction } from '@/app/[locale]/(tenant)/crm/settings/integrations/whatsapp/flows/actions';
 import { Button } from '@/components/ui/button';
 import type { WhatsAppFlow } from '@/types/whatsapp-flows';
 

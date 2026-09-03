@@ -4,7 +4,7 @@ import { useState, useTransition } from 'react';
 import { Blocks, Sparkles } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { createWhatsAppFlowAction } from '@/app/[locale]/crm/settings/integrations/whatsapp/flows/actions';
+import { createWhatsAppFlowAction } from '@/app/[locale]/(tenant)/crm/settings/integrations/whatsapp/flows/actions';
 import { Button } from '@/components/ui/button';
 import type { WhatsAppFlowCategory, WhatsAppFlowContextSchemaOption } from '@/types/whatsapp-flows';
 

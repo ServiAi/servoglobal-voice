@@ -12,7 +12,7 @@ import {
   publishWhatsAppFlowAction,
   syncWhatsAppFlowMetaAction,
   updateWhatsAppFlowAction,
-} from '@/app/[locale]/crm/settings/integrations/whatsapp/flows/actions';
+} from '@/app/[locale]/(tenant)/crm/settings/integrations/whatsapp/flows/actions';
 import { Button } from '@/components/ui/button';
 import type {
   WhatsAppFlow,

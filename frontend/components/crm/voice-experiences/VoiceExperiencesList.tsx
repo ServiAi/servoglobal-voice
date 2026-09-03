@@ -25,7 +25,7 @@ import {
   archiveVoiceExperienceAction,
   deleteVoiceExperienceAction,
   unarchiveVoiceExperienceAction,
-} from '@/app/[locale]/crm/settings/voice-experiences/actions';
+} from '@/app/[locale]/(tenant)/crm/settings/voice-experiences/actions';
 import { canDeleteArchivedExperience } from '@/lib/voice-experiences/deletion';
 import { getVoiceExperienceErrorKey } from '@/lib/voice-experiences/error-messages';
 import { ActionDialog } from './ActionDialog';

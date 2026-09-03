@@ -33,7 +33,7 @@ import {
   unarchiveVoiceExperienceAction,
   unpublishVoiceExperienceAction,
   updateVoiceExperienceAction,
-} from '@/app/[locale]/crm/settings/voice-experiences/actions';
+} from '@/app/[locale]/(tenant)/crm/settings/voice-experiences/actions';
 import { ActionDialog } from './ActionDialog';
 import { VoiceExperienceStatusBadge } from './VoiceExperienceStatusBadge';
 import { ContextSchemaManager } from './context-schemas/ContextSchemaManager';

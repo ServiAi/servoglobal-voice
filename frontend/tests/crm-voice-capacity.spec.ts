@@ -3,7 +3,7 @@ import type { CrmVoiceCapacityMetrics } from '@/types/crm';
 import {
   canManageVoiceCapacity,
   getVoiceCapacityStatus,
-} from '@/app/[locale]/crm/dashboard/voice-capacity';
+} from '@/app/[locale]/(tenant)/crm/dashboard/voice-capacity';
 
 const capacity = (overrides: Partial<CrmVoiceCapacityMetrics> = {}): CrmVoiceCapacityMetrics => ({
   configured: true,

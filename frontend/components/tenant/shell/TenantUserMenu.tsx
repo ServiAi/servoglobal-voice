@@ -1,8 +1,8 @@
 import { LogOut, UserRound } from 'lucide-react';
 
-type CrmUserMenuProps = { userName: string; compact?: boolean };
+type TenantUserMenuProps = { userName: string; compact?: boolean };
 
-export function CrmUserMenu({ userName, compact = false }: CrmUserMenuProps) {
+export function TenantUserMenu({ userName, compact = false }: TenantUserMenuProps) {
   return (
     <div className="flex min-w-0 items-center gap-2">
       <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-[hsl(var(--brand)/0.12)] text-[hsl(var(--brand))]">
