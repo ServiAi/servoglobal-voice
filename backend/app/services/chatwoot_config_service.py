@@ -354,3 +354,49 @@ class ChatwootConfigService:
             id=agent["id"], name=agent.get("name") or name, email=agent.get("email") or email,
             role=agent.get("role") or role, confirmed=agent.get("confirmed", False),
         )
+
+    async def update_inbox(self, tenant_id: str, inbox_id: int, *, name: str) -> ChatwootInboxSummary:
+        _, client_config = self.get_active_client_config(tenant_id)
+        inbox = await ChatwootClient(client_config).update_inbox(inbox_id, name=name)
+        self.events.record_event(
+            tenant_id=tenant_id, provider=self.provider, event_type="chatwoot_inbox_updated", status="success",
+            resource_type="inbox", resource_id=str(inbox_id),
+        )
+        return ChatwootInboxSummary(id=inbox["id"], name=inbox.get("name") or name, channel_type=inbox.get("channel_type"))
+
+    async def update_team(self, tenant_id: str, team_id: int, *, name: str | None = None, description: str | None = None) -> ChatwootTeamSummary:
+        _, client_config = self.get_active_client_config(tenant_id)
+        team = await ChatwootClient(client_config).update_team(team_id, name=name, description=description)
+        self.events.record_event(
+            tenant_id=tenant_id, provider=self.provider, event_type="chatwoot_team_updated", status="success",
+            resource_type="team", resource_id=str(team_id),
+        )
+        return ChatwootTeamSummary(id=team["id"], name=team.get("name") or "")
+
+    async def delete_team(self, tenant_id: str, team_id: int) -> None:
+        _, client_config = self.get_active_client_config(tenant_id)
+        await ChatwootClient(client_config).delete_team(team_id)
+        self.events.record_event(
+            tenant_id=tenant_id, provider=self.provider, event_type="chatwoot_team_deleted", status="success",
+            resource_type="team", resource_id=str(team_id),
+        )
+
+    async def update_agent(self, tenant_id: str, agent_id: int, *, name: str | None = None, role: str | None = None) -> ChatwootAgentSummary:
+        _, client_config = self.get_active_client_config(tenant_id)
+        agent = await ChatwootClient(client_config).update_agent(agent_id, name=name, role=role)
+        self.events.record_event(
+            tenant_id=tenant_id, provider=self.provider, event_type="chatwoot_agent_updated", status="success",
+            resource_type="agent", resource_id=str(agent_id),
+        )
+        return ChatwootAgentSummary(
+            id=agent["id"], name=agent.get("name") or "", email=agent.get("email") or "",
+            role=agent.get("role") or "agent", confirmed=agent.get("confirmed", True),
+        )
+
+    async def delete_agent(self, tenant_id: str, agent_id: int) -> None:
+        _, client_config = self.get_active_client_config(tenant_id)
+        await ChatwootClient(client_config).delete_agent(agent_id)
+        self.events.record_event(
+            tenant_id=tenant_id, provider=self.provider, event_type="chatwoot_agent_removed", status="success",
+            resource_type="agent", resource_id=str(agent_id),
+        )

@@ -103,6 +103,60 @@ class ChatwootResourcesTests(Integration2ATestCase):
         response = self.client.post("/api/v1/integrations/chatwoot/inboxes", json={"name": "Soporte"})
         self.assertEqual(response.status_code, 422)
 
+    def test_update_inbox_renames_it(self):
+        with patch(
+            "app.services.chatwoot_config_service.ChatwootClient.update_inbox",
+            new_callable=AsyncMock,
+            return_value={"id": 42, "name": "Nuevo nombre", "channel_type": "Channel::Api"},
+        ) as update_inbox:
+            response = self.client.patch(
+                "/api/v1/integrations/chatwoot/inboxes/42", json={"name": "Nuevo nombre"}
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["name"], "Nuevo nombre")
+        update_inbox.assert_awaited_once_with(42, name="Nuevo nombre")
+
+    def test_update_and_delete_team(self):
+        with patch(
+            "app.services.chatwoot_config_service.ChatwootClient.update_team",
+            new_callable=AsyncMock,
+            return_value={"id": 2, "name": "Renombrado"},
+        ) as update_team:
+            update_response = self.client.patch(
+                "/api/v1/integrations/chatwoot/teams/2", json={"name": "Renombrado"}
+            )
+        self.assertEqual(update_response.status_code, 200)
+        self.assertEqual(update_response.json(), {"id": 2, "name": "Renombrado"})
+        update_team.assert_awaited_once_with(2, name="Renombrado", description=None)
+
+        with patch(
+            "app.services.chatwoot_config_service.ChatwootClient.delete_team", new_callable=AsyncMock
+        ) as delete_team:
+            delete_response = self.client.delete("/api/v1/integrations/chatwoot/teams/2")
+        self.assertEqual(delete_response.status_code, 204)
+        delete_team.assert_awaited_once_with(2)
+
+    def test_update_and_delete_agent(self):
+        with patch(
+            "app.services.chatwoot_config_service.ChatwootClient.update_agent",
+            new_callable=AsyncMock,
+            return_value={"id": 9, "name": "Ana Maria", "email": "ana@example.com", "role": "administrator", "confirmed": True},
+        ) as update_agent:
+            update_response = self.client.patch(
+                "/api/v1/integrations/chatwoot/agents/9", json={"name": "Ana Maria", "role": "administrator"}
+            )
+        self.assertEqual(update_response.status_code, 200)
+        self.assertEqual(update_response.json()["role"], "administrator")
+        update_agent.assert_awaited_once_with(9, name="Ana Maria", role="administrator")
+
+        with patch(
+            "app.services.chatwoot_config_service.ChatwootClient.delete_agent", new_callable=AsyncMock
+        ) as delete_agent:
+            delete_response = self.client.delete("/api/v1/integrations/chatwoot/agents/9")
+        self.assertEqual(delete_response.status_code, 204)
+        delete_agent.assert_awaited_once_with(9)
+
 
 if __name__ == "__main__":
     import unittest
