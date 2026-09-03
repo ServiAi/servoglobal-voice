@@ -60,32 +60,37 @@ class ChatwootConfigServiceTests(Integration2ATestCase):
 
         self.assertEqual(response.status_code, 422)
 
-    def test_chatwoot_webhook_key_is_unique_per_tenant(self):
-        self.client.post("/api/v1/integrations/chatwoot/config", json=self._payload())
-        other_tenant, other_user = self._seed_tenant_user(slug="tenant-b", email="admin-b@example.com")
+    def _override_auth_for_tenant(self, tenant, user):
+        from app.models.identity import TenantMembership
+        from app.api.auth.deps import AuthContext
 
-        def override_for_other():
+        def override():
             with SessionLocal() as db:
-                from app.models.identity import TenantMembership
-                from app.api.auth.deps import AuthContext
-
-                tenant = db.get(type(self.tenant), other_tenant.id)
-                user = db.get(type(self.user), other_user.id)
+                db_tenant = db.get(type(self.tenant), tenant.id)
+                db_user = db.get(type(self.user), user.id)
                 membership = db.scalar(
                     select(TenantMembership).where(
-                        TenantMembership.tenant_id == other_tenant.id,
-                        TenantMembership.user_id == other_user.id,
+                        TenantMembership.tenant_id == tenant.id,
+                        TenantMembership.user_id == user.id,
                     )
                 )
-                return AuthContext(user=user, tenant=tenant, membership=membership)
+                return AuthContext(user=db_user, tenant=db_tenant, membership=membership)
 
         from app.api.auth.deps import get_current_auth_context
         from app.main import app
 
-        app.dependency_overrides[get_current_auth_context] = override_for_other
+        app.dependency_overrides[get_current_auth_context] = override
+
+    def test_chatwoot_webhook_key_is_unique_per_tenant(self):
+        self.client.post("/api/v1/integrations/chatwoot/config", json=self._payload())
+        other_tenant, other_user = self._seed_tenant_user(slug="tenant-b", email="admin-b@example.com")
+        self._override_auth_for_tenant(other_tenant, other_user)
+
+        other_payload = self._payload(token="other_secret_token_98765")
+        other_payload["account_id"] = 18  # Account distinta: esta prueba es sobre webhook_key, no sobre colision.
         response = self.client.post(
             "/api/v1/integrations/chatwoot/config",
-            json=self._payload(token="other_secret_token_98765"),
+            json=other_payload,
         )
         self.assertEqual(response.status_code, 200)
 
@@ -93,6 +98,47 @@ class ChatwootConfigServiceTests(Integration2ATestCase):
             configs = list(db.scalars(select(TenantChatwootConfig)))
         self.assertEqual(len(configs), 2)
         self.assertNotEqual(configs[0].webhook_key, configs[1].webhook_key)
+
+    def test_chatwoot_config_rejects_account_already_used_by_another_tenant(self):
+        self.client.post("/api/v1/integrations/chatwoot/config", json=self._payload(token="tenant_a_token_1234567"))
+        other_tenant, other_user = self._seed_tenant_user(slug="tenant-b", email="admin-b@example.com")
+        self._override_auth_for_tenant(other_tenant, other_user)
+
+        response = self.client.post(
+            "/api/v1/integrations/chatwoot/config",
+            json=self._payload(token="tenant_b_token_7654321"),  # mismo base_url + account_id que tenant A
+        )
+
+        self.assertEqual(response.status_code, 409)
+        self.assertNotIn(self.tenant.id, response.text)
+        with SessionLocal() as db:
+            configs = list(db.scalars(select(TenantChatwootConfig)))
+        self.assertEqual(len(configs), 1)
+
+    def test_chatwoot_config_allows_same_account_id_on_different_chatwoot_instance(self):
+        self.client.post("/api/v1/integrations/chatwoot/config", json=self._payload(token="tenant_a_token_1234567"))
+        other_tenant, other_user = self._seed_tenant_user(slug="tenant-b", email="admin-b@example.com")
+        self._override_auth_for_tenant(other_tenant, other_user)
+
+        other_payload = self._payload(token="tenant_b_token_7654321")
+        other_payload["base_url"] = "https://chatwoot-other.example.com"  # mismo account_id, otra instancia
+
+        response = self.client.post("/api/v1/integrations/chatwoot/config", json=other_payload)
+
+        self.assertEqual(response.status_code, 200)
+        with SessionLocal() as db:
+            configs = list(db.scalars(select(TenantChatwootConfig)))
+        self.assertEqual(len(configs), 2)
+
+    def test_chatwoot_config_allows_tenant_to_update_its_own_account(self):
+        self.client.post("/api/v1/integrations/chatwoot/config", json=self._payload())
+
+        updated_payload = self._payload(token=None)
+        updated_payload["default_inbox_id"] = 77
+        response = self.client.post("/api/v1/integrations/chatwoot/config", json=updated_payload)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["default_inbox_id"], 77)
 
     def test_chatwoot_test_connection_marks_health_with_mock(self):
         self.client.post("/api/v1/integrations/chatwoot/config", json=self._payload())

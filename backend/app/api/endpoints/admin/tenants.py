@@ -75,7 +75,7 @@ from app.schemas.crm import BookingCreateRequest, BookingResponse
 from app.api.endpoints.integrations import _integration_catalog_statuses, _resend_response, _whatsapp_template_detail
 from app.services.booking_config_service import BookingConfigService
 from app.services.chatwoot_client import ChatwootClientError, sanitize_chatwoot_error
-from app.services.chatwoot_config_service import ChatwootConfigService
+from app.services.chatwoot_config_service import ChatwootAccountConflictError, ChatwootConfigService
 from app.services.booking_service import BookingService
 from app.services.email_config_service import EmailConfigService
 from app.services.email_send_service import EmailSendService
@@ -586,6 +586,8 @@ def configure_tenant_chatwoot_admin(
     try:
         OnboardingService(db).get_tenant(tenant_id)
         return ChatwootConfigService(db).upsert_config(tenant_id, body)
+    except ChatwootAccountConflictError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
 
