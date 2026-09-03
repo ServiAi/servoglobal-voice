@@ -440,6 +440,10 @@ class ChatwootInboxCreateRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=160)
 
 
+class ChatwootInboxUpdateRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=160)
+
+
 class ChatwootTeamSummary(BaseModel):
     id: int
     name: str
@@ -447,6 +451,11 @@ class ChatwootTeamSummary(BaseModel):
 
 class ChatwootTeamCreateRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=160)
+    description: Optional[str] = Field(None, max_length=500)
+
+
+class ChatwootTeamUpdateRequest(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=160)
     description: Optional[str] = Field(None, max_length=500)
 
 
@@ -462,6 +471,11 @@ class ChatwootAgentInviteRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=160)
     email: str = Field(..., min_length=3, max_length=255)
     role: Literal["agent", "administrator"] = "agent"
+
+
+class ChatwootAgentUpdateRequest(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=160)
+    role: Optional[Literal["agent", "administrator"]] = None
 
 
 class VoiceCallActionRequest(BaseModel):

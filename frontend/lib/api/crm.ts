@@ -21,13 +21,16 @@ import type {
   ResendTestEmailRequest,
   ChatwootAgentInviteRequest,
   ChatwootAgentSummary,
+  ChatwootAgentUpdateRequest,
   ChatwootConfigRequest,
   ChatwootConfigResponse,
   ChatwootInboxCreateRequest,
   ChatwootInboxSummary,
+  ChatwootInboxUpdateRequest,
   ChatwootProvisionRequest,
   ChatwootTeamCreateRequest,
   ChatwootTeamSummary,
+  ChatwootTeamUpdateRequest,
   ChatwootTestResponse,
   WhatsAppActionRequest,
   WhatsAppActionResponse,
@@ -621,6 +624,52 @@ export function inviteAdminTenantChatwootAgent(accessToken: string, tenantId: st
   return requestBackendEndpoint<ChatwootAgentSummary>(
     'POST', 'admin', `tenants/${tenantId}/integrations/chatwoot/agents`, accessToken, undefined, payload
   );
+}
+
+export function updateChatwootInbox(accessToken: string, inboxId: number, payload: ChatwootInboxUpdateRequest) {
+  return requestIntegrationEndpoint<ChatwootInboxSummary>('PATCH', `chatwoot/inboxes/${inboxId}`, accessToken, undefined, payload);
+}
+
+export function updateAdminTenantChatwootInbox(accessToken: string, tenantId: string, inboxId: number, payload: ChatwootInboxUpdateRequest) {
+  return requestBackendEndpoint<ChatwootInboxSummary>(
+    'PATCH', 'admin', `tenants/${tenantId}/integrations/chatwoot/inboxes/${inboxId}`, accessToken, undefined, payload
+  );
+}
+
+export function updateChatwootTeam(accessToken: string, teamId: number, payload: ChatwootTeamUpdateRequest) {
+  return requestIntegrationEndpoint<ChatwootTeamSummary>('PATCH', `chatwoot/teams/${teamId}`, accessToken, undefined, payload);
+}
+
+export function updateAdminTenantChatwootTeam(accessToken: string, tenantId: string, teamId: number, payload: ChatwootTeamUpdateRequest) {
+  return requestBackendEndpoint<ChatwootTeamSummary>(
+    'PATCH', 'admin', `tenants/${tenantId}/integrations/chatwoot/teams/${teamId}`, accessToken, undefined, payload
+  );
+}
+
+export function deleteChatwootTeam(accessToken: string, teamId: number) {
+  return requestIntegrationEndpoint<null>('DELETE', `chatwoot/teams/${teamId}`, accessToken);
+}
+
+export function deleteAdminTenantChatwootTeam(accessToken: string, tenantId: string, teamId: number) {
+  return requestBackendEndpoint<null>('DELETE', 'admin', `tenants/${tenantId}/integrations/chatwoot/teams/${teamId}`, accessToken);
+}
+
+export function updateChatwootAgent(accessToken: string, agentId: number, payload: ChatwootAgentUpdateRequest) {
+  return requestIntegrationEndpoint<ChatwootAgentSummary>('PATCH', `chatwoot/agents/${agentId}`, accessToken, undefined, payload);
+}
+
+export function updateAdminTenantChatwootAgent(accessToken: string, tenantId: string, agentId: number, payload: ChatwootAgentUpdateRequest) {
+  return requestBackendEndpoint<ChatwootAgentSummary>(
+    'PATCH', 'admin', `tenants/${tenantId}/integrations/chatwoot/agents/${agentId}`, accessToken, undefined, payload
+  );
+}
+
+export function deleteChatwootAgent(accessToken: string, agentId: number) {
+  return requestIntegrationEndpoint<null>('DELETE', `chatwoot/agents/${agentId}`, accessToken);
+}
+
+export function deleteAdminTenantChatwootAgent(accessToken: string, tenantId: string, agentId: number) {
+  return requestBackendEndpoint<null>('DELETE', 'admin', `tenants/${tenantId}/integrations/chatwoot/agents/${agentId}`, accessToken);
 }
 
 export function configureResendIntegration(accessToken: string, payload: ResendIntegrationConfigRequest) {

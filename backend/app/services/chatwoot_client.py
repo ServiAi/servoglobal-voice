@@ -326,3 +326,42 @@ class ChatwootClient:
             if resp.status_code >= 400:
                 raise ChatwootClientError(sanitize_chatwoot_error(resp.text) or "Chatwoot request failed")
             return resp.json()
+
+    async def update_inbox(self, inbox_id: int, *, name: str) -> dict:
+        """Chatwoot no expone un DELETE para inboxes en su API publica (solo
+        list/create/update); renombrar es lo unico disponible aqui."""
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            resp = await client.patch(
+                self._url(f"inboxes/{inbox_id}"), headers=self._headers(), json={"name": name}
+            )
+            if resp.status_code >= 400:
+                raise ChatwootClientError(sanitize_chatwoot_error(resp.text) or "Chatwoot request failed")
+            return resp.json()
+
+    async def update_team(self, team_id: int, *, name: str | None = None, description: str | None = None) -> dict:
+        payload = {k: v for k, v in {"name": name, "description": description}.items() if v is not None}
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            resp = await client.patch(self._url(f"teams/{team_id}"), headers=self._headers(), json=payload)
+            if resp.status_code >= 400:
+                raise ChatwootClientError(sanitize_chatwoot_error(resp.text) or "Chatwoot request failed")
+            return resp.json()
+
+    async def delete_team(self, team_id: int) -> None:
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            resp = await client.delete(self._url(f"teams/{team_id}"), headers=self._headers())
+            if resp.status_code >= 400:
+                raise ChatwootClientError(sanitize_chatwoot_error(resp.text) or "Chatwoot request failed")
+
+    async def update_agent(self, agent_id: int, *, name: str | None = None, role: str | None = None) -> dict:
+        payload = {k: v for k, v in {"name": name, "role": role}.items() if v is not None}
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            resp = await client.put(self._url(f"agents/{agent_id}"), headers=self._headers(), json=payload)
+            if resp.status_code >= 400:
+                raise ChatwootClientError(sanitize_chatwoot_error(resp.text) or "Chatwoot request failed")
+            return resp.json()
+
+    async def delete_agent(self, agent_id: int) -> None:
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            resp = await client.delete(self._url(f"agents/{agent_id}"), headers=self._headers())
+            if resp.status_code >= 400:
+                raise ChatwootClientError(sanitize_chatwoot_error(resp.text) or "Chatwoot request failed")
