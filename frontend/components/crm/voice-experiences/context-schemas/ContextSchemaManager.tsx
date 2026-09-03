@@ -27,7 +27,7 @@ import {
   forkVoiceContextSchemaVersionAction,
   updateVoiceContextFieldAction,
   updateVoiceContextSchemaMetaAction,
-} from '@/app/[locale]/(tenant)/crm/settings/voice-experiences/actions';
+} from '@/app/[locale]/(tenant)/voice-ai/experiences/actions';
 import { ActionDialog } from '@/components/crm/voice-experiences/ActionDialog';
 import { ContextFieldForm } from './ContextFieldForm';
 import { FieldHelp } from '@/components/crm/integrations/FieldHelp';

@@ -1,46 +1,10 @@
-import { getTranslations } from 'next-intl/server';
-import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { VoiceExperienceBuilder } from '@/components/crm/voice-experiences/VoiceExperienceBuilder';
-import { Button } from '@/components/ui/button';
-import { getAccessToken } from '@/lib/auth/server';
-import { fetchVoiceAgents } from '@/lib/api/crm';
-import { fetchMeProfile } from '@/lib/api/me';
-import { canEditVoiceExperiences } from '@/lib/permissions/voice-experiences';
 
-export const dynamic = 'force-dynamic';
-
-export default async function NewVoiceExperiencePage({
-  params,
-}: {
+type Props = {
   params: Promise<{ locale: string }>;
-}) {
+};
+
+export default async function LegacyNewVoiceExperienceRedirect({ params }: Props) {
   const { locale } = await params;
-  const accessToken = await getAccessToken();
-  if (!accessToken) redirect(`/${locale}/auth/login`);
-
-  const [profileResult, agentsResult] = await Promise.all([
-    fetchMeProfile(accessToken),
-    fetchVoiceAgents(accessToken),
-  ]);
-  const canEdit = profileResult.ok && canEditVoiceExperiences(profileResult.profile);
-  if (!canEdit || !agentsResult.ok || agentsResult.data.length === 0) {
-    const t = await getTranslations('crm.voiceExperiences');
-    const noAgents = agentsResult.ok && agentsResult.data.length === 0;
-    const integrationDisabled = !agentsResult.ok && agentsResult.status === 404;
-    const state = noAgents ? 'noAgents' : integrationDisabled ? 'integrationDisabled' : 'accessDenied';
-    return (
-      <div className="rounded-xl border border-amber-200 bg-amber-50 p-6 text-amber-950">
-        <h1 className="text-xl font-semibold">{t(`${state}.title`)}</h1>
-        <p className="mt-2 text-sm">{t(`${state}.description`)}</p>
-        {noAgents || integrationDisabled ? (
-          <Button asChild className="mt-5">
-            <Link href={`/${locale}/crm/settings/integrations`}>{t(`${state}.cta`)}</Link>
-          </Button>
-        ) : null}
-      </div>
-    );
-  }
-
-  return <VoiceExperienceBuilder mode="create" locale={locale} canEdit agents={agentsResult.data} />;
+  redirect(`/${locale}/voice-ai/experiences/new`);
 }

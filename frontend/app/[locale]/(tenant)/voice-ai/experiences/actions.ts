@@ -47,7 +47,7 @@ async function withAccessToken<T>(
 }
 
 function revalidateVoiceExperiences(locale: string) {
-  revalidatePath(`/${locale}/crm/settings/voice-experiences`, 'layout');
+  revalidatePath(`/${locale}/voice-ai/experiences`, 'layout');
 }
 
 export async function createVoiceExperienceAction(

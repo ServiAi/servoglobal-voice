@@ -33,7 +33,7 @@ import {
   unarchiveVoiceExperienceAction,
   unpublishVoiceExperienceAction,
   updateVoiceExperienceAction,
-} from '@/app/[locale]/(tenant)/crm/settings/voice-experiences/actions';
+} from '@/app/[locale]/(tenant)/voice-ai/experiences/actions';
 import { ActionDialog } from './ActionDialog';
 import { VoiceExperienceStatusBadge } from './VoiceExperienceStatusBadge';
 import { ContextSchemaManager } from './context-schemas/ContextSchemaManager';
@@ -264,7 +264,7 @@ export function VoiceExperienceBuilder({
     setBaseline(nextBaseline);
     setSaveState('saved');
     if (mode === 'create') {
-      router.push(`/${locale}/crm/settings/voice-experiences/${result.data.id}`);
+      router.push(`/${locale}/voice-ai/experiences/${result.data.id}`);
     } else {
       router.refresh();
     }
@@ -306,7 +306,7 @@ export function VoiceExperienceBuilder({
       setServerError(safeError(result.status, result.detail));
       return;
     }
-    router.push(`/${locale}/crm/settings/voice-experiences`);
+    router.push(`/${locale}/voice-ai/experiences`);
   };
 
   const selectVersion = async (version: VoiceExperienceVersionResponse) => {
@@ -971,7 +971,7 @@ export function VoiceExperienceBuilder({
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex min-w-0 items-start gap-3">
             <Button asChild variant="ghost" size="icon">
-              <Link href={`/${locale}/crm/settings/voice-experiences`} aria-label={t('common.back')}>
+              <Link href={`/${locale}/voice-ai/experiences`} aria-label={t('common.back')}>
                 <ArrowLeft className="size-4" aria-hidden="true" />
               </Link>
             </Button>

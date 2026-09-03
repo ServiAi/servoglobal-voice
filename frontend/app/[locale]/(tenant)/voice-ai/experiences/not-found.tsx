@@ -12,7 +12,7 @@ export default function VoiceExperienceNotFound() {
       <h1 className="text-2xl font-bold">{t('notFound.title')}</h1>
       <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">{t('notFound.description')}</p>
       <Button asChild className="mt-6">
-        <Link href={`/${locale}/crm/settings/voice-experiences`}>{t('notFound.back')}</Link>
+        <Link href={`/${locale}/voice-ai/experiences`}>{t('notFound.back')}</Link>
       </Button>
     </div>
   );

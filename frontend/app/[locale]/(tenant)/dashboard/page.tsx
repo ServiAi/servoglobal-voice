@@ -4,7 +4,7 @@ import { AlertTriangle, ArrowRight, CheckCircle2 } from 'lucide-react';
 import { getAccessToken } from '@/lib/auth/server';
 import { fetchCrmDashboard, fetchIntegrationCatalogStatuses } from '@/lib/api/crm';
 import { fetchKpis, fetchUsage } from '@/lib/api/dashboard';
-import { getVoiceCapacityStatus } from '@/app/[locale]/(tenant)/crm/dashboard/voice-capacity';
+import { getVoiceCapacityStatus } from '@/lib/permissions/voice-capacity';
 
 type Props = {
   params: Promise<{ locale: string }>;

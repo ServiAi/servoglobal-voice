@@ -1,7 +1,19 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 
-const routes = ['crm', 'crm/dashboard', 'crm/leads', 'crm/tasks', 'crm/settings/integrations', 'crm/settings/notifications', 'dashboard'];
+const routes = [
+  'dashboard',
+  'crm',
+  'crm/leads',
+  'crm/tasks',
+  'crm/analytics',
+  'voice-ai/experiences',
+  'voice-ai/calls',
+  'voice-ai/analytics',
+  'voice-ai/telephony',
+  'crm/settings/integrations',
+  'crm/settings/notifications',
+];
 const locales = ['es', 'en'] as const;
 const themes = ['light', 'dark'] as const;
 const viewports = [
@@ -41,8 +53,10 @@ for (const locale of locales) {
             await expect(page.locator('body')).toBeVisible();
             await expect(page.locator('html')).toHaveAttribute('lang', new RegExp(`^${locale}(?:-|$)`, 'i'));
 
-            if (route === 'crm/dashboard') {
+            if (route === 'voice-ai/analytics') {
               await expect(page.getByRole('heading', { name: locale === 'en' ? 'Call performance (Ultravox)' : 'Rendimiento de llamadas (Ultravox)' })).toBeVisible();
+            }
+            if (route === 'voice-ai/telephony') {
               await expect(page.getByRole('heading', { name: locale === 'en' ? 'Outbound call capacity (SIP)' : 'Capacidad de llamadas salientes (SIP)' })).toBeVisible();
             }
 

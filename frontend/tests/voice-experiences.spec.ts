@@ -19,7 +19,7 @@ import { buildEmbedSnippet } from '../lib/voice-experiences/build-embed-snippet'
 import { createVoiceExperienceDefaults } from '../lib/voice-experiences/validation';
 import type { VoiceContextCollectionMode } from '../types/voice-experiences';
 
-const PATH = '/es/crm/settings/voice-experiences';
+const PATH = '/es/voice-ai/experiences';
 
 async function requireAuthenticatedInventory(page: import('@playwright/test').Page) {
   await page.goto(PATH, { waitUntil: 'networkidle' });

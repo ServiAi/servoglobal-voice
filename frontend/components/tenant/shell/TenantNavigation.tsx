@@ -9,6 +9,8 @@ import {
   CheckSquare2,
   Gauge,
   LayoutDashboard,
+  PhoneCall,
+  RadioTower,
   Settings,
   Users,
 } from 'lucide-react';
@@ -23,25 +25,33 @@ const GROUPS = [
     ],
   },
   {
-    label: 'operation',
+    label: 'crmGroup',
     links: [
-      { label: 'home', path: '/crm', icon: Gauge, exact: true },
+      { label: 'crmSummary', path: '/crm', icon: Gauge, exact: true },
       { label: 'leads', path: '/crm/leads', icon: Users },
       { label: 'tasks', path: '/crm/tasks', icon: CheckSquare2 },
+      { label: 'performance', path: '/crm/analytics', icon: BarChart3 },
     ],
   },
   {
-    label: 'analysis',
+    label: 'voiceGroup',
     links: [
-      { label: 'performance', path: '/crm/dashboard', icon: BarChart3 },
+      { label: 'voiceExperiences', path: '/voice-ai/experiences', icon: AudioLines },
+      { label: 'voiceCalls', path: '/voice-ai/calls', icon: PhoneCall },
+      { label: 'voiceAnalytics', path: '/voice-ai/analytics', icon: BarChart3 },
+      { label: 'voiceTelephony', path: '/voice-ai/telephony', icon: RadioTower },
     ],
   },
   {
-    label: 'configuration',
+    label: 'automationGroup',
+    links: [
+      { label: 'notifications', path: '/crm/settings/notifications', icon: BellRing },
+    ],
+  },
+  {
+    label: 'integrationsGroup',
     links: [
       { label: 'integrations', path: '/crm/settings/integrations', icon: Settings },
-      { label: 'notifications', path: '/crm/settings/notifications', icon: BellRing },
-      { label: 'voiceExperiences', path: '/crm/settings/voice-experiences', icon: AudioLines },
     ],
   },
 ] as const;
