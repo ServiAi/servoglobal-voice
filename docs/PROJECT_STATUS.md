@@ -94,7 +94,7 @@ Redirects permanentes desde las rutas legacy (preservan query params):
 - Confirmar que cada entorno con automatizaciones tenga un proceso persistente `python -m app.workers.notification_worker` conectado a PostgreSQL.
 - Renovar la sesión Playwright con `npm.cmd run qa:auth` antes de la validación visual si la prueba redirige a la pantalla de login.
 - Validar en cada entorno credenciales, URLs públicas, webhooks, CORS y almacenamiento; no asumir que los defaults locales representan producción.
-- El contenido nuevo de `/dashboard`, `/crm`, `/voice-ai/*` sigue el mismo patrón que sus páginas de origen (texto en español embebido, sin `next-intl`); sólo la navegación (`crm.navigation` en `messages/{es,en}.json`) quedó bilingüe. Extender i18n a estas páginas si el producto lo requiere.
+- El contenido propio de `/dashboard`, `/crm` y los encabezados de `/voice-ai/*` es bilingüe vía `next-intl` (`crm.tenantHome`, `crm.commercialHome`, `crm.voiceAi`, `crm.analyticsLoadError` en `messages/{es,en}.json`), igual que `crm.navigation`. `crm-dashboard-view-client.tsx` (la vista "Rendimiento" de `/crm/analytics`, movida pero no reescrita en este refactor) y los componentes de `components/dashboard/*` (`KpiCards`, `TrendsChart`, etc.) siguen con texto en español embebido, como ya estaba antes de este refactor; extender i18n ahí es un esfuerzo aparte.
 - `frontend/tests/tenant-shell.spec.ts` cubre que `/dashboard` no redirige a `/crm`, los redirects legacy, el sidebar por dominio y que `crm/analytics` ya no muestra `CallsPanel`/`VoiceCapacityPanel`; corre en el proyecto `crm-visual` y necesita la misma sesión Auth0 renovada.
 
 ## Evidencia de pruebas
