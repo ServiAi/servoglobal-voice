@@ -572,6 +572,11 @@ class TenantChatwootConfig(Base, TimestampMixin):
     webhook_key: Mapped[str] = mapped_column(String(64), nullable=False)
     last_health_check_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Identifica al usuario tecnico que el modo "managed" crea en Chatwoot para
+    # operar la Account (no es un agente humano). Se usa para excluirlo de
+    # list_agents() y de cualquier listado de agentes visible en la UI.
+    managed_user_id: Mapped[int | None] = mapped_column(sa.Integer, nullable=True)
+    managed_user_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     tenant = relationship("Tenant")
 
