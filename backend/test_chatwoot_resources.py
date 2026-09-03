@@ -122,6 +122,56 @@ class ChatwootResourcesTests(Integration2ATestCase):
         agent_ids = [agent["id"] for agent in response.json()]
         self.assertEqual(agent_ids, [10])
 
+    def _override_auth_for_tenant(self, tenant, user):
+        from app.models.identity import TenantMembership
+        from app.api.auth.deps import AuthContext, get_current_auth_context
+        from app.main import app
+
+        def override():
+            with SessionLocal() as db:
+                db_tenant = db.get(type(self.tenant), tenant.id)
+                db_user = db.get(type(self.user), user.id)
+                membership = db.scalar(
+                    select(TenantMembership).where(
+                        TenantMembership.tenant_id == tenant.id,
+                        TenantMembership.user_id == user.id,
+                    )
+                )
+                return AuthContext(user=db_user, tenant=db_tenant, membership=membership)
+
+        app.dependency_overrides[get_current_auth_context] = override
+
+    def test_tenant_resource_endpoints_never_reach_another_tenants_account(self):
+        """Aunque un tenant pase el id de un recurso de otro tenant (p. ej. adivinando
+        un inbox_id), la llamada a Chatwoot siempre queda scoped al account_id del
+        tenant autenticado -- nunca al de otro tenant."""
+        other_tenant, other_user = self._seed_tenant_user(slug="tenant-b", email="admin-b@example.com")
+        with SessionLocal() as db:
+            ChatwootConfigService(db).upsert_config(
+                other_tenant.id,
+                ChatwootConfigRequest(
+                    base_url="https://crm.serviglobal-ia.com",
+                    account_id=18,
+                    status="active",
+                    api_token="cw_secret_token_tenant_b",
+                ),
+            )
+        self._override_auth_for_tenant(other_tenant, other_user)
+
+        seen_account_ids: list[int] = []
+
+        async def fake_update_inbox(self, inbox_id, **kwargs):
+            seen_account_ids.append(self.config.account_id)
+            return {"id": inbox_id, "name": kwargs.get("name"), "channel_type": "Channel::Api"}
+
+        with patch("app.services.chatwoot_config_service.ChatwootClient.update_inbox", new=fake_update_inbox):
+            response = self.client.patch(
+                "/api/v1/integrations/chatwoot/inboxes/999", json={"name": "Intento cross-tenant"}
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(seen_account_ids, [18])
+
     def test_create_resources_require_active_chatwoot_config(self):
         with SessionLocal() as db:
             ChatwootConfigService(db).disconnect(self.tenant.id)
