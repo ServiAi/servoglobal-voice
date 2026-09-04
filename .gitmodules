@@ -1,0 +1,3 @@
+[submodule "ponytail-repo"]
+	path = ponytail-repo
+	url = https://github.com/alyconr/ponytail.git
