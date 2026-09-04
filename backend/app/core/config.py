@@ -68,6 +68,7 @@ class Settings(BaseSettings):
     GOOGLE_CALENDAR_OAUTH_CLIENT_ID: str = ""
     GOOGLE_CALENDAR_OAUTH_CLIENT_SECRET: str = ""
     GOOGLE_CALENDAR_REDIRECT_URI: str = ""
+    GOOGLE_CALENDAR_FRONTEND_REDIRECT_URL: str = ""
     GOOGLE_CALENDAR_DEFAULT_TIMEZONE: str = "America/Bogota"
 
     # Turnstile

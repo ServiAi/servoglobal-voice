@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -64,6 +65,7 @@ from app.schemas.integrations import (
     VoiceCallActionResponse,
     VoiceCallResponse,
 )
+from app.core.config import settings
 from app.services.booking_config_service import BookingConfigService
 from app.services.booking_service import BookingService
 from app.services.chatwoot_client import ChatwootClientError, sanitize_chatwoot_error
@@ -307,14 +309,29 @@ def google_calendar_connect_url(
 
 @router.get("/google-calendar/callback", response_model=GoogleCalendarConnectionResponse)
 def google_calendar_callback(
+    request: Request,
     code: str | None = None,
     state: str | None = None,
     error: str | None = None,
+    redirect: bool | None = None,
     db: Session = Depends(get_db),
 ) -> Any:
+    # Determine whether to redirect: if redirect param is True, or if browser navigation (accept text/html)
+    accept = request.headers.get("accept", "")
+    should_redirect = redirect if redirect is not None else ("text/html" in accept)
+    frontend_base = (
+        settings.GOOGLE_CALENDAR_FRONTEND_REDIRECT_URL.rstrip("/")
+        if settings.GOOGLE_CALENDAR_FRONTEND_REDIRECT_URL
+        else "https://www.serviglobal-ia.com/es/integrations/google-calendar"
+    )
+
     if error:
+        if should_redirect:
+            return RedirectResponse(url=f"{frontend_base}?status=error&detail={error}", status_code=302)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Google OAuth error: {error}")
     if not code or not state:
+        if should_redirect:
+            return RedirectResponse(url=f"{frontend_base}?status=error&detail=Missing+code+or+state", status_code=302)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Missing code or state parameter.")
 
     oauth_service = GoogleCalendarOAuthService(db)
@@ -351,7 +368,12 @@ def google_calendar_callback(
             pass
 
     except ValueError as exc:
+        if should_redirect:
+            return RedirectResponse(url=f"{frontend_base}?status=error&detail={str(exc)}", status_code=302)
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+
+    if should_redirect:
+        return RedirectResponse(url=f"{frontend_base}?status=connected", status_code=302)
 
     return oauth_service.response(connection)
 
