@@ -138,3 +138,12 @@ class GoogleCalendarOAuthTests(Integration2ATestCase):
         self.assertEqual(payload["status"], "connected")
         self.assertEqual(payload["google_account_email"], "oauth_user@example.com")
         self.assertTrue(payload["has_tokens"])
+
+        # Test browser redirect with text/html accept header
+        response_redirect = self.client.get(
+            f"/api/v1/integrations/google-calendar/callback?code=mock_code&state={state}",
+            headers={"Accept": "text/html,application/xhtml+xml"},
+            follow_redirects=False,
+        )
+        self.assertEqual(response_redirect.status_code, 302)
+        self.assertIn("/integrations/google-calendar?status=connected", response_redirect.headers.get("location", ""))
