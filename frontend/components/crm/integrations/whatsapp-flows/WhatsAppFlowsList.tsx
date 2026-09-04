@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { Copy, Plus, RefreshCw, Search } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { cloneWhatsAppFlowAction, syncWhatsAppFlowStatusAction } from '@/app/[locale]/crm/settings/integrations/whatsapp/flows/actions';
+import { cloneWhatsAppFlowAction, syncWhatsAppFlowStatusAction } from '@/app/[locale]/(tenant)/integrations/whatsapp/flows/actions';
 import { Button } from '@/components/ui/button';
 import type { WhatsAppFlow } from '@/types/whatsapp-flows';
 
@@ -25,7 +25,7 @@ export function WhatsAppFlowsList({ locale, flows, canEdit, configured }: Props)
   const [query, setQuery] = useState('');
   const [message, setMessage] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
-  const base = `/${locale}/crm/settings/integrations/whatsapp/flows`;
+  const base = `/${locale}/integrations/whatsapp/flows`;
   const filtered = useMemo(() => {
     const value = query.trim().toLowerCase();
     return value ? flows.filter((flow) => `${flow.name} ${flow.flow_key}`.toLowerCase().includes(value)) : flows;
@@ -49,7 +49,7 @@ export function WhatsAppFlowsList({ locale, flows, canEdit, configured }: Props)
   };
 
   if (!configured) {
-    return <div className="rounded-2xl border border-amber-300/60 bg-amber-50 p-8 text-amber-950 dark:bg-amber-950/30 dark:text-amber-100"><h2 className="text-lg font-semibold">{t('notConfigured.title')}</h2><p className="mt-2 text-sm">{t('notConfigured.description')}</p><Button asChild className="mt-5"><Link href={`/${locale}/crm/settings/integrations/whatsapp/account`}>{t('notConfigured.cta')}</Link></Button></div>;
+    return <div className="rounded-2xl border border-amber-300/60 bg-amber-50 p-8 text-amber-950 dark:bg-amber-950/30 dark:text-amber-100"><h2 className="text-lg font-semibold">{t('notConfigured.title')}</h2><p className="mt-2 text-sm">{t('notConfigured.description')}</p><Button asChild className="mt-5"><Link href={`/${locale}/integrations/whatsapp/account`}>{t('notConfigured.cta')}</Link></Button></div>;
   }
 
   return (

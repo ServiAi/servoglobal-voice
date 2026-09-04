@@ -25,7 +25,7 @@ import {
   archiveVoiceExperienceAction,
   deleteVoiceExperienceAction,
   unarchiveVoiceExperienceAction,
-} from '@/app/[locale]/crm/settings/voice-experiences/actions';
+} from '@/app/[locale]/(tenant)/voice-ai/experiences/actions';
 import { canDeleteArchivedExperience } from '@/lib/voice-experiences/deletion';
 import { getVoiceExperienceErrorKey } from '@/lib/voice-experiences/error-messages';
 import { ActionDialog } from './ActionDialog';
@@ -153,7 +153,7 @@ export function VoiceExperiencesList({
           <p className="mt-2 text-sm leading-6 text-muted-foreground">{config.description}</p>
           {gateState === 'integration_disabled' || gateState === 'no_agents' ? (
             <Button asChild className="mt-5">
-              <Link href={`/${locale}/crm/settings/integrations`}>
+              <Link href={`/${locale}/integrations`}>
                 {t(gateState === 'no_agents' ? 'noAgents.cta' : 'integrationDisabled.cta')}
                 <ArrowRight className="ml-2 size-4" aria-hidden="true" />
               </Link>
@@ -177,7 +177,7 @@ export function VoiceExperiencesList({
         </div>
         {canEdit ? (
           <Button asChild>
-            <Link href={`/${locale}/crm/settings/voice-experiences/new`}>
+            <Link href={`/${locale}/voice-ai/experiences/new`}>
               <Plus className="mr-2 size-4" aria-hidden="true" />
               {t('newExperience')}
             </Link>
@@ -208,7 +208,7 @@ export function VoiceExperiencesList({
             <p className="mt-2 text-sm leading-6 text-muted-foreground">{t('list.emptyAction')}</p>
             {canEdit ? (
               <Button asChild className="mt-5">
-                <Link href={`/${locale}/crm/settings/voice-experiences/new`}>
+                <Link href={`/${locale}/voice-ai/experiences/new`}>
                   <Plus className="mr-2 size-4" aria-hidden="true" />
                   {t('newExperience')}
                 </Link>
@@ -275,7 +275,7 @@ export function VoiceExperiencesList({
                   ) : null}
                   <div className="mt-auto flex flex-wrap items-center gap-2 pt-5">
                     <Button asChild size="sm" variant="outline" className="mr-auto">
-                      <Link href={`/${locale}/crm/settings/voice-experiences/${experience.id}`}>
+                      <Link href={`/${locale}/voice-ai/experiences/${experience.id}`}>
                         {t('list.open')}
                         <ArrowRight className="ml-1.5 size-4" aria-hidden="true" />
                       </Link>

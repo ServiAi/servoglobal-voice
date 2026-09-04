@@ -12,7 +12,7 @@ import {
   publishWhatsAppFlowAction,
   syncWhatsAppFlowMetaAction,
   updateWhatsAppFlowAction,
-} from '@/app/[locale]/crm/settings/integrations/whatsapp/flows/actions';
+} from '@/app/[locale]/(tenant)/integrations/whatsapp/flows/actions';
 import { Button } from '@/components/ui/button';
 import type {
   WhatsAppFlow,
@@ -137,7 +137,7 @@ export function WhatsAppFlowStudio({ locale, initialFlow, canEdit }: Props) {
     startTransition(async () => {
       const result = await cloneWhatsAppFlowAction(initialFlow.id);
       if (!result.ok) return setNotice({ kind: 'error', text: result.detail || t('errors.generic') });
-      router.push(`/${locale}/crm/settings/integrations/whatsapp/flows/${result.data.id}`);
+      router.push(`/${locale}/integrations/whatsapp/flows/${result.data.id}`);
     });
   };
   const deleteDraft = () => {
@@ -145,7 +145,7 @@ export function WhatsAppFlowStudio({ locale, initialFlow, canEdit }: Props) {
     startTransition(async () => {
       const result = await deleteWhatsAppFlowAction(initialFlow.id);
       if (!result.ok) return setNotice({ kind: 'error', text: result.detail || t('errors.generic') });
-      router.push(`/${locale}/crm/settings/integrations/whatsapp/flows`);
+      router.push(`/${locale}/integrations/whatsapp/flows`);
     });
   };
 

@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import {
   fetchNotificationDeliveriesAction,
   fetchNotificationDeliveryAction,
-} from '@/app/[locale]/crm/settings/notifications/actions';
+} from '@/app/[locale]/(tenant)/automations/notifications/actions';
 import type {
   NotificationCatalogResponse,
   NotificationDeliveryItem,

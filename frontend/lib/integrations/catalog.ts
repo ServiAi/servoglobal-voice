@@ -25,12 +25,12 @@ export const integrationCategories: IntegrationCategory[] = [
 ];
 
 export const integrationCatalog: IntegrationCatalogItem[] = [
-  { provider: 'whatsapp', category: 'communication', href: '/crm/settings/integrations/whatsapp', icon: 'message' },
-  { provider: 'resend', category: 'communication', href: '/crm/settings/integrations/resend', icon: 'mail' },
-  { provider: 'voice', category: 'voice', href: '/crm/settings/integrations/voice', icon: 'phone' },
-  { provider: 'calcom', category: 'scheduling', href: '/crm/settings/integrations/calcom', icon: 'calendar' },
-  { provider: 'google_calendar', category: 'scheduling', href: '/crm/settings/integrations/google-calendar', icon: 'calendar' },
-  { provider: 'chatwoot', category: 'crm', href: '/crm/settings/integrations/chatwoot', icon: 'message' },
+  { provider: 'whatsapp', category: 'communication', href: '/integrations/whatsapp', icon: 'message' },
+  { provider: 'resend', category: 'communication', href: '/integrations/resend', icon: 'mail' },
+  { provider: 'voice', category: 'voice', href: '/integrations/voice', icon: 'phone' },
+  { provider: 'calcom', category: 'scheduling', href: '/integrations/calcom', icon: 'calendar' },
+  { provider: 'google_calendar', category: 'scheduling', href: '/integrations/google-calendar', icon: 'calendar' },
+  { provider: 'chatwoot', category: 'crm', href: '/integrations/chatwoot', icon: 'message' },
 ];
 
 export function resolveIntegrationStatus(

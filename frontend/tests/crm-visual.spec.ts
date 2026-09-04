@@ -1,7 +1,19 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 
-const routes = ['crm', 'crm/dashboard', 'crm/leads', 'crm/tasks', 'crm/settings/integrations', 'crm/settings/notifications', 'dashboard'];
+const routes = [
+  'dashboard',
+  'crm',
+  'crm/leads',
+  'crm/tasks',
+  'crm/analytics',
+  'voice-ai/experiences',
+  'voice-ai/calls',
+  'voice-ai/analytics',
+  'voice-ai/telephony',
+  'integrations',
+  'automations/notifications',
+];
 const locales = ['es', 'en'] as const;
 const themes = ['light', 'dark'] as const;
 const viewports = [
@@ -41,8 +53,10 @@ for (const locale of locales) {
             await expect(page.locator('body')).toBeVisible();
             await expect(page.locator('html')).toHaveAttribute('lang', new RegExp(`^${locale}(?:-|$)`, 'i'));
 
-            if (route === 'crm/dashboard') {
+            if (route === 'voice-ai/analytics') {
               await expect(page.getByRole('heading', { name: locale === 'en' ? 'Call performance (Ultravox)' : 'Rendimiento de llamadas (Ultravox)' })).toBeVisible();
+            }
+            if (route === 'voice-ai/telephony') {
               await expect(page.getByRole('heading', { name: locale === 'en' ? 'Outbound call capacity (SIP)' : 'Capacidad de llamadas salientes (SIP)' })).toBeVisible();
             }
 
@@ -52,9 +66,9 @@ for (const locale of locales) {
             const accessibility = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze();
             expect(accessibility.violations, JSON.stringify(accessibility.violations, null, 2)).toEqual([]);
             expect(browserErrors, browserErrors.join('\n')).toEqual([]);
-            // The CRM app is a standalone tool and must never show the
-            // ServiGlobal marketing footer; the top-level dashboard keeps it.
-            await expect(page.locator('footer')).toHaveCount(route === 'dashboard' ? 1 : 0);
+            // The tenant app (dashboard, CRM, etc.) is a standalone tool and
+            // must never show the ServiGlobal marketing footer.
+            await expect(page.locator('footer')).toHaveCount(0);
             if (process.env.QA_VISUAL_SNAPSHOTS === 'true') {
               await expect(page).toHaveScreenshot(`${locale}-${route.replaceAll('/', '-')}-${viewport.name}-${theme}.png`, { fullPage: true });
             }

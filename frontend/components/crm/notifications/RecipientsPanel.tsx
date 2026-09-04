@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import {
   createNotificationRecipientAction,
   updateNotificationRecipientAction,
-} from '@/app/[locale]/crm/settings/notifications/actions';
+} from '@/app/[locale]/(tenant)/automations/notifications/actions';
 import type {
   NotificationRecipientCreateRequest,
   NotificationRecipientItem,

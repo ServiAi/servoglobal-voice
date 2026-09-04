@@ -4,7 +4,7 @@ import { useState, useTransition } from 'react';
 import { Blocks, Sparkles } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { createWhatsAppFlowAction } from '@/app/[locale]/crm/settings/integrations/whatsapp/flows/actions';
+import { createWhatsAppFlowAction } from '@/app/[locale]/(tenant)/integrations/whatsapp/flows/actions';
 import { Button } from '@/components/ui/button';
 import type { WhatsAppFlowCategory, WhatsAppFlowContextSchemaOption } from '@/types/whatsapp-flows';
 
@@ -32,7 +32,7 @@ export function WhatsAppFlowCreate({ locale, schemas }: Props) {
         context_schema_id: mode === 'context_schema' ? schemaId : undefined,
       });
       if (!result.ok) return setError(result.detail || t('genericError'));
-      router.push(`/${locale}/crm/settings/integrations/whatsapp/flows/${result.data.id}`);
+      router.push(`/${locale}/integrations/whatsapp/flows/${result.data.id}`);
     });
   };
 

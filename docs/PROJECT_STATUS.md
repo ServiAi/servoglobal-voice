@@ -6,8 +6,10 @@ Actualizado: 2026-09-01. Fuente: código, migraciones y pruebas del repositorio.
 | --- | --- | --- |
 | Landing e i18n | Operativa | Landing bilingüe, pricing, demos, formularios y contenido SEO. |
 | Auth0 y tenants | Operativa | Login, contexto privado, onboarding, administración, membresías y agentes. El administrador de tenants usa un catálogo compacto de integraciones y carga cada configuración en una ruta independiente. |
-| Dashboard | Operativa | KPIs, tendencias, distribuciones, heatmap, llamadas recientes, uso y ahorro. |
-| CRM | Operativa | Pipeline, leads, detalle, timeline, notas, tareas, dashboard comercial y catálogo bilingüe de integraciones con búsqueda, filtros, estados resumidos y configuración por ruta. |
+| Inicio (`/dashboard`) | Operativa | Resumen ejecutivo del tenant: bloque CRM (leads nuevos/calificados, citas, conversión), bloque Voz IA (llamadas, atendidas, tasa de respuesta, minutos) y "Atención requerida" (tareas vencidas, % de minutos usados, capacidad SIP, integraciones con error), todo desde endpoints ya existentes. Ya no redirige a `/crm`. |
+| CRM | Operativa | Dominio puramente comercial. `/crm` es un resumen compacto (leads, tareas, próxima acción); `/crm/analytics` (antes `/crm/dashboard`) tiene pipeline, leads, detalle, timeline, notas, tareas, funnel, conversión, fuentes y campañas — ya sin `CallsPanel`/`VoiceCapacityPanel`. |
+| Voz IA | Operativa | Dominio nuevo bajo `/voice-ai`: `experiences` (antes `crm/settings/voice-experiences`), `calls` (listado de llamadas recientes), `analytics` (KPIs, tendencias, distribuciones, heatmap, uso, ahorro y rendimiento de llamadas — antes en `/crm`) y `telephony` (capacidad SIP saliente, antes embebida en el dashboard CRM). |
+| Integraciones | Operativa | Catálogo bilingüe de integraciones con búsqueda, filtros, estados resumidos y configuración por ruta, ahora transversal en `/integrations` (antes `crm/settings/integrations`). |
 | Ingesta Ultravox | Operativa | Eventos, llamadas, estados, resumen, costos y correlación CRM. |
 | Resend | Operativa | Configuración tenant, prueba, templates, preview, envío y trazabilidad. |
 | Composer y assets | Operativa | Markdown/MDX seguro, resumen de llamada, adjuntos local/S3 y formularios públicos. |
@@ -24,9 +26,43 @@ Actualizado: 2026-09-01. Fuente: código, migraciones y pruebas del repositorio.
 
 Las migraciones cubren identidad, analítica, riesgo Auth0, planes/uso, CRM base y contexto de llamadas, Resend/email/formularios, Cal.com/Google Calendar, WhatsApp, voz, disponibilidad de integraciones, notificaciones, grants tenant, context submissions, runtime WebRTC, rutas SIP/callbacks salientes y configuración multi-tenant de Chatwoot (incluye `mode`). La migración más reciente es `202609020001_chatwoot_managed_mode.py` y la cadena debe conservar una única head.
 
+## Arquitectura de navegación del tenant
+
+El shell dejó de identificarse como "CRM" (antes `CrmShell`/`CrmSidebar`/`CrmNavigation`) y pasó a `TenantShell`/`TenantSidebar`/`TenantNavigation` (`frontend/components/tenant/shell/`), compartido por todos los dominios vía el route group `frontend/app/[locale]/(tenant)/` (sin segmento en la URL). El encabezado del sidebar muestra "ServiGlobal IA" y el nombre del tenant en vez de "ServiGlobal / CRM".
+
+```
+Tenant
+├── Inicio            /dashboard
+├── CRM
+│   ├── (resumen)      /crm
+│   ├── Leads          /crm/leads
+│   ├── Tareas         /crm/tasks
+│   └── Rendimiento    /crm/analytics
+├── Voz IA
+│   ├── Experiencias   /voice-ai/experiences
+│   ├── Llamadas       /voice-ai/calls
+│   ├── Analítica      /voice-ai/analytics
+│   └── Telefonía      /voice-ai/telephony
+├── Automatización
+│   └── Notificaciones /automations/notifications
+└── Integraciones      /integrations
+```
+
+Redirects permanentes desde las rutas legacy (preservan query params):
+
+| Ruta anterior | Ruta nueva |
+| --- | --- |
+| `/dashboard` (redirigía a `/crm`) | Home real, ya no redirige |
+| `/crm/dashboard` | `/crm/analytics` |
+| `/crm/settings/integrations` y cualquier subruta | `/integrations` y la misma subruta |
+| `/crm/settings/notifications` | `/automations/notifications` |
+| `/crm/settings/voice-experiences`, `/new`, `/{id}` | `/voice-ai/experiences`, `/new`, `/{id}` |
+
+"Configuración / Organización" no aparece todavía en el sidebar: no existe una pantalla de autoservicio de tenant (sólo `/admin/tenants/{id}` de plataforma), y el criterio del refactor es no introducir enlaces muertos.
+
 ## Continuidad: automatizaciones y notificaciones
 
-- La página tenant es `frontend/app/[locale]/crm/settings/notifications/page.tsx` y carga resumen, catálogo, capacidades, reglas, destinatarios, entregas y plantillas WhatsApp en paralelo.
+- La página tenant es `frontend/app/[locale]/(tenant)/automations/notifications/page.tsx` (antes `crm/settings/notifications/page.tsx`, que ahora sólo redirige) y carga resumen, catálogo, capacidades, reglas, destinatarios, entregas y plantillas WhatsApp en paralelo.
 - `NotificationsWorkspace` organiza cuatro pestañas: resumen, reglas, destinatarios y entregas. Los roles `platform_admin` y `tenant_admin` pueden escribir; analistas y viewers sólo consultan.
 - Las reglas WhatsApp sólo pueden crearse con plantillas en `status="approved"`, ya sea importadas por sync desde Meta (`source="meta_sync"`, variables `POSITIONAL`) o creadas en la app y aprobadas (`source="tenant_authored"`, variables `NAMED`). El registro central relaciona capacidad/evento con campos tipados, operadores, formatos, rutas de destinatario, ejemplo seguro y versión.
 - Las dos plantillas semilla (`lead_follow_up`, `meeting_reminder`) ya no aparecen como "activas" por defecto: inician como `draft` y deben enviarse a Meta y aprobarse antes de poder usarse en una regla o envío de plantilla real.
@@ -58,6 +94,8 @@ Las migraciones cubren identidad, analítica, riesgo Auth0, planes/uso, CRM base
 - Confirmar que cada entorno con automatizaciones tenga un proceso persistente `python -m app.workers.notification_worker` conectado a PostgreSQL.
 - Renovar la sesión Playwright con `npm.cmd run qa:auth` antes de la validación visual si la prueba redirige a la pantalla de login.
 - Validar en cada entorno credenciales, URLs públicas, webhooks, CORS y almacenamiento; no asumir que los defaults locales representan producción.
+- El contenido propio de `/dashboard`, `/crm` y los encabezados de `/voice-ai/*` es bilingüe vía `next-intl` (`crm.tenantHome`, `crm.commercialHome`, `crm.voiceAi`, `crm.analyticsLoadError` en `messages/{es,en}.json`), igual que `crm.navigation`. `crm-dashboard-view-client.tsx` (la vista "Rendimiento" de `/crm/analytics`, movida pero no reescrita en este refactor) y los componentes de `components/dashboard/*` (`KpiCards`, `TrendsChart`, etc.) siguen con texto en español embebido, como ya estaba antes de este refactor; extender i18n ahí es un esfuerzo aparte.
+- `frontend/tests/tenant-shell.spec.ts` cubre que `/dashboard` no redirige a `/crm`, los redirects legacy, el sidebar por dominio y que `crm/analytics` ya no muestra `CallsPanel`/`VoiceCapacityPanel`; corre en el proyecto `crm-visual` y necesita la misma sesión Auth0 renovada.
 
 ## Evidencia de pruebas
 

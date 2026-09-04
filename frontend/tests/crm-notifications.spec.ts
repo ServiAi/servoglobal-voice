@@ -2,7 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 import { toLocalDayEndIso, toLocalDayStartIso } from '../lib/notifications/date-range';
 
-const PATH = '/es/crm/settings/notifications';
+const PATH = '/es/automations/notifications';
 
 test.describe('helpers de rango de fechas', () => {
   test('un rango de un mismo día cubre el día local completo sin desplazarse', () => {
