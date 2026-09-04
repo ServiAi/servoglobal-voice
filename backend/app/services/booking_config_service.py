@@ -17,26 +17,26 @@ class BookingConfigService:
         self.db = db
         self.secret_manager = secret_manager or SecretManager()
 
-    def get_config(self, tenant_id: str) -> TenantBookingConfig | None:
+    def get_config(self, tenant_id: str, provider: str = "calcom") -> TenantBookingConfig | None:
         return self.db.scalar(
             select(TenantBookingConfig).where(
                 TenantBookingConfig.tenant_id == tenant_id,
-                TenantBookingConfig.provider == "calcom",
+                TenantBookingConfig.provider == provider,
             )
         )
 
-    def get_active_config(self, tenant_id: str) -> TenantBookingConfig:
-        config = self.get_config(tenant_id)
+    def get_active_config(self, tenant_id: str, provider: str = "calcom") -> TenantBookingConfig:
+        config = self.get_config(tenant_id, provider=provider)
         if not config or config.status not in {"active", "error"}:
-            raise ValueError("Cal.com booking config is not active for this tenant.")
-        if not config.cal_api_key_encrypted:
+            raise ValueError(f"{provider.capitalize()} booking config is not active for this tenant.")
+        if provider == "calcom" and not config.cal_api_key_encrypted:
             raise ValueError("Cal.com API key is not configured for this tenant.")
         return config
 
     def upsert_calcom_config(self, tenant_id: str, body: BookingConfigRequest) -> TenantBookingConfig:
         if body.calendar_mode not in {"cal_managed", "crm_google_insert"}:
             raise ValueError("Invalid calendar_mode.")
-        config = self.get_config(tenant_id)
+        config = self.get_config(tenant_id, provider="calcom")
         if config is None:
             config = TenantBookingConfig(tenant_id=tenant_id, provider="calcom")
             self.db.add(config)
@@ -99,26 +99,31 @@ class BookingConfigService:
         config = self.get_config(tenant_id)
         if config is None:
             return BookingConfigResponse(
+                provider="calcom",
                 status="inactive",
                 calendar_mode="cal_managed",
-                has_secret=False,
-                default_timezone=settings.GOOGLE_CALENDAR_DEFAULT_TIMEZONE,
+                cal_api_version=settings.CALCOM_API_VERSION,
+                default_timezone="America/Bogota",
                 default_language="es",
                 default_length_minutes=30,
+                has_api_key=False,
             )
         return BookingConfigResponse(
+            id=config.id,
+            provider=config.provider,
             status=config.status,
             calendar_mode=config.calendar_mode,
-            has_secret=bool(config.cal_api_key_encrypted),
+            cal_api_version=config.cal_api_version,
+            organization_slug=config.organization_slug,
             default_event_type_id=config.default_event_type_id,
             default_event_type_slug=config.default_event_type_slug,
             default_username=config.default_username,
             default_team_slug=config.default_team_slug,
-            organization_slug=config.organization_slug,
             default_timezone=config.default_timezone,
             default_language=config.default_language,
             default_location_type=config.default_location_type,
             default_length_minutes=config.default_length_minutes,
             last_health_check_at=config.last_health_check_at,
             last_error_message=config.last_error_message,
+            has_api_key=bool(config.cal_api_key_encrypted),
         )

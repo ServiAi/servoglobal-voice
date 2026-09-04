@@ -66,7 +66,7 @@ export function GoogleCalendarIntegrationCard({ accessToken, connections }: Prop
         )}
       </div>
       <div className="p-5">
-        <GoogleCalendarConnectionList connections={items} onDisconnect={accessToken ? disconnect : undefined} />
+        <GoogleCalendarConnectionList accessToken={accessToken} connections={items} onDisconnect={accessToken ? disconnect : undefined} />
       </div>
       {message && (
         <div role="alert" className="mx-5 mb-5 rounded-md border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">

@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import sqlalchemy as sa
 from datetime import datetime
@@ -105,6 +105,78 @@ class TenantGoogleCalendarConnection(Base, TimestampMixin):
 
     tenant = relationship("Tenant")
     user = relationship("User")
+    calendars = relationship("TenantGoogleCalendar", back_populates="connection", cascade="all, delete-orphan")
+
+
+class TenantGoogleCalendar(Base, TimestampMixin):
+    __tablename__ = "tenant_google_calendars"
+    __table_args__ = (
+        UniqueConstraint("connection_id", "google_calendar_id", name="uq_tenant_google_calendars_conn_cal"),
+        Index("ix_tenant_google_calendars_tenant_conn", "tenant_id", "connection_id"),
+        Index("ix_tenant_google_calendars_tenant_blocking", "tenant_id", "is_blocking"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False)
+    connection_id: Mapped[str] = mapped_column(ForeignKey("tenant_google_calendar_connections.id"), nullable=False)
+    google_calendar_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    summary: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    time_zone: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    is_primary: Mapped[bool] = mapped_column(sa.Boolean, nullable=False, default=False)
+    is_blocking: Mapped[bool] = mapped_column(sa.Boolean, nullable=False, default=True)
+    is_booking_destination: Mapped[bool] = mapped_column(sa.Boolean, nullable=False, default=False)
+    access_role: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    sync_token: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    tenant = relationship("Tenant")
+    connection = relationship("TenantGoogleCalendarConnection", back_populates="calendars")
+
+
+class TenantSchedulingResource(Base, TimestampMixin):
+    __tablename__ = "tenant_scheduling_resources"
+    __table_args__ = (
+        Index("ix_tenant_scheduling_resources_tenant_team", "tenant_id", "team"),
+        Index("ix_tenant_scheduling_resources_tenant_active", "tenant_id", "is_active"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False)
+    name: Mapped[str] = mapped_column(String(160), nullable=False)
+    resource_type: Mapped[str] = mapped_column(String(40), nullable=False, default="user")
+    team: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    phone: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    priority: Mapped[int] = mapped_column(sa.Integer, nullable=False, default=1)
+    is_active: Mapped[bool] = mapped_column(sa.Boolean, nullable=False, default=True)
+    timezone: Mapped[str] = mapped_column(String(80), nullable=False, default="America/Bogota")
+    capacity: Mapped[int] = mapped_column(sa.Integer, nullable=False, default=1)
+    working_hours_json: Mapped[dict | None] = mapped_column(sa.JSON, nullable=True)
+    total_assigned_count: Mapped[int] = mapped_column(sa.Integer, nullable=False, default=0)
+    last_assigned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    tenant = relationship("Tenant")
+    resource_calendars = relationship("TenantSchedulingResourceCalendar", back_populates="resource", cascade="all, delete-orphan")
+
+
+class TenantSchedulingResourceCalendar(Base):
+    __tablename__ = "tenant_scheduling_resource_calendars"
+    __table_args__ = (
+        UniqueConstraint("resource_id", "calendar_id", name="uq_tenant_resource_calendars_res_cal"),
+        Index("ix_tenant_scheduling_resource_calendars_tenant_resource", "tenant_id", "resource_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False)
+    resource_id: Mapped[str] = mapped_column(ForeignKey("tenant_scheduling_resources.id", ondelete="CASCADE"), nullable=False)
+    calendar_id: Mapped[str] = mapped_column(ForeignKey("tenant_google_calendars.id", ondelete="CASCADE"), nullable=False)
+    is_blocking: Mapped[bool] = mapped_column(sa.Boolean, nullable=False, default=True)
+    is_destination: Mapped[bool] = mapped_column(sa.Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, nullable=False)
+
+    tenant = relationship("Tenant")
+    resource = relationship("TenantSchedulingResource", back_populates="resource_calendars")
+    calendar = relationship("TenantGoogleCalendar")
 
 
 class TenantVoiceBookingConfig(Base, TimestampMixin):
