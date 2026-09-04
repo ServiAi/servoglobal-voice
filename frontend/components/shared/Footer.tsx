@@ -10,9 +10,11 @@ export function Footer() {
   const locale = useLocale();
   const pathname = usePathname();
 
-  // Public voice forms and the authenticated tenant workspace do not use
-  // the marketing footer.
-  if (['voice', 'crm'].includes(pathname.split('/')[2])) return null;
+  // Public voice forms and the authenticated tenant workspace (all its
+  // top-level domains: dashboard, crm, voice-ai, automations,
+  // integrations) do not use the marketing footer.
+  const TENANT_SEGMENTS = ['voice', 'crm', 'dashboard', 'voice-ai', 'automations', 'integrations'];
+  if (TENANT_SEGMENTS.includes(pathname.split('/')[2])) return null;
 
   return (
     <footer className="bg-zinc-100 dark:bg-zinc-950 border-t border-zinc-200 dark:border-white/5 transition-colors duration-300">
@@ -70,7 +72,7 @@ export function Footer() {
         <div className="flex flex-col md:flex-row justify-between items-center pt-8 border-t border-zinc-200 dark:border-white/10 text-xs text-zinc-500 dark:text-neutral-600 gap-4">
           <div>{t('copyright')}</div>
           <div className="flex items-center gap-4">
-            <Link href={`/${locale}/crm`} className="hover:text-violet-600 dark:hover:text-violet-400 transition-colors font-medium">
+            <Link href={`/${locale}/dashboard`} className="hover:text-violet-600 dark:hover:text-violet-400 transition-colors font-medium">
               Acceso Clientes
             </Link>
             <div className="h-3 w-px bg-zinc-300 dark:bg-white/10" />
