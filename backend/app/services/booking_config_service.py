@@ -28,7 +28,8 @@ class BookingConfigService:
     def get_active_config(self, tenant_id: str, provider: str = "calcom") -> TenantBookingConfig:
         config = self.get_config(tenant_id, provider=provider)
         if not config or config.status not in {"active", "error"}:
-            raise ValueError(f"{provider.capitalize()} booking config is not active for this tenant.")
+            display_name = "Cal.com" if provider == "calcom" else provider.capitalize()
+            raise ValueError(f"{display_name} booking config is not active for this tenant.")
         if provider == "calcom" and not config.cal_api_key_encrypted:
             raise ValueError("Cal.com API key is not configured for this tenant.")
         return config
@@ -102,18 +103,15 @@ class BookingConfigService:
                 provider="calcom",
                 status="inactive",
                 calendar_mode="cal_managed",
-                cal_api_version=settings.CALCOM_API_VERSION,
                 default_timezone="America/Bogota",
                 default_language="es",
                 default_length_minutes=30,
-                has_api_key=False,
+                has_secret=False,
             )
         return BookingConfigResponse(
-            id=config.id,
             provider=config.provider,
             status=config.status,
             calendar_mode=config.calendar_mode,
-            cal_api_version=config.cal_api_version,
             organization_slug=config.organization_slug,
             default_event_type_id=config.default_event_type_id,
             default_event_type_slug=config.default_event_type_slug,
@@ -125,5 +123,5 @@ class BookingConfigService:
             default_length_minutes=config.default_length_minutes,
             last_health_check_at=config.last_health_check_at,
             last_error_message=config.last_error_message,
-            has_api_key=bool(config.cal_api_key_encrypted),
+            has_secret=bool(config.cal_api_key_encrypted),
         )
