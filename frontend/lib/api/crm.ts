@@ -107,7 +107,7 @@ async function requestIntegrationEndpoint<T>(
 
 export async function requestBackendEndpoint<T>(
   method: 'GET' | 'POST' | 'PATCH' | 'DELETE' | 'PUT',
-  resource: 'crm' | 'integrations' | 'admin' | 'forms' | 'voice',
+  resource: 'crm' | 'integrations' | 'admin' | 'forms' | 'voice' | 'scheduling',
   endpoint: string,
   accessToken: string,
   queryParams?: Record<string, unknown>,
