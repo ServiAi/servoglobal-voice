@@ -598,6 +598,33 @@ export type GoogleCalendarConnectUrlResponse = {
   url: string;
 };
 
+export type TenantGoogleCalendarResponse = {
+  id: string;
+  tenant_id: string;
+  connection_id: string;
+  google_calendar_id: string;
+  summary: string;
+  description?: string | null;
+  time_zone?: string | null;
+  is_primary: boolean;
+  is_blocking: boolean;
+  is_booking_destination: boolean;
+  access_role?: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type TenantGoogleCalendarUpdateRequest = {
+  is_blocking?: boolean;
+  is_booking_destination?: boolean;
+};
+
+export type GoogleCalendarSyncResponse = {
+  connection_id: string;
+  synced_count: number;
+  calendars: TenantGoogleCalendarResponse[];
+};
+
 export type BookingCreateRequest = {
   start: string;
   timezone?: string;

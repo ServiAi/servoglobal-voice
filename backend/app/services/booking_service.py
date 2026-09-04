@@ -9,13 +9,15 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.crm import CrmBooking, CrmBookingEvent, CrmLead
-from app.models.integrations import TenantBookingConfig, TenantVoiceBookingConfig
+from app.models.integrations import TenantBookingConfig, TenantGoogleCalendarConnection, TenantVoiceBookingConfig
 from app.schemas.crm import BookingCreateRequest
 from app.services.booking_config_service import BookingConfigService
 from app.services.calcom_client import CalComClient, CalComClientConfig, parse_utc_start, sanitize_calcom_error
 from app.services.crm_activity_service import CrmActivityService
+from app.services.google_calendar_service import sanitize_google_calendar_error
 from app.services.integration_event_service import IntegrationEventService
 from app.services.notification_event_pipeline import NotificationEventPipeline
+from app.services.scheduling_provider import CalComProvider, GoogleCalendarProvider
 
 logger = logging.getLogger(__name__)
 
@@ -63,8 +65,24 @@ class BookingService:
             booking_config_id=booking_config_id,
             voice_config=voice_config,
         )
-        result = self.calcom_client.get_available_slots(
-            client_config,
+        if config.provider == "google_calendar" or config.calendar_mode == "crm_google_insert":
+            provider = GoogleCalendarProvider(self.db, tenant_id=tenant_id, booking_config=config)
+            result = provider.get_available_slots(
+                date_input=date_input,
+                jornada=jornada,
+                reference_datetime=reference_datetime,
+            )
+            IntegrationEventService(self.db).record_event(
+                tenant_id=tenant_id,
+                provider="google_calendar",
+                event_type="availability_lookup",
+                status="success",
+                metadata={"date": result.get("date"), "jornada": result.get("jornada")},
+            )
+            return result
+
+        provider = CalComProvider(self.db, self.calcom_client, client_config)  # type: ignore[arg-type]
+        result = provider.get_available_slots(
             date_input=date_input,
             jornada=jornada,
             reference_datetime=reference_datetime,
@@ -96,8 +114,77 @@ class BookingService:
             booking_config_id=booking_config_id,
             voice_config=voice_config,
         )
-        if config.calendar_mode == "crm_google_insert":
-            raise ValueError("Google Calendar insert mode is not enabled yet.")
+
+        if config.provider == "google_calendar" or config.calendar_mode == "crm_google_insert":
+            booking = CrmBooking(
+                tenant_id=tenant_id,
+                lead_id=lead.id,
+                contact_id=lead.contact_id,
+                provider="google_calendar",
+                provider_event_type_id=None,
+                provider_event_type_slug=None,
+                title="Reserva Google Calendar",
+                description=body.notes,
+                status="pending",
+                start_at=start_at,
+                end_at=start_at + timedelta(minutes=config.default_length_minutes),
+                timezone=body.timezone or config.default_timezone,
+                duration_minutes=config.default_length_minutes,
+                attendee_name=body.attendee_name,
+                attendee_email=body.attendee_email,
+                attendee_phone=body.attendee_phone,
+                calendar_mode="crm_google_insert",
+                metadata_json={
+                    "source": "serviglobal_crm",
+                    "voice_booking_config_id": resolved_voice_config.id if resolved_voice_config else None,
+                },
+            )
+            self.db.add(booking)
+            self.db.commit()
+            self.db.refresh(booking)
+            self.record_crm_activity(booking, "booking_requested")
+            self.record_crm_booking_event(booking, "booking_requested", "pending", {"start_at": body.start})
+
+            google_prov = GoogleCalendarProvider(self.db, tenant_id=tenant_id, booking_config=config)
+            try:
+                booking = google_prov.create_booking(booking=booking, lead=lead, body=body)
+            except Exception as exc:
+                booking.status = "failed"
+                self.db.commit()
+                message = sanitize_google_calendar_error(str(exc))
+                self.record_crm_activity(booking, "booking_failed", message)
+                self.record_crm_booking_event(booking, "booking_failed", "failed", {"error": message})
+                IntegrationEventService(self.db).record_event(
+                    tenant_id=tenant_id,
+                    provider="google_calendar",
+                    event_type="booking_create",
+                    status="failed",
+                    resource_type="crm_booking",
+                    resource_id=booking.id,
+                    message=message,
+                )
+                raise
+
+            self.record_crm_activity(booking, "booking_created")
+            self.record_crm_booking_event(
+                booking,
+                "booking_created",
+                booking.status,
+                {"provider_booking_id": booking.provider_booking_id, "status": booking.status},
+            )
+            IntegrationEventService(self.db).record_event(
+                tenant_id=tenant_id,
+                provider="google_calendar",
+                event_type="booking_create",
+                status="success",
+                resource_type="crm_booking",
+                resource_id=booking.id,
+                metadata={"booking_id": booking.id, "google_calendar_event_id": booking.google_calendar_event_id},
+            )
+            self._notify_booking_event_safely(
+                tenant_id=tenant_id, booking_id=booking.id, event_type="booking.created"
+            )
+            return booking
 
         event_type_id = body.event_type_id or client_config.event_type_id
         event_type_slug = body.event_type_slug or client_config.event_type_slug
@@ -199,7 +286,7 @@ class BookingService:
         *,
         booking_config_id: str | None = None,
         voice_config: TenantVoiceBookingConfig | None = None,
-    ) -> tuple[TenantBookingConfig, CalComClientConfig, TenantVoiceBookingConfig | None]:
+    ) -> tuple[TenantBookingConfig, CalComClientConfig | None, TenantVoiceBookingConfig | None]:
         resolved_voice_config = voice_config
         if resolved_voice_config is None and booking_config_id:
             resolved_voice_config = self.db.scalar(
@@ -221,18 +308,42 @@ class BookingService:
             )
             if config is None:
                 raise ValueError("Voice booking config points to an inactive Cal.com booking config.")
-            if not config.cal_api_key_encrypted:
+            if config.provider == "calcom" and not config.cal_api_key_encrypted:
                 raise ValueError("Cal.com API key is not configured for this tenant.")
 
-        config = config or self.config_service.get_active_config(tenant_id)
-        client_config = self.config_service.to_client_config(config)
-        if resolved_voice_config:
-            client_config = replace(
-                client_config,
-                event_type_id=resolved_voice_config.default_event_type_id or client_config.event_type_id,
-                event_type_slug=resolved_voice_config.default_event_type_slug or client_config.event_type_slug,
-                timezone=resolved_voice_config.default_timezone or client_config.timezone,
-            )
+        if config is None:
+            try:
+                config = self.config_service.get_active_config(tenant_id)
+            except ValueError:
+                # Fallback: Check if tenant has an active Google Calendar connection
+                g_conn = self.db.scalar(
+                    select(TenantGoogleCalendarConnection).where(
+                        TenantGoogleCalendarConnection.tenant_id == tenant_id,
+                        TenantGoogleCalendarConnection.status == "connected",
+                    )
+                )
+                if g_conn:
+                    config = TenantBookingConfig(
+                        tenant_id=tenant_id,
+                        provider="google_calendar",
+                        status="active",
+                        calendar_mode="crm_google_insert",
+                        default_timezone="America/Bogota",
+                        default_length_minutes=30,
+                    )
+                else:
+                    raise
+
+        client_config = None
+        if config.provider == "calcom":
+            client_config = self.config_service.to_client_config(config)
+            if resolved_voice_config:
+                client_config = replace(
+                    client_config,
+                    event_type_id=resolved_voice_config.default_event_type_id or client_config.event_type_id,
+                    event_type_slug=resolved_voice_config.default_event_type_slug or client_config.event_type_slug,
+                    timezone=resolved_voice_config.default_timezone or client_config.timezone,
+                )
         return config, client_config, resolved_voice_config
 
     def record_crm_booking_event(self, booking: CrmBooking, event_type: str, status: str, payload_summary: dict[str, Any]) -> None:
@@ -351,8 +462,18 @@ class BookingService:
         if not booking:
             raise ValueError("Booking not found")
 
+        if booking.provider == "google_calendar" or booking.google_calendar_event_id:
+            google_prov = GoogleCalendarProvider(self.db, tenant_id=tenant_id)
+            google_prov.cancel_booking(booking=booking)
+            self.record_crm_activity(booking, "booking_created", "Reserva cancelada manualmente desde el CRM")
+            self.record_crm_booking_event(booking, "booking_cancelled", booking.status, {"status": "cancelled"})
+            self._notify_booking_event_safely(
+                tenant_id=tenant_id, booking_id=booking.id, event_type="booking.cancelled"
+            )
+            return {"status": "success", "booking_id": booking.id}
+
         config, client_config, _ = self._effective_config(tenant_id)
-        result = self.calcom_client.cancel_booking(client_config, booking.provider_booking_uid)
+        result = self.calcom_client.cancel_booking(client_config, booking.provider_booking_uid)  # type: ignore[arg-type]
         self.map_calcom_response_to_crm_booking(booking, result)
         booking.status = "cancelled"
         self.db.commit()
@@ -373,12 +494,24 @@ class BookingService:
         if not booking:
             raise ValueError("Booking not found")
 
+        new_start_at = parse_utc_start(new_start_time)
+        if booking.provider == "google_calendar" or booking.google_calendar_event_id:
+            google_prov = GoogleCalendarProvider(self.db, tenant_id=tenant_id)
+            google_prov.reschedule_booking(booking=booking, new_start_at=new_start_at)
+            self.record_crm_activity(booking, "booking_created", "Reserva reprogramada desde el CRM")
+            self.record_crm_booking_event(
+                booking, "booking_rescheduled", booking.status, {"status": "scheduled", "start_at": new_start_time}
+            )
+            self._notify_booking_event_safely(
+                tenant_id=tenant_id, booking_id=booking.id, event_type="booking.rescheduled"
+            )
+            return {"status": "success", "booking_id": booking.id}
+
         config, client_config, _ = self._effective_config(tenant_id)
-        result = self.calcom_client.reschedule_booking(client_config, booking.provider_booking_uid, new_start_time)
+        result = self.calcom_client.reschedule_booking(client_config, booking.provider_booking_uid, new_start_time)  # type: ignore[arg-type]
         self.map_calcom_response_to_crm_booking(booking, result)
         booking.status = "scheduled"
 
-        new_start_at = parse_utc_start(new_start_time)
         duration_minutes = booking.duration_minutes or config.default_length_minutes
         booking.start_at = new_start_at
         booking.end_at = new_start_at + timedelta(minutes=duration_minutes)

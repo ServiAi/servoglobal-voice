@@ -183,6 +183,33 @@ class GoogleCalendarConnectionResponse(BaseModel):
     has_tokens: bool
 
 
+class TenantGoogleCalendarResponse(BaseModel):
+    id: str
+    tenant_id: str
+    connection_id: str
+    google_calendar_id: str
+    summary: Optional[str] = None
+    description: Optional[str] = None
+    time_zone: Optional[str] = None
+    is_primary: bool
+    is_blocking: bool
+    is_booking_destination: bool
+    access_role: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class TenantGoogleCalendarUpdateRequest(BaseModel):
+    is_blocking: Optional[bool] = None
+    is_booking_destination: Optional[bool] = None
+
+
+class GoogleCalendarSyncResponse(BaseModel):
+    connection_id: str
+    synced_count: int
+    calendars: list[TenantGoogleCalendarResponse]
+
+
 class WhatsAppConfigRequest(BaseModel):
     phone_number_id: str = Field(..., min_length=1, max_length=120)
     business_account_id: Optional[str] = Field(None, max_length=120)
@@ -508,3 +535,49 @@ class VoiceCallResponse(BaseModel):
     duration_seconds: Optional[int] = None
     summary: Optional[str] = None
     created_at: datetime
+
+
+class SchedulingResourceCreateRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=160)
+    resource_type: str = Field(default="user", max_length=40)
+    team: Optional[str] = Field(None, max_length=80)
+    email: Optional[str] = Field(None, max_length=255)
+    phone: Optional[str] = Field(None, max_length=80)
+    priority: int = 1
+    timezone: str = "America/Bogota"
+    capacity: int = 1
+    working_hours: Optional[dict[str, Any]] = None
+
+
+class SchedulingResourceCalendarResponse(BaseModel):
+    id: str
+    resource_id: str
+    calendar_id: str
+    is_blocking: bool
+    is_destination: bool
+    created_at: datetime
+
+
+class SchedulingResourceResponse(BaseModel):
+    id: str
+    tenant_id: str
+    name: str
+    resource_type: str
+    team: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    priority: int
+    is_active: bool
+    timezone: str
+    capacity: int
+    total_assigned_count: int
+    last_assigned_at: Optional[datetime] = None
+    created_at: datetime
+    updated_at: datetime
+    calendars: list[SchedulingResourceCalendarResponse] = Field(default_factory=list)
+
+
+class SchedulingResourceCalendarAssignRequest(BaseModel):
+    calendar_id: str
+    is_blocking: bool = True
+    is_destination: bool = True

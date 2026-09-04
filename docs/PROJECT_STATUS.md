@@ -14,7 +14,7 @@ Actualizado: 2026-09-01. Fuente: código, migraciones y pruebas del repositorio.
 | Resend | Operativa | Configuración tenant, prueba, templates, preview, envío y trazabilidad. |
 | Composer y assets | Operativa | Markdown/MDX seguro, resumen de llamada, adjuntos local/S3 y formularios públicos. |
 | Cal.com | Operativa | Slots, booking, cancelación, reprogramación y webhook. |
-| Google Calendar | Parcial | OAuth foundation, listado y desconexión; creación directa de eventos deshabilitada. |
+| Google Calendar | Operativa | Multi-tenant OAuth (app centralizada, tokens cifrados, auto-refresh), sincronización de calendarios (`calendarList.list`), configuración de bloqueo y destino de reservas por calendario, recursos agendables independientes con Round Robin, motor de disponibilidad FreeBusy + jornada, y compatibilidad nativa con herramientas de agendamiento por voz. |
 | WhatsApp Cloud | Operativa en código | Configuración, envío CRM, mensajes, estados, webhook y ciclo de vida completo de plantillas. Flow Studio V1 añade builder visual versionado, generación desde Context Schema, preview, compilación determinista a Flow JSON, creación/upload/validación/publicación en Meta y clonación de versiones publicadas. Botones CTA: `QUICK_REPLY|URL|PHONE_NUMBER|VOICE_CALL|FLOW`; `VOICE_CALL` gateado por el feature grant `whatsapp_business_calling` (hoy sólo `platform_admin` vía API, sin UI). |
 | Automatizaciones y notificaciones | Operativa en código | Contratos versionados de eventos, builder dinámico, dry-run sin envío, reglas, destinatarios, entregas, planificación, reintentos, recuperación y worker PostgreSQL. El despliegue del proceso worker debe verificarse por entorno. |
 | Voz CRM | Operativa en código | Configuración de proveedor/agentes, rutas SIP cifradas por tenant, aprovisionamiento automático y versionado de endpoints PJSIP, llamadas WebRTC y callbacks salientes mediante IDT, webhook y booking tools. El agente local del PBX debe instalarse por entorno. |
@@ -24,7 +24,7 @@ Actualizado: 2026-09-01. Fuente: código, migraciones y pruebas del repositorio.
 
 ## Persistencia
 
-Las migraciones cubren identidad, analítica, riesgo Auth0, planes/uso, CRM base y contexto de llamadas, Resend/email/formularios, Cal.com/Google Calendar, WhatsApp, voz, disponibilidad de integraciones, notificaciones, grants tenant, context submissions, runtime WebRTC, rutas SIP/callbacks salientes y configuración multi-tenant de Chatwoot (incluye `mode`). La migración más reciente es `202609020001_chatwoot_managed_mode.py` y la cadena debe conservar una única head.
+Las migraciones cubren identidad, analítica, riesgo Auth0, planes/uso, CRM base y contexto de llamadas, Resend/email/formularios, Cal.com/Google Calendar, WhatsApp, voz, disponibilidad de integraciones, notificaciones, grants tenant, context submissions, runtime WebRTC, rutas SIP/callbacks salientes, configuración multi-tenant de Chatwoot (incluye `mode`), y Google Calendar multi-tenant con recursos agendables. La migración más reciente es `202609040002_tenant_scheduling_resources.py` y la cadena conserva una única head.
 
 ## Arquitectura de navegación del tenant
 

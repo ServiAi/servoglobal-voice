@@ -48,6 +48,9 @@ import type {
   BookingResponse,
   GoogleCalendarConnectionResponse,
   GoogleCalendarConnectUrlResponse,
+  TenantGoogleCalendarResponse,
+  TenantGoogleCalendarUpdateRequest,
+  GoogleCalendarSyncResponse,
   EmailAssetItem,
   CallSummaryAssetRequest,
   CallSummaryAssetResponse,
@@ -505,6 +508,37 @@ export function disconnectGoogleCalendar(accessToken: string, connectionId: stri
     'google-calendar/disconnect',
     accessToken,
     { connection_id: connectionId }
+  );
+}
+
+export function syncGoogleCalendarConnection(accessToken: string, connectionId: string) {
+  return requestIntegrationEndpoint<GoogleCalendarSyncResponse>(
+    'POST',
+    `google-calendar/connections/${connectionId}/sync`,
+    accessToken
+  );
+}
+
+export function fetchGoogleCalendars(accessToken: string, connectionId?: string) {
+  return requestIntegrationEndpoint<TenantGoogleCalendarResponse[]>(
+    'GET',
+    'google-calendar/calendars',
+    accessToken,
+    connectionId ? { connection_id: connectionId } : undefined
+  );
+}
+
+export function updateGoogleCalendar(
+  accessToken: string,
+  calendarId: string,
+  payload: TenantGoogleCalendarUpdateRequest
+) {
+  return requestIntegrationEndpoint<TenantGoogleCalendarResponse>(
+    'PATCH',
+    `google-calendar/calendars/${calendarId}`,
+    accessToken,
+    undefined,
+    payload
   );
 }
 
