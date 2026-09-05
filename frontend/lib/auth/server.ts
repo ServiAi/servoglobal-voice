@@ -61,21 +61,23 @@ function adminLoginPath(returnTo: string): string {
   return `/api/auth/login?${params.toString()}`;
 }
 
-function noAccessPath(locale: string): string {
-  return `/${locale}/dashboard/no-access`;
+function noAccessPath(locale: string, reason?: string): string {
+  const query = reason ? `?reason=${encodeURIComponent(reason)}` : '';
+  return `/${locale}/dashboard/no-access${query}`;
 }
 
 export function redirectAdminAccessFailure(
   status: number,
   locale: string,
-  returnTo: string
+  returnTo: string,
+  detail?: string
 ): void {
   if (status === 401) {
     redirect(adminLoginPath(returnTo));
   }
 
   if (status === 403) {
-    redirect(noAccessPath(locale));
+    redirect(noAccessPath(locale, detail));
   }
 }
 
@@ -131,7 +133,7 @@ export async function requireInternalAdminAccess(
       redirect(adminLoginPath(returnTo));
     }
 
-    redirect(noAccessPath(locale));
+    redirect(noAccessPath(locale, result.detail));
   }
 
   return result.context;
