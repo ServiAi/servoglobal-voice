@@ -32,6 +32,7 @@ import {
   addTenantAgent,
   addTenantMembership,
   deleteTenant,
+  deleteTenantMembership,
   fetchTenantDetail,
   sendMembershipPasswordReset,
   updateTenant,
@@ -144,6 +145,7 @@ export function TenantDetailClient({
   const [membershipError, setMembershipError] = useState<string | null>(null);
   const [membershipSuccessMsg, setMembershipSuccessMsg] = useState<string | null>(null);
   const [resettingMembershipId, setResettingMembershipId] = useState<string | null>(null);
+  const [deletingMembershipId, setDeletingMembershipId] = useState<string | null>(null);
 
   // Add agent state
   const [showAddAgent, setShowAddAgent] = useState(false);
@@ -258,6 +260,34 @@ export function TenantDetailClient({
       );
     } else if (!redirectOnAccessFailure(result.status)) {
       setMembershipError(result.detail || 'Error al enviar correo de contraseña');
+    }
+  };
+
+  const handleDeleteMembership = async (membershipId: string, email?: string | null) => {
+    const targetDesc = email ? `de "${email}"` : 'seleccionada';
+    if (!window.confirm(`¿Estás seguro de que deseas eliminar la membresía ${targetDesc}? El usuario perderá acceso a este tenant.`)) {
+      return;
+    }
+    setDeletingMembershipId(membershipId);
+    setMembershipError(null);
+    setMembershipSuccessMsg(null);
+    const result = await deleteTenantMembership(tenantId, membershipId);
+    setDeletingMembershipId(null);
+    if (result.ok) {
+      setTenant((prev) =>
+        prev
+          ? {
+              ...prev,
+              memberships: prev.memberships.filter((m) => m.id !== membershipId),
+            }
+          : prev
+      );
+      setMembershipSuccessMsg(
+        `Membresía ${targetDesc} eliminada exitosamente.`
+      );
+      load();
+    } else if (!redirectOnAccessFailure(result.status)) {
+      setMembershipError(result.detail || 'Error al eliminar membresía');
     }
   };
 
@@ -661,20 +691,36 @@ export function TenantDetailClient({
                       <StatusBadge status={m.status} />
                     </td>
                     <td className="py-2.5 text-right">
-                      <button
-                        type="button"
-                        disabled={resettingMembershipId === m.id}
-                        onClick={() => handleSendPasswordReset(m.id, m.user_email)}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-2.5 py-1 text-xs font-medium text-zinc-700 transition hover:border-cyan-500 hover:text-cyan-600 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:border-cyan-500 dark:hover:text-cyan-400"
-                        title="Enviar correo para configurar contraseña"
-                      >
-                        {resettingMembershipId === m.id ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin text-cyan-600" />
-                        ) : (
-                          <KeyRound className="h-3.5 w-3.5 text-zinc-500 dark:text-zinc-400" />
-                        )}
-                        Enviar contraseña
-                      </button>
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          type="button"
+                          disabled={resettingMembershipId === m.id || deletingMembershipId === m.id}
+                          onClick={() => handleSendPasswordReset(m.id, m.user_email)}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-2.5 py-1 text-xs font-medium text-zinc-700 transition hover:border-cyan-500 hover:text-cyan-600 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:border-cyan-500 dark:hover:text-cyan-400"
+                          title="Enviar correo para configurar contraseña"
+                        >
+                          {resettingMembershipId === m.id ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin text-cyan-600" />
+                          ) : (
+                            <KeyRound className="h-3.5 w-3.5 text-zinc-500 dark:text-zinc-400" />
+                          )}
+                          Enviar contraseña
+                        </button>
+                        <button
+                          type="button"
+                          disabled={deletingMembershipId === m.id || resettingMembershipId === m.id}
+                          onClick={() => handleDeleteMembership(m.id, m.user_email)}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-white px-2.5 py-1 text-xs font-medium text-red-600 transition hover:border-red-500 hover:bg-red-50 disabled:opacity-50 dark:border-red-900/50 dark:bg-zinc-800 dark:text-red-400 dark:hover:border-red-500 dark:hover:bg-red-950/30"
+                          title="Eliminar membresía"
+                        >
+                          {deletingMembershipId === m.id ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin text-red-600" />
+                          ) : (
+                            <Trash2 className="h-3.5 w-3.5 text-red-500 dark:text-red-400" />
+                          )}
+                          Eliminar
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}

@@ -401,6 +401,20 @@ def disconnect_google_calendar(
     return service.response(connection)
 
 
+@router.delete("/google-calendar/connections/{connection_id}", response_model=dict[str, Any])
+def delete_google_calendar_connection(
+    connection_id: str,
+    context: AuthContext = Depends(require_enabled_integration("google_calendar", _WRITE_ROLES)),
+    db: Session = Depends(get_db),
+) -> Any:
+    service = GoogleCalendarOAuthService(db)
+    try:
+        service.delete_connection(context.tenant.id, connection_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return {"deleted": True, "connection_id": connection_id}
+
+
 @router.post("/google-calendar/connections/{connection_id}/sync", response_model=GoogleCalendarSyncResponse)
 def sync_google_calendar_connection(
     connection_id: str,

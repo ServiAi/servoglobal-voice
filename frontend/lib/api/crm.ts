@@ -511,6 +511,14 @@ export function disconnectGoogleCalendar(accessToken: string, connectionId: stri
   );
 }
 
+export function deleteGoogleCalendarConnection(accessToken: string, connectionId: string) {
+  return requestIntegrationEndpoint<{ deleted: boolean; connection_id: string }>(
+    'DELETE',
+    `google-calendar/connections/${connectionId}`,
+    accessToken
+  );
+}
+
 export function syncGoogleCalendarConnection(accessToken: string, connectionId: string) {
   return requestIntegrationEndpoint<GoogleCalendarSyncResponse>(
     'POST',
@@ -833,6 +841,19 @@ export function fetchAdminTenantGoogleCalendarConnections(accessToken: string, t
     'GET',
     'admin',
     `tenants/${tenantId}/integrations/google-calendar/connections`,
+    accessToken
+  );
+}
+
+export function deleteAdminTenantGoogleCalendarConnection(
+  accessToken: string,
+  tenantId: string,
+  connectionId: string
+) {
+  return requestBackendEndpoint<{ deleted: boolean; connection_id: string; tenant_id: string }>(
+    'DELETE',
+    'admin',
+    `tenants/${tenantId}/integrations/google-calendar/connections/${connectionId}`,
     accessToken
   );
 }

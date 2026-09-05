@@ -519,6 +519,30 @@ def send_membership_password_reset(
     }
 
 
+@router.delete(
+    "/tenants/{tenant_id}/memberships/{membership_id}",
+    response_model=dict[str, Any],
+)
+def delete_tenant_membership(
+    tenant_id: str,
+    membership_id: str,
+    db: Session = Depends(get_current_internal_db),
+) -> dict:
+    service = OnboardingService(db)
+    try:
+        return service.delete_membership(tenant_id, membership_id)
+    except ValueError as exc:
+        if "not found" in str(exc).lower():
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=str(exc),
+            ) from exc
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+
 @router.get("/tenants/{tenant_id}/agents", response_model=list[dict[str, Any]])
 def list_tenant_agents(
     tenant_id: str,
@@ -998,6 +1022,24 @@ def list_tenant_google_calendar_connections_admin(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     service = GoogleCalendarOAuthService(db)
     return [service.response(connection) for connection in service.list_connections(tenant_id)]
+
+
+@router.delete("/tenants/{tenant_id}/integrations/google-calendar/connections/{connection_id}", response_model=dict[str, Any])
+def delete_tenant_google_calendar_connection_admin(
+    tenant_id: str,
+    connection_id: str,
+    db: Session = Depends(get_current_internal_db),
+) -> Any:
+    try:
+        OnboardingService(db).get_tenant(tenant_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    service = GoogleCalendarOAuthService(db)
+    try:
+        service.delete_connection(tenant_id, connection_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return {"deleted": True, "connection_id": connection_id, "tenant_id": tenant_id}
 
 
 @router.post("/tenants/{tenant_id}/crm/leads/{lead_id}/bookings", response_model=BookingResponse)

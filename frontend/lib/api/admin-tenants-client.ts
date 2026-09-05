@@ -149,6 +149,18 @@ export function sendMembershipPasswordReset(
   );
 }
 
+export function deleteTenantMembership(
+  tenantId: string,
+  membershipId: string
+): Promise<FetchResult<{ deleted: boolean; membership_id: string; tenant_id: string }>> {
+  return localAdminFetch<{ deleted: boolean; membership_id: string; tenant_id: string }>(
+    `/api/admin/tenants/${encodeURIComponent(tenantId)}/memberships/${encodeURIComponent(membershipId)}`,
+    {
+      method: 'DELETE',
+    }
+  );
+}
+
 export function addTenantAgent(
   tenantId: string,
   payload: AgentCreatePayload

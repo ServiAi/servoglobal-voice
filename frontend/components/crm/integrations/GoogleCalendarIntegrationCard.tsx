@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { Calendar, CalendarDays, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { disconnectGoogleCalendar, fetchGoogleCalendarConnectUrl } from '@/lib/api/crm';
+import { deleteGoogleCalendarConnection, disconnectGoogleCalendar, fetchGoogleCalendarConnectUrl } from '@/lib/api/crm';
 import type { GoogleCalendarConnectionResponse } from '@/types/crm';
 import { GoogleCalendarConnectionList } from './GoogleCalendarConnectionList';
 import { FieldHelp } from './FieldHelp';
@@ -46,6 +46,16 @@ export function GoogleCalendarIntegrationCard({ accessToken, connections, locale
     setItems((current) => current.map((item) => (item.id === connectionId ? result.data : item)));
   };
 
+  const deleteConnection = async (connectionId: string) => {
+    if (!accessToken) return;
+    const result = await deleteGoogleCalendarConnection(accessToken, connectionId);
+    if (!result.ok) {
+      setMessage(result.detail);
+      return;
+    }
+    setItems((current) => current.filter((item) => item.id !== connectionId));
+  };
+
   return (
     <section className="overflow-hidden rounded-lg border border-border bg-card shadow-xs" aria-labelledby="google-calendar-integration-title">
       <div className="flex flex-col gap-3 border-b border-border bg-muted/20 p-5 md:flex-row md:items-center md:justify-between">
@@ -75,7 +85,12 @@ export function GoogleCalendarIntegrationCard({ accessToken, connections, locale
         )}
       </div>
       <div className="p-5">
-        <GoogleCalendarConnectionList accessToken={accessToken} connections={items} onDisconnect={accessToken ? disconnect : undefined} />
+        <GoogleCalendarConnectionList
+          accessToken={accessToken}
+          connections={items}
+          onDisconnect={accessToken ? disconnect : undefined}
+          onDelete={accessToken ? deleteConnection : undefined}
+        />
       </div>
       {message && (
         <div role="alert" className="mx-5 mb-5 rounded-md border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
