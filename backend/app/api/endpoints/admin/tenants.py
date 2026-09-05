@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -91,6 +92,8 @@ from app.services.whatsapp_template_service import WhatsAppTemplateService
 from app.services.voice_config_service import VoiceConfigService
 from app.services.voice_agent_service import VoiceAgentService
 
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
 
@@ -423,8 +426,11 @@ def add_tenant_membership(
     tenant_id: str,
     payload: MembershipCreateRequest,
     db: Session = Depends(get_current_internal_db),
+    auth0_provisioning_service: Auth0ProvisioningService = Depends(
+        get_auth0_provisioning_service
+    ),
 ) -> dict:
-    service = OnboardingService(db)
+    service = OnboardingService(db, auth0_provisioning_service)
     try:
         membership = service.add_membership(
             tenant_id,
@@ -449,6 +455,67 @@ def add_tenant_membership(
         "status": membership.status,
         "user_email": membership.user.email if membership.user else None,
         "user_name": membership.user.name if membership.user else None,
+        "password_reset_url": getattr(membership, "password_reset_url", None),
+    }
+
+
+@router.post(
+    "/tenants/{tenant_id}/memberships/{membership_id}/password-reset",
+    response_model=dict[str, Any],
+)
+def send_membership_password_reset(
+    tenant_id: str,
+    membership_id: str,
+    db: Session = Depends(get_current_internal_db),
+    auth0_provisioning_service: Auth0ProvisioningService = Depends(
+        get_auth0_provisioning_service
+    ),
+) -> dict:
+    service = OnboardingService(db, auth0_provisioning_service)
+    membership = service.get_membership(tenant_id, membership_id)
+    if not membership or not membership.user or not membership.user.email:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Membership or user not found",
+        )
+
+    email = membership.user.email
+    # Ensure user is provisioned in Auth0
+    if membership.user.external_auth_id is None:
+        try:
+            provisioned = auth0_provisioning_service.provision_tenant_admin(
+                email=email,
+                name=membership.user.name or email.split("@")[0],
+            )
+            membership.user.external_auth_id = provisioned.user_id
+            db.commit()
+        except Auth0ProvisioningError as exc:
+            if exc.status_code != 409:
+                logger.warning("Auth0 provisioning error on password reset: %s", exc)
+
+    error_detail: str | None = None
+    try:
+        auth0_provisioning_service.trigger_password_reset_email(email=email)
+    except Auth0ProvisioningError as exc:
+        error_detail = str(exc)
+        logger.warning("trigger_password_reset_email failed: %s", exc)
+
+    ticket_url = None
+    try:
+        ticket_url = auth0_provisioning_service.create_password_change_ticket(email=email)
+    except Exception as exc:
+        logger.warning("create_password_change_ticket failed: %s", exc)
+
+    if error_detail and not ticket_url:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"No se pudo enviar el correo de contraseña: {error_detail}",
+        )
+
+    return {
+        "success": True,
+        "detail": f"Correo para configurar contraseña enviado a {email}",
+        "password_reset_url": ticket_url,
     }
 
 

@@ -21,6 +21,7 @@ import {
   X,
   ArrowLeft,
   Settings,
+  KeyRound,
 } from 'lucide-react';
 
 import {
@@ -32,6 +33,7 @@ import {
   addTenantMembership,
   deleteTenant,
   fetchTenantDetail,
+  sendMembershipPasswordReset,
   updateTenant,
   updateTenantPlan,
 } from '@/lib/api/admin-tenants-client';
@@ -140,6 +142,8 @@ export function TenantDetailClient({
   const [membershipEmail, setMembershipEmail] = useState('');
   const [membershipRole, setMembershipRole] = useState('tenant_analyst');
   const [membershipError, setMembershipError] = useState<string | null>(null);
+  const [membershipSuccessMsg, setMembershipSuccessMsg] = useState<string | null>(null);
+  const [resettingMembershipId, setResettingMembershipId] = useState<string | null>(null);
 
   // Add agent state
   const [showAddAgent, setShowAddAgent] = useState(false);
@@ -222,6 +226,7 @@ export function TenantDetailClient({
 
   const handleAddMembership = async () => {
     setMembershipError(null);
+    setMembershipSuccessMsg(null);
     const result = await addTenantMembership(tenantId, {
       email: membershipEmail.trim().toLowerCase(),
       role: membershipRole,
@@ -232,9 +237,27 @@ export function TenantDetailClient({
       );
       setShowAddMembership(false);
       setMembershipEmail('');
+      setMembershipSuccessMsg(
+        `Membresía creada exitosamente. Se ha enviado el correo para configurar contraseña a ${result.data.user_email || membershipEmail}.`
+      );
       load();
     } else if (!redirectOnAccessFailure(result.status)) {
       setMembershipError(result.detail);
+    }
+  };
+
+  const handleSendPasswordReset = async (membershipId: string, email?: string | null) => {
+    setResettingMembershipId(membershipId);
+    setMembershipError(null);
+    setMembershipSuccessMsg(null);
+    const result = await sendMembershipPasswordReset(tenantId, membershipId);
+    setResettingMembershipId(null);
+    if (result.ok) {
+      setMembershipSuccessMsg(
+        result.data.detail || `Correo para configurar contraseña enviado a ${email || 'usuario'}.`
+      );
+    } else if (!redirectOnAccessFailure(result.status)) {
+      setMembershipError(result.detail || 'Error al enviar correo de contraseña');
     }
   };
 
@@ -607,6 +630,13 @@ export function TenantDetailClient({
           </div>
         )}
 
+        {membershipSuccessMsg && (
+          <div className="mb-4 flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800 dark:border-emerald-800/50 dark:bg-emerald-950/30 dark:text-emerald-300">
+            <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+            <span>{membershipSuccessMsg}</span>
+          </div>
+        )}
+
         {tenant.memberships.length === 0 ? (
           <p className="py-4 text-center text-sm text-zinc-500 dark:text-zinc-400">Sin membresías</p>
         ) : (
@@ -617,7 +647,8 @@ export function TenantDetailClient({
                   <th className="pb-2 pr-4 font-medium">Email</th>
                   <th className="pb-2 pr-4 font-medium">Nombre</th>
                   <th className="pb-2 pr-4 font-medium">Rol</th>
-                  <th className="pb-2 font-medium">Estado</th>
+                  <th className="pb-2 pr-4 font-medium">Estado</th>
+                  <th className="pb-2 text-right font-medium">Acciones</th>
                 </tr>
               </thead>
               <tbody>
@@ -626,8 +657,24 @@ export function TenantDetailClient({
                     <td className="py-2.5 pr-4 text-zinc-700 dark:text-zinc-200">{m.user_email || <span className="text-zinc-400 dark:text-zinc-500">—</span>}</td>
                     <td className="py-2.5 pr-4 text-zinc-700 dark:text-zinc-200">{m.user_name || <span className="text-zinc-400 dark:text-zinc-500">—</span>}</td>
                     <td className="py-2.5 pr-4 text-zinc-600 dark:text-zinc-300">{m.role}</td>
-                    <td className="py-2.5">
+                    <td className="py-2.5 pr-4">
                       <StatusBadge status={m.status} />
+                    </td>
+                    <td className="py-2.5 text-right">
+                      <button
+                        type="button"
+                        disabled={resettingMembershipId === m.id}
+                        onClick={() => handleSendPasswordReset(m.id, m.user_email)}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-2.5 py-1 text-xs font-medium text-zinc-700 transition hover:border-cyan-500 hover:text-cyan-600 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:border-cyan-500 dark:hover:text-cyan-400"
+                        title="Enviar correo para configurar contraseña"
+                      >
+                        {resettingMembershipId === m.id ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin text-cyan-600" />
+                        ) : (
+                          <KeyRound className="h-3.5 w-3.5 text-zinc-500 dark:text-zinc-400" />
+                        )}
+                        Enviar contraseña
+                      </button>
                     </td>
                   </tr>
                 ))}

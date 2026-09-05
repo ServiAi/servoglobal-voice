@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session, joinedload
 
@@ -14,6 +16,8 @@ from app.services.auth0_provisioning_service import (
     Auth0ProvisioningService,
 )
 from app.services.tenant_usage_service import TenantUsageService
+
+logger = logging.getLogger(__name__)
 
 
 class OnboardingConsistencyError(RuntimeError):
@@ -317,15 +321,81 @@ class OnboardingService:
         user = self.db.scalar(
             select(User).where(User.email == normalized_email)
         )
+        ticket_url: str | None = None
+
         if user is None:
+            user_name = normalized_email.split("@")[0]
+            external_auth_id: str | None = None
+            try:
+                provisioned = self.auth0_provisioning_service.provision_tenant_admin(
+                    email=normalized_email,
+                    name=user_name,
+                )
+                external_auth_id = provisioned.user_id
+            except Auth0ProvisioningError as exc:
+                if exc.status_code == 409:
+                    # User already exists in Auth0; trigger password reset directly
+                    try:
+                        self.auth0_provisioning_service.trigger_password_reset_email(
+                            email=normalized_email
+                        )
+                    except Exception as reset_exc:
+                        logger.warning("Failed triggering Auth0 password reset on 409: %s", reset_exc)
+                else:
+                    logger.warning("Auth0 provisioning error when adding member: %s", exc)
+            except Exception as exc:
+                logger.warning("Unexpected error provisioning user in Auth0: %s", exc)
+
+            try:
+                ticket_url = self.auth0_provisioning_service.create_password_change_ticket(
+                    email=normalized_email
+                )
+            except Exception as exc:
+                logger.warning("Could not create password ticket for new user: %s", exc)
+
             user = User(
                 email=normalized_email,
-                name=normalized_email.split("@")[0],
+                name=user_name,
+                external_auth_id=external_auth_id,
                 is_internal=False,
                 status="active",
             )
             self.db.add(user)
             self.db.flush()
+        else:
+            if user.external_auth_id is None:
+                try:
+                    provisioned = self.auth0_provisioning_service.provision_tenant_admin(
+                        email=normalized_email,
+                        name=user.name or normalized_email.split("@")[0],
+                    )
+                    user.external_auth_id = provisioned.user_id
+                except Auth0ProvisioningError as exc:
+                    if exc.status_code == 409:
+                        try:
+                            self.auth0_provisioning_service.trigger_password_reset_email(
+                                email=normalized_email
+                            )
+                        except Exception as reset_exc:
+                            logger.warning("Failed triggering Auth0 password reset on 409: %s", reset_exc)
+                    else:
+                        logger.warning("Auth0 provisioning error for existing DB user: %s", exc)
+                except Exception as exc:
+                    logger.warning("Unexpected error provisioning existing DB user: %s", exc)
+            else:
+                try:
+                    self.auth0_provisioning_service.trigger_password_reset_email(
+                        email=normalized_email
+                    )
+                except Exception as exc:
+                    logger.warning("Failed triggering password reset for existing user: %s", exc)
+
+            try:
+                ticket_url = self.auth0_provisioning_service.create_password_change_ticket(
+                    email=normalized_email
+                )
+            except Exception as exc:
+                logger.warning("Could not create password ticket for existing user: %s", exc)
 
         existing = self.db.scalar(
             select(TenantMembership).where(
@@ -345,7 +415,19 @@ class OnboardingService:
         self.db.add(membership)
         self.db.commit()
         self.db.refresh(membership)
+        if ticket_url:
+            setattr(membership, "password_reset_url", ticket_url)
         return membership
+
+    def get_membership(self, tenant_id: str, membership_id: str) -> TenantMembership | None:
+        return self.db.scalar(
+            select(TenantMembership)
+            .options(joinedload(TenantMembership.user))
+            .where(
+                TenantMembership.tenant_id == tenant_id,
+                TenantMembership.id == membership_id,
+            )
+        )
 
     def list_memberships(self, tenant_id: str) -> list[TenantMembership]:
         tenant = self.db.scalar(

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+import logging
 import secrets
 import string
 from typing import Any
@@ -9,6 +10,16 @@ from urllib.parse import quote
 import httpx
 
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
+
+
+def _mask_email(email: str) -> str:
+    if "@" not in email:
+        return "***"
+    local, domain = email.split("@", 1)
+    masked_local = local[0] + "***" if local else "***"
+    return f"{masked_local}@{domain}"
 
 
 class Auth0ProvisioningError(RuntimeError):
@@ -194,6 +205,7 @@ class Auth0ProvisioningService:
                 "when password reset is enabled"
             )
 
+        logger.info("Triggering Auth0 password reset email for %s", _mask_email(email))
         response = self._post(
             f"{self._auth0_base_url()}/dbconnections/change_password",
             operation="trigger Auth0 password reset email",
@@ -208,6 +220,32 @@ class Auth0ProvisioningService:
             operation="trigger Auth0 password reset email",
             expected_status=200,
         )
+        logger.info("Successfully triggered Auth0 password reset email for %s", _mask_email(email))
+
+    def create_password_change_ticket(
+        self,
+        *,
+        email: str,
+        result_url: str | None = None,
+        ttl_sec: int = 432000,
+    ) -> str | None:
+        payload: dict[str, Any] = {
+            "email": email,
+            "ttl_sec": ttl_sec,
+            "mark_email_as_verified": True,
+        }
+        if result_url:
+            payload["result_url"] = result_url
+        try:
+            data = self._management_post(
+                "/api/v2/tickets/password-change",
+                payload,
+                expected_status=201,
+            )
+            return data.get("ticket")
+        except Exception as exc:
+            logger.warning("Could not generate Auth0 password change ticket: %s", exc)
+            return None
 
     def delete_user(self, user_id: str) -> None:
         encoded_user_id = quote(user_id, safe="")

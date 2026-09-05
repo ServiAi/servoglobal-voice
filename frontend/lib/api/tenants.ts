@@ -302,6 +302,20 @@ export function addTenantMembership(
   );
 }
 
+export function sendMembershipPasswordReset(
+  accessToken: string,
+  tenantId: string,
+  membershipId: string
+): Promise<FetchResult<{ success: boolean; detail: string; password_reset_url?: string }>> {
+  return adminFetch<{ success: boolean; detail: string; password_reset_url?: string }>(
+    `/api/v1/admin/tenants/${tenantId}/memberships/${membershipId}/password-reset`,
+    accessToken,
+    {
+      method: 'POST',
+    }
+  );
+}
+
 export function addTenantAgent(
   accessToken: string,
   tenantId: string,
