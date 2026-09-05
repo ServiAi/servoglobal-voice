@@ -225,15 +225,32 @@ class Auth0ProvisioningService:
     def create_password_change_ticket(
         self,
         *,
-        email: str,
+        email: str | None = None,
+        user_id: str | None = None,
         result_url: str | None = None,
         ttl_sec: int = 432000,
     ) -> str | None:
+        target_user_id = user_id
+        if not target_user_id and email:
+            try:
+                users = self._management_get(f"/api/v2/users-by-email?email={quote(email)}")
+                if isinstance(users, list) and users:
+                    target_user_id = users[0].get("user_id")
+            except Exception as exc:
+                logger.warning("Could not lookup user_id by email for password ticket: %s", exc)
+
         payload: dict[str, Any] = {
-            "email": email,
             "ttl_sec": ttl_sec,
             "mark_email_as_verified": True,
         }
+        if target_user_id:
+            payload["user_id"] = target_user_id
+        elif email:
+            payload["email"] = email
+            payload["connection_id"] = "con_EgD4J7WIVQSgIFFR"
+        else:
+            return None
+
         if result_url:
             payload["result_url"] = result_url
         try:
@@ -282,6 +299,30 @@ class Auth0ProvisioningService:
         )
         return self._response_json(response)
 
+    def _management_get(
+        self,
+        path: str,
+        *,
+        expected_status: int = 200,
+    ) -> Any:
+        response = self._get(
+            f"{self._auth0_base_url()}{path}",
+            operation=f"call Auth0 Management API {path}",
+            headers=self._authorization_headers(),
+        )
+        self._ensure_success(
+            response,
+            operation=f"call Auth0 Management API {path}",
+            expected_status=expected_status,
+        )
+        try:
+            return response.json()
+        except ValueError as exc:
+            raise Auth0ProvisioningError(
+                "Auth0 response did not contain valid JSON",
+                status_code=response.status_code,
+            ) from exc
+
     def _authorization_headers(self) -> dict[str, str]:
         return {"Authorization": f"Bearer {self._get_management_token()}"}
 
@@ -322,6 +363,18 @@ class Auth0ProvisioningService:
     ) -> httpx.Response:
         try:
             return self._client.post(url, json=json, headers=headers)
+        except httpx.HTTPError as exc:
+            raise Auth0ProvisioningError(f"Failed to {operation}: {exc}") from exc
+
+    def _get(
+        self,
+        url: str,
+        *,
+        operation: str,
+        headers: dict[str, str] | None = None,
+    ) -> httpx.Response:
+        try:
+            return self._client.get(url, headers=headers)
         except httpx.HTTPError as exc:
             raise Auth0ProvisioningError(f"Failed to {operation}: {exc}") from exc
 
