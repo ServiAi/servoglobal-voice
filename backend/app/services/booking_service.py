@@ -59,6 +59,9 @@ class BookingService:
         reference_datetime: str | None = None,
         booking_config_id: str | None = None,
         voice_config: TenantVoiceBookingConfig | None = None,
+        resource_id: str | None = None,
+        team_id: str | None = None,
+        agent_id: str | None = None,
     ) -> dict:
         config, client_config, _ = self._effective_config(
             tenant_id,
@@ -71,6 +74,9 @@ class BookingService:
                 date_input=date_input,
                 jornada=jornada,
                 reference_datetime=reference_datetime,
+                resource_id=resource_id,
+                team_id=team_id,
+                agent_id=agent_id,
             )
             IntegrationEventService(self.db).record_event(
                 tenant_id=tenant_id,
@@ -137,6 +143,8 @@ class BookingService:
                 metadata_json={
                     "source": "serviglobal_crm",
                     "voice_booking_config_id": resolved_voice_config.id if resolved_voice_config else None,
+                    "scheduling_resource_id": body.scheduling_resource_id,
+                    "scheduling_team_id": body.scheduling_team_id,
                 },
             )
             self.db.add(booking)

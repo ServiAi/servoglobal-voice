@@ -118,7 +118,7 @@ class SchedulingResourcesTests(Integration2ATestCase):
                 calendar_id=self.cal_bob.id,
             )
 
-            chosen1, cal_id1 = svc.select_resource_round_robin(tenant_id=self.tenant.id, team="sales")
+            chosen1, cal_id1 = svc.select_resource_round_robin(tenant_id=self.tenant.id, team_name="sales")
             self.assertIsNotNone(chosen1)
             self.assertEqual(chosen1.id, r_alice.id)
             self.assertEqual(cal_id1, "alice@example.com")
@@ -127,7 +127,7 @@ class SchedulingResourcesTests(Integration2ATestCase):
             chosen1.total_assigned_count = 1
             db.commit()
 
-            chosen2, cal_id2 = svc.select_resource_round_robin(tenant_id=self.tenant.id, team="sales")
+            chosen2, cal_id2 = svc.select_resource_round_robin(tenant_id=self.tenant.id, team_name="sales")
             self.assertIsNotNone(chosen2)
             self.assertEqual(chosen2.id, r_bob.id)
             self.assertEqual(cal_id2, "bob@example.com")
@@ -136,7 +136,7 @@ class SchedulingResourcesTests(Integration2ATestCase):
             chosen2.total_assigned_count = 1
             db.commit()
 
-            chosen3, _ = svc.select_resource_round_robin(tenant_id=self.tenant.id, team="sales")
+            chosen3, _ = svc.select_resource_round_robin(tenant_id=self.tenant.id, team_name="sales")
             self.assertIsNotNone(chosen3)
             self.assertEqual(chosen3.id, r_alice.id)
 

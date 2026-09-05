@@ -6,6 +6,7 @@ import {
   AudioLines,
   BarChart3,
   BellRing,
+  Calendar,
   CheckSquare2,
   Gauge,
   LayoutDashboard,
@@ -29,6 +30,7 @@ const GROUPS = [
     links: [
       { label: 'crmSummary', path: '/crm', icon: Gauge, exact: true },
       { label: 'leads', path: '/crm/leads', icon: Users },
+      { label: 'agenda', path: '/agenda', icon: Calendar },
       { label: 'tasks', path: '/crm/tasks', icon: CheckSquare2 },
       { label: 'performance', path: '/crm/analytics', icon: BarChart3 },
     ],

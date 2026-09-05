@@ -138,9 +138,12 @@ class GoogleCalendarProvider:
         date_input: str,
         jornada: str | None = None,
         reference_datetime: str | None = None,
+        resource_id: str | None = None,
+        team_id: str | None = None,
+        agent_id: str | None = None,
     ) -> dict[str, Any]:
         tz = self.booking_config.default_timezone if self.booking_config else "America/Bogota"
-        duration = self.booking_config.default_length_minutes if self.booking_config else 30
+        duration = self.booking_config.default_length_minutes if self.booking_config else None
         return self.availability_service.get_available_slots(
             tenant_id=self.tenant_id,
             date_input=date_input,
@@ -148,6 +151,9 @@ class GoogleCalendarProvider:
             reference_datetime=reference_datetime,
             timezone_str=tz,
             slot_duration_minutes=duration,
+            resource_id=resource_id,
+            team_id=team_id,
+            agent_id=agent_id,
         )
 
     def create_booking(
@@ -162,17 +168,44 @@ class GoogleCalendarProvider:
         duration = booking.duration_minutes or 30
         end_at = booking.end_at or (booking.start_at + timedelta(minutes=duration))
 
-        # Round Robin resource assignment if resources exist
-        metadata = dict(booking.metadata_json or {})
-        team = metadata.get("team")
+        from app.services.scheduling_config_service import SchedulingConfigService
         from app.services.scheduling_resource_service import SchedulingResourceService
+        sched_cfg = SchedulingConfigService(self.db).get_or_create_config(self.tenant_id)
         res_service = SchedulingResourceService(self.db, self.google_service)
-        assigned_resource, assigned_cal_id = res_service.select_resource_round_robin(
-            tenant_id=self.tenant_id,
-            team=team,
-            slot_start=booking.start_at,
-            duration_minutes=duration,
-        )
+
+        metadata = dict(booking.metadata_json or {})
+        target_team_id = getattr(body, "scheduling_team_id", None) or metadata.get("scheduling_team_id") or sched_cfg.default_team_id
+        target_resource_id = getattr(body, "scheduling_resource_id", None) or metadata.get("scheduling_resource_id") or sched_cfg.default_resource_id
+        team_name = metadata.get("team")
+        buf_before = sched_cfg.buffer_before_minutes or 0
+        buf_after = sched_cfg.buffer_after_minutes or 0
+
+        assigned_resource = None
+        assigned_cal_id = None
+
+        if target_resource_id:
+            # If a specific resource is requested, look it up directly
+            res = res_service.get_resource(self.tenant_id, target_resource_id)
+            if res and res.is_active:
+                assigned_resource = res
+                dest_cal = next(
+                    (rc.calendar.google_calendar_id for rc in res.resource_calendars if rc.is_destination and rc.calendar),
+                    None,
+                )
+                if dest_cal:
+                    assigned_cal_id = dest_cal
+        else:
+            # Round Robin selection over team or active resources
+            assigned_resource, assigned_cal_id = res_service.select_resource_round_robin(
+                tenant_id=self.tenant_id,
+                team_id=target_team_id,
+                team_name=team_name,
+                slot_start=booking.start_at,
+                duration_minutes=duration,
+                buffer_before_minutes=buf_before,
+                buffer_after_minutes=buf_after,
+            )
+
         if assigned_resource:
             if assigned_cal_id:
                 target_cal_id = assigned_cal_id
@@ -180,8 +213,11 @@ class GoogleCalendarProvider:
             booking.host_email = assigned_resource.email
             metadata["scheduling_resource_id"] = assigned_resource.id
             metadata["scheduling_resource_name"] = assigned_resource.name
+            if target_team_id:
+                metadata["scheduling_team_id"] = target_team_id
             if assigned_resource.team:
                 metadata["team"] = assigned_resource.team
+            metadata["routing_strategy"] = sched_cfg.routing_strategy or "round_robin"
 
         summary = booking.title or f"Cita ServiGlobal: {body.attendee_name}"
         host_line = f"\nAsignado a: {booking.host_name}" if booking.host_name else ""
@@ -212,14 +248,12 @@ class GoogleCalendarProvider:
         booking.google_calendar_event_id = event_id
         booking.status = "accepted"
         booking.meeting_url = event.get("hangoutLink") or event.get("htmlLink")
-        booking.metadata_json = {
-            **(booking.metadata_json or {}),
-            "google_event": {
-                "id": event_id,
-                "htmlLink": event.get("htmlLink"),
-                "calendar_id": target_cal_id,
-            },
+        metadata["google_event"] = {
+            "id": event_id,
+            "htmlLink": event.get("htmlLink"),
+            "calendar_id": target_cal_id,
         }
+        booking.metadata_json = metadata
         self.db.commit()
         self.db.refresh(booking)
         return booking

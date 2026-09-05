@@ -1,9 +1,8 @@
 'use client';
 
-'use client';
-
 import { useState } from 'react';
-import { CalendarDays, Loader2 } from 'lucide-react';
+import Link from 'next/link';
+import { Calendar, CalendarDays, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { disconnectGoogleCalendar, fetchGoogleCalendarConnectUrl } from '@/lib/api/crm';
 import type { GoogleCalendarConnectionResponse } from '@/types/crm';
@@ -57,6 +56,12 @@ export function GoogleCalendarIntegrationCard({ accessToken, connections }: Prop
         </div>
         {accessToken && (
           <div className="flex items-center gap-2">
+            <Link href="/agenda">
+              <Button type="button" variant="secondary">
+                <Calendar className="mr-2 h-4 w-4" />
+                Configurar agenda
+              </Button>
+            </Link>
             <Button type="button" variant="outline" onClick={connect} disabled={loading}>
               {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CalendarDays className="mr-2 h-4 w-4" />}
               Conectar cuenta

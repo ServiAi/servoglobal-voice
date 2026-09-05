@@ -287,6 +287,8 @@ class BookingCreateRequest(BaseModel):
     attendee_email: str = Field(..., min_length=3, max_length=255)
     attendee_phone: Optional[str] = Field(None, max_length=80)
     booking_fields_responses: dict[str, Any] = Field(default_factory=dict)
+    scheduling_resource_id: Optional[str] = None
+    scheduling_team_id: Optional[str] = None
     notes: Optional[str] = None
 
 
