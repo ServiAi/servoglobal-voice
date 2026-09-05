@@ -263,6 +263,91 @@ class TenantSchedulingAvailabilityException(Base, TimestampMixin):
     resource = relationship("TenantSchedulingResource")
 
 
+class TenantSchedulingSchedule(Base, TimestampMixin):
+    __tablename__ = "tenant_scheduling_schedules"
+    __table_args__ = (
+        Index("ix_tenant_scheduling_schedules_tenant_id", "tenant_id"),
+        Index("ix_tenant_scheduling_schedules_tenant_provider", "tenant_id", "provider"),
+        Index("ix_tenant_scheduling_schedules_tenant_provider_ext", "tenant_id", "provider", "provider_schedule_id"),
+        Index("ix_tenant_scheduling_schedules_tenant_status", "tenant_id", "sync_status"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False)
+    provider: Mapped[str] = mapped_column(String(40), nullable=False, default="calcom")
+    name: Mapped[str] = mapped_column(String(160), nullable=False)
+    timezone: Mapped[str] = mapped_column(String(80), nullable=False, default="America/Bogota")
+    working_hours_json: Mapped[dict | None] = mapped_column(sa.JSON, nullable=True)
+    overrides_json: Mapped[list | None] = mapped_column(sa.JSON, nullable=True)
+    provider_schedule_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    is_default: Mapped[bool] = mapped_column(sa.Boolean, nullable=False, default=False)
+    is_active: Mapped[bool] = mapped_column(sa.Boolean, nullable=False, default=True)
+    last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    sync_status: Mapped[str] = mapped_column(String(32), nullable=False, default="synced")
+    last_error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    tenant = relationship("Tenant")
+
+
+class TenantSchedulingEventType(Base, TimestampMixin):
+    __tablename__ = "tenant_scheduling_event_types"
+    __table_args__ = (
+        Index("ix_tenant_scheduling_event_types_tenant_id", "tenant_id"),
+        Index("ix_tenant_scheduling_event_types_tenant_provider", "tenant_id", "provider"),
+        Index("ix_tenant_scheduling_event_types_tenant_provider_ext", "tenant_id", "provider", "provider_event_type_id"),
+        Index("ix_tenant_scheduling_event_types_tenant_status", "tenant_id", "sync_status"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False)
+    provider: Mapped[str] = mapped_column(String(40), nullable=False, default="calcom")
+    name: Mapped[str] = mapped_column(String(160), nullable=False)
+    slug: Mapped[str] = mapped_column(String(160), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    duration_minutes: Mapped[int] = mapped_column(sa.Integer, nullable=False, default=30)
+    slot_interval_minutes: Mapped[int] = mapped_column(sa.Integer, nullable=False, default=30)
+    buffer_before_minutes: Mapped[int] = mapped_column(sa.Integer, nullable=False, default=0)
+    buffer_after_minutes: Mapped[int] = mapped_column(sa.Integer, nullable=False, default=0)
+    minimum_notice_minutes: Mapped[int] = mapped_column(sa.Integer, nullable=False, default=60)
+    timezone: Mapped[str] = mapped_column(String(80), nullable=False, default="America/Bogota")
+    local_schedule_id: Mapped[str | None] = mapped_column(ForeignKey("tenant_scheduling_schedules.id", ondelete="SET NULL"), nullable=True)
+    local_team_id: Mapped[str | None] = mapped_column(ForeignKey("tenant_scheduling_teams.id", ondelete="SET NULL"), nullable=True)
+    provider_event_type_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    provider_event_type_slug: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    provider_config_json: Mapped[dict] = mapped_column(sa.JSON, nullable=False, default=dict)
+    is_active: Mapped[bool] = mapped_column(sa.Boolean, nullable=False, default=True)
+    last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    sync_status: Mapped[str] = mapped_column(String(32), nullable=False, default="synced")
+    last_error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    tenant = relationship("Tenant")
+    schedule = relationship("TenantSchedulingSchedule", foreign_keys=[local_schedule_id])
+    team = relationship("TenantSchedulingTeam", foreign_keys=[local_team_id])
+
+
+class TenantSchedulingProviderObject(Base, TimestampMixin):
+    __tablename__ = "tenant_scheduling_provider_objects"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "provider", "object_type", "external_id", name="uq_tenant_provider_object"),
+        Index("ix_tenant_provider_objects_tenant_provider", "tenant_id", "provider"),
+        Index("ix_tenant_provider_objects_tenant_status", "tenant_id", "sync_status"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False)
+    provider: Mapped[str] = mapped_column(String(40), nullable=False)
+    object_type: Mapped[str] = mapped_column(String(40), nullable=False)  # schedule, event_type, resource, team, membership
+    local_object_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    external_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    external_slug: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    provider_metadata_json: Mapped[dict] = mapped_column(sa.JSON, nullable=False, default=dict)
+    sync_status: Mapped[str] = mapped_column(String(32), nullable=False, default="active")  # active, remote_deleted, sync_error
+    last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    tenant = relationship("Tenant")
+
+
 class TenantAgentSchedulingConfig(Base, TimestampMixin):
     __tablename__ = "tenant_agent_scheduling_configs"
     __table_args__ = (
@@ -275,6 +360,7 @@ class TenantAgentSchedulingConfig(Base, TimestampMixin):
     agent_id: Mapped[str] = mapped_column(String(255), nullable=False)
     provider: Mapped[str] = mapped_column(String(40), nullable=False, default="google_calendar")
     scheduling_config_id: Mapped[str | None] = mapped_column(ForeignKey("tenant_scheduling_configs.id"), nullable=True)
+    event_type_id: Mapped[str | None] = mapped_column(ForeignKey("tenant_scheduling_event_types.id", ondelete="SET NULL"), nullable=True)
     resource_id: Mapped[str | None] = mapped_column(ForeignKey("tenant_scheduling_resources.id", ondelete="SET NULL"), nullable=True)
     team_id: Mapped[str | None] = mapped_column(ForeignKey("tenant_scheduling_teams.id", ondelete="SET NULL"), nullable=True)
     routing_strategy: Mapped[str] = mapped_column(String(40), nullable=False, default="single")
@@ -287,6 +373,7 @@ class TenantAgentSchedulingConfig(Base, TimestampMixin):
 
     tenant = relationship("Tenant")
     scheduling_config = relationship("TenantSchedulingConfig")
+    event_type = relationship("TenantSchedulingEventType", foreign_keys=[event_type_id])
     resource = relationship("TenantSchedulingResource")
     team = relationship("TenantSchedulingTeam")
 

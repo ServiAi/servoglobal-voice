@@ -9,7 +9,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.crm import CrmBooking, CrmBookingEvent, CrmLead
-from app.models.integrations import TenantBookingConfig, TenantGoogleCalendarConnection, TenantVoiceBookingConfig
+from app.models.integrations import (
+    TenantBookingConfig,
+    TenantGoogleCalendarConnection,
+    TenantSchedulingEventType,
+    TenantVoiceBookingConfig,
+)
 from app.schemas.crm import BookingCreateRequest
 from app.services.booking_config_service import BookingConfigService
 from app.services.calcom_client import CalComClient, CalComClientConfig, parse_utc_start, sanitize_calcom_error
@@ -199,6 +204,20 @@ class BookingService:
         username = body.username or config.default_username
         team_slug = body.team_slug or config.default_team_slug
         organization_slug = body.organization_slug or config.organization_slug
+
+        if body.event_type_id:
+            local_et = self.db.scalar(
+                select(TenantSchedulingEventType).where(
+                    TenantSchedulingEventType.tenant_id == tenant_id,
+                    (TenantSchedulingEventType.id == str(body.event_type_id))
+                    | (TenantSchedulingEventType.provider_event_type_id == str(body.event_type_id)),
+                )
+            )
+            if local_et:
+                if local_et.provider_event_type_id:
+                    event_type_id = int(local_et.provider_event_type_id) if local_et.provider_event_type_id.isdigit() else local_et.provider_event_type_id
+                event_type_slug = local_et.provider_event_type_slug or local_et.slug or event_type_slug
+
         if not event_type_id and not (event_type_slug and (username or team_slug)):
             raise ValueError("event_type_id or event_type_slug plus username/team_slug is required.")
 

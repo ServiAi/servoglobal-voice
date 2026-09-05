@@ -4,6 +4,7 @@ import logging
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.auth.deps import AuthContext, require_roles
@@ -11,20 +12,30 @@ from app.db.session import get_db
 from app.models.integrations import (
     TenantAgentSchedulingConfig,
     TenantSchedulingAvailabilityException,
+    TenantSchedulingEventType,
     TenantSchedulingResource,
+    TenantSchedulingSchedule,
     TenantSchedulingTeam,
 )
 from app.schemas.scheduling import (
     AgentSchedulingConfigResponse,
     AgentSchedulingConfigUpsertRequest,
+    CalComDiscoveryResponse,
     SchedulingAvailabilityExceptionCreateRequest,
     SchedulingAvailabilityExceptionResponse,
     SchedulingDashboardSummaryResponse,
+    SchedulingEventTypeCreateRequest,
+    SchedulingEventTypeResponse,
+    SchedulingEventTypeUpdateRequest,
+    SchedulingProviderCapabilitiesResponse,
     SchedulingResourceCalendarAssignRequest,
     SchedulingResourceCalendarResponse,
     SchedulingResourceCreateRequest,
     SchedulingResourceResponse,
     SchedulingResourceUpdateRequest,
+    SchedulingScheduleCreateRequest,
+    SchedulingScheduleResponse,
+    SchedulingScheduleUpdateRequest,
     SchedulingTeamCreateRequest,
     SchedulingTeamMemberAddRequest,
     SchedulingTeamMemberResponse,
@@ -33,8 +44,11 @@ from app.schemas.scheduling import (
     TenantSchedulingConfigResponse,
     TenantSchedulingConfigUpdateRequest,
 )
+from app.core.scheduling_exceptions import SchedulingNotFoundError
+from app.services.calcom_sync_service import CalComSyncService
 from app.services.scheduling_availability_service import SchedulingAvailabilityService
 from app.services.scheduling_config_service import SchedulingConfigService
+from app.services.scheduling_provider_resolver import SchedulingProviderResolver
 from app.services.scheduling_resource_service import SchedulingResourceService
 
 logger = logging.getLogger(__name__)
@@ -128,6 +142,7 @@ def _serialize_agent_config(cfg: TenantAgentSchedulingConfig) -> dict[str, Any]:
         "agent_id": cfg.agent_id,
         "provider": cfg.provider,
         "scheduling_config_id": cfg.scheduling_config_id,
+        "event_type_id": cfg.event_type_id,
         "resource_id": cfg.resource_id,
         "team_id": cfg.team_id,
         "routing_strategy": cfg.routing_strategy,
@@ -141,6 +156,7 @@ def _serialize_agent_config(cfg: TenantAgentSchedulingConfig) -> dict[str, Any]:
         "updated_at": cfg.updated_at,
         "resource_name": cfg.resource.name if cfg.resource else None,
         "team_name": cfg.team.name if cfg.team else None,
+        "event_type_name": cfg.event_type.name if cfg.event_type else None,
     }
 
 
@@ -541,3 +557,349 @@ def get_availability_slots(
         team_id=team_id,
         agent_id=agent_id,
     )
+
+
+# -----------------------------------------------------------------------------
+# Providers & Capabilities
+# -----------------------------------------------------------------------------
+@router.get("/providers", response_model=list[SchedulingProviderCapabilitiesResponse])
+def list_providers_with_capabilities(
+    auth: AuthContext = Depends(require_roles(READ_ROLES)),
+    db: Session = Depends(get_db),
+) -> Any:
+    resolver = SchedulingProviderResolver(db)
+    calcom_admin = resolver.resolve_admin_provider(auth.tenant_id, "calcom")
+    google_admin = resolver.resolve_admin_provider(auth.tenant_id, "google_calendar")
+    return [
+        {"provider": "google_calendar", **google_admin.capabilities().to_dict()},
+        {"provider": "calcom", **calcom_admin.capabilities().to_dict()},
+    ]
+
+
+# -----------------------------------------------------------------------------
+# Schedules (Availability Profiles)
+# -----------------------------------------------------------------------------
+@router.get("/schedules", response_model=list[SchedulingScheduleResponse])
+def list_schedules(
+    provider: Optional[str] = Query(None),
+    auth: AuthContext = Depends(require_roles(READ_ROLES)),
+    db: Session = Depends(get_db),
+) -> Any:
+    # First query local projections
+    stmt = select(TenantSchedulingSchedule).where(
+        TenantSchedulingSchedule.tenant_id == auth.tenant_id,
+        TenantSchedulingSchedule.sync_status != "remote_deleted",
+    )
+    if provider:
+        stmt = stmt.where(TenantSchedulingSchedule.provider == provider)
+    local_schedules = list(db.scalars(stmt))
+    if local_schedules:
+        return [
+            {
+                "id": s.id,
+                "tenant_id": s.tenant_id,
+                "provider": s.provider,
+                "name": s.name,
+                "timezone": s.timezone,
+                "working_hours": s.working_hours_json,
+                "overrides": s.overrides_json,
+                "provider_schedule_id": s.provider_schedule_id,
+                "is_default": s.is_default,
+                "is_active": s.is_active,
+                "sync_status": s.sync_status,
+                "last_synced_at": s.last_synced_at,
+            }
+            for s in local_schedules
+        ]
+
+    admin = SchedulingProviderResolver(db).resolve_admin_provider(auth.tenant_id, provider)
+    schedules = admin.list_schedules()
+    return [
+        {
+            "id": str(s.get("id")),
+            "tenant_id": auth.tenant_id,
+            "provider": provider or "calcom",
+            "name": s.get("name", "Horario"),
+            "timezone": s.get("timeZone", "America/Bogota"),
+            "working_hours": s.get("availability") or s.get("working_hours_json"),
+            "overrides": s.get("overrides") or s.get("dateOverrides"),
+            "provider_schedule_id": str(s.get("id")),
+            "is_default": bool(s.get("isDefault", False)),
+            "is_active": True,
+            "sync_status": "synced",
+            "last_synced_at": None,
+        }
+        for s in schedules
+    ]
+
+
+@router.post("/schedules", response_model=SchedulingScheduleResponse, status_code=status.HTTP_201_CREATED)
+def create_schedule(
+    body: SchedulingScheduleCreateRequest,
+    provider: Optional[str] = Query(None),
+    auth: AuthContext = Depends(require_roles(WRITE_ROLES)),
+    db: Session = Depends(get_db),
+) -> Any:
+    admin = SchedulingProviderResolver(db).resolve_admin_provider(auth.tenant_id, provider)
+    created = admin.create_schedule(body.model_dump(exclude_unset=True))
+    return {
+        "id": str(created.get("id", "new")),
+        "tenant_id": auth.tenant_id,
+        "provider": provider or "calcom",
+        "name": created.get("name", body.name),
+        "timezone": created.get("timeZone", body.timezone),
+        "working_hours": created.get("availability") or body.working_hours,
+        "overrides": created.get("overrides") or body.overrides,
+        "provider_schedule_id": str(created.get("id", "")),
+        "is_default": bool(created.get("isDefault", body.is_default)),
+        "is_active": True,
+        "sync_status": "synced",
+        "last_synced_at": None,
+    }
+
+
+@router.patch("/schedules/{schedule_id}", response_model=SchedulingScheduleResponse)
+def update_schedule(
+    schedule_id: str,
+    body: SchedulingScheduleUpdateRequest,
+    provider: Optional[str] = Query(None),
+    auth: AuthContext = Depends(require_roles(WRITE_ROLES)),
+    db: Session = Depends(get_db),
+) -> Any:
+    admin = SchedulingProviderResolver(db).resolve_admin_provider(auth.tenant_id, provider)
+    try:
+        updated = admin.update_schedule(schedule_id, body.model_dump(exclude_unset=True))
+    except (ValueError, SchedulingNotFoundError) as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    return {
+        "id": str(schedule_id),
+        "tenant_id": auth.tenant_id,
+        "provider": provider or "calcom",
+        "name": updated.get("name", body.name or "Horario"),
+        "timezone": updated.get("timeZone", body.timezone or "America/Bogota"),
+        "working_hours": updated.get("availability") or body.working_hours,
+        "overrides": updated.get("overrides") or body.overrides,
+        "provider_schedule_id": str(schedule_id),
+        "is_default": bool(updated.get("isDefault", False)),
+        "is_active": True,
+        "sync_status": "synced",
+        "last_synced_at": None,
+    }
+
+
+@router.delete("/schedules/{schedule_id}")
+def delete_schedule(
+    schedule_id: str,
+    provider: Optional[str] = Query(None),
+    auth: AuthContext = Depends(require_roles(WRITE_ROLES)),
+    db: Session = Depends(get_db),
+) -> Any:
+    admin = SchedulingProviderResolver(db).resolve_admin_provider(auth.tenant_id, provider)
+    try:
+        admin.delete_schedule(schedule_id)
+    except (ValueError, SchedulingNotFoundError) as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    return {"status": "deleted"}
+
+
+# -----------------------------------------------------------------------------
+# Event Types (Tipos de Cita)
+# -----------------------------------------------------------------------------
+@router.get("/event-types", response_model=list[SchedulingEventTypeResponse])
+def list_event_types(
+    provider: Optional[str] = Query(None),
+    auth: AuthContext = Depends(require_roles(READ_ROLES)),
+    db: Session = Depends(get_db),
+) -> Any:
+    stmt = select(TenantSchedulingEventType).where(
+        TenantSchedulingEventType.tenant_id == auth.tenant_id,
+        TenantSchedulingEventType.sync_status != "remote_deleted",
+    )
+    if provider:
+        stmt = stmt.where(TenantSchedulingEventType.provider == provider)
+    local_ets = list(db.scalars(stmt))
+
+    if local_ets:
+        return [
+            {
+                "id": et.id,
+                "tenant_id": et.tenant_id,
+                "provider": et.provider,
+                "name": et.name,
+                "slug": et.slug,
+                "description": et.description,
+                "duration_minutes": et.duration_minutes,
+                "slot_interval_minutes": et.slot_interval_minutes,
+                "buffer_before_minutes": et.buffer_before_minutes,
+                "buffer_after_minutes": et.buffer_after_minutes,
+                "minimum_notice_minutes": et.minimum_notice_minutes,
+                "timezone": et.timezone,
+                "local_schedule_id": et.local_schedule_id,
+                "local_team_id": et.local_team_id,
+                "provider_event_type_id": et.provider_event_type_id,
+                "provider_event_type_slug": et.provider_event_type_slug,
+                "is_active": et.is_active,
+                "sync_status": et.sync_status,
+                "last_synced_at": et.last_synced_at,
+            }
+            for et in local_ets
+        ]
+
+    admin = SchedulingProviderResolver(db).resolve_admin_provider(auth.tenant_id, provider)
+    ets = admin.list_event_types()
+    return [
+        {
+            "id": str(e.get("id")),
+            "tenant_id": auth.tenant_id,
+            "provider": provider or "calcom",
+            "name": e.get("title") or e.get("name", "Tipo de cita"),
+            "slug": e.get("slug", "cita"),
+            "description": e.get("description"),
+            "duration_minutes": int(e.get("length") or e.get("duration", 30)),
+            "slot_interval_minutes": int(e.get("slotInterval", 30)),
+            "buffer_before_minutes": int(e.get("beforeEventBuffer", 0)),
+            "buffer_after_minutes": int(e.get("afterEventBuffer", 0)),
+            "minimum_notice_minutes": int(e.get("minimumBookingNotice", 60)),
+            "timezone": "America/Bogota",
+            "local_schedule_id": None,
+            "local_team_id": None,
+            "provider_event_type_id": str(e.get("id")),
+            "provider_event_type_slug": e.get("slug"),
+            "is_active": not bool(e.get("hidden", False)),
+            "sync_status": "synced",
+            "last_synced_at": None,
+        }
+        for e in ets
+    ]
+
+
+@router.post("/event-types", response_model=SchedulingEventTypeResponse, status_code=status.HTTP_201_CREATED)
+def create_event_type(
+    body: SchedulingEventTypeCreateRequest,
+    provider: Optional[str] = Query(None),
+    auth: AuthContext = Depends(require_roles(WRITE_ROLES)),
+    db: Session = Depends(get_db),
+) -> Any:
+    admin = SchedulingProviderResolver(db).resolve_admin_provider(auth.tenant_id, provider)
+    payload = {
+        "title": body.name,
+        "slug": body.slug,
+        "description": body.description,
+        "length": body.duration_minutes,
+        "slotInterval": body.slot_interval_minutes,
+        "beforeEventBuffer": body.buffer_before_minutes,
+        "afterEventBuffer": body.buffer_after_minutes,
+        "minimumBookingNotice": body.minimum_notice_minutes,
+    }
+    created = admin.create_event_type(payload)
+    et_id = str(created.get("id", "new"))
+    return {
+        "id": et_id,
+        "tenant_id": auth.tenant_id,
+        "provider": provider or "calcom",
+        "name": created.get("title") or created.get("name", body.name),
+        "slug": created.get("slug", body.slug),
+        "description": created.get("description", body.description),
+        "duration_minutes": int(created.get("length") or body.duration_minutes),
+        "slot_interval_minutes": int(created.get("slotInterval") or body.slot_interval_minutes),
+        "buffer_before_minutes": int(created.get("beforeEventBuffer") or body.buffer_before_minutes),
+        "buffer_after_minutes": int(created.get("afterEventBuffer") or body.buffer_after_minutes),
+        "minimum_notice_minutes": int(created.get("minimumBookingNotice") or body.minimum_notice_minutes),
+        "timezone": "America/Bogota",
+        "local_schedule_id": body.local_schedule_id,
+        "local_team_id": body.local_team_id,
+        "provider_event_type_id": et_id,
+        "provider_event_type_slug": created.get("slug", body.slug),
+        "is_active": body.is_active,
+        "sync_status": "synced",
+        "last_synced_at": None,
+    }
+
+
+@router.patch("/event-types/{event_type_id}", response_model=SchedulingEventTypeResponse)
+def update_event_type(
+    event_type_id: str,
+    body: SchedulingEventTypeUpdateRequest,
+    provider: Optional[str] = Query(None),
+    auth: AuthContext = Depends(require_roles(WRITE_ROLES)),
+    db: Session = Depends(get_db),
+) -> Any:
+    admin = SchedulingProviderResolver(db).resolve_admin_provider(auth.tenant_id, provider)
+    payload = body.model_dump(exclude_unset=True)
+    if "duration_minutes" in payload:
+        payload["length"] = payload["duration_minutes"]
+    if "name" in payload:
+        payload["title"] = payload["name"]
+    try:
+        updated = admin.update_event_type(event_type_id, payload)
+    except (ValueError, SchedulingNotFoundError) as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    return {
+        "id": str(event_type_id),
+        "tenant_id": auth.tenant_id,
+        "provider": provider or "calcom",
+        "name": updated.get("title") or updated.get("name", body.name or "Tipo de cita"),
+        "slug": updated.get("slug", body.slug or "cita"),
+        "description": updated.get("description", body.description),
+        "duration_minutes": int(updated.get("length") or body.duration_minutes or 30),
+        "slot_interval_minutes": int(updated.get("slotInterval") or body.slot_interval_minutes or 30),
+        "buffer_before_minutes": int(updated.get("beforeEventBuffer") or body.buffer_before_minutes or 0),
+        "buffer_after_minutes": int(updated.get("afterEventBuffer") or body.buffer_after_minutes or 0),
+        "minimum_notice_minutes": int(updated.get("minimumBookingNotice") or body.minimum_notice_minutes or 60),
+        "timezone": "America/Bogota",
+        "local_schedule_id": body.local_schedule_id,
+        "local_team_id": body.local_team_id,
+        "provider_event_type_id": str(event_type_id),
+        "provider_event_type_slug": updated.get("slug"),
+        "is_active": body.is_active if body.is_active is not None else True,
+        "sync_status": "synced",
+        "last_synced_at": None,
+    }
+
+
+@router.delete("/event-types/{event_type_id}")
+def delete_event_type(
+    event_type_id: str,
+    provider: Optional[str] = Query(None),
+    auth: AuthContext = Depends(require_roles(WRITE_ROLES)),
+    db: Session = Depends(get_db),
+) -> Any:
+    admin = SchedulingProviderResolver(db).resolve_admin_provider(auth.tenant_id, provider)
+    try:
+        admin.delete_event_type(event_type_id)
+    except (ValueError, SchedulingNotFoundError) as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    return {"status": "deleted"}
+
+
+# -----------------------------------------------------------------------------
+# Cal.com Discovery & Sync
+# -----------------------------------------------------------------------------
+@router.post("/providers/calcom/sync", response_model=CalComDiscoveryResponse)
+def sync_calcom(
+    auth: AuthContext = Depends(require_roles(WRITE_ROLES)),
+    db: Session = Depends(get_db),
+) -> Any:
+    service = CalComSyncService(db)
+    try:
+        return service.sync(auth.tenant_id)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.get("/providers/calcom/discovery", response_model=CalComDiscoveryResponse)
+def get_calcom_discovery(
+    auth: AuthContext = Depends(require_roles(READ_ROLES)),
+    db: Session = Depends(get_db),
+) -> Any:
+    admin = SchedulingProviderResolver(db).resolve_admin_provider(auth.tenant_id, "calcom")
+    try:
+        data = admin.discover()
+        return {
+            "status": "success",
+            "counts": data.get("counts", {}),
+            "account": data.get("user"),
+            "last_synced_at": None,
+        }
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))

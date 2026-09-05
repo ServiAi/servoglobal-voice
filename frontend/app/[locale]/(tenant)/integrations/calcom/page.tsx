@@ -14,5 +14,5 @@ export default async function CalComIntegrationPage({ params }: Props) {
     fetchBookingConfig(accessToken),
     getTranslations({ locale, namespace: 'crm.integrationsCatalog' }),
   ]);
-  return <IntegrationDetailShell locale={locale} integrationsLabel={t('title')} name={t('providers.calcom.name')} description={t('providers.calcom.description')}><CalComIntegrationCard accessToken={accessToken} initialConfig={result.ok ? result.data : undefined} /></IntegrationDetailShell>;
+  return <IntegrationDetailShell locale={locale} integrationsLabel={t('title')} name={t('providers.calcom.name')} description={t('providers.calcom.description')}><CalComIntegrationCard accessToken={accessToken} initialConfig={result.ok ? result.data : undefined} locale={locale} /></IntegrationDetailShell>;
 }

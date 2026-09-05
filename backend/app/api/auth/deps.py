@@ -22,6 +22,10 @@ class AuthContext:
     membership: TenantMembership
 
     @property
+    def tenant_id(self) -> str:
+        return self.tenant.id
+
+    @property
     def role(self) -> str:
         return self.membership.role
 

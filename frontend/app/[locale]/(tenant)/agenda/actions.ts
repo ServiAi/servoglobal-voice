@@ -5,14 +5,25 @@ import type { FetchResult } from '@/lib/api/crm';
 import {
   addSchedulingTeamMember,
   assignCalendarToResource,
+  createEventType,
+  createSchedule,
   createSchedulingException,
   createSchedulingResource,
   createSchedulingTeam,
+  deleteEventType,
+  deleteSchedule,
   deleteSchedulingException,
   deleteSchedulingResource,
   deleteSchedulingTeam,
+  fetchCalComDiscovery,
+  fetchEventTypes,
+  fetchSchedules,
+  fetchSchedulingProviders,
   removeSchedulingTeamMember,
+  syncCalComProvider,
+  updateEventType,
   updateResourceAvailability,
+  updateSchedule,
   updateSchedulingConfig,
   updateSchedulingResource,
   updateSchedulingTeam,
@@ -20,13 +31,22 @@ import {
 } from '@/lib/api/scheduling';
 import type {
   AgentSchedulingConfig,
+  CalComDiscoveryResponse,
   SchedulingAvailabilityException,
+  SchedulingEventType,
+  SchedulingEventTypeCreateRequest,
+  SchedulingEventTypeUpdateRequest,
+  SchedulingProviderCapabilities,
   SchedulingResource,
   SchedulingResourceCalendar,
+  SchedulingSchedule,
+  SchedulingScheduleCreateRequest,
+  SchedulingScheduleUpdateRequest,
   SchedulingTeam,
   SchedulingTeamMember,
   TenantSchedulingConfig,
 } from '@/types/scheduling';
+
 
 async function withAccessToken<T>(run: (accessToken: string) => Promise<FetchResult<T>>): Promise<FetchResult<T>> {
   const accessToken = await getAccessToken();
@@ -125,4 +145,66 @@ export async function upsertAgentSchedulingConfigAction(
   payload: Partial<AgentSchedulingConfig>
 ): Promise<FetchResult<AgentSchedulingConfig>> {
   return withAccessToken((accessToken) => upsertAgentSchedulingConfig(accessToken, agentId, payload));
+}
+
+// Providers & Capabilities
+export async function fetchSchedulingProvidersAction(): Promise<FetchResult<SchedulingProviderCapabilities[]>> {
+  return withAccessToken((accessToken) => fetchSchedulingProviders(accessToken));
+}
+
+// Schedules
+export async function fetchSchedulesAction(): Promise<FetchResult<SchedulingSchedule[]>> {
+  return withAccessToken((accessToken) => fetchSchedules(accessToken));
+}
+
+export async function createScheduleAction(
+  payload: SchedulingScheduleCreateRequest
+): Promise<FetchResult<SchedulingSchedule>> {
+  return withAccessToken((accessToken) => createSchedule(accessToken, payload));
+}
+
+export async function updateScheduleAction(
+  scheduleId: string,
+  payload: SchedulingScheduleUpdateRequest
+): Promise<FetchResult<SchedulingSchedule>> {
+  return withAccessToken((accessToken) => updateSchedule(accessToken, scheduleId, payload));
+}
+
+export async function deleteScheduleAction(
+  scheduleId: string
+): Promise<FetchResult<{ status: string }>> {
+  return withAccessToken((accessToken) => deleteSchedule(accessToken, scheduleId));
+}
+
+// Event Types
+export async function fetchEventTypesAction(): Promise<FetchResult<SchedulingEventType[]>> {
+  return withAccessToken((accessToken) => fetchEventTypes(accessToken));
+}
+
+export async function createEventTypeAction(
+  payload: SchedulingEventTypeCreateRequest
+): Promise<FetchResult<SchedulingEventType>> {
+  return withAccessToken((accessToken) => createEventType(accessToken, payload));
+}
+
+export async function updateEventTypeAction(
+  eventTypeId: string,
+  payload: SchedulingEventTypeUpdateRequest
+): Promise<FetchResult<SchedulingEventType>> {
+  return withAccessToken((accessToken) => updateEventType(accessToken, eventTypeId, payload));
+}
+
+export async function deleteEventTypeAction(
+  eventTypeId: string
+): Promise<FetchResult<{ status: string }>> {
+  return withAccessToken((accessToken) => deleteEventType(accessToken, eventTypeId));
+}
+
+// Cal.com Sync & Discovery
+export async function syncCalComProviderAction(): Promise<FetchResult<CalComDiscoveryResponse>> {
+  return withAccessToken((accessToken) => syncCalComProvider(accessToken));
+}
+
+export async function fetchCalComDiscoveryAction(): Promise<FetchResult<CalComDiscoveryResponse>> {
+  return withAccessToken((accessToken) => fetchCalComDiscovery(accessToken));
 }
