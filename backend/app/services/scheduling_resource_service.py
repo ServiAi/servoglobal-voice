@@ -176,6 +176,11 @@ class SchedulingResourceService:
 
         self.db.commit()
         self.db.refresh(mapping)
+        # `resource` was loaded via get_resource() (joinedload) before this
+        # mapping existed, so its resource_calendars collection is cached as
+        # empty in the session's identity map. Expire it so later reads in
+        # this same session (e.g. list_resources) see the new mapping.
+        self.db.expire(resource, ["resource_calendars"])
         return mapping
 
     # -------------------------------------------------------------------------
