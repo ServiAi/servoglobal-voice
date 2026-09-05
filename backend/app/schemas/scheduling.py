@@ -189,6 +189,7 @@ class AgentSchedulingConfigResponse(BaseModel):
     agent_id: str
     provider: str
     scheduling_config_id: Optional[str] = None
+    event_type_id: Optional[str] = None
     resource_id: Optional[str] = None
     team_id: Optional[str] = None
     routing_strategy: str
@@ -198,15 +199,17 @@ class AgentSchedulingConfigResponse(BaseModel):
     allow_reschedule: bool
     allow_cancel: bool
     is_active: bool
-    created_at: datetime
-    updated_at: datetime
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
     resource_name: Optional[str] = None
     team_name: Optional[str] = None
+    event_type_name: Optional[str] = None
 
 
 class AgentSchedulingConfigUpsertRequest(BaseModel):
     provider: str = Field(default="google_calendar", max_length=40)
     scheduling_config_id: Optional[str] = None
+    event_type_id: Optional[str] = None
     resource_id: Optional[str] = None
     team_id: Optional[str] = None
     routing_strategy: str = Field(default="single", max_length=40)
@@ -227,3 +230,111 @@ class SchedulingDashboardSummaryResponse(BaseModel):
     availability_configured: bool
     agents_count: int
     alerts: list[str] = Field(default_factory=list)
+
+
+# -----------------------------------------------------------------------------
+# Capabilities, Schedules & Event Types
+# -----------------------------------------------------------------------------
+class SchedulingProviderCapabilitiesResponse(BaseModel):
+    provider: str
+    schedules: bool
+    native_schedules: bool
+    event_types: bool
+    native_event_types: bool
+    resources: bool
+    teams: bool
+    native_round_robin: bool
+    exceptions: bool
+    native_exceptions: bool
+    external_calendars: bool
+    booking: bool
+    reschedule: bool
+    cancel: bool
+
+
+class SchedulingScheduleResponse(BaseModel):
+    id: str
+    tenant_id: str
+    provider: str
+    name: str
+    timezone: str
+    working_hours: Optional[Any] = None
+    overrides: Optional[list[Any]] = None
+    provider_schedule_id: Optional[str] = None
+    is_default: bool
+    is_active: bool
+    sync_status: str
+    last_synced_at: Optional[datetime] = None
+
+
+class SchedulingScheduleCreateRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=160)
+    timezone: str = Field(default="America/Bogota", max_length=80)
+    is_default: bool = False
+    working_hours: Optional[Any] = None
+    overrides: Optional[list[Any]] = None
+
+
+class SchedulingScheduleUpdateRequest(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=160)
+    timezone: Optional[str] = Field(None, max_length=80)
+    is_default: Optional[bool] = None
+    working_hours: Optional[Any] = None
+    overrides: Optional[list[Any]] = None
+
+
+class SchedulingEventTypeResponse(BaseModel):
+    id: str
+    tenant_id: str
+    provider: str
+    name: str
+    slug: str
+    description: Optional[str] = None
+    duration_minutes: int
+    slot_interval_minutes: int
+    buffer_before_minutes: int
+    buffer_after_minutes: int
+    minimum_notice_minutes: int
+    timezone: str
+    local_schedule_id: Optional[str] = None
+    local_team_id: Optional[str] = None
+    provider_event_type_id: Optional[str] = None
+    provider_event_type_slug: Optional[str] = None
+    is_active: bool
+    sync_status: str
+    last_synced_at: Optional[datetime] = None
+
+
+class SchedulingEventTypeCreateRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=160)
+    slug: str = Field(..., min_length=1, max_length=160)
+    description: Optional[str] = None
+    duration_minutes: int = Field(default=30, ge=5, le=480)
+    slot_interval_minutes: Optional[int] = Field(default=30, ge=5, le=480)
+    buffer_before_minutes: Optional[int] = Field(default=0, ge=0, le=240)
+    buffer_after_minutes: Optional[int] = Field(default=0, ge=0, le=240)
+    minimum_notice_minutes: Optional[int] = Field(default=60, ge=0, le=10080)
+    local_schedule_id: Optional[str] = None
+    local_team_id: Optional[str] = None
+    is_active: bool = True
+
+
+class SchedulingEventTypeUpdateRequest(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=160)
+    slug: Optional[str] = Field(None, min_length=1, max_length=160)
+    description: Optional[str] = None
+    duration_minutes: Optional[int] = Field(None, ge=5, le=480)
+    slot_interval_minutes: Optional[int] = Field(None, ge=5, le=480)
+    buffer_before_minutes: Optional[int] = Field(None, ge=0, le=240)
+    buffer_after_minutes: Optional[int] = Field(None, ge=0, le=240)
+    minimum_notice_minutes: Optional[int] = Field(None, ge=0, le=10080)
+    local_schedule_id: Optional[str] = None
+    local_team_id: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+class CalComDiscoveryResponse(BaseModel):
+    status: str
+    counts: dict[str, int]
+    account: Optional[dict[str, Any]] = None
+    last_synced_at: Optional[str] = None

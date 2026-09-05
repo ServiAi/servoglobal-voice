@@ -3,8 +3,11 @@ import { getAccessToken } from '@/lib/auth/server';
 import { fetchMeProfile } from '@/lib/api/me';
 import { fetchGoogleCalendarConnections } from '@/lib/api/crm';
 import {
+  fetchEventTypes,
+  fetchSchedules,
   fetchSchedulingConfig,
   fetchSchedulingExceptions,
+  fetchSchedulingProviders,
   fetchSchedulingResources,
   fetchSchedulingSummary,
   fetchSchedulingTeams,
@@ -35,6 +38,9 @@ export default async function AgendaPage({ params }: Props) {
     teamsResult,
     exceptionsResult,
     googleConnectionsResult,
+    providersResult,
+    schedulesResult,
+    eventTypesResult,
   ] = await Promise.all([
     fetchMeProfile(accessToken),
     fetchSchedulingSummary(accessToken),
@@ -43,7 +49,11 @@ export default async function AgendaPage({ params }: Props) {
     fetchSchedulingTeams(accessToken),
     fetchSchedulingExceptions(accessToken),
     fetchGoogleCalendarConnections(accessToken),
+    fetchSchedulingProviders(accessToken),
+    fetchSchedules(accessToken),
+    fetchEventTypes(accessToken),
   ]);
+
 
   const canEdit = profileResult.ok && WRITE_ROLES.has(profileResult.profile.role);
 
@@ -98,6 +108,9 @@ export default async function AgendaPage({ params }: Props) {
         initialTeams={teamsResult.ok ? teamsResult.data : []}
         initialExceptions={exceptionsResult.ok ? exceptionsResult.data : []}
         connectedGoogleCalendars={connectedCals}
+        initialProviders={providersResult.ok ? providersResult.data : []}
+        initialSchedules={schedulesResult.ok ? schedulesResult.data : []}
+        initialEventTypes={eventTypesResult.ok ? eventTypesResult.data : []}
       />
     </div>
   );

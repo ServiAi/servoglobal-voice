@@ -107,6 +107,7 @@ export type AgentSchedulingConfig = {
   agent_id: string;
   provider: string;
   scheduling_config_id?: string | null;
+  event_type_id?: string | null;
   resource_id?: string | null;
   team_id?: string | null;
   routing_strategy: string;
@@ -120,6 +121,7 @@ export type AgentSchedulingConfig = {
   updated_at?: string | null;
   resource_name?: string | null;
   team_name?: string | null;
+  event_type_name?: string | null;
 };
 
 export type SchedulingDashboardSummary = {
@@ -131,4 +133,105 @@ export type SchedulingDashboardSummary = {
   availability_configured: boolean;
   agents_count: number;
   alerts: string[];
+};
+
+export type SchedulingProviderCapabilities = {
+  provider: string;
+  schedules: boolean;
+  native_schedules: boolean;
+  event_types: boolean;
+  native_event_types: boolean;
+  resources: boolean;
+  teams: boolean;
+  native_round_robin: boolean;
+  exceptions: boolean;
+  native_exceptions: boolean;
+  external_calendars: boolean;
+  booking: boolean;
+  reschedule: boolean;
+  cancel: boolean;
+};
+
+export type SchedulingSchedule = {
+  id: string;
+  tenant_id: string;
+  provider: string;
+  name: string;
+  timezone: string;
+  working_hours?: WeeklyWorkingHours | Record<string, unknown> | null;
+  overrides?: Array<{ date: string; start_time?: string; end_time?: string }> | null;
+  provider_schedule_id?: string | null;
+  is_default: boolean;
+  is_active: boolean;
+  sync_status: 'synced' | 'local_only' | 'pending' | 'remote_deleted';
+  last_synced_at?: string | null;
+};
+
+export type SchedulingScheduleCreateRequest = {
+  name: string;
+  timezone?: string;
+  is_default?: boolean;
+  working_hours?: WeeklyWorkingHours | Record<string, unknown> | null;
+  overrides?: Array<{ date: string; start_time?: string; end_time?: string }> | null;
+};
+
+export type SchedulingScheduleUpdateRequest = Partial<SchedulingScheduleCreateRequest>;
+
+export type SchedulingEventType = {
+  id: string;
+  tenant_id: string;
+  provider: string;
+  name: string;
+  slug: string;
+  description?: string | null;
+  duration_minutes: number;
+  slot_interval_minutes: number;
+  buffer_before_minutes: number;
+  buffer_after_minutes: number;
+  minimum_notice_minutes: number;
+  timezone: string;
+  local_schedule_id?: string | null;
+  local_team_id?: string | null;
+  provider_event_type_id?: string | null;
+  provider_event_type_slug?: string | null;
+  is_active: boolean;
+  sync_status: 'synced' | 'local_only' | 'pending' | 'remote_deleted';
+  last_synced_at?: string | null;
+};
+
+export type SchedulingEventTypeCreateRequest = {
+  name: string;
+  slug: string;
+  description?: string | null;
+  duration_minutes?: number;
+  slot_interval_minutes?: number;
+  buffer_before_minutes?: number;
+  buffer_after_minutes?: number;
+  minimum_notice_minutes?: number;
+  local_schedule_id?: string | null;
+  local_team_id?: string | null;
+  is_active?: boolean;
+};
+
+export type SchedulingEventTypeUpdateRequest = Partial<SchedulingEventTypeCreateRequest>;
+
+export type CalComDiscoveryResponse = {
+  status: string;
+  counts: {
+    schedules?: number;
+    event_types?: number;
+    teams?: number;
+    memberships?: number;
+    [key: string]: number | undefined;
+  };
+  account?: {
+    id?: number;
+    username?: string;
+    email?: string;
+    name?: string;
+    timeZone?: string;
+    organizationId?: number | null;
+    [key: string]: unknown;
+  } | null;
+  last_synced_at?: string | null;
 };

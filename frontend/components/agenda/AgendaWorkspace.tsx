@@ -6,13 +6,16 @@ import {
   AlertTriangle,
   Bot,
   Calendar,
+  CalendarCheck,
   CalendarDays,
   CheckCircle2,
   Clock,
+  Edit2,
   ExternalLink,
   Layers,
   Loader2,
   Plus,
+  RefreshCw,
   Sliders,
   Trash2,
   UserCheck,
@@ -26,23 +29,38 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import type {
   SchedulingAvailabilityException,
   SchedulingDashboardSummary,
+  SchedulingEventType,
+  SchedulingEventTypeCreateRequest,
+  SchedulingProviderCapabilities,
   SchedulingResource,
+  SchedulingSchedule,
+  SchedulingScheduleCreateRequest,
   SchedulingTeam,
   TenantSchedulingConfig,
   WeeklyWorkingHours,
 } from '@/types/scheduling';
 import {
   addSchedulingTeamMemberAction,
+  createEventTypeAction,
+  createScheduleAction,
   createSchedulingExceptionAction,
   createSchedulingResourceAction,
   createSchedulingTeamAction,
+  deleteEventTypeAction,
+  deleteScheduleAction,
   deleteSchedulingExceptionAction,
   deleteSchedulingResourceAction,
   deleteSchedulingTeamAction,
+  fetchEventTypesAction,
+  fetchSchedulesAction,
   removeSchedulingTeamMemberAction,
+  syncCalComProviderAction,
+  updateEventTypeAction,
+  updateScheduleAction,
   updateSchedulingConfigAction,
   upsertAgentSchedulingConfigAction,
 } from '@/app/[locale]/(tenant)/agenda/actions';
+
 
 type Props = {
   locale: string;
@@ -53,9 +71,13 @@ type Props = {
   initialTeams: SchedulingTeam[];
   initialExceptions: SchedulingAvailabilityException[];
   connectedGoogleCalendars: Array<{ id: string; google_calendar_id: string; summary?: string | null }>;
+  initialProviders?: SchedulingProviderCapabilities[];
+  initialSchedules?: SchedulingSchedule[];
+  initialEventTypes?: SchedulingEventType[];
 };
 
-type TabKey = 'resumen' | 'recursos' | 'disponibilidad' | 'equipos' | 'reglas' | 'excepciones' | 'agentes';
+type TabKey = 'resumen' | 'event_types' | 'disponibilidad' | 'recursos' | 'equipos' | 'reglas' | 'excepciones' | 'agentes';
+
 
 const WEEKDAYS = [
   { key: 'monday', label: 'Lunes' },
@@ -76,6 +98,9 @@ export function AgendaWorkspace({
   initialTeams,
   initialExceptions,
   connectedGoogleCalendars,
+  initialProviders,
+  initialSchedules,
+  initialEventTypes,
 }: Props) {
   const [activeTab, setActiveTab] = useState<TabKey>('resumen');
   const [isPending, startTransition] = useTransition();
@@ -87,6 +112,38 @@ export function AgendaWorkspace({
   const [resources, setResources] = useState(initialResources);
   const [teams, setTeams] = useState(initialTeams);
   const [exceptions, setExceptions] = useState(initialExceptions);
+  const [providers] = useState(initialProviders ?? []);
+  const [schedules, setSchedules] = useState(initialSchedules ?? []);
+  const [eventTypes, setEventTypes] = useState(initialEventTypes ?? []);
+  const [selectedScheduleId, setSelectedScheduleId] = useState<string>(
+    initialSchedules && initialSchedules.length > 0 ? initialSchedules[0].id : ''
+  );
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  // Event Type Form State
+  const [showEventTypeModal, setShowEventTypeModal] = useState(false);
+  const [editingEventTypeId, setEditingEventTypeId] = useState<string | null>(null);
+  const [eventTypeForm, setEventTypeForm] = useState<SchedulingEventTypeCreateRequest>({
+    name: '',
+    slug: '',
+    description: '',
+    duration_minutes: 30,
+    slot_interval_minutes: 30,
+    buffer_before_minutes: 0,
+    buffer_after_minutes: 0,
+    minimum_notice_minutes: 60,
+    local_schedule_id: '',
+    local_team_id: '',
+    is_active: true,
+  });
+
+  // Schedule Form State
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [scheduleForm, setScheduleForm] = useState<SchedulingScheduleCreateRequest>({
+    name: '',
+    timezone: config.timezone || 'America/Bogota',
+    is_default: false,
+  });
 
   // Resource Form State
   const [showResourceModal, setShowResourceModal] = useState(false);
@@ -122,6 +179,7 @@ export function AgendaWorkspace({
     reason: '',
     resource_id: '',
   });
+
 
   // Agent Config Form State
   const [agentForm, setAgentForm] = useState({
@@ -184,8 +242,162 @@ export function AgendaWorkspace({
     });
   };
 
+  const handleSyncCalCom = async () => {
+    setIsSyncing(true);
+    const res = await syncCalComProviderAction();
+    setIsSyncing(false);
+    if (res.ok) {
+      const { event_types = 0, schedules = 0, teams = 0 } = res.data.counts;
+      notify(
+        'success',
+        `Sincronización Cal.com completada: ${event_types} tipos de cita, ${schedules} horarios, ${teams} equipos.`
+      );
+      const [schRes, etRes] = await Promise.all([fetchSchedulesAction(), fetchEventTypesAction()]);
+      if (schRes.ok) {
+        setSchedules(schRes.data);
+        if (schRes.data.length > 0 && !selectedScheduleId) {
+          setSelectedScheduleId(schRes.data[0].id);
+        }
+      }
+      if (etRes.ok) setEventTypes(etRes.data);
+    } else {
+      notify('error', `Error al sincronizar con Cal.com: ${res.detail}`);
+    }
+  };
+
+  const handleOpenCreateEventType = () => {
+    setEditingEventTypeId(null);
+    setEventTypeForm({
+      name: '',
+      slug: '',
+      description: '',
+      duration_minutes: config.default_duration_minutes || 30,
+      slot_interval_minutes: config.slot_interval_minutes || 30,
+      buffer_before_minutes: config.buffer_before_minutes || 0,
+      buffer_after_minutes: config.buffer_after_minutes || 0,
+      minimum_notice_minutes: config.minimum_notice_minutes || 60,
+      local_schedule_id: schedules.length > 0 ? schedules[0].id : '',
+      local_team_id: teams.length > 0 ? teams[0].id : '',
+      is_active: true,
+    });
+    setShowEventTypeModal(true);
+  };
+
+  const handleOpenEditEventType = (et: SchedulingEventType) => {
+    setEditingEventTypeId(et.id);
+    setEventTypeForm({
+      name: et.name,
+      slug: et.slug,
+      description: et.description || '',
+      duration_minutes: et.duration_minutes,
+      slot_interval_minutes: et.slot_interval_minutes,
+      buffer_before_minutes: et.buffer_before_minutes,
+      buffer_after_minutes: et.buffer_after_minutes,
+      minimum_notice_minutes: et.minimum_notice_minutes,
+      local_schedule_id: et.local_schedule_id || '',
+      local_team_id: et.local_team_id || '',
+      is_active: et.is_active,
+    });
+    setShowEventTypeModal(true);
+  };
+
+  const handleSaveEventType = async (e: React.FormEvent) => {
+    e.preventDefault();
+    startTransition(async () => {
+      const payload: SchedulingEventTypeCreateRequest = {
+        name: eventTypeForm.name,
+        slug: eventTypeForm.slug,
+        description: eventTypeForm.description || undefined,
+        duration_minutes: Number(eventTypeForm.duration_minutes),
+        slot_interval_minutes: Number(eventTypeForm.slot_interval_minutes),
+        buffer_before_minutes: Number(eventTypeForm.buffer_before_minutes),
+        buffer_after_minutes: Number(eventTypeForm.buffer_after_minutes),
+        minimum_notice_minutes: Number(eventTypeForm.minimum_notice_minutes),
+        local_schedule_id: eventTypeForm.local_schedule_id || undefined,
+        local_team_id: eventTypeForm.local_team_id || undefined,
+        is_active: eventTypeForm.is_active,
+      };
+
+      if (editingEventTypeId) {
+        const res = await updateEventTypeAction(editingEventTypeId, payload);
+        if (res.ok) {
+          setEventTypes((prev) => prev.map((item) => (item.id === editingEventTypeId ? res.data : item)));
+          setShowEventTypeModal(false);
+          notify('success', `Tipo de cita "${res.data.name}" actualizado.`);
+        } else {
+          notify('error', `Error al actualizar: ${res.detail}`);
+        }
+      } else {
+        const res = await createEventTypeAction(payload);
+        if (res.ok) {
+          setEventTypes((prev) => [...prev, res.data]);
+          setShowEventTypeModal(false);
+          notify('success', `Tipo de cita "${res.data.name}" creado.`);
+        } else {
+          notify('error', `Error al crear: ${res.detail}`);
+        }
+      }
+    });
+  };
+
+  const handleDeleteEventType = async (id: string, name: string) => {
+    if (!confirm(`¿Eliminar tipo de cita "${name}"?`)) return;
+    startTransition(async () => {
+      const res = await deleteEventTypeAction(id);
+      if (res.ok) {
+        setEventTypes((prev) => prev.filter((et) => et.id !== id));
+        notify('success', `Tipo de cita "${name}" eliminado.`);
+      } else {
+        notify('error', `Error al eliminar: ${res.detail}`);
+      }
+    });
+  };
+
+  const handleCreateSchedule = async (e: React.FormEvent) => {
+    e.preventDefault();
+    startTransition(async () => {
+      const res = await createScheduleAction(scheduleForm);
+      if (res.ok) {
+        setSchedules((prev) => [...prev, res.data]);
+        setSelectedScheduleId(res.data.id);
+        setShowScheduleModal(false);
+        setScheduleForm({ name: '', timezone: config.timezone, is_default: false });
+        notify('success', `Perfil de horario "${res.data.name}" creado.`);
+      } else {
+        notify('error', `Error al crear horario: ${res.detail}`);
+      }
+    });
+  };
+
+  const handleDeleteSchedule = async (id: string, name: string) => {
+    if (!confirm(`¿Eliminar perfil de horario "${name}"?`)) return;
+    startTransition(async () => {
+      const res = await deleteScheduleAction(id);
+      if (res.ok) {
+        setSchedules((prev) => prev.filter((s) => s.id !== id));
+        if (selectedScheduleId === id) {
+          const remaining = schedules.filter((s) => s.id !== id);
+          setSelectedScheduleId(remaining.length > 0 ? remaining[0].id : '');
+        }
+        notify('success', `Horario "${name}" eliminado.`);
+      } else {
+        notify('error', `Error al eliminar horario: ${res.detail}`);
+      }
+    });
+  };
+
   const saveWorkingHours = () => {
     startTransition(async () => {
+      if (selectedScheduleId) {
+        const res = await updateScheduleAction(selectedScheduleId, { working_hours: workingHours });
+        if (res.ok) {
+          setSchedules((prev) =>
+            prev.map((s) => (s.id === selectedScheduleId ? { ...s, working_hours: workingHours } : s))
+          );
+          notify('success', 'Horarios guardados en el perfil de disponibilidad.');
+          return;
+        }
+      }
       const res = await updateSchedulingConfigAction({ working_hours_json: workingHours });
       if (res.ok) {
         setConfig(res.data);
@@ -195,6 +407,7 @@ export function AgendaWorkspace({
       }
     });
   };
+
 
   // Handlers for Rules
   const saveRules = (e: React.FormEvent) => {
@@ -368,9 +581,12 @@ export function AgendaWorkspace({
       return;
     }
     startTransition(async () => {
+      const isEventType = agentForm.target_type === 'event_type';
+      const selectedEt = isEventType ? eventTypes.find((e) => e.id === agentForm.target_id) : null;
       const payload = {
-        provider: 'google_calendar',
+        provider: isEventType ? selectedEt?.provider || 'calcom' : 'google_calendar',
         routing_strategy: agentForm.target_type,
+        event_type_id: isEventType ? agentForm.target_id || undefined : undefined,
         team_id: agentForm.target_type === 'team' ? agentForm.target_id || undefined : undefined,
         resource_id: agentForm.target_type === 'resource' ? agentForm.target_id || undefined : undefined,
         duration_minutes: Number(agentForm.duration_minutes),
@@ -381,6 +597,7 @@ export function AgendaWorkspace({
         is_active: true,
       };
       const res = await upsertAgentSchedulingConfigAction(agentForm.agent_id, payload);
+
       if (res.ok) {
         notify('success', `Configuración del agente ${agentForm.agent_id} guardada.`);
       } else {
@@ -399,10 +616,16 @@ export function AgendaWorkspace({
             Agenda y Disponibilidad
           </h1>
           <p className="text-sm text-muted-foreground">
-            Motor de scheduling multi-tenant: calendarios Google, recursos, turnos semanales y reglas de negocio.
+            Motor de scheduling multi-tenant: calendarios Google, Cal.com (v2), recursos, turnos y reglas de agendamiento.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {providers.some((p) => p.provider === 'calcom') || schedules.some((s) => s.provider === 'calcom') ? (
+            <Badge variant="outline" className="border-fuchsia-500/30 bg-fuchsia-500/10 text-fuchsia-600 gap-1.5 py-1">
+              <CalendarCheck className="h-3.5 w-3.5" /> Cal.com Activo
+            </Badge>
+          ) : null}
+
           {summary.google_connected ? (
             <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-600 gap-1.5 py-1">
               <CheckCircle2 className="h-3.5 w-3.5" /> Google Calendar Conectado
@@ -414,9 +637,23 @@ export function AgendaWorkspace({
               </Badge>
             </Link>
           )}
-          <Link href={`/${locale}/integrations/google-calendar`}>
-            <Button variant="outline" size="sm" className="gap-1">
-              <ExternalLink className="h-3.5 w-3.5" /> Integraciones
+
+          {canEdit && (providers.some((p) => p.provider === 'calcom') || schedules.some((s) => s.provider === 'calcom')) && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleSyncCalCom}
+              disabled={isSyncing}
+              className="gap-1 text-xs"
+            >
+              {isSyncing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+              Sincronizar Cal.com
+            </Button>
+          )}
+
+          <Link href={`/${locale}/integrations/calcom`}>
+            <Button variant="outline" size="sm" className="gap-1 text-xs">
+              <ExternalLink className="h-3.5 w-3.5" /> Configurar Cal.com
             </Button>
           </Link>
         </div>
@@ -442,11 +679,12 @@ export function AgendaWorkspace({
         <nav className="flex space-x-2 overflow-x-auto" aria-label="Secciones de Agenda">
           {[
             { id: 'resumen', label: 'Resumen', icon: Layers },
-            { id: 'recursos', label: 'Recursos', icon: Users },
+            { id: 'event_types', label: `Tipos de Cita (${eventTypes.length})`, icon: CalendarDays },
             { id: 'disponibilidad', label: 'Disponibilidad', icon: Clock },
+            { id: 'recursos', label: 'Recursos', icon: Users },
             { id: 'equipos', label: 'Equipos (Round Robin)', icon: UserCheck },
             { id: 'reglas', label: 'Reglas y Buffers', icon: Sliders },
-            { id: 'excepciones', label: 'Excepciones', icon: CalendarDays },
+            { id: 'excepciones', label: 'Excepciones', icon: Calendar },
             { id: 'agentes', label: 'Agentes IA', icon: Bot },
           ].map((tab) => {
             const Icon = tab.icon;
@@ -468,6 +706,7 @@ export function AgendaWorkspace({
           })}
         </nav>
       </div>
+
 
       {/* =========================================================================
           TAB 1: RESUMEN
@@ -607,9 +846,326 @@ export function AgendaWorkspace({
       )}
 
       {/* =========================================================================
+          TAB: TIPOS DE CITA (EVENT TYPES)
+      ========================================================================= */}
+      {activeTab === 'event_types' && (
+        <div className="space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold text-foreground">Tipos de Cita y Eventos</h2>
+              <p className="text-sm text-muted-foreground">
+                Servicios y formatos de reunión ofrecidos a tus clientes, sincronizados con Cal.com o gestionados por ServiGlobal.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              {canEdit && (
+                <>
+                  <Button
+                    variant="outline"
+                    onClick={handleSyncCalCom}
+                    disabled={isSyncing}
+                    className="gap-2 text-xs"
+                  >
+                    {isSyncing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                    Sincronizar Cal.com
+                  </Button>
+                  <Button onClick={handleOpenCreateEventType} className="gap-2">
+                    <Plus className="h-4 w-4" /> Nuevo Tipo de Cita
+                  </Button>
+                </>
+              )}
+            </div>
+          </div>
+
+          {eventTypes.length === 0 ? (
+            <Card className="text-center p-8 space-y-3">
+              <div className="mx-auto w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                <CalendarDays className="h-6 w-6" />
+              </div>
+              <div>
+                <h3 className="text-base font-semibold text-foreground">No hay tipos de cita registrados</h3>
+                <p className="text-sm text-muted-foreground max-w-md mx-auto mt-1">
+                  Crea tu primer tipo de cita o sincroniza directamente los existentes en tu cuenta de Cal.com.
+                </p>
+              </div>
+              {canEdit && (
+                <div className="flex items-center justify-center gap-2 pt-2">
+                  <Button onClick={handleOpenCreateEventType} className="gap-2">
+                    <Plus className="h-4 w-4" /> Crear Tipo de Cita
+                  </Button>
+                  <Button variant="outline" onClick={handleSyncCalCom} disabled={isSyncing} className="gap-2">
+                    {isSyncing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                    Sincronizar desde Cal.com
+                  </Button>
+                </div>
+              )}
+            </Card>
+          ) : (
+            <div className="overflow-x-auto rounded-lg border border-border">
+              <table className="w-full text-left text-sm">
+                <thead className="border-b border-border bg-muted/40 text-xs font-semibold text-muted-foreground uppercase">
+                  <tr>
+                    <th className="p-3">Nombre y Slug</th>
+                    <th className="p-3">Proveedor</th>
+                    <th className="p-3">Duración / Intervalo</th>
+                    <th className="p-3">Buffers y Aviso</th>
+                    <th className="p-3">Horario / Equipo</th>
+                    <th className="p-3">Sincronización</th>
+                    <th className="p-3 text-right">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {eventTypes.map((et) => {
+                    const linkedSchedule = schedules.find((s) => s.id === et.local_schedule_id);
+                    const linkedTeam = teams.find((t) => t.id === et.local_team_id);
+                    return (
+                      <tr key={et.id} className="hover:bg-muted/20">
+                        <td className="p-3">
+                          <div className="font-medium text-foreground">{et.name}</div>
+                          <div className="text-xs text-muted-foreground font-mono">/{et.slug}</div>
+                          {et.description && (
+                            <div className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{et.description}</div>
+                          )}
+                        </td>
+                        <td className="p-3">
+                          {et.provider === 'calcom' ? (
+                            <Badge variant="outline" className="border-fuchsia-500/30 bg-fuchsia-500/10 text-fuchsia-600">
+                              Cal.com
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-600">
+                              Google
+                            </Badge>
+                          )}
+                        </td>
+                        <td className="p-3 text-muted-foreground">
+                          <div>{et.duration_minutes} min</div>
+                          <div className="text-xs text-muted-foreground">cada {et.slot_interval_minutes} min</div>
+                        </td>
+                        <td className="p-3 text-xs text-muted-foreground">
+                          <div>Buffers: +{et.buffer_before_minutes}m / +{et.buffer_after_minutes}m</div>
+                          <div>Aviso mín: {et.minimum_notice_minutes}m</div>
+                        </td>
+                        <td className="p-3 text-xs text-muted-foreground">
+                          <div>Horario: <span className="font-medium text-foreground">{linkedSchedule?.name || 'Base del Tenant'}</span></div>
+                          <div>Equipo: <span className="font-medium text-foreground">{linkedTeam?.name || 'Sin equipo'}</span></div>
+                        </td>
+                        <td className="p-3 text-xs">
+                          {et.sync_status === 'synced' && (
+                            <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-600">
+                              Sincronizado
+                            </Badge>
+                          )}
+                          {et.sync_status === 'local_only' && (
+                            <Badge variant="outline" className="border-sky-500/30 bg-sky-500/10 text-sky-600">
+                              Local
+                            </Badge>
+                          )}
+                          {et.sync_status === 'remote_deleted' && (
+                            <Badge variant="outline" className="border-amber-500/30 bg-amber-500/10 text-amber-600">
+                              Eliminado en remoto
+                            </Badge>
+                          )}
+                        </td>
+                        <td className="p-3 text-right">
+                          {canEdit && (
+                            <div className="flex items-center justify-end gap-1">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleOpenEditEventType(et)}
+                                className="h-8 w-8 p-0"
+                              >
+                                <Edit2 className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDeleteEventType(et.id, et.name)}
+                                className="text-destructive h-8 w-8 p-0 hover:bg-destructive/10"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Modal Crear / Editar Tipo de Cita */}
+          {showEventTypeModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+              <div className="w-full max-w-lg rounded-lg border border-border bg-card p-6 shadow-xl space-y-4 max-h-[90vh] overflow-y-auto">
+                <div className="flex justify-between items-center border-b pb-3">
+                  <h3 className="font-semibold text-lg">
+                    {editingEventTypeId ? 'Editar Tipo de Cita' : 'Nuevo Tipo de Cita'}
+                  </h3>
+                  <button
+                    onClick={() => setShowEventTypeModal(false)}
+                    className="text-muted-foreground hover:text-foreground"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <form onSubmit={handleSaveEventType} className="space-y-4">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="col-span-2">
+                      <label className="text-xs font-medium text-muted-foreground">Nombre del Tipo de Cita *</label>
+                      <input
+                        required
+                        type="text"
+                        className="mt-1 w-full rounded-md border border-input bg-background p-2 text-sm"
+                        value={eventTypeForm.name}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setEventTypeForm({
+                            ...eventTypeForm,
+                            name: val,
+                            slug: editingEventTypeId
+                              ? eventTypeForm.slug
+                              : val
+                                  .toLowerCase()
+                                  .replace(/[^a-z0-9]+/g, '-')
+                                  .replace(/(^-|-$)/g, ''),
+                          });
+                        }}
+                        placeholder="Ej: Asesoría Inmobiliaria 30 Minutos"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground">Slug (URL) *</label>
+                      <input
+                        required
+                        type="text"
+                        className="mt-1 w-full rounded-md border border-input bg-background p-2 text-sm font-mono"
+                        value={eventTypeForm.slug}
+                        onChange={(e) => setEventTypeForm({ ...eventTypeForm, slug: e.target.value })}
+                        placeholder="asesoria-inmobiliaria"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground">Duración (minutos) *</label>
+                      <input
+                        required
+                        type="number"
+                        min="5"
+                        max="480"
+                        className="mt-1 w-full rounded-md border border-input bg-background p-2 text-sm"
+                        value={eventTypeForm.duration_minutes}
+                        onChange={(e) => setEventTypeForm({ ...eventTypeForm, duration_minutes: Number(e.target.value) })}
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground">Descripción</label>
+                    <textarea
+                      rows={2}
+                      className="mt-1 w-full rounded-md border border-input bg-background p-2 text-sm"
+                      value={eventTypeForm.description || ''}
+                      onChange={(e) => setEventTypeForm({ ...eventTypeForm, description: e.target.value })}
+                      placeholder="Breve resumen de los temas a tratar en la sesión..."
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground">Intervalo (min)</label>
+                      <input
+                        type="number"
+                        min="5"
+                        max="480"
+                        className="mt-1 w-full rounded-md border border-input bg-background p-2 text-sm"
+                        value={eventTypeForm.slot_interval_minutes}
+                        onChange={(e) => setEventTypeForm({ ...eventTypeForm, slot_interval_minutes: Number(e.target.value) })}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground">Buffer Antes (min)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="240"
+                        className="mt-1 w-full rounded-md border border-input bg-background p-2 text-sm"
+                        value={eventTypeForm.buffer_before_minutes}
+                        onChange={(e) => setEventTypeForm({ ...eventTypeForm, buffer_before_minutes: Number(e.target.value) })}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground">Buffer Después (min)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="240"
+                        className="mt-1 w-full rounded-md border border-input bg-background p-2 text-sm"
+                        value={eventTypeForm.buffer_after_minutes}
+                        onChange={(e) => setEventTypeForm({ ...eventTypeForm, buffer_after_minutes: Number(e.target.value) })}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground">Horario de Disponibilidad</label>
+                      <select
+                        className="mt-1 w-full rounded-md border border-input bg-background p-2 text-sm"
+                        value={eventTypeForm.local_schedule_id || ''}
+                        onChange={(e) => setEventTypeForm({ ...eventTypeForm, local_schedule_id: e.target.value })}
+                      >
+                        <option value="">Por defecto (Horario Base)</option>
+                        {schedules.map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {s.name} {s.is_default ? '(Por defecto)' : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground">Equipo de Asignación</label>
+                      <select
+                        className="mt-1 w-full rounded-md border border-input bg-background p-2 text-sm"
+                        value={eventTypeForm.local_team_id || ''}
+                        onChange={(e) => setEventTypeForm({ ...eventTypeForm, local_team_id: e.target.value })}
+                      >
+                        <option value="">Sin equipo (Asignación directa)</option>
+                        {teams.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end gap-2 pt-3 border-t">
+                    <Button type="button" variant="outline" onClick={() => setShowEventTypeModal(false)}>
+                      Cancelar
+                    </Button>
+                    <Button type="submit" disabled={isPending}>
+                      {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Guardar Tipo de Cita'}
+                    </Button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* =========================================================================
           TAB 2: RECURSOS
       ========================================================================= */}
       {activeTab === 'recursos' && (
+
         <div className="space-y-6">
           <div className="flex items-center justify-between">
             <div>
@@ -809,6 +1365,70 @@ export function AgendaWorkspace({
             )}
           </div>
 
+          {/* Schedules / Profiles Selector if available */}
+          {schedules.length > 0 && (
+            <div className="flex flex-col gap-2 rounded-lg border border-border bg-muted/20 p-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Perfiles de Horario ({schedules.length})
+                </span>
+                {canEdit && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowScheduleModal(true)}
+                    className="h-7 gap-1 text-xs text-primary"
+                  >
+                    <Plus className="h-3.5 w-3.5" /> Nuevo Horario
+                  </Button>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-2 pt-1">
+                {schedules.map((sch) => {
+                  const isSelected = sch.id === selectedScheduleId;
+                  return (
+                    <div
+                      key={sch.id}
+                      onClick={() => {
+                        setSelectedScheduleId(sch.id);
+                        if (sch.working_hours && typeof sch.working_hours === 'object') {
+                          setWorkingHours(sch.working_hours as WeeklyWorkingHours);
+                        }
+                      }}
+                      className={`flex items-center gap-2 cursor-pointer rounded-md border px-3 py-1.5 text-xs transition ${
+                        isSelected
+                          ? 'border-primary bg-primary/10 text-primary font-semibold shadow-xs'
+                          : 'border-border bg-background text-muted-foreground hover:border-foreground/30 hover:text-foreground'
+                      }`}
+                    >
+                      <span>{sch.name}</span>
+                      {sch.is_default && (
+                        <span className="rounded bg-primary/20 px-1 py-0.2 text-[10px]">Default</span>
+                      )}
+                      {sch.provider === 'calcom' && (
+                        <span className="rounded bg-fuchsia-500/20 px-1 py-0.2 text-[10px] text-fuchsia-600">
+                          Cal.com
+                        </span>
+                      )}
+                      {canEdit && !sch.is_default && isSelected && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteSchedule(sch.id, sch.name);
+                          }}
+                          className="text-muted-foreground hover:text-destructive ml-1"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           <div className="space-y-3">
             {WEEKDAYS.map((day) => {
               const shifts = workingHours[day.key] || [];
@@ -816,6 +1436,7 @@ export function AgendaWorkspace({
               return (
                 <Card key={day.key} className={hasShifts ? 'border-border' : 'border-border/50 bg-muted/10 opacity-75'}>
                   <div className="p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+
                     <div className="w-32">
                       <span className="font-semibold text-foreground">{day.label}</span>
                       <p className="text-xs text-muted-foreground">{hasShifts ? `${shifts.length} turno(s)` : 'No laborable'}</p>
@@ -873,8 +1494,58 @@ export function AgendaWorkspace({
               );
             })}
           </div>
+
+          {/* Modal Nuevo Perfil de Horario */}
+          {showScheduleModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+              <div className="w-full max-w-md rounded-lg border border-border bg-card p-6 shadow-xl space-y-4">
+                <div className="flex justify-between items-center border-b pb-3">
+                  <h3 className="font-semibold text-lg">Nuevo Perfil de Horario</h3>
+                  <button onClick={() => setShowScheduleModal(false)} className="text-muted-foreground hover:text-foreground">✕</button>
+                </div>
+                <form onSubmit={handleCreateSchedule} className="space-y-3">
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground">Nombre del Horario *</label>
+                    <input
+                      required
+                      type="text"
+                      className="mt-1 w-full rounded-md border border-input bg-background p-2 text-sm"
+                      value={scheduleForm.name}
+                      onChange={(e) => setScheduleForm({ ...scheduleForm, name: e.target.value })}
+                      placeholder="Ej: Horario Atención Clientes o Turno Especial"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground">Zona Horaria</label>
+                    <input
+                      type="text"
+                      className="mt-1 w-full rounded-md border border-input bg-background p-2 text-sm"
+                      value={scheduleForm.timezone ?? 'America/Bogota'}
+                      onChange={(e) => setScheduleForm({ ...scheduleForm, timezone: e.target.value })}
+                      placeholder="America/Bogota"
+                    />
+                  </div>
+                  <label className="flex items-center gap-2 pt-1 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(scheduleForm.is_default)}
+                      onChange={(e) => setScheduleForm({ ...scheduleForm, is_default: e.target.checked })}
+                    />
+                    <span>Marcar como horario predeterminado</span>
+                  </label>
+                  <div className="flex justify-end gap-2 pt-3 border-t">
+                    <Button type="button" variant="outline" onClick={() => setShowScheduleModal(false)}>Cancelar</Button>
+                    <Button type="submit" disabled={isPending}>
+                      {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Crear Horario'}
+                    </Button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
         </div>
       )}
+
 
       {/* =========================================================================
           TAB 4: EQUIPOS (ROUND ROBIN)
@@ -1406,6 +2077,7 @@ export function AgendaWorkspace({
                       onChange={(e) => setAgentForm({ ...agentForm, target_type: e.target.value, target_id: '' })}
                       disabled={!canEdit}
                     >
+                      <option value="event_type">Tipo de Cita (Cal.com / Google)</option>
                       <option value="team">Equipo (Round Robin)</option>
                       <option value="resource">Recurso Específico</option>
                     </select>
@@ -1416,16 +2088,41 @@ export function AgendaWorkspace({
                     <select
                       className="mt-1 w-full rounded-md border border-input bg-background p-2 text-sm"
                       value={agentForm.target_id}
-                      onChange={(e) => setAgentForm({ ...agentForm, target_id: e.target.value })}
+                      onChange={(e) => {
+                        const nextId = e.target.value;
+                        setAgentForm((prev) => {
+                          let nextDuration = prev.duration_minutes;
+                          if (prev.target_type === 'event_type') {
+                            const found = eventTypes.find((et) => et.id === nextId);
+                            if (found) nextDuration = found.duration_minutes;
+                          }
+                          return { ...prev, target_id: nextId, duration_minutes: nextDuration };
+                        });
+                      }}
                       disabled={!canEdit}
                     >
                       <option value="">Selecciona destino...</option>
-                      {agentForm.target_type === 'team'
-                        ? teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)
-                        : resources.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+                      {agentForm.target_type === 'event_type'
+                        ? eventTypes.map((et) => (
+                            <option key={et.id} value={et.id}>
+                              {et.name} ({et.duration_minutes} min - {et.provider === 'calcom' ? 'Cal.com' : 'Google'})
+                            </option>
+                          ))
+                        : agentForm.target_type === 'team'
+                        ? teams.map((t) => (
+                            <option key={t.id} value={t.id}>
+                              {t.name}
+                            </option>
+                          ))
+                        : resources.map((r) => (
+                            <option key={r.id} value={r.id}>
+                              {r.name}
+                            </option>
+                          ))}
                     </select>
                   </div>
                 </div>
+
 
                 <div>
                   <label className="text-xs font-medium text-muted-foreground">Duración de la llamada / cita (minutos)</label>

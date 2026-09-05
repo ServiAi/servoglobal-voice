@@ -1,14 +1,23 @@
 import { requestBackendEndpoint } from './crm';
 import type {
   AgentSchedulingConfig,
+  CalComDiscoveryResponse,
   SchedulingAvailabilityException,
   SchedulingDashboardSummary,
+  SchedulingEventType,
+  SchedulingEventTypeCreateRequest,
+  SchedulingEventTypeUpdateRequest,
+  SchedulingProviderCapabilities,
   SchedulingResource,
   SchedulingResourceCalendar,
+  SchedulingSchedule,
+  SchedulingScheduleCreateRequest,
+  SchedulingScheduleUpdateRequest,
   SchedulingTeam,
   SchedulingTeamMember,
   TenantSchedulingConfig,
 } from '@/types/scheduling';
+
 
 function schedulingApi<T>(
   method: 'GET' | 'POST' | 'PATCH' | 'DELETE' | 'PUT',
@@ -110,4 +119,52 @@ export function fetchAgentSchedulingConfig(accessToken: string, agentId: string)
 
 export function upsertAgentSchedulingConfig(accessToken: string, agentId: string, payload: Partial<AgentSchedulingConfig>) {
   return schedulingApi<AgentSchedulingConfig>('PUT', `agents/${agentId}`, accessToken, undefined, payload);
+}
+
+// Providers & Capabilities
+export function fetchSchedulingProviders(accessToken: string) {
+  return schedulingApi<SchedulingProviderCapabilities[]>('GET', 'providers', accessToken);
+}
+
+// Schedules
+export function fetchSchedules(accessToken: string) {
+  return schedulingApi<SchedulingSchedule[]>('GET', 'schedules', accessToken);
+}
+
+export function createSchedule(accessToken: string, payload: SchedulingScheduleCreateRequest) {
+  return schedulingApi<SchedulingSchedule>('POST', 'schedules', accessToken, undefined, payload);
+}
+
+export function updateSchedule(accessToken: string, scheduleId: string, payload: SchedulingScheduleUpdateRequest) {
+  return schedulingApi<SchedulingSchedule>('PATCH', `schedules/${scheduleId}`, accessToken, undefined, payload);
+}
+
+export function deleteSchedule(accessToken: string, scheduleId: string) {
+  return schedulingApi<{ status: string }>('DELETE', `schedules/${scheduleId}`, accessToken);
+}
+
+// Event Types
+export function fetchEventTypes(accessToken: string) {
+  return schedulingApi<SchedulingEventType[]>('GET', 'event-types', accessToken);
+}
+
+export function createEventType(accessToken: string, payload: SchedulingEventTypeCreateRequest) {
+  return schedulingApi<SchedulingEventType>('POST', 'event-types', accessToken, undefined, payload);
+}
+
+export function updateEventType(accessToken: string, eventTypeId: string, payload: SchedulingEventTypeUpdateRequest) {
+  return schedulingApi<SchedulingEventType>('PATCH', `event-types/${eventTypeId}`, accessToken, undefined, payload);
+}
+
+export function deleteEventType(accessToken: string, eventTypeId: string) {
+  return schedulingApi<{ status: string }>('DELETE', `event-types/${eventTypeId}`, accessToken);
+}
+
+// Cal.com Sync & Discovery
+export function syncCalComProvider(accessToken: string) {
+  return schedulingApi<CalComDiscoveryResponse>('POST', 'providers/calcom/sync', accessToken);
+}
+
+export function fetchCalComDiscovery(accessToken: string) {
+  return schedulingApi<CalComDiscoveryResponse>('GET', 'providers/calcom/discovery', accessToken);
 }

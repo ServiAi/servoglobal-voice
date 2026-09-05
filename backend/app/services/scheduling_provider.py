@@ -13,30 +13,9 @@ from app.schemas.crm import BookingCreateRequest
 from app.services.calcom_client import CalComClient, CalComClientConfig, sanitize_calcom_error
 from app.services.google_calendar_service import GoogleCalendarService, sanitize_google_calendar_error
 from app.services.scheduling_availability_service import SchedulingAvailabilityService
+from app.services.scheduling_protocols import SchedulingProvider
 
 logger = logging.getLogger(__name__)
-
-
-class SchedulingProvider(Protocol):
-    def get_available_slots(
-        self,
-        *,
-        date_input: str,
-        jornada: str | None = None,
-        reference_datetime: str | None = None,
-    ) -> dict[str, Any]: ...
-
-    def create_booking(
-        self,
-        *,
-        booking: CrmBooking,
-        lead: CrmLead,
-        body: BookingCreateRequest,
-    ) -> CrmBooking: ...
-
-    def cancel_booking(self, *, booking: CrmBooking) -> dict[str, Any]: ...
-
-    def reschedule_booking(self, *, booking: CrmBooking, new_start_at: datetime) -> dict[str, Any]: ...
 
 
 class CalComProvider:
