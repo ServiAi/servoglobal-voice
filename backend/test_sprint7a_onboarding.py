@@ -44,6 +44,7 @@ class FakeAuth0ProvisioningService:
     def __init__(self) -> None:
         self.created: list[dict[str, str]] = []
         self.deleted: list[str] = []
+        self.password_resets: list[str] = []
         self.fail_on_provision: Auth0ProvisioningError | None = None
         self.fail_on_delete: Auth0ProvisioningError | None = None
 
@@ -61,6 +62,12 @@ class FakeAuth0ProvisioningService:
             verification_email_sent=True,
             password_reset_triggered=True,
         )
+
+    def trigger_password_reset_email(self, *, email: str) -> None:
+        self.password_resets.append(email)
+
+    def create_password_change_ticket(self, *, email: str, **kwargs) -> str | None:
+        return f"https://fake.auth0.com/u/reset-password?ticket=mock-{email}"
 
     def delete_user(self, user_id: str) -> None:
         if self.fail_on_delete is not None:
@@ -1027,7 +1034,7 @@ class Sprint7AIdentityTests(unittest.TestCase):
         with SessionLocal() as db:
             user = db.scalar(select(User).where(User.email == new_email))
             self.assertIsNotNone(user)
-            self.assertIsNone(user.external_auth_id)
+            self.assertIsNotNone(user.external_auth_id)
             self.assertEqual(user.status, "active")
 
             membership = db.scalar(
@@ -1103,6 +1110,32 @@ class Sprint7AIdentityTests(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 404)
         self.assertIn(f"Tenant '{unknown_id}' not found", response.json()["detail"])
+
+    def test_send_membership_password_reset(self):
+        """Triggering password reset for a tenant membership succeeds and calls Auth0."""
+        slug = f"tenant-{uuid.uuid4().hex[:8]}"
+        created = self.client.post(
+            "/api/v1/admin/tenants",
+            json=self._make_admin_payload(slug, agent_count=0),
+        )
+        self.assertEqual(created.status_code, 201)
+        tenant_id = created.json()["id"]
+
+        email = f"reset-test-{uuid.uuid4().hex[:6]}@example.com"
+        res = self.client.post(
+            f"/api/v1/admin/tenants/{tenant_id}/memberships",
+            json={"email": email, "role": "tenant_analyst"},
+        )
+        self.assertEqual(res.status_code, 201)
+        membership_id = res.json()["id"]
+
+        reset_res = self.client.post(
+            f"/api/v1/admin/tenants/{tenant_id}/memberships/{membership_id}/password-reset",
+        )
+        self.assertEqual(reset_res.status_code, 200)
+        data = reset_res.json()
+        self.assertTrue(data["success"])
+        self.assertIn(email, self.auth0_provisioning.password_resets)
 
 
 if __name__ == "__main__":

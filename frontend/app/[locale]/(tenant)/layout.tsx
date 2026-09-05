@@ -28,7 +28,8 @@ export default async function TenantLayout({ children, params }: Props) {
     if (result.status === 401) {
       redirect(`/api/auth/login?returnTo=/${locale}/dashboard`);
     }
-    redirect(`/${locale}/dashboard/no-access`);
+    const reasonParam = result.detail ? `?reason=${encodeURIComponent(result.detail)}` : '';
+    redirect(`/${locale}/dashboard/no-access${reasonParam}`);
   }
 
   const { profile } = result;

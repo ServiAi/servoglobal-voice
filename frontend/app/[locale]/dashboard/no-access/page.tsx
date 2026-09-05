@@ -4,14 +4,16 @@ import { locales, type Locale } from '@/i18n';
 
 type Props = {
   params: Promise<{ locale: string }>;
+  searchParams?: Promise<{ reason?: string }>;
 };
 
 function normalizeLocale(locale: string): Locale {
   return locales.includes(locale as Locale) ? (locale as Locale) : 'es';
 }
 
-export default async function NoAccessPage({ params }: Props) {
+export default async function NoAccessPage({ params, searchParams }: Props) {
   const { locale: rawLocale } = await params;
+  const { reason } = (await searchParams) ?? {};
   const locale = normalizeLocale(rawLocale);
 
   return (
@@ -24,7 +26,7 @@ export default async function NoAccessPage({ params }: Props) {
           <h1 className="mt-2 text-3xl font-semibold tracking-normal">Sin acceso</h1>
         </header>
         <p className="text-base text-zinc-300">
-          No hay una membresia activa asociada a esta cuenta.
+          {reason || 'No hay una membresia activa asociada a esta cuenta.'}
         </p>
         <div className="flex flex-wrap gap-3">
           <form action="/api/auth/login" method="get">

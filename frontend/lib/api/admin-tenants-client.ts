@@ -127,12 +127,24 @@ export function deleteTenant(
 export function addTenantMembership(
   tenantId: string,
   payload: MembershipCreatePayload
-): Promise<FetchResult<TenantDetail['memberships'][number]>> {
-  return localAdminFetch<TenantDetail['memberships'][number]>(
+): Promise<FetchResult<TenantDetail['memberships'][number] & { password_reset_url?: string }>> {
+  return localAdminFetch<TenantDetail['memberships'][number] & { password_reset_url?: string }>(
     `/api/admin/tenants/${encodeURIComponent(tenantId)}/memberships`,
     {
       method: 'POST',
       body: JSON.stringify(payload),
+    }
+  );
+}
+
+export function sendMembershipPasswordReset(
+  tenantId: string,
+  membershipId: string
+): Promise<FetchResult<{ success: boolean; detail: string; password_reset_url?: string }>> {
+  return localAdminFetch<{ success: boolean; detail: string; password_reset_url?: string }>(
+    `/api/admin/tenants/${encodeURIComponent(tenantId)}/memberships/${encodeURIComponent(membershipId)}/password-reset`,
+    {
+      method: 'POST',
     }
   );
 }

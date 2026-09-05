@@ -35,6 +35,19 @@ class IdentityService:
             select(User).where(User.external_auth_id == identity.external_auth_id)
         )
         if user is not None:
+            if identity.email and (user.email.endswith(FALLBACK_EMAIL_DOMAIN) or user.email.endswith("@auth0.local")):
+                real_user = self.db.scalar(
+                    select(User).where(User.email == identity.email)
+                )
+                if real_user and real_user.id != user.id:
+                    user.external_auth_id = None
+                    user.status = "superseded"
+                    real_user.external_auth_id = identity.external_auth_id
+                    real_user.last_login_at = datetime.now(UTC)
+                    self.db.commit()
+                    self.db.refresh(real_user)
+                    user = real_user
+
             if identity.email_verified is False:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,

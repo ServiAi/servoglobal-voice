@@ -2,11 +2,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import logging
+import httpx
 import jwt
 from fastapi import HTTPException, status
 from jwt import PyJWKClient
 
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -60,7 +64,18 @@ class Auth0TokenVerifier:
             ) from exc
 
         external_auth_id = claims.get("sub")
-        email = claims.get("email")
+        email = (
+            claims.get("email")
+            or claims.get("https://serviglobal-ia.com/email")
+            or claims.get("https://serviglobal.co/email")
+        )
+        name = claims.get("name") or claims.get("nickname")
+        email_verified = (
+            claims.get("email_verified")
+            if "email_verified" in claims
+            else claims.get("https://serviglobal-ia.com/email_verified")
+        )
+
         if not external_auth_id:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -68,11 +83,28 @@ class Auth0TokenVerifier:
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
+        if not email and settings.AUTH0_DOMAIN:
+            try:
+                domain = settings.AUTH0_DOMAIN.strip().removeprefix("https://").removeprefix("http://").rstrip("/")
+                resp = httpx.get(
+                    f"https://{domain}/userinfo",
+                    headers={"Authorization": f"Bearer {token}"},
+                    timeout=5.0,
+                )
+                if resp.status_code == 200:
+                    info = resp.json()
+                    email = info.get("email")
+                    name = name or info.get("name") or info.get("nickname")
+                    if email_verified is None:
+                        email_verified = info.get("email_verified")
+            except Exception as exc:
+                logger.debug("Failed to fetch userinfo from Auth0: %s", exc)
+
         return AuthenticatedIdentity(
             external_auth_id=external_auth_id,
             email=email,
-            name=claims.get("name") or claims.get("nickname"),
-            email_verified=claims.get("email_verified") if "email_verified" in claims else None,
+            name=name,
+            email_verified=email_verified,
             claims=claims,
         )
 
