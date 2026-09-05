@@ -998,6 +998,112 @@ class Sprint7AIdentityTests(unittest.TestCase):
         response = self.client.get("/api/v1/admin/tenants")
         self.assertEqual(response.status_code, 403)
 
+    # ============================================================
+    # TEST 12: Tenant memberships management
+    # ============================================================
+
+    def test_add_membership_with_new_email_preprovisions_user(self):
+        """Adding a membership with an email not previously registered pre-provisions the user."""
+        slug = f"tenant-{uuid.uuid4().hex[:8]}"
+        created = self.client.post(
+            "/api/v1/admin/tenants",
+            json=self._make_admin_payload(slug, agent_count=0),
+        )
+        self.assertEqual(created.status_code, 201)
+        tenant_id = created.json()["id"]
+
+        new_email = f"new-member-{uuid.uuid4().hex[:6]}@example.com"
+        response = self.client.post(
+            f"/api/v1/admin/tenants/{tenant_id}/memberships",
+            json={"email": new_email, "role": "tenant_analyst"},
+        )
+        self.assertEqual(response.status_code, 201)
+        data = response.json()
+        self.assertEqual(data["user_email"], new_email)
+        self.assertEqual(data["role"], "tenant_analyst")
+        self.assertEqual(data["status"], "active")
+
+        # Verify pre-provisioned user in DB
+        with SessionLocal() as db:
+            user = db.scalar(select(User).where(User.email == new_email))
+            self.assertIsNotNone(user)
+            self.assertIsNone(user.external_auth_id)
+            self.assertEqual(user.status, "active")
+
+            membership = db.scalar(
+                select(TenantMembership).where(
+                    TenantMembership.tenant_id == tenant_id,
+                    TenantMembership.user_id == user.id,
+                )
+            )
+            self.assertIsNotNone(membership)
+            self.assertEqual(membership.role, "tenant_analyst")
+
+    def test_add_membership_with_existing_user_reuses_user(self):
+        """Adding a membership for an existing user reuses the user and creates the membership."""
+        slug = f"tenant-{uuid.uuid4().hex[:8]}"
+        created = self.client.post(
+            "/api/v1/admin/tenants",
+            json=self._make_admin_payload(slug, agent_count=0),
+        )
+        self.assertEqual(created.status_code, 201)
+        tenant_id = created.json()["id"]
+
+        existing_email = f"existing-{uuid.uuid4().hex[:6]}@example.com"
+        with SessionLocal() as db:
+            existing_user = User(
+                email=existing_email,
+                name="Existing User",
+                is_internal=False,
+                status="active",
+            )
+            db.add(existing_user)
+            db.commit()
+            existing_user_id = existing_user.id
+
+        response = self.client.post(
+            f"/api/v1/admin/tenants/{tenant_id}/memberships",
+            json={"email": existing_email, "role": "tenant_admin"},
+        )
+        self.assertEqual(response.status_code, 201)
+        data = response.json()
+        self.assertEqual(data["user_id"], existing_user_id)
+        self.assertEqual(data["user_email"], existing_email)
+
+    def test_add_membership_duplicate_raises_409(self):
+        """Adding a duplicate membership for the same user in the tenant returns 409 Conflict."""
+        slug = f"tenant-{uuid.uuid4().hex[:8]}"
+        created = self.client.post(
+            "/api/v1/admin/tenants",
+            json=self._make_admin_payload(slug, agent_count=0),
+        )
+        self.assertEqual(created.status_code, 201)
+        tenant_id = created.json()["id"]
+
+        email = f"dup-member-{uuid.uuid4().hex[:6]}@example.com"
+        first = self.client.post(
+            f"/api/v1/admin/tenants/{tenant_id}/memberships",
+            json={"email": email, "role": "tenant_analyst"},
+        )
+        self.assertEqual(first.status_code, 201)
+
+        second = self.client.post(
+            f"/api/v1/admin/tenants/{tenant_id}/memberships",
+            json={"email": email, "role": "tenant_admin"},
+        )
+        self.assertEqual(second.status_code, 409)
+        self.assertIn("already has a membership", second.json()["detail"])
+
+    def test_add_membership_unknown_tenant_raises_404(self):
+        """Adding a membership to an unknown tenant returns 404 Not Found."""
+        unknown_id = str(uuid.uuid4())
+        response = self.client.post(
+            f"/api/v1/admin/tenants/{unknown_id}/memberships",
+            json={"email": "test@example.com", "role": "tenant_analyst"},
+        )
+        self.assertEqual(response.status_code, 404)
+        self.assertIn(f"Tenant '{unknown_id}' not found", response.json()["detail"])
+
 
 if __name__ == "__main__":
     unittest.main()
