@@ -429,6 +429,44 @@ class OnboardingService:
             )
         )
 
+    def delete_membership(self, tenant_id: str, membership_id: str) -> dict:
+        tenant = self.db.scalar(
+            select(Tenant).where(Tenant.id == tenant_id)
+        )
+        if tenant is None:
+            raise ValueError(f"Tenant '{tenant_id}' not found")
+
+        membership = self.db.scalar(
+            select(TenantMembership).where(
+                TenantMembership.tenant_id == tenant_id,
+                TenantMembership.id == membership_id,
+            )
+        )
+        if membership is None:
+            raise ValueError(f"Membership '{membership_id}' not found in tenant '{tenant_id}'")
+
+        admin_roles = ["tenant_admin", "admin", "owner"]
+        if membership.role in admin_roles and membership.status == "active":
+            active_admins = list(
+                self.db.scalars(
+                    select(TenantMembership).where(
+                        TenantMembership.tenant_id == tenant_id,
+                        TenantMembership.role.in_(admin_roles),
+                        TenantMembership.status == "active",
+                    )
+                ).all()
+            )
+            if len(active_admins) <= 1:
+                raise ValueError("No se puede eliminar la única membresía de administrador activa del tenant.")
+
+        self.db.delete(membership)
+        self.db.commit()
+        return {
+            "deleted": True,
+            "membership_id": membership_id,
+            "tenant_id": tenant_id,
+        }
+
     def list_memberships(self, tenant_id: str) -> list[TenantMembership]:
         tenant = self.db.scalar(
             select(Tenant).where(Tenant.id == tenant_id)

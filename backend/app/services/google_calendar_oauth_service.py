@@ -10,11 +10,11 @@ from urllib.parse import urlencode
 import re
 
 import httpx
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.models.integrations import TenantGoogleCalendarConnection
+from app.models.integrations import TenantGoogleCalendarConnection, TenantSchedulingResourceCalendar
 from app.schemas.integrations import GoogleCalendarConnectionResponse
 from app.services.secret_manager_service import SecretManager
 
@@ -201,6 +201,48 @@ class GoogleCalendarOAuthService:
         token_expires_at: datetime | None = None,
         scopes: list[str] | None = None,
     ) -> TenantGoogleCalendarConnection:
+        existing: TenantGoogleCalendarConnection | None = None
+        if google_account_email:
+            existing = self.db.scalar(
+                select(TenantGoogleCalendarConnection).where(
+                    TenantGoogleCalendarConnection.tenant_id == tenant_id,
+                    TenantGoogleCalendarConnection.google_account_email == google_account_email,
+                )
+            )
+        if not existing and user_id:
+            existing = self.db.scalar(
+                select(TenantGoogleCalendarConnection).where(
+                    TenantGoogleCalendarConnection.tenant_id == tenant_id,
+                    TenantGoogleCalendarConnection.user_id == user_id,
+                )
+            )
+        if not existing:
+            existing = self.db.scalar(
+                select(TenantGoogleCalendarConnection).where(
+                    TenantGoogleCalendarConnection.tenant_id == tenant_id,
+                    TenantGoogleCalendarConnection.status == "disconnected",
+                )
+            )
+
+        if existing:
+            existing.status = "connected"
+            if user_id:
+                existing.user_id = user_id
+            if google_account_email:
+                existing.google_account_email = google_account_email
+            existing.calendar_id = calendar_id
+            if calendar_summary:
+                existing.calendar_summary = calendar_summary
+            existing.access_token_encrypted = self.secret_manager.encrypt_secret(access_token)
+            if refresh_token:
+                existing.refresh_token_encrypted = self.secret_manager.encrypt_secret(refresh_token)
+            existing.token_expires_at = token_expires_at
+            existing.scopes_json = scopes or GOOGLE_CALENDAR_SCOPES
+            existing.last_error_message = None
+            self.db.commit()
+            self.db.refresh(existing)
+            return existing
+
         connection = TenantGoogleCalendarConnection(
             tenant_id=tenant_id,
             user_id=user_id,
@@ -240,6 +282,27 @@ class GoogleCalendarOAuthService:
         self.db.commit()
         self.db.refresh(connection)
         return connection
+
+    def delete_connection(self, tenant_id: str, connection_id: str) -> bool:
+        connection = self.db.scalar(
+            select(TenantGoogleCalendarConnection).where(
+                TenantGoogleCalendarConnection.tenant_id == tenant_id,
+                TenantGoogleCalendarConnection.id == connection_id,
+            )
+        )
+        if connection is None:
+            raise ValueError("Google Calendar connection not found.")
+
+        cal_ids = [c.id for c in connection.calendars]
+        if cal_ids:
+            self.db.execute(
+                delete(TenantSchedulingResourceCalendar).where(
+                    TenantSchedulingResourceCalendar.calendar_id.in_(cal_ids)
+                )
+            )
+        self.db.delete(connection)
+        self.db.commit()
+        return True
 
     def response(self, connection: TenantGoogleCalendarConnection) -> GoogleCalendarConnectionResponse:
         return GoogleCalendarConnectionResponse(

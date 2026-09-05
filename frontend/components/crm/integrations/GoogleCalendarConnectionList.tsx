@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Calendar, Loader2, PowerOff, RefreshCw } from 'lucide-react';
+import { Calendar, Loader2, PowerOff, RefreshCw, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { fetchGoogleCalendars, syncGoogleCalendarConnection, updateGoogleCalendar } from '@/lib/api/crm';
 import type { GoogleCalendarConnectionResponse, TenantGoogleCalendarResponse } from '@/types/crm';
@@ -10,10 +10,12 @@ type Props = {
   accessToken?: string;
   connections: GoogleCalendarConnectionResponse[];
   onDisconnect?: (connectionId: string) => Promise<void>;
+  onDelete?: (connectionId: string) => Promise<void>;
 };
 
-export function GoogleCalendarConnectionList({ accessToken, connections, onDisconnect }: Props) {
+export function GoogleCalendarConnectionList({ accessToken, connections, onDisconnect, onDelete }: Props) {
   const [disconnectingId, setDisconnectingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [syncingId, setSyncingId] = useState<string | null>(null);
   const [calendarsByConnection, setCalendarsByConnection] = useState<Record<string, TenantGoogleCalendarResponse[]>>({});
   const [loadingCalendars, setLoadingCalendars] = useState<Record<string, boolean>>({});
@@ -93,6 +95,20 @@ export function GoogleCalendarConnectionList({ accessToken, connections, onDisco
     }
   };
 
+  const handleDelete = async (connectionId: string, email?: string | null) => {
+    if (!onDelete) return;
+    const desc = email ? `de "${email}"` : '';
+    if (!window.confirm(`¿Estás seguro de que deseas eliminar esta conexión ${desc}? Podrás volver a conectar la cuenta cuando lo desees.`)) {
+      return;
+    }
+    setDeletingId(connectionId);
+    try {
+      await onDelete(connectionId);
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   if (connections.length === 0) {
     return <p className="rounded-lg border border-dashed border-border bg-muted/20 p-6 text-center text-sm text-muted-foreground">Sin conexiones Google Calendar.</p>;
   }
@@ -144,14 +160,34 @@ export function GoogleCalendarConnectionList({ accessToken, connections, onDisco
                     variant="outline"
                     size="sm"
                     onClick={() => disconnect(connection.id)}
-                    disabled={disconnectingId === connection.id}
+                    disabled={disconnectingId === connection.id || deletingId === connection.id}
                     aria-label="Desconectar Google Calendar"
+                    title="Desconectar cuenta"
                   >
                     {disconnectingId === connection.id ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
                     ) : (
                       <PowerOff className="h-4 w-4" />
                     )}
+                  </Button>
+                )}
+                {onDelete && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleDelete(connection.id, connection.google_account_email)}
+                    disabled={deletingId === connection.id || disconnectingId === connection.id}
+                    aria-label="Eliminar conexión Google Calendar"
+                    title="Eliminar conexión"
+                    className="text-destructive hover:bg-destructive/10 hover:text-destructive border-destructive/20"
+                  >
+                    {deletingId === connection.id ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-4 w-4" />
+                    )}
+                    <span className="ml-1.5 hidden sm:inline">Eliminar</span>
                   </Button>
                 )}
               </div>

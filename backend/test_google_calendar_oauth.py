@@ -147,3 +147,55 @@ class GoogleCalendarOAuthTests(Integration2ATestCase):
         )
         self.assertEqual(response_redirect.status_code, 302)
         self.assertIn("/integrations/google-calendar?status=connected", response_redirect.headers.get("location", ""))
+
+    def test_delete_google_calendar_connection(self):
+        with SessionLocal() as db:
+            service = GoogleCalendarOAuthService(db)
+            conn = service.store_connection(
+                tenant_id=self.tenant.id,
+                user_id=self.user.id,
+                google_account_email="to_delete@example.com",
+                access_token="test_acc",
+                refresh_token="test_ref",
+            )
+            conn_id = conn.id
+
+        response = self.client.delete(
+            f"/api/v1/integrations/google-calendar/connections/{conn_id}",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["deleted"])
+
+        with SessionLocal() as db:
+            service = GoogleCalendarOAuthService(db)
+            conns = service.list_connections(self.tenant.id)
+            self.assertEqual(len(conns), 0)
+
+    def test_reconnect_reactivates_disconnected_connection(self):
+        with SessionLocal() as db:
+            service = GoogleCalendarOAuthService(db)
+            conn = service.store_connection(
+                tenant_id=self.tenant.id,
+                user_id=self.user.id,
+                google_account_email="reconnect@example.com",
+                access_token="old_acc",
+                refresh_token="old_ref",
+            )
+            service.disconnect_connection(self.tenant.id, conn.id)
+            db.refresh(conn)
+            self.assertEqual(conn.status, "disconnected")
+
+            # Now store connection again with same email
+            reactivated = service.store_connection(
+                tenant_id=self.tenant.id,
+                user_id=self.user.id,
+                google_account_email="reconnect@example.com",
+                access_token="new_acc",
+                refresh_token="new_ref",
+            )
+            self.assertEqual(reactivated.id, conn.id)
+            self.assertEqual(reactivated.status, "connected")
+
+            # Check total count is 1
+            conns = service.list_connections(self.tenant.id)
+            self.assertEqual(len(conns), 1)
