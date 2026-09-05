@@ -14,5 +14,5 @@ export default async function GoogleCalendarIntegrationPage({ params }: Props) {
     fetchGoogleCalendarConnections(accessToken),
     getTranslations({ locale, namespace: 'crm.integrationsCatalog' }),
   ]);
-  return <IntegrationDetailShell locale={locale} integrationsLabel={t('title')} name={t('providers.google_calendar.name')} description={t('providers.google_calendar.description')}><GoogleCalendarIntegrationCard accessToken={accessToken} connections={result.ok ? result.data : []} /></IntegrationDetailShell>;
+  return <IntegrationDetailShell locale={locale} integrationsLabel={t('title')} name={t('providers.google_calendar.name')} description={t('providers.google_calendar.description')}><GoogleCalendarIntegrationCard accessToken={accessToken} locale={locale} connections={result.ok ? result.data : []} /></IntegrationDetailShell>;
 }

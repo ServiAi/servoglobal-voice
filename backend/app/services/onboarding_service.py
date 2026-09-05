@@ -313,11 +313,19 @@ class OnboardingService:
         if tenant is None:
             raise ValueError(f"Tenant '{tenant_id}' not found")
 
+        normalized_email = email.strip().lower()
         user = self.db.scalar(
-            select(User).where(User.email == email.strip().lower())
+            select(User).where(User.email == normalized_email)
         )
         if user is None:
-            raise ValueError(f"User with email '{email}' not found")
+            user = User(
+                email=normalized_email,
+                name=normalized_email.split("@")[0],
+                is_internal=False,
+                status="active",
+            )
+            self.db.add(user)
+            self.db.flush()
 
         existing = self.db.scalar(
             select(TenantMembership).where(

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { useParams } from 'next/navigation';
 import { Calendar, CalendarDays, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { disconnectGoogleCalendar, fetchGoogleCalendarConnectUrl } from '@/lib/api/crm';
@@ -12,9 +13,12 @@ import { FieldHelp } from './FieldHelp';
 type Props = {
   accessToken?: string;
   connections: GoogleCalendarConnectionResponse[];
+  locale?: string;
 };
 
-export function GoogleCalendarIntegrationCard({ accessToken, connections }: Props) {
+export function GoogleCalendarIntegrationCard({ accessToken, connections, locale }: Props) {
+  const params = useParams();
+  const currentLocale = locale || (params?.locale as string) || 'es';
   const [items, setItems] = useState(connections);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -56,7 +60,7 @@ export function GoogleCalendarIntegrationCard({ accessToken, connections }: Prop
         </div>
         {accessToken && (
           <div className="flex items-center gap-2">
-            <Link href="/agenda">
+            <Link href={`/${currentLocale}/agenda`}>
               <Button type="button" variant="secondary">
                 <Calendar className="mr-2 h-4 w-4" />
                 Configurar agenda
