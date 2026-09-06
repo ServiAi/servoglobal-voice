@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Loader2, RefreshCw, Send } from 'lucide-react';
+import { RefreshCw, Send } from 'lucide-react';
+import { CircularLoader } from '@/components/ui/circular-loader';
 import { fetchLeadMessages, fetchWhatsAppTemplates, previewLeadWhatsApp, sendLeadWhatsApp } from '@/lib/api/crm';
 import { Button } from '@/components/ui/button';
 import {
@@ -145,11 +146,11 @@ export function CrmSendWhatsAppModal({
         </div>
         <DialogFooter className="gap-2 sm:justify-end">
           <Button type="button" variant="outline" disabled={loading} onClick={runPreview} className="gap-2">
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+            {loading ? <CircularLoader size="xs" glow={false} /> : <RefreshCw className="h-4 w-4" />}
             Previsualizar
           </Button>
           <Button type="button" disabled={loading || !contactPhone} onClick={runSend} className="gap-2">
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+            {loading ? <CircularLoader size="xs" glow={false} /> : <Send className="h-4 w-4" />}
             Enviar
           </Button>
         </DialogFooter>

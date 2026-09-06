@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { CalendarCheck, Loader2, RefreshCw } from 'lucide-react';
+import { CalendarCheck, RefreshCw } from 'lucide-react';
+import { CircularLoader } from '@/components/ui/circular-loader';
 import {
   createLeadBooking,
   cancelLeadBooking,
@@ -215,9 +216,8 @@ export function LeadBookingModal({
         </DialogHeader>
 
         {loading ? (
-          <div className="flex min-h-40 items-center justify-center text-sm text-muted-foreground">
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            Cargando agenda...
+          <div className="flex min-h-40 flex-col items-center justify-center p-6 text-sm text-muted-foreground">
+            <CircularLoader size="lg" glow={true} label="Cargando agenda..." showLabel={true} />
           </div>
         ) : (
           <div className="grid gap-5 lg:grid-cols-[1fr_260px]">
@@ -257,7 +257,7 @@ export function LeadBookingModal({
                 </label>
                 <div className="flex items-end">
                   <Button type="button" variant="outline" onClick={loadSlots} disabled={loadingSlots || config?.status !== 'active'}>
-                    {loadingSlots ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+                    {loadingSlots ? <CircularLoader size="xs" glow={false} className="mr-2" /> : <RefreshCw className="mr-2 h-4 w-4" />}
                     Buscar
                   </Button>
                 </div>
@@ -361,7 +361,7 @@ export function LeadBookingModal({
                       </div>
                       {actionLoading === booking.id && (
                         <div className="absolute inset-0 flex items-center justify-center bg-background/50 rounded-md">
-                          <Loader2 className="h-3 w-3 animate-spin" />
+                          <CircularLoader size="xs" glow={false} />
                         </div>
                       )}
                     </div>
@@ -383,7 +383,7 @@ export function LeadBookingModal({
             Cerrar
           </Button>
           <Button type="button" onClick={submit} disabled={!canCreate || creating || loading}>
-            {creating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            {creating ? <CircularLoader size="xs" glow={false} className="mr-2" /> : null}
             Crear booking
           </Button>
         </DialogFooter>

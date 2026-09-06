@@ -7,6 +7,7 @@ import { CrmTaskList } from '@/components/crm/CrmTaskList';
 import { CrmTaskForm } from '@/components/crm/CrmTaskForm';
 import { createCrmTask, updateCrmTask, deleteCrmTask } from '@/lib/api/crm';
 import { ShieldAlert, Filter, CheckSquare } from 'lucide-react';
+import { CircularLoader } from '@/components/ui/circular-loader';
 import { useTranslations } from 'next-intl';
 
 type TasksClientProps = {
@@ -121,7 +122,7 @@ export function TasksClient({
         <div className="fixed bottom-5 right-5 z-50 max-w-sm rounded-lg border bg-card p-4 shadow-lg transition-all duration-300">
           {isPending && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <div className="h-4 w-4 animate-spin rounded-full border-2 border-violet-500 border-t-transparent" />
+              <CircularLoader size="xs" glow={false} />
               <span>{t('syncing')}</span>
             </div>
           )}

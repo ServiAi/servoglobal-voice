@@ -8,11 +8,11 @@ import {
   Clock,
   ExternalLink,
   Layers,
-  Loader2,
   RefreshCw,
   Users,
 } from 'lucide-react';
 import Link from 'next/link';
+import { CircularLoader } from '@/components/ui/circular-loader';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import type { BookingConfigResponse } from '@/types/crm';
@@ -136,7 +136,7 @@ export function CalComIntegrationCard({
                 className="gap-1.5 text-xs"
               >
                 {syncing ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  <CircularLoader size="xs" glow={false} />
                 ) : (
                   <RefreshCw className="h-3.5 w-3.5" />
                 )}

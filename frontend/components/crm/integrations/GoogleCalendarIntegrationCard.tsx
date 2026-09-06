@@ -3,7 +3,8 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { Calendar, CalendarDays, Loader2 } from 'lucide-react';
+import { Calendar, CalendarDays } from 'lucide-react';
+import { CircularLoader } from '@/components/ui/circular-loader';
 import { Button } from '@/components/ui/button';
 import { deleteGoogleCalendarConnection, disconnectGoogleCalendar, fetchGoogleCalendarConnectUrl } from '@/lib/api/crm';
 import type { GoogleCalendarConnectionResponse } from '@/types/crm';
@@ -77,7 +78,7 @@ export function GoogleCalendarIntegrationCard({ accessToken, connections, locale
               </Button>
             </Link>
             <Button type="button" variant="outline" onClick={connect} disabled={loading}>
-              {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CalendarDays className="mr-2 h-4 w-4" />}
+              {loading ? <CircularLoader size="xs" glow={false} className="mr-2" /> : <CalendarDays className="mr-2 h-4 w-4" />}
               Conectar cuenta
             </Button>
             <FieldHelp align="right" label="Conectar Google Calendar" required={false}>No requiere copiar credenciales. Haz clic en Conectar, elige tu cuenta de Google y autoriza el acceso solicitado.</FieldHelp>

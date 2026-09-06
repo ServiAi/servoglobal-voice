@@ -2,7 +2,8 @@
 
 import type { FormEvent } from 'react';
 import { useState } from 'react';
-import { Loader2, Pencil, Plus, RefreshCw, Send, Trash2, Eye, X } from 'lucide-react';
+import { Pencil, Plus, RefreshCw, Send, Trash2, Eye, X } from 'lucide-react';
+import { CircularLoader } from '@/components/ui/circular-loader';
 import { Button } from '@/components/ui/button';
 import {
   createAdminTenantWhatsAppTemplate,
@@ -252,7 +253,7 @@ export function WhatsAppTemplateManager({ accessToken, templates: initialTemplat
                   {STATUS_LABEL[template.status] ?? template.status}
                 </span>
                 <Button type="button" variant="ghost" size="sm" disabled={busyId === template.id} onClick={() => handlePreview(template)} title="Previsualizar">
-                  {busyId === template.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eye className="h-4 w-4" />}
+                  {busyId === template.id ? <CircularLoader size="xs" glow={false} /> : <Eye className="h-4 w-4" />}
                 </Button>
                 {(template.status === 'draft' || template.status === 'rejected') && (
                   <>
@@ -428,7 +429,7 @@ export function WhatsAppTemplateManager({ accessToken, templates: initialTemplat
           <div className="flex justify-end gap-2 border-t border-border pt-4">
             <Button type="button" variant="outline" onClick={closeForm}>Cancelar</Button>
             <Button type="submit" disabled={busyId === (editingId ?? 'new')} className="gap-2">
-              {busyId === (editingId ?? 'new') && <Loader2 className="h-4 w-4 animate-spin" />}
+              {busyId === (editingId ?? 'new') && <CircularLoader size="xs" glow={false} />}
               {editingId ? 'Guardar cambios' : 'Crear borrador'}
             </Button>
           </div>

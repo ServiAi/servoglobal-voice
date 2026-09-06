@@ -43,6 +43,10 @@
   --row-height: 3.25rem;
   --radius-card: 0.75rem;
   --radius-control: 0.5rem;
+  --circular-stop-1: #0284c7;
+  --circular-stop-2: #1d4ed8;
+  --circular-stop-3: #6d28d9;
+  --circular-stop-4: #9333ea;
 }
 
 .dark {
@@ -82,6 +86,10 @@
   --sidebar-accent-foreground: 240 10% 4%;
   --sidebar-border: 240 4% 18%;
   --overlay: 240 10% 2%;
+  --circular-stop-1: #38bdf8;
+  --circular-stop-2: #2563eb;
+  --circular-stop-3: #7c3aed;
+  --circular-stop-4: #c084fc;
 }
 
 @theme {
@@ -174,6 +182,31 @@
 
 .animate-spin-slow {
   animation: spin-slow 8s linear infinite;
+}
+
+/* Circular Glowing Orb Spinner (Tenant & Admin) */
+@keyframes circular-orb-spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-circular-spin {
+  animation: circular-orb-spin 1.25s linear infinite;
+}
+
+.circular-orb-gradient {
+  background: conic-gradient(
+    from 0deg at 50% 50%,
+    var(--circular-stop-1) 0deg,
+    var(--circular-stop-2) 110deg,
+    var(--circular-stop-3) 205deg,
+    var(--circular-stop-4) 295deg,
+    var(--circular-stop-1) 360deg
+  );
 }
 
 @layer components {

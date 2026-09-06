@@ -2,7 +2,8 @@
 
 import { FormEvent, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
-import { AlertTriangle, CheckCircle2, Clock3, Copy, FlaskConical, Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Clock3, Copy, FlaskConical, Pencil, Plus, Trash2 } from 'lucide-react';
+import { CircularLoader } from '@/components/ui/circular-loader';
 
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -284,7 +285,7 @@ export function RulesPanel({ canEdit, catalog, initialRules, whatsappTemplates }
                               disabled={busyRuleId === rule.id}
                               onClick={() => requestToggle(rule)}
                             >
-                              {busyRuleId === rule.id && <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />}
+                              {busyRuleId === rule.id && <CircularLoader size="xs" glow={false} />}
                               {rule.enabled ? t('actions.deactivate') : t('actions.activate')}
                             </Button>
                             <Button
@@ -359,7 +360,7 @@ export function RulesPanel({ canEdit, catalog, initialRules, whatsappTemplates }
                         disabled={busyRuleId === rule.id}
                         onClick={() => requestToggle(rule)}
                       >
-                        {busyRuleId === rule.id && <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />}
+                        {busyRuleId === rule.id && <CircularLoader size="xs" glow={false} />}
                         {rule.enabled ? t('actions.deactivate') : t('actions.activate')}
                       </Button>
                       <Button
@@ -507,7 +508,7 @@ function ConfirmDisableRuleDialog({
             {t('cancel')}
           </Button>
           <Button type="button" variant="destructive" onClick={onConfirm} disabled={busy} className="gap-2">
-            {busy && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+            {busy && <CircularLoader size="xs" glow={false} />}
             {t('confirm')}
           </Button>
         </DialogFooter>
@@ -541,7 +542,7 @@ function ConfirmDeleteRuleDialog({
             {t('cancel')}
           </Button>
           <Button type="button" variant="destructive" onClick={onConfirm} disabled={busy} className="gap-2">
-            {busy && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+            {busy && <CircularLoader size="xs" glow={false} />}
             {t('confirm')}
           </Button>
         </DialogFooter>
@@ -977,7 +978,7 @@ function RuleFormDialog({
               disabled={testBusy || busy || !selectedSchema || missingRequiredParameters.length > 0 || hasInvalidNumericCondition || hasStaleConfiguration}
               className="gap-2"
             >
-              {testBusy ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <FlaskConical className="size-4" aria-hidden="true" />}
+              {testBusy ? <CircularLoader size="xs" glow={false} /> : <FlaskConical className="size-4" aria-hidden="true" />}
               {t('testRule')}
             </Button>
             <Button type="button" variant="outline" onClick={onClose}>
@@ -988,7 +989,7 @@ function RuleFormDialog({
               disabled={busy || testBusy || !selectedSchema || missingRequiredParameters.length > 0 || hasInvalidNumericCondition || hasStaleConfiguration}
               className="gap-2"
             >
-              {busy && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+              {busy && <CircularLoader size="xs" glow={false} />}
               {t('save')}
             </Button>
           </DialogFooter>

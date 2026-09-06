@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import { CircularLoader } from '@/components/ui/circular-loader';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { updateAdminTenantIntegrationAvailability } from '@/lib/api/crm';
@@ -58,7 +58,7 @@ export function IntegrationAvailabilityPanel({ accessToken, tenantId, initialIte
                 <span className="block text-xs text-muted-foreground">{t(item.enabled ? 'enabled' : 'disabled')}</span>
               </span>
               {isUpdating ? (
-                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" aria-label={t('updating')} />
+                <CircularLoader size="xs" glow={false} />
               ) : (
                 <input
                   type="checkbox"

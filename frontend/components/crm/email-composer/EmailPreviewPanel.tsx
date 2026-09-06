@@ -1,6 +1,7 @@
 'use client';
 
-import { Loader2, AlertCircle } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
+import { CircularLoader } from '@/components/ui/circular-loader';
 import { cn } from '@/lib/utils';
 
 type PreviewState = {
@@ -23,8 +24,7 @@ export function EmailPreviewPanel({
   if (loading) {
     return (
       <div className="flex min-h-[420px] flex-col items-center justify-center gap-3 rounded-md border border-border bg-muted/30 p-4 text-muted-foreground">
-        <Loader2 className="h-6 w-6 animate-spin text-violet-500" />
-        <span className="text-sm">Generando preview...</span>
+        <CircularLoader size="lg" glow={true} label="Generando preview..." showLabel={true} />
       </div>
     );
   }

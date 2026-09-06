@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { CalendarRange, Loader2, Search } from 'lucide-react';
+import { CalendarRange, Search } from 'lucide-react';
+import { CircularLoader } from '@/components/ui/circular-loader';
 
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -181,7 +182,7 @@ export function DeliveriesPanel({ initialDeliveries, rules, catalog }: Props) {
         <div className="mt-4 flex justify-end">
           <Button type="button" variant="outline" size="sm" disabled={loading} onClick={submitFilters} className="gap-2">
             <Search className="size-3.5" aria-hidden="true" />
-            {loading && <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />}
+            {loading && <CircularLoader size="xs" glow={false} />}
             {t('filters.apply')}
           </Button>
         </div>
@@ -195,7 +196,7 @@ export function DeliveriesPanel({ initialDeliveries, rules, catalog }: Props) {
 
       {loading && (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+          <CircularLoader size="xs" glow={false} />
           {t('loading') || '...'}
         </div>
       )}

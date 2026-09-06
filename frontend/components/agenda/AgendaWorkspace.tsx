@@ -13,7 +13,6 @@ import {
   Edit2,
   ExternalLink,
   Layers,
-  Loader2,
   Plus,
   RefreshCw,
   Sliders,
@@ -23,6 +22,7 @@ import {
   Users,
 } from 'lucide-react';
 import Link from 'next/link';
+import { CircularLoader } from '@/components/ui/circular-loader';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -646,7 +646,7 @@ export function AgendaWorkspace({
               disabled={isSyncing}
               className="gap-1 text-xs"
             >
-              {isSyncing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+              {isSyncing ? <CircularLoader size="xs" glow={false} /> : <RefreshCw className="h-3.5 w-3.5" />}
               Sincronizar Cal.com
             </Button>
           )}
@@ -866,7 +866,7 @@ export function AgendaWorkspace({
                     disabled={isSyncing}
                     className="gap-2 text-xs"
                   >
-                    {isSyncing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                    {isSyncing ? <CircularLoader size="xs" glow={false} /> : <RefreshCw className="h-3.5 w-3.5" />}
                     Sincronizar Cal.com
                   </Button>
                   <Button onClick={handleOpenCreateEventType} className="gap-2">
@@ -894,7 +894,7 @@ export function AgendaWorkspace({
                     <Plus className="h-4 w-4" /> Crear Tipo de Cita
                   </Button>
                   <Button variant="outline" onClick={handleSyncCalCom} disabled={isSyncing} className="gap-2">
-                    {isSyncing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                    {isSyncing ? <CircularLoader size="xs" glow={false} /> : <RefreshCw className="h-3.5 w-3.5" />}
                     Sincronizar desde Cal.com
                   </Button>
                 </div>
@@ -1151,7 +1151,7 @@ export function AgendaWorkspace({
                       Cancelar
                     </Button>
                     <Button type="submit" disabled={isPending}>
-                      {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Guardar Tipo de Cita'}
+                      {isPending ? <CircularLoader size="sm" glow={false} /> : 'Guardar Tipo de Cita'}
                     </Button>
                   </div>
                 </form>
@@ -1335,7 +1335,7 @@ export function AgendaWorkspace({
                   <div className="flex justify-end gap-2 pt-3 border-t">
                     <Button type="button" variant="outline" onClick={() => setShowResourceModal(false)}>Cancelar</Button>
                     <Button type="submit" disabled={isPending}>
-                      {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Guardar Recurso'}
+                      {isPending ? <CircularLoader size="sm" glow={false} /> : 'Guardar Recurso'}
                     </Button>
                   </div>
                 </form>
@@ -1359,7 +1359,7 @@ export function AgendaWorkspace({
             </div>
             {canEdit && (
               <Button onClick={saveWorkingHours} disabled={isPending} className="gap-2">
-                {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Clock className="h-4 w-4" />}
+                {isPending ? <CircularLoader size="sm" glow={false} /> : <Clock className="h-4 w-4" />}
                 Guardar Horarios
               </Button>
             )}
@@ -1536,7 +1536,7 @@ export function AgendaWorkspace({
                   <div className="flex justify-end gap-2 pt-3 border-t">
                     <Button type="button" variant="outline" onClick={() => setShowScheduleModal(false)}>Cancelar</Button>
                     <Button type="submit" disabled={isPending}>
-                      {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Crear Horario'}
+                      {isPending ? <CircularLoader size="sm" glow={false} /> : 'Crear Horario'}
                     </Button>
                   </div>
                 </form>
@@ -1714,7 +1714,7 @@ export function AgendaWorkspace({
                   <div className="flex justify-end gap-2 pt-3 border-t">
                     <Button type="button" variant="outline" onClick={() => setShowTeamModal(false)}>Cancelar</Button>
                     <Button type="submit" disabled={isPending}>
-                      {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Crear Equipo'}
+                      {isPending ? <CircularLoader size="sm" glow={false} /> : 'Crear Equipo'}
                     </Button>
                   </div>
                 </form>
@@ -1862,7 +1862,7 @@ export function AgendaWorkspace({
             {canEdit && (
               <div className="flex justify-end">
                 <Button type="submit" disabled={isPending} className="gap-2">
-                  {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sliders className="h-4 w-4" />}
+                  {isPending ? <CircularLoader size="sm" glow={false} /> : <Sliders className="h-4 w-4" />}
                   Guardar Reglas
                 </Button>
               </div>
@@ -2024,7 +2024,7 @@ export function AgendaWorkspace({
                   <div className="flex justify-end gap-2 pt-3 border-t">
                     <Button type="button" variant="outline" onClick={() => setShowExceptionModal(false)}>Cancelar</Button>
                     <Button type="submit" disabled={isPending}>
-                      {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Guardar Excepción'}
+                      {isPending ? <CircularLoader size="sm" glow={false} /> : 'Guardar Excepción'}
                     </Button>
                   </div>
                 </form>
@@ -2181,7 +2181,7 @@ export function AgendaWorkspace({
 
                 {canEdit && (
                   <Button type="submit" disabled={isPending} className="gap-2 mt-4">
-                    {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bot className="h-4 w-4" />}
+                    {isPending ? <CircularLoader size="sm" glow={false} /> : <Bot className="h-4 w-4" />}
                     Guardar Configuración de Agente
                   </Button>
                 )}

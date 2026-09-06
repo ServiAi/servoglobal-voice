@@ -2,7 +2,8 @@
 
 import { FormEvent, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { Loader2, Pencil, Plus, UserRoundCheck, UsersRound } from 'lucide-react';
+import { Pencil, Plus, UserRoundCheck, UsersRound } from 'lucide-react';
+import { CircularLoader } from '@/components/ui/circular-loader';
 
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -125,7 +126,7 @@ export function RecipientsPanel({ canEdit, initialRecipients }: Props) {
                               disabled={busyId === recipient.id}
                               onClick={() => toggleStatus(recipient)}
                             >
-                              {busyId === recipient.id && <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />}
+                              {busyId === recipient.id && <CircularLoader size="xs" glow={false} />}
                               {recipient.status === 'active' ? t('actions.deactivate') : t('actions.activate')}
                             </Button>
                           </div>
@@ -176,7 +177,7 @@ export function RecipientsPanel({ canEdit, initialRecipients }: Props) {
                         disabled={busyId === recipient.id}
                         onClick={() => toggleStatus(recipient)}
                       >
-                        {busyId === recipient.id && <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />}
+                        {busyId === recipient.id && <CircularLoader size="xs" glow={false} />}
                         {recipient.status === 'active' ? t('actions.deactivate') : t('actions.activate')}
                       </Button>
                     </div>
@@ -362,7 +363,7 @@ function RecipientFormDialog({
               {t('cancel')}
             </Button>
             <Button type="submit" disabled={busy} className="gap-2">
-              {busy && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+              {busy && <CircularLoader size="xs" glow={false} />}
               {t('save')}
             </Button>
           </DialogFooter>
