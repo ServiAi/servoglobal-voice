@@ -61,7 +61,7 @@ export function CircularLoader({
         {/* Sharp core spinning orb */}
         <div
           aria-hidden="true"
-          className={`circular-orb-gradient animate-circular-spin relative size-full rounded-full shadow-[0_3px_12px_rgba(37,99,235,0.24),0_1px_3px_rgba(15,23,42,0.08)] dark:shadow-[0_0_14px_rgba(56,189,248,0.5)]`}
+          className={`circular-orb-gradient animate-circular-spin relative size-full rounded-full shadow-[0_0_14px_rgba(2,132,199,0.35)] dark:shadow-[0_0_16px_rgba(56,189,248,0.5)]`}
         >
           {/* Inner cutout for 'ring' variant */}
           {isRing && (
@@ -92,10 +92,9 @@ export interface CircularLoadingStateProps {
  * Full component / panel / route loading screen with centered glowing orb.
  */
 export function CircularLoadingState({
-  message = 'Cargando información…',
-  description,
+  message = 'Cargando…',
   minHeight = 'min-h-[300px]',
-  size = 'xl',
+  size = '2xl',
   className = '',
 }: CircularLoadingStateProps) {
   return (
@@ -103,31 +102,9 @@ export function CircularLoadingState({
       role="status"
       aria-busy="true"
       aria-label={message}
-      className={`flex flex-col items-center justify-center p-8 text-center ${minHeight} ${className}`}
+      className={`flex w-full items-center justify-center ${minHeight} ${className}`}
     >
-      <div className="relative mb-5 flex items-center justify-center">
-        {/* Enhanced ambient background bloom */}
-        <div
-          aria-hidden="true"
-          className="absolute size-24 rounded-full bg-sky-500/15 blur-2xl dark:bg-cyan-500/20"
-        />
-        <div
-          aria-hidden="true"
-          className="absolute size-24 rounded-full bg-indigo-500/15 blur-2xl dark:bg-purple-500/20"
-        />
-        <CircularLoader size={size} glow={true} />
-      </div>
-
-      {message && (
-        <p className="text-sm font-semibold tracking-tight text-foreground/90 sm:text-base">
-          {message}
-        </p>
-      )}
-      {description && (
-        <p className="mt-1.5 max-w-sm text-xs text-muted-foreground">
-          {description}
-        </p>
-      )}
+      <CircularLoader size={size} glow={true} label={message} />
       <span className="sr-only">{message}</span>
     </div>
   );

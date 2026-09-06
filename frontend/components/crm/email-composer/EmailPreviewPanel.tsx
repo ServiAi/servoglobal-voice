@@ -23,8 +23,8 @@ export function EmailPreviewPanel({
 }) {
   if (loading) {
     return (
-      <div className="flex min-h-[420px] flex-col items-center justify-center gap-3 rounded-md border border-border bg-muted/30 p-4 text-muted-foreground">
-        <CircularLoader size="lg" glow={true} label="Generando preview..." showLabel={true} />
+      <div className="flex min-h-[420px] w-full items-center justify-center p-4">
+        <CircularLoader size="xl" glow={true} label="Generando preview..." />
       </div>
     );
   }
