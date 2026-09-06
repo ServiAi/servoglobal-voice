@@ -20,6 +20,8 @@ Cada experiencia publicada expone además `/{locale}/voice/{slug}/embed`: la mis
 
 FastAPI organiza routers en `backend/app/api/endpoints/`, reglas de negocio en `backend/app/services/`, contratos en `schemas/` y persistencia SQLAlchemy en `models/`. `backend/app/main.py` ensambla middleware, CORS y routers.
 
+El dominio Agent Builder (`backend/app/models/agents.py`, `agent_service.py`, `agent_compiler_service.py`, `agent_runtime_adapter.py`, `api/endpoints/agents.py`) introduce `TenantAgent`/`TenantAgentVersion` como fuente de verdad provider-agnostic del agente, separada de `TenantVoiceAgentConfig` (config legacy ligada a Ultravox). Ver `docs-local/fase-4/AGENT_BUILDER_ARCHITECTURE.md` para el diseño completo, el estado de compatibilidad y lo que queda para la siguiente fase (Provider/Model/Capability Registry, `RuntimeBinding` como tabla, LiveKit).
+
 El subsistema de notificaciones separa administración (`notification_admin_service.py`), creación segura de eventos (`notification_event_pipeline.py`), planificación (`notification_orchestrator.py`), condiciones/destinatarios/variables, claims, reintentos, recuperación y ejecución WhatsApp. `backend/app/workers/notification_worker.py` procesa entregas vencidas fuera del proceso web y requiere PostgreSQL.
 
 ### Datos

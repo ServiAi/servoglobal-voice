@@ -107,7 +107,7 @@ async function requestIntegrationEndpoint<T>(
 
 export async function requestBackendEndpoint<T>(
   method: 'GET' | 'POST' | 'PATCH' | 'DELETE' | 'PUT',
-  resource: 'crm' | 'integrations' | 'admin' | 'forms' | 'voice' | 'scheduling',
+  resource: 'crm' | 'integrations' | 'admin' | 'forms' | 'voice' | 'scheduling' | 'agents',
   endpoint: string,
   accessToken: string,
   queryParams?: Record<string, unknown>,
@@ -186,6 +186,23 @@ export function requestVoiceEndpoint<T>(
   return requestBackendEndpoint<T>(
     method,
     'voice',
+    endpoint,
+    accessToken,
+    queryParams,
+    body
+  );
+}
+
+export function requestAgentEndpoint<T>(
+  method: 'GET' | 'POST' | 'PATCH' | 'DELETE',
+  endpoint: string,
+  accessToken: string,
+  queryParams?: Record<string, unknown>,
+  body?: unknown
+): Promise<FetchResult<T>> {
+  return requestBackendEndpoint<T>(
+    method,
+    'agents',
     endpoint,
     accessToken,
     queryParams,

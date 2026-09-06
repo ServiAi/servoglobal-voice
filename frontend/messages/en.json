@@ -698,6 +698,7 @@
       "tasks": "Tasks",
       "performance": "Performance",
       "voiceGroup": "Voice AI",
+      "agents": "Agents",
       "voiceExperiences": "Voice experiences",
       "voiceCalls": "Calls",
       "voiceAnalytics": "Analytics",
@@ -1278,6 +1279,58 @@
         "timezoneSuggestion": "Suggestion: America/Bogota",
         "defaultValue": "Default value"
       }
+    },
+    "agentBuilder": {
+      "newAgent": "New agent",
+      "createAgent": "Create agent",
+      "saveDraft": "Save draft",
+      "draftSaved": "Draft saved",
+      "publish": "Publish version",
+      "status": { "draft": "Draft", "active": "Active", "archived": "Archived" },
+      "versionStatus": { "draft": "Draft", "published": "Published", "superseded": "Superseded" },
+      "featureDisabled": { "title": "Feature not enabled", "description": "Agent Builder is not enabled for this tenant." },
+      "accessDenied": { "title": "Access restricted", "description": "Your role does not have permission to manage agents." },
+      "errors": { "loadTitle": "Could not load", "generic": "Something went wrong. Please try again.", "conflict": "That action is not valid for the agent's current state.", "validation": "Please check the form fields.", "publishValidation": "The system prompt is required before publishing." },
+      "list": {
+        "eyebrow": "ServiGlobal agents",
+        "count": "{count, plural, =0 {No agents} one {# agent} other {# agents}}",
+        "empty": "No agents yet",
+        "emptyAction": "Create your first agent and define its identity, prompt and behavior.",
+        "noDescription": "No description",
+        "engine": "Engine",
+        "updated": "Updated {date}",
+        "open": "Open",
+        "archivedNotice": "Archived"
+      },
+      "actions": { "archive": "Archive" },
+      "confirm": { "archive": { "title": "Archive agent", "description": "The agent will no longer be available for editing or publishing. Contact support to revert this." } },
+      "common": { "cancel": "Cancel" },
+      "tabs": { "general": "General", "behavior": "Behavior", "voice": "Voice & models", "versions": "Versions" },
+      "fields": {
+        "name": "Name", "description": "Description", "language": "Language", "timezone": "Timezone",
+        "role": "Role", "objective": "Objective", "systemPrompt": "Prompt / instructions", "greeting": "Greeting", "closing": "Closing",
+        "responseStyle": "Response style", "interruptions": "Interruptions", "turnDetection": "Turn detection",
+        "confirmationStrategy": "Confirmation strategy", "agentFirst": "Agent speaks first"
+      },
+      "behaviorOptions": {
+        "responseStyle": { "precise": "Precise", "balanced": "Balanced", "creative": "Creative" },
+        "interruptions": { "conservative": "Conservative", "balanced": "Balanced", "responsive": "Responsive" },
+        "turnDetection": { "automatic": "Automatic", "conservative": "Conservative", "balanced": "Balanced", "responsive": "Responsive" },
+        "confirmationStrategy": { "important_data": "Important data only", "always": "Always", "never": "Never" }
+      },
+      "voice": {
+        "pipelineType": "Architecture", "speechToSpeech": "Speech-to-Speech", "ultravox": "Ultravox", "comingSoon": "Coming soon",
+        "modular": "Modular", "hybrid": "Hybrid",
+        "providerModel": "Provider & model", "provider": "Provider", "model": "Model", "noModels": "No models available",
+        "capabilities": {
+          "tools": "Tools", "voice_selection": "Voice selection", "turn_detection": "Turn detection",
+          "interruptions": "Interruptions", "transcription": "Transcription", "function_calling": "Function calling", "reasoning": "Reasoning"
+        },
+        "linkTitle": "Link an existing voice agent", "linkLabel": "Ultravox agent",
+        "linkNone": "Not linked", "linkHelp": "Optional: reuse the voice and agent already configured under Integrations → Voice."
+      },
+      "versions": { "empty": "No published versions yet.", "current": "Current published", "publishedAt": "Published on {date}", "neverPublished": "Not published" },
+      "noDraft": { "description": "This agent has no editable draft. Create a new one from the published version to keep editing.", "cta": "Create new draft" }
     },
     "voiceExperiences": {
       "page": { "eyebrow": "Voice Context", "title": "Voice experiences", "description": "Design and manage the private experience that prepares context before a call." },

@@ -1,9 +1,10 @@
 # Estado funcional del proyecto
 
-Actualizado: 2026-09-01. Fuente: código, migraciones y pruebas del repositorio.
+Actualizado: 2026-09-06. Fuente: código, migraciones y pruebas del repositorio.
 
 | Área | Estado | Implementación actual |
 | --- | --- | --- |
+| Agent Builder (fase 1 + fase 2) | Operativa en código, tras feature flag | `TenantAgent`/`TenantAgentVersion` como nueva fuente de verdad del agente (identidad, instrucciones, comportamiento), con draft/publish real y versionado inmutable. `runtime_binding_json` (`pipeline_type`/`provider`/`model`) ya no es un valor fijo: se elige explícitamente y se valida contra un Provider/Model/Capability Registry de plataforma (catálogo estático en `app/domain/voice_registry.py`, expuesto en `GET /api/v1/voice/providers|models*`) — hoy sólo `realtime`/`ultravox` está `active`/`available`, el resto de proveedores aparecen como "Próximamente" sin lógica ficticia. Gateado por `agent_builder_v2` (`TenantFeatureGrant`). Endpoints en `/api/v1/agents*`, UI en `/voice-ai/agents` (General, Comportamiento, Voz y modelos con selectores reales de proveedor/modelo, Versiones). Compatible con `TenantVoiceAgentConfig`: cada versión puede vincularse a un agente Ultravox existente vía `voice_agent_config_id` (sólo hereda prompt/voz, ya no decide el provider), sin mutarlo. Migración de backfill crea automáticamente un `TenantAgent` + versión v1 por cada `TenantVoiceAgentConfig` existente. Ver `docs-local/fase-4/AGENT_BUILDER_ARCHITECTURE.md`. `AgentRuntimeBinding` como tabla independiente y LiveKit quedan para la siguiente fase. |
 | Landing e i18n | Operativa | Landing bilingüe, pricing, demos, formularios y contenido SEO. |
 | Auth0 y tenants | Operativa | Login, contexto privado, onboarding, administración, membresías y agentes. El administrador de tenants usa un catálogo compacto de integraciones y carga cada configuración en una ruta independiente. |
 | Inicio (`/dashboard`) | Operativa | Resumen ejecutivo del tenant: bloque CRM (leads nuevos/calificados, citas, conversión), bloque Voz IA (llamadas, atendidas, tasa de respuesta, minutos) y "Atención requerida" (tareas vencidas, % de minutos usados, capacidad SIP, integraciones con error), todo desde endpoints ya existentes. Ya no redirige a `/crm`. |
@@ -24,7 +25,7 @@ Actualizado: 2026-09-01. Fuente: código, migraciones y pruebas del repositorio.
 
 ## Persistencia
 
-Las migraciones cubren identidad, analítica, riesgo Auth0, planes/uso, CRM base y contexto de llamadas, Resend/email/formularios, Cal.com/Google Calendar, WhatsApp, voz, disponibilidad de integraciones, notificaciones, grants tenant, context submissions, runtime WebRTC, rutas SIP/callbacks salientes, configuración multi-tenant de Chatwoot (incluye `mode`), Google Calendar multi-tenant con recursos agendables y motor de scheduling (equipos, excepciones, reglas y agentes), y entidades proyectadas de proveedor Cal.com (schedules, event types, provider objects). La migración más reciente es `202609050001_calcom_scheduling_provider_entities.py` y la cadena conserva una única head.
+Las migraciones cubren identidad, analítica, riesgo Auth0, planes/uso, CRM base y contexto de llamadas, Resend/email/formularios, Cal.com/Google Calendar, WhatsApp, voz, disponibilidad de integraciones, notificaciones, grants tenant, context submissions, runtime WebRTC, rutas SIP/callbacks salientes, configuración multi-tenant de Chatwoot (incluye `mode`), Google Calendar multi-tenant con recursos agendables, motor de scheduling (equipos, excepciones, reglas y agentes), entidades proyectadas de proveedor Cal.com (schedules, event types, provider objects), y el dominio Agent Builder (`tenant_agents`, `tenant_agent_versions`) con backfill automático desde `tenant_voice_agent_configs`. La migración más reciente es `202609060001_agent_builder_foundation.py` y la cadena conserva una única head.
 
 
 ## Arquitectura de navegación del tenant
@@ -41,6 +42,7 @@ Tenant
 │   ├── Tareas         /crm/tasks
 │   └── Rendimiento    /crm/analytics
 ├── Voz IA
+│   ├── Agentes        /voice-ai/agents
 │   ├── Experiencias   /voice-ai/experiences
 │   ├── Llamadas       /voice-ai/calls
 │   ├── Analítica      /voice-ai/analytics
@@ -76,6 +78,7 @@ Redirects permanentes desde las rutas legacy (preservan query params):
 
 ## Pendientes explícitos
 
+- Agent Builder: backlog completo documentado en `docs-local/fase-4/AGENT_BUILDER_ARCHITECTURE.md` ("Pendientes") — resumen: `AgentRuntimeBinding` como entidad propia, Registry en base de datos, `DynamicModelSettings` editable, pestañas no construidas (Conocimiento, Herramientas, Flujos, Transferencias, Telefonía, Evaluaciones — ni UI ni backend, no confundir con "próximamente" ficticio), sin `agent_version_id` en `CrmVoiceCall` ni en ninguna llamada real (`VoiceClient`/Ultravox siguen siendo el único runtime operativo), evento `runtime_binding_changed` no separado de `agent_draft_updated`, sin spec Playwright ni prueba manual en navegador, y una limitación conocida del backfill (no pasa por `validate_runtime_selection`).
 - Habilitar Google Calendar `events.insert` sólo en un sprint dedicado con callback, scopes y pruebas completas.
 - Evolucionar el builder de formularios y la UI de submissions si el producto lo requiere.
 - Mantener separados futuros cambios de WhatsApp y voz.
@@ -101,4 +104,4 @@ Redirects permanentes desde las rutas legacy (preservan query params):
 
 ## Evidencia de pruebas
 
-El repositorio contiene cobertura backend específica para identidad, analítica, CRM, dashboard, Resend, assets, formularios, Cal.com, Google Calendar foundation, WhatsApp, voz, context schemas, Voice Experiences, resolución pública y snapshots publicados, webhooks, límites de uso y el pipeline de notificaciones; incluye la compatibilidad del tema con snapshots anteriores a `background_color`/`color_scheme`. El frontend incluye lint, typecheck, build, pruebas privadas y `frontend/tests/public-voice-experiences.spec.ts` y `frontend/tests/public-voice-embed.spec.ts` (tema claro/oscuro/fondo personalizado, chrome de la ruta `/embed`, resize por `postMessage` contra un host HTTP real y los tres modos del SDK); la ruta pública no requiere sesión Auth0. Los resultados históricos están en `docs-local/` y deben ejecutarse nuevamente antes de cada entrega.
+El repositorio contiene cobertura backend específica para identidad, analítica, CRM, dashboard, Resend, assets, formularios, Cal.com, Google Calendar foundation, WhatsApp, voz, context schemas, Voice Experiences, resolución pública y snapshots publicados, webhooks, límites de uso, el pipeline de notificaciones y Agent Builder (`test_agent_builder.py`: draft/publish/versionado, aislamiento multi-tenant, feature flag, compatibilidad con `TenantVoiceAgentConfig`, validación de `runtime_binding` contra el Registry; `test_migration_agent_builder_backfill.py`: backfill idempotente desde configs Ultravox existentes; `test_voice_registry.py`: catálogo de providers/modelos y filtros); incluye la compatibilidad del tema con snapshots anteriores a `background_color`/`color_scheme`. El frontend incluye lint, typecheck, build, pruebas privadas y `frontend/tests/public-voice-experiences.spec.ts` y `frontend/tests/public-voice-embed.spec.ts` (tema claro/oscuro/fondo personalizado, chrome de la ruta `/embed`, resize por `postMessage` contra un host HTTP real y los tres modos del SDK); la ruta pública no requiere sesión Auth0. Agent Builder no tiene todavía spec Playwright dedicado. Los resultados históricos están en `docs-local/` y deben ejecutarse nuevamente antes de cada entrega.
