@@ -12,8 +12,8 @@ import {
   XCircle,
   AlertCircle,
   ShieldAlert,
-  Loader2,
 } from 'lucide-react';
+import { CircularLoader } from '@/components/ui/circular-loader';
 import {
   leadActionCall,
   changeCrmLeadStage,
@@ -360,7 +360,7 @@ export function CrmLeadQuickActions({
             </Button>
             <Button type="button" disabled={loadingAction !== null}
               onClick={handleTerminalStageSubmit}>
-              {loadingAction !== null ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              {loadingAction !== null ? <CircularLoader size="xs" glow={false} className="mr-2" /> : null}
               Guardar Cambios
             </Button>
           </DialogFooter>

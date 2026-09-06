@@ -7,12 +7,12 @@ import {
   CheckCircle2,
   Clock3,
   LayoutDashboard,
-  Loader2,
   Send,
   UserRoundCheck,
   UsersRound,
   Workflow,
 } from 'lucide-react';
+import { CircularLoader } from '@/components/ui/circular-loader';
 
 import { updateNotificationCapabilityAction } from '@/app/[locale]/(tenant)/automations/notifications/actions';
 import type {
@@ -261,7 +261,7 @@ function OverviewTab({
                   }`}
                 >
                   {isSaving ? (
-                    <Loader2 aria-hidden="true" className="mx-auto size-4 animate-spin text-primary-foreground" />
+                    <CircularLoader size="xs" glow={false} className="mx-auto" />
                   ) : (
                     <span
                       className={`inline-block size-4 transform rounded-full bg-background shadow-sm transition-transform ${

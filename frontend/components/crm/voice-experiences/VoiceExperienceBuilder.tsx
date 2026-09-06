@@ -10,7 +10,6 @@ import {
   ChevronLeft,
   Eye,
   FileText,
-  Loader2,
   Lock,
   Mic2,
   PanelLeft,
@@ -21,6 +20,7 @@ import {
   Sparkles,
   Trash2,
 } from 'lucide-react';
+import { CircularLoader } from '@/components/ui/circular-loader';
 import { useTranslations } from 'next-intl';
 import {
   archiveVoiceExperienceAction,
@@ -934,7 +934,7 @@ export function VoiceExperienceBuilder({
             </div>
           </dl>
           <Button type="button" size="lg" disabled={submitting || !canEdit || !form.context_schema_id} onClick={save}>
-            {submitting ? <Loader2 className="mr-2 size-4 animate-spin" aria-hidden="true" /> : <Sparkles className="mr-2 size-4" aria-hidden="true" />}
+            {submitting ? <CircularLoader size="xs" glow={false} className="mr-2" /> : <Sparkles className="mr-2 size-4" aria-hidden="true" />}
             {t('wizard.createDraft')}
           </Button>
           {form.context_schema_id && !activeSchema ? (
@@ -1003,7 +1003,7 @@ export function VoiceExperienceBuilder({
               </span>
               {editable ? (
                 <Button type="button" variant="outline" disabled={!dirty || submitting} onClick={save}>
-                  {submitting ? <Loader2 className="mr-2 size-4 animate-spin" aria-hidden="true" /> : <Save className="mr-2 size-4" aria-hidden="true" />}
+                  {submitting ? <CircularLoader size="xs" glow={false} className="mr-2" /> : <Save className="mr-2 size-4" aria-hidden="true" />}
                   {t('common.save')}
                 </Button>
               ) : null}

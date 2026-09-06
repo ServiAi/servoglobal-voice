@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { Send, FileText } from 'lucide-react';
+import { CircularLoader } from '@/components/ui/circular-loader';
 import { canCreateNote } from '@/lib/permissions/crm';
 
 type CrmNoteFormProps = {
@@ -71,7 +72,7 @@ export function CrmNoteForm({ onSubmit, userRole }: CrmNoteFormProps) {
           >
             {submitting ? (
               <>
-                <div className="h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                <CircularLoader size="xs" glow={false} />
                 Guardando...
               </>
             ) : (

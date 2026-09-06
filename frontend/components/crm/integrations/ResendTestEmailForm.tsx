@@ -2,7 +2,8 @@
 
 import type { FormEvent } from 'react';
 import { useState } from 'react';
-import { Loader2, Send } from 'lucide-react';
+import { Send } from 'lucide-react';
+import { CircularLoader } from '@/components/ui/circular-loader';
 import { Button } from '@/components/ui/button';
 import { testResendIntegration, testAdminTenantResendIntegration } from '@/lib/api/crm';
 import { FieldHelp } from './FieldHelp';
@@ -50,7 +51,7 @@ export function ResendTestEmailForm({ accessToken, disabled, mode = 'tenant', te
         />
       </label>
       <Button type="submit" disabled={disabled || sending} variant="outline" className="gap-2">
-        {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+        {sending ? <CircularLoader size="xs" glow={false} /> : <Send className="h-4 w-4" />}
         Probar
       </Button>
     </form>

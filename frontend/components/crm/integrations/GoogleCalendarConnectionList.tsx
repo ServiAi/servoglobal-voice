@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Calendar, Loader2, PowerOff, RefreshCw, Trash2 } from 'lucide-react';
+import { Calendar, PowerOff, RefreshCw, Trash2 } from 'lucide-react';
+import { CircularLoader } from '@/components/ui/circular-loader';
 import { Button } from '@/components/ui/button';
 import { fetchGoogleCalendars, syncGoogleCalendarConnection, updateGoogleCalendar } from '@/lib/api/crm';
 import type { GoogleCalendarConnectionResponse, TenantGoogleCalendarResponse } from '@/types/crm';
@@ -147,7 +148,7 @@ export function GoogleCalendarConnectionList({ accessToken, connections, onDisco
                     aria-label="Sincronizar calendarios"
                   >
                     {isSyncing ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <CircularLoader size="xs" glow={false} />
                     ) : (
                       <RefreshCw className="h-4 w-4" />
                     )}
@@ -165,7 +166,7 @@ export function GoogleCalendarConnectionList({ accessToken, connections, onDisco
                     title="Desconectar cuenta"
                   >
                     {disconnectingId === connection.id ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <CircularLoader size="xs" glow={false} />
                     ) : (
                       <PowerOff className="h-4 w-4" />
                     )}
@@ -183,7 +184,7 @@ export function GoogleCalendarConnectionList({ accessToken, connections, onDisco
                     className="text-destructive hover:bg-destructive/10 hover:text-destructive border-destructive/20"
                   >
                     {deletingId === connection.id ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <CircularLoader size="xs" glow={false} />
                     ) : (
                       <Trash2 className="h-4 w-4" />
                     )}
@@ -200,7 +201,7 @@ export function GoogleCalendarConnectionList({ accessToken, connections, onDisco
                   <span className="flex items-center gap-1">
                     <Calendar className="h-3.5 w-3.5" /> Calendarios disponibles ({calendars.length})
                   </span>
-                  {isLoadingCal && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                  {isLoadingCal && <CircularLoader size="xs" glow={false} />}
                 </div>
 
                 {calendars.length === 0 && !isLoadingCal ? (

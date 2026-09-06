@@ -1,7 +1,8 @@
 'use client';
 
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Eye, FileUp, Loader2, Send, Trash2 } from 'lucide-react';
+import { Eye, FileUp, Send, Trash2 } from 'lucide-react';
+import { CircularLoader } from '@/components/ui/circular-loader';
 import { Button } from '@/components/ui/button';
 import {
   createCallSummaryAsset,
@@ -489,7 +490,7 @@ export function EmailComposerModal({
                         void deleteAsset(asset);
                       }}
                     >
-                      {loading === 'delete' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                      {loading === 'delete' ? <CircularLoader size="xs" glow={false} /> : <Trash2 className="h-4 w-4" />}
                     </button>
                   </label>
                 ))}
@@ -519,11 +520,11 @@ export function EmailComposerModal({
         </div>
         <DialogFooter className="gap-2">
           <Button type="button" variant="outline" disabled={loading !== null} onClick={() => submit(true)} className="gap-2">
-            {loading === 'preview' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eye className="h-4 w-4" />}
+            {loading === 'preview' ? <CircularLoader size="xs" glow={false} /> : <Eye className="h-4 w-4" />}
             Preview
           </Button>
           <Button type="button" variant="outline" disabled={loading !== null || !toEmail} onClick={sendTest} className="gap-2">
-            {loading === 'test' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+            {loading === 'test' ? <CircularLoader size="xs" glow={false} /> : <Send className="h-4 w-4" />}
             Enviar prueba
           </Button>
           <Button
@@ -532,7 +533,7 @@ export function EmailComposerModal({
             onClick={() => submit(false)}
             className="gap-2"
           >
-            {loading === 'send' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+            {loading === 'send' ? <CircularLoader size="xs" glow={false} /> : <Send className="h-4 w-4" />}
             Enviar al lead
           </Button>
         </DialogFooter>

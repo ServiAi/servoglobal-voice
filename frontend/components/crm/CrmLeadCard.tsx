@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { ArrowRightLeft, Building2, CalendarClock, Eye, Loader2 } from 'lucide-react';
+import { ArrowRightLeft, Building2, CalendarClock, Eye } from 'lucide-react';
+import { CircularLoader } from '@/components/ui/circular-loader';
 import type { PipelineBoardLeadItem } from '@/types/crm';
 import { formatCrmDate } from './lead-workspace/crm-format';
 import { CrmStatusBadge } from './shared/CrmStatusBadge';
@@ -53,7 +54,7 @@ export function CrmLeadCard({ lead, locale, stages, onStageChange, currentStageK
         <DialogContent className="sm:max-w-md">
           <DialogHeader><DialogTitle>Mover Lead</DialogTitle><DialogDescription>Etapa actual: {currentStage?.name ?? currentStageKey}. Selecciona el nuevo destino para {lead.contact_name}.</DialogDescription></DialogHeader>
           <label className="space-y-1 py-2"><span className="text-sm font-medium text-foreground">Nueva etapa</span><select value={selectedStage} onChange={(event) => setSelectedStage(event.target.value)} disabled={updating} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring">{stages.map((stage) => <option key={stage.key} value={stage.key}>{stage.name}{stage.key === currentStageKey ? ' (actual)' : ''}</option>)}</select></label>
-          <DialogFooter><Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={updating}>Cancelar</Button><Button type="button" onClick={moveLead} disabled={updating || selectedStage === currentStageKey}>{updating ? <Loader2 className="mr-2 size-4 animate-spin motion-reduce:animate-none" /> : null}{updating ? 'Moviendo…' : 'Confirmar movimiento'}</Button></DialogFooter>
+          <DialogFooter><Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={updating}>Cancelar</Button><Button type="button" onClick={moveLead} disabled={updating || selectedStage === currentStageKey}>{updating ? <CircularLoader size="xs" glow={false} className="mr-2" /> : null}{updating ? 'Moviendo…' : 'Confirmar movimiento'}</Button></DialogFooter>
         </DialogContent>
       </Dialog>
     </Card>

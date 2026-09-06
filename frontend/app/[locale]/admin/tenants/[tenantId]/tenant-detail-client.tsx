@@ -7,7 +7,6 @@ import {
   Building2,
   Users,
   Mic,
-  Loader2,
   AlertCircle,
   CheckCircle2,
   Clock,
@@ -23,6 +22,7 @@ import {
   Settings,
   KeyRound,
 } from 'lucide-react';
+import { CircularLoader, CircularLoadingState } from '@/components/ui/circular-loader';
 
 import {
   type TenantDetail,
@@ -349,9 +349,11 @@ export function TenantDetailClient({
 
   if (loading) {
     return (
-      <div className="flex min-h-[60vh] items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-zinc-400 dark:text-zinc-500" />
-      </div>
+      <CircularLoadingState
+        message="Cargando detalles del tenant…"
+        description="Recuperando configuración, membresías y límites"
+        minHeight="min-h-[60vh]"
+      />
     );
   }
 
@@ -700,7 +702,7 @@ export function TenantDetailClient({
                           title="Enviar correo para configurar contraseña"
                         >
                           {resettingMembershipId === m.id ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin text-cyan-600" />
+                            <CircularLoader size="xs" glow={false} />
                           ) : (
                             <KeyRound className="h-3.5 w-3.5 text-zinc-500 dark:text-zinc-400" />
                           )}
@@ -714,7 +716,7 @@ export function TenantDetailClient({
                           title="Eliminar membresía"
                         >
                           {deletingMembershipId === m.id ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin text-red-600" />
+                            <CircularLoader size="xs" glow={false} />
                           ) : (
                             <Trash2 className="h-3.5 w-3.5 text-red-500 dark:text-red-400" />
                           )}
@@ -925,7 +927,7 @@ export function TenantDetailClient({
                 className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-950 disabled:text-red-300/50 dark:bg-red-500 dark:hover:bg-red-400"
               >
                 {deleting ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <CircularLoader size="sm" glow={false} />
                 ) : (
                   <Trash2 className="h-4 w-4" />
                 )}

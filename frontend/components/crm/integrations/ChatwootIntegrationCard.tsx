@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { AlertCircle, Copy, Eye, EyeOff, Loader2, MessageCircle, Send, Settings2, Sparkles, Unplug } from 'lucide-react';
+import { AlertCircle, Copy, Eye, EyeOff, MessageCircle, Send, Settings2, Sparkles, Unplug } from 'lucide-react';
+import { CircularLoader } from '@/components/ui/circular-loader';
 import { Button } from '@/components/ui/button';
 import {
   disconnectAdminTenantChatwoot,
@@ -167,11 +168,11 @@ export function ChatwootIntegrationCard({ accessToken, initialConfig, mode = 'te
                 {manageOpen ? 'Ocultar conexión' : 'Manage connection'}
               </Button>
               <Button type="button" variant="outline" disabled={!config?.has_secret || testing} onClick={handleTest} className="gap-2">
-                {testing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                {testing ? <CircularLoader size="sm" glow={false} /> : <Send className="h-4 w-4" />}
                 Test connection
               </Button>
               <Button type="button" variant="outline" disabled={disconnecting} onClick={handleDisconnect} className="gap-2 text-destructive hover:text-destructive">
-                {disconnecting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Unplug className="h-4 w-4" />}
+                {disconnecting ? <CircularLoader size="sm" glow={false} /> : <Unplug className="h-4 w-4" />}
                 Disconnect
               </Button>
             </div>
@@ -261,7 +262,7 @@ export function ChatwootIntegrationCard({ accessToken, initialConfig, mode = 'te
                   </p>
                 </div>
                 <Button type="button" onClick={handleProvision} disabled={provisioning} className="gap-2 sm:shrink-0">
-                  {provisioning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                  {provisioning ? <CircularLoader size="sm" glow={false} /> : <Sparkles className="h-4 w-4" />}
                   {isManagedReconnect ? 'Reconectar' : 'Crear automáticamente'}
                 </Button>
               </div>

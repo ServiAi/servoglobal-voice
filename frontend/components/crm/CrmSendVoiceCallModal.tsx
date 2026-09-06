@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Loader2, Phone, Play, Volume2, AlertTriangle, Clock } from 'lucide-react';
+import { Phone, Play, Volume2, AlertTriangle, Clock } from 'lucide-react';
+import { CircularLoader } from '@/components/ui/circular-loader';
 import { fetchVoiceAgents, startCrmLeadVoiceCall, fetchCrmLeadVoiceCalls } from '@/lib/api/crm';
 import { Button } from '@/components/ui/button';
 import {
@@ -195,7 +196,7 @@ export function CrmSendVoiceCallModal({
 
             {loadingHistory ? (
               <div className="text-center py-6 text-xs text-muted-foreground flex items-center justify-center gap-2">
-                <Loader2 className="h-4 w-4 animate-spin text-indigo-500" />
+                <CircularLoader size="xs" glow={false} />
                 Cargando historial de llamadas...
               </div>
             ) : calls.length === 0 ? (
@@ -258,7 +259,7 @@ export function CrmSendVoiceCallModal({
             className="bg-indigo-600 hover:bg-indigo-500 text-white gap-2"
           >
             {loading ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <CircularLoader size="xs" glow={false} />
             ) : (
               <Play className="h-4 w-4 fill-current" />
             )}

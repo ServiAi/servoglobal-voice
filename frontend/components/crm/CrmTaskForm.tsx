@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { Plus, CheckSquare } from 'lucide-react';
+import { CircularLoader } from '@/components/ui/circular-loader';
 import { canCreateTask } from '@/lib/permissions/crm';
 
 type CrmTaskFormProps = {
@@ -145,7 +146,7 @@ export function CrmTaskForm({ onSubmit, userRole }: CrmTaskFormProps) {
           >
             {submitting ? (
               <>
-                <div className="h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                <CircularLoader size="xs" glow={false} />
                 Creando...
               </>
             ) : (

@@ -1,8 +1,8 @@
 'use client';
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { Loader2, RefreshCw, Send, ShieldCheck } from 'lucide-react';
-
+import { RefreshCw, Send, ShieldCheck } from 'lucide-react';
+import { CircularLoader } from '@/components/ui/circular-loader';
 import { Button } from '@/components/ui/button';
 import {
   fetchAdminTenantWhatsAppTemplates,
@@ -109,7 +109,7 @@ export function WhatsAppTestForm({ accessToken, templates: initialTemplates, dis
           <p className="text-sm text-muted-foreground">Esta prueba valida el token y el Phone Number ID. No envía mensajes.</p>
         </div>
         <Button type="button" disabled={disabled || busy !== null} variant="outline" className="gap-2" onClick={validateConnection}>
-          {busy === 'connection' ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
+          {busy === 'connection' ? <CircularLoader size="xs" glow={false} /> : <ShieldCheck className="h-4 w-4" />}
           Validar conexión con Meta
         </Button>
       </section>
@@ -120,7 +120,7 @@ export function WhatsAppTestForm({ accessToken, templates: initialTemplates, dis
           <p className="text-sm text-muted-foreground">Sincroniza únicamente plantillas aprobadas y usa una para enviar un WhatsApp real.</p>
         </div>
         <Button type="button" disabled={disabled || busy !== null} variant="outline" className="gap-2" onClick={syncTemplates}>
-          {busy === 'sync' ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+          {busy === 'sync' ? <CircularLoader size="xs" glow={false} /> : <RefreshCw className="h-4 w-4" />}
           Sincronizar plantillas aprobadas
         </Button>
         {syncResult && (
@@ -160,7 +160,7 @@ export function WhatsAppTestForm({ accessToken, templates: initialTemplates, dis
             </div>
           )}
           <Button type="submit" disabled={disabled || busy !== null || !templateKey} className="gap-2">
-            {busy === 'message' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+            {busy === 'message' ? <CircularLoader size="xs" glow={false} /> : <Send className="h-4 w-4" />}
             Enviar mensaje de prueba
           </Button>
           {messageResult && <p role="status" className="rounded-md border border-emerald-500/20 bg-emerald-500/10 p-3 text-sm text-emerald-700 dark:text-emerald-300">{messageResult}</p>}

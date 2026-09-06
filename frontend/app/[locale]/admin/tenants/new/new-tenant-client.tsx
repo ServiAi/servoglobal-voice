@@ -7,13 +7,13 @@ import {
   Building2,
   Plus,
   X,
-  Loader2,
   AlertCircle,
   CheckCircle2,
   User,
   Mic,
   ArrowLeft,
 } from 'lucide-react';
+import { CircularLoader } from '@/components/ui/circular-loader';
 
 import {
   createTenant,
@@ -505,7 +505,7 @@ export function NewTenantClient({ locale }: NewTenantClientProps) {
             disabled={loading}
             className="inline-flex items-center gap-2 rounded-lg bg-cyan-600 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-cyan-700 disabled:opacity-50 dark:bg-cyan-500 dark:hover:bg-cyan-400"
           >
-            {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+            {loading && <CircularLoader size="sm" glow={false} />}
             {loading ? 'Creando...' : 'Crear tenant'}
           </button>
         </div>

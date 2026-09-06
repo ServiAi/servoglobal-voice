@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Check, Loader2, Pencil, Plus, Trash2, X } from 'lucide-react';
+import { Check, Pencil, Plus, Trash2, X } from 'lucide-react';
+import { CircularLoader } from '@/components/ui/circular-loader';
 import { Button } from '@/components/ui/button';
 import type { ChatwootAgentSummary, ChatwootInboxSummary, ChatwootTeamSummary } from '@/types/crm';
 import {
@@ -294,7 +295,7 @@ export function ChatwootResourcesPanel({ accessToken, mode = 'tenant', tenantId,
                     autoFocus
                   />
                   <Button type="button" size="icon" variant="outline" className={ICON_BTN_CLASS} onClick={() => handleSaveInbox(inbox.id)} disabled={busyKey === `inbox-${inbox.id}` || !editingInboxName.trim()} aria-label="Guardar">
-                    {busyKey === `inbox-${inbox.id}` ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+                    {busyKey === `inbox-${inbox.id}` ? <CircularLoader size="xs" glow={false} /> : <Check className="h-3 w-3" />}
                   </Button>
                   <Button type="button" size="icon" variant="ghost" className={ICON_BTN_CLASS} onClick={() => setEditingInboxId(null)} aria-label="Cancelar">
                     <X className="h-3 w-3" />
@@ -319,7 +320,7 @@ export function ChatwootResourcesPanel({ accessToken, mode = 'tenant', tenantId,
               aria-label="Nombre del nuevo inbox"
             />
             <Button type="button" size="icon" variant="outline" className="h-9 w-9 shrink-0" onClick={handleCreateInbox} disabled={creatingInbox || !newInboxName.trim()} aria-label="Crear inbox">
-              {creatingInbox ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+              {creatingInbox ? <CircularLoader size="xs" glow={false} /> : <Plus className="h-3.5 w-3.5" />}
             </Button>
           </div>
           <p className="text-[11px] text-muted-foreground/70">Chatwoot no permite borrar inboxes por API; hazlo desde Chatwoot si lo necesitas.</p>
@@ -340,7 +341,7 @@ export function ChatwootResourcesPanel({ accessToken, mode = 'tenant', tenantId,
                     autoFocus
                   />
                   <Button type="button" size="icon" variant="outline" className={ICON_BTN_CLASS} onClick={() => handleSaveTeam(team.id)} disabled={busyKey === `team-${team.id}` || !editingTeamName.trim()} aria-label="Guardar">
-                    {busyKey === `team-${team.id}` ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+                    {busyKey === `team-${team.id}` ? <CircularLoader size="xs" glow={false} /> : <Check className="h-3 w-3" />}
                   </Button>
                   <Button type="button" size="icon" variant="ghost" className={ICON_BTN_CLASS} onClick={() => setEditingTeamId(null)} aria-label="Cancelar">
                     <X className="h-3 w-3" />
@@ -354,7 +355,7 @@ export function ChatwootResourcesPanel({ accessToken, mode = 'tenant', tenantId,
                       <Pencil className="h-3 w-3" />
                     </Button>
                     <Button type="button" size="icon" variant="ghost" className={`${ICON_BTN_CLASS} text-destructive hover:text-destructive`} onClick={() => handleDeleteTeam(team)} disabled={busyKey === `team-${team.id}`} aria-label={`Borrar ${team.name}`}>
-                      {busyKey === `team-${team.id}` ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
+                      {busyKey === `team-${team.id}` ? <CircularLoader size="xs" glow={false} /> : <Trash2 className="h-3 w-3" />}
                     </Button>
                   </span>
                 </li>
@@ -378,7 +379,7 @@ export function ChatwootResourcesPanel({ accessToken, mode = 'tenant', tenantId,
                 aria-label="Descripción del nuevo team"
               />
               <Button type="button" size="icon" variant="outline" className="h-9 w-9 shrink-0" onClick={handleCreateTeam} disabled={creatingTeam || !newTeamName.trim()} aria-label="Crear team">
-                {creatingTeam ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+                {creatingTeam ? <CircularLoader size="xs" glow={false} /> : <Plus className="h-3.5 w-3.5" />}
               </Button>
             </div>
           </div>
@@ -409,7 +410,7 @@ export function ChatwootResourcesPanel({ accessToken, mode = 'tenant', tenantId,
                       <option value="administrator">Administrador</option>
                     </select>
                     <Button type="button" size="icon" variant="outline" className={ICON_BTN_CLASS} onClick={() => handleSaveAgent(agent.id)} disabled={busyKey === `agent-${agent.id}` || !editingAgentName.trim()} aria-label="Guardar">
-                      {busyKey === `agent-${agent.id}` ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+                      {busyKey === `agent-${agent.id}` ? <CircularLoader size="xs" glow={false} /> : <Check className="h-3 w-3" />}
                     </Button>
                     <Button type="button" size="icon" variant="ghost" className={ICON_BTN_CLASS} onClick={() => setEditingAgentId(null)} aria-label="Cancelar">
                       <X className="h-3 w-3" />
@@ -427,7 +428,7 @@ export function ChatwootResourcesPanel({ accessToken, mode = 'tenant', tenantId,
                       <Pencil className="h-3 w-3" />
                     </Button>
                     <Button type="button" size="icon" variant="ghost" className={`${ICON_BTN_CLASS} text-destructive hover:text-destructive`} onClick={() => handleDeleteAgent(agent)} disabled={busyKey === `agent-${agent.id}`} aria-label={`Quitar ${agent.name}`}>
-                      {busyKey === `agent-${agent.id}` ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
+                      {busyKey === `agent-${agent.id}` ? <CircularLoader size="xs" glow={false} /> : <Trash2 className="h-3 w-3" />}
                     </Button>
                   </span>
                 </li>
@@ -469,7 +470,7 @@ export function ChatwootResourcesPanel({ accessToken, mode = 'tenant', tenantId,
                 disabled={invitingAgent || !newAgentName.trim() || !newAgentEmail.trim()}
                 aria-label="Invitar agente"
               >
-                {invitingAgent ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+                {invitingAgent ? <CircularLoader size="xs" glow={false} /> : <Plus className="h-3.5 w-3.5" />}
               </Button>
             </div>
           </div>

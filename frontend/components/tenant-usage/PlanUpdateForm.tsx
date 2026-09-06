@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
-import { Loader2, Save } from 'lucide-react';
+import { Save } from 'lucide-react';
+import { CircularLoader } from '@/components/ui/circular-loader';
 
 import type { TenantPlanPayload, TenantUsage } from '@/lib/api/tenants';
 import { TenantPlanFields } from '@/components/tenant-usage/TenantPlanFields';
@@ -76,7 +77,7 @@ export function PlanUpdateForm({ usage, saving, onSubmit }: PlanUpdateFormProps)
           className="inline-flex items-center gap-2 rounded-lg bg-cyan-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-cyan-500 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {saving ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
+            <CircularLoader size="xs" glow={false} />
           ) : (
             <Save className="h-4 w-4" />
           )}

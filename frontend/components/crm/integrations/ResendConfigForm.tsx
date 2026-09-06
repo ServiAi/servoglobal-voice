@@ -2,7 +2,8 @@
 
 import type { FormEvent } from 'react';
 import { useState } from 'react';
-import { Save, Loader2 } from 'lucide-react';
+import { Save } from 'lucide-react';
+import { CircularLoader } from '@/components/ui/circular-loader';
 import { Button } from '@/components/ui/button';
 import { configureResendIntegration, configureAdminTenantResendIntegration } from '@/lib/api/crm';
 import type { ResendIntegrationConfigResponse } from '@/types/crm';
@@ -77,7 +78,7 @@ export function ResendConfigForm({ accessToken, config, mode = 'tenant', tenantI
       <div className="flex flex-col gap-3 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between md:col-span-2">
         <span className="text-xs font-medium text-muted-foreground">API key configurada: {config?.has_secret ? 'Sí' : 'No'}</span>
         <Button type="submit" disabled={saving} className="gap-2">
-          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+          {saving ? <CircularLoader size="xs" glow={false} /> : <Save className="h-4 w-4" />}
           Guardar
         </Button>
       </div>
