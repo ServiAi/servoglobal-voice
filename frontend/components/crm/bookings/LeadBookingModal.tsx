@@ -216,8 +216,8 @@ export function LeadBookingModal({
         </DialogHeader>
 
         {loading ? (
-          <div className="flex min-h-40 flex-col items-center justify-center p-6 text-sm text-muted-foreground">
-            <CircularLoader size="lg" glow={true} label="Cargando agenda..." showLabel={true} />
+          <div className="flex min-h-48 w-full items-center justify-center p-6">
+            <CircularLoader size="xl" glow={true} label="Cargando agenda..." />
           </div>
         ) : (
           <div className="grid gap-5 lg:grid-cols-[1fr_260px]">
