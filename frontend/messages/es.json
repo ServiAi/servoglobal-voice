@@ -698,6 +698,7 @@
       "tasks": "Tareas",
       "performance": "Rendimiento",
       "voiceGroup": "Voz IA",
+      "agents": "Agentes",
       "voiceExperiences": "Experiencias de voz",
       "voiceCalls": "Llamadas",
       "voiceAnalytics": "Analítica",
@@ -1278,6 +1279,58 @@
         "timezoneSuggestion": "Sugerencia: America/Bogota",
         "defaultValue": "Valor por defecto"
       }
+    },
+    "agentBuilder": {
+      "newAgent": "Nuevo agente",
+      "createAgent": "Crear agente",
+      "saveDraft": "Guardar borrador",
+      "draftSaved": "Borrador guardado",
+      "publish": "Publicar versión",
+      "status": { "draft": "Borrador", "active": "Activo", "archived": "Archivado" },
+      "versionStatus": { "draft": "Borrador", "published": "Publicada", "superseded": "Reemplazada" },
+      "featureDisabled": { "title": "Funcionalidad no habilitada", "description": "Agent Builder no está habilitado para este tenant." },
+      "accessDenied": { "title": "Acceso restringido", "description": "Tu rol no tiene permiso para administrar agentes." },
+      "errors": { "loadTitle": "No se pudo cargar", "generic": "Ocurrió un error inesperado. Intenta de nuevo.", "conflict": "La acción no es válida en el estado actual del agente.", "validation": "Revisa los campos del formulario.", "publishValidation": "El prompt del sistema es obligatorio antes de publicar." },
+      "list": {
+        "eyebrow": "Agentes ServiGlobal",
+        "count": "{count, plural, =0 {Sin agentes} one {# agente} other {# agentes}}",
+        "empty": "Aún no hay agentes",
+        "emptyAction": "Crea tu primer agente y define su identidad, prompt y comportamiento.",
+        "noDescription": "Sin descripción",
+        "engine": "Motor",
+        "updated": "Actualizado {date}",
+        "open": "Abrir",
+        "archivedNotice": "Archivado"
+      },
+      "actions": { "archive": "Archivar" },
+      "confirm": { "archive": { "title": "Archivar agente", "description": "El agente dejará de estar disponible para edición o publicación. Esta acción se puede revertir contactando a soporte." } },
+      "common": { "cancel": "Cancelar" },
+      "tabs": { "general": "General", "behavior": "Comportamiento", "voice": "Voz y modelos", "versions": "Versiones" },
+      "fields": {
+        "name": "Nombre", "description": "Descripción", "language": "Idioma", "timezone": "Zona horaria",
+        "role": "Rol", "objective": "Objetivo", "systemPrompt": "Prompt / instrucciones", "greeting": "Saludo", "closing": "Despedida",
+        "responseStyle": "Estilo de respuesta", "interruptions": "Interrupciones", "turnDetection": "Detección de turno",
+        "confirmationStrategy": "Estrategia de confirmación", "agentFirst": "El agente inicia la conversación"
+      },
+      "behaviorOptions": {
+        "responseStyle": { "precise": "Preciso", "balanced": "Balanceado", "creative": "Creativo" },
+        "interruptions": { "conservative": "Conservadoras", "balanced": "Balanceadas", "responsive": "Responsivas" },
+        "turnDetection": { "automatic": "Automática", "conservative": "Conservadora", "balanced": "Balanceada", "responsive": "Responsiva" },
+        "confirmationStrategy": { "important_data": "Solo datos importantes", "always": "Siempre", "never": "Nunca" }
+      },
+      "voice": {
+        "pipelineType": "Arquitectura", "speechToSpeech": "Speech-to-Speech", "ultravox": "Ultravox", "comingSoon": "Próximamente",
+        "modular": "Modular", "hybrid": "Híbrida",
+        "providerModel": "Proveedor y modelo", "provider": "Proveedor", "model": "Modelo", "noModels": "Sin modelos disponibles",
+        "capabilities": {
+          "tools": "Herramientas", "voice_selection": "Selección de voz", "turn_detection": "Detección de turno",
+          "interruptions": "Interrupciones", "transcription": "Transcripción", "function_calling": "Function calling", "reasoning": "Razonamiento"
+        },
+        "linkTitle": "Vincular agente de voz existente", "linkLabel": "Agente Ultravox",
+        "linkNone": "Sin vincular", "linkHelp": "Opcional: usa la voz y el agente ya configurados en Integraciones → Voz."
+      },
+      "versions": { "empty": "Aún no hay versiones publicadas.", "current": "Publicada actual", "publishedAt": "Publicada el {date}", "neverPublished": "No publicada" },
+      "noDraft": { "description": "Este agente no tiene un borrador editable. Crea uno nuevo a partir de la versión publicada para seguir editando.", "cta": "Crear nuevo borrador" }
     },
     "voiceExperiences": {
       "page": { "eyebrow": "Voice Context", "title": "Experiencias de voz", "description": "Diseña y administra la experiencia privada que prepara el contexto antes de una llamada." },

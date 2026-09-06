@@ -6,6 +6,7 @@ import {
   AudioLines,
   BarChart3,
   BellRing,
+  Bot,
   Calendar,
   CheckSquare2,
   Gauge,
@@ -38,6 +39,7 @@ const GROUPS = [
   {
     label: 'voiceGroup',
     links: [
+      { label: 'agents', path: '/voice-ai/agents', icon: Bot },
       { label: 'voiceExperiences', path: '/voice-ai/experiences', icon: AudioLines },
       { label: 'voiceCalls', path: '/voice-ai/calls', icon: PhoneCall },
       { label: 'voiceAnalytics', path: '/voice-ai/analytics', icon: BarChart3 },
