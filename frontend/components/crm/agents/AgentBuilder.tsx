@@ -9,7 +9,6 @@ import {
   createAgentAction,
   createAgentNextDraftAction,
   publishAgentAction,
-  updateAgentAction,
   updateAgentDraftAction,
 } from '@/app/[locale]/(tenant)/voice-ai/agents/actions';
 import { ActionDialog } from '@/components/crm/voice-experiences/ActionDialog';
@@ -193,60 +192,73 @@ export function AgentBuilder({
     router.push(`/${locale}/voice-ai/agents/${result.data.id}`);
   }
 
+  function buildDraftPayload() {
+    return {
+      name: form.name,
+      description: form.description || null,
+      language: form.language,
+      timezone: form.timezone,
+      instructions: {
+        role: form.role,
+        objective: form.objective,
+        system_prompt: form.system_prompt,
+        greeting: form.greeting,
+        closing: form.closing,
+      },
+      behavior: form.behavior,
+      voice_agent_config_id: form.voice_agent_config_id || null,
+      pipeline_type: form.pipeline_type,
+      provider: form.provider,
+      model: form.model,
+    };
+  }
+
   async function handleSaveDraft() {
     if (!agent || !draft) return;
     setSaving(true);
     setServerError(null);
-    const [agentResult, draftResult] = await Promise.all([
-      updateAgentAction(locale, agent.id, {
-        name: form.name,
-        description: form.description || null,
-      }),
-      updateAgentDraftAction(locale, agent.id, {
-        language: form.language,
-        timezone: form.timezone,
-        instructions: {
-          role: form.role,
-          objective: form.objective,
-          system_prompt: form.system_prompt,
-          greeting: form.greeting,
-          closing: form.closing,
-        },
-        behavior: form.behavior,
-        voice_agent_config_id: form.voice_agent_config_id || null,
-        pipeline_type: form.pipeline_type,
-        provider: form.provider,
-        model: form.model,
-      }),
-    ]);
+    const result = await updateAgentDraftAction(locale, agent.id, buildDraftPayload());
     setSaving(false);
-    if (!agentResult.ok || !draftResult.ok) {
-      const failed = !agentResult.ok ? agentResult : draftResult;
-      setServerError(t(!failed.ok && failed.status === 422 ? 'errors.validation' : 'errors.generic'));
+    if (!result.ok) {
+      setServerError(t(result.status === 422 ? 'errors.validation' : 'errors.generic'));
       return;
     }
-    setAgent(agentResult.data);
-    setDraft(draftResult.data);
+    setAgent((current) =>
+      current
+        ? { ...current, name: result.data.identity.name, description: result.data.identity.description ?? null }
+        : current
+    );
+    setDraft(result.data);
     setSaved(true);
   }
 
   async function handlePublish() {
-    if (!agent) return;
+    if (!agent || !draft) return;
     setPublishing(true);
     setServerError(null);
-    const result = await publishAgentAction(locale, agent.id);
+    // Always save the on-screen form as the draft first, then publish
+    // exactly that saved version id -- the user should never be able to
+    // publish stale content just by skipping "Guardar".
+    const draftResult = await updateAgentDraftAction(locale, agent.id, buildDraftPayload());
+    if (!draftResult.ok) {
+      setPublishing(false);
+      setServerError(t(draftResult.status === 422 ? 'errors.validation' : 'errors.generic'));
+      return;
+    }
+    const publishResult = await publishAgentAction(locale, agent.id, draftResult.data.id);
     setPublishing(false);
-    if (!result.ok) {
+    if (!publishResult.ok) {
       setServerError(
-        t(result.status === 422 ? 'errors.publishValidation' : 'errors.generic')
+        t(publishResult.status === 422 ? 'errors.publishValidation' : 'errors.generic')
       );
       return;
     }
-    setAgent(result.data);
+    setAgent(publishResult.data);
     setDraft(null);
+    setSaved(false);
     setVersions((current) =>
       current.map((version) =>
-        version.id === result.data.published_version_id
+        version.id === publishResult.data.published_version_id
           ? { ...version, status: 'published', published_at: new Date().toISOString() }
           : version.status === 'published'
             ? { ...version, status: 'superseded' }

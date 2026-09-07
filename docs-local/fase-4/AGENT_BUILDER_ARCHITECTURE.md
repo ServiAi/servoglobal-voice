@@ -1,4 +1,11 @@
-# Agent Builder — Arquitectura (Fase 1 + Fase 2)
+# Agent Builder — Arquitectura (Fase 1 + Fase 2 + Sprint 0 Hardening)
+
+**Sprint 0 Hardening: complete** (backend/frontend; no verificado contra
+PostgreSQL real -- ver "Alembic" en Draft/Publish más abajo). Endureció la
+frontera entre Agent Builder y el futuro Voice Runtime antes de construir
+LiveKit/Runtime Dispatcher encima: reparó el backfill de `draft_version_id`,
+hizo atómico el guardado de draft, protegió `publish` contra concurrencia, y
+tipó `RuntimeSessionSpec` con Pydantic en vez de un `dict` informal.
 
 ## Objetivo
 
@@ -62,14 +69,27 @@ create_agent
     → Agent(status=draft) + AgentVersion v1 (status=draft)
 
 update_draft (PATCH /agents/{id}/draft)
-    → muta la versión draft actual in place
+    → una sola transacción: muta Agent.name/description Y la versión draft
+      actual in place (identity_json incluido). El body ahora exige
+      name/description junto con instructions/behavior/runtime -- el
+      frontend ya no hace dos PATCH separados (Agent + Draft) vía
+      Promise.all; un único updateAgentDraftAction envía todo el formulario.
 
-publish (POST /agents/{id}/publish)
+publish (POST /agents/{id}/publish, body opcional {expected_draft_version_id})
     → requiere instructions.system_prompt no vacío
+    → si expected_draft_version_id viene y no coincide con
+      Agent.draft_version_id actual: 409, nada se publica (protege contra
+      dos pestañas/administradores editando el mismo draft)
     → la versión draft pasa a status=published, published_at=now
     → la versión previamente publicada (si existía) pasa a status=superseded
     → Agent.published_version_id = nueva versión; draft_version_id = null;
       Agent.status = active
+
+    El frontend garantiza "se publica exactamente lo visible en pantalla"
+    guardando primero (PATCH draft con el formulario actual) y publicando
+    después con expected_draft_version_id = id de esa misma versión recién
+    guardada -- nunca publica sin guardar antes, y nunca publica algo que no
+    acaba de guardar.
 
 editar de nuevo (POST /agents/{id}/draft, sin body)
     → sólo si Agent.draft_version_id es null y existe published_version_id
@@ -165,7 +185,15 @@ VoiceClient / Ultravox             (sin cambios, no tocado por esta fase)
   `voice_agent_config_id`. `default_voice` y `default_tools_json` del config
   original no se duplican todavía en `AgentVersion` — siguen viviendo sólo en
   `TenantVoiceAgentConfig` hasta que exista un Model/Capability Registry que
-  les dé un lugar tipado.
+  les dé un lugar tipado. **Bug corregido (Sprint 0 Hardening):** su tabla de
+  backfill no declaraba `draft_version_id`, así que todo agente que quedaba
+  en `draft` (config legacy `inactive`) nunca recibía un draft recuperable
+  vía `GET /agents/{id}/draft`. `202609060001` ya escribe `draft_version_id`
+  para instalaciones nuevas; `202609070001_repair_agent_builder_draft_links.py`
+  repara -- de forma idempotente y tenant-safe -- cualquier agente ya
+  desplegado que haya quedado en ese estado (`status=draft` AND
+  `draft_version_id IS NULL`, exactamente una versión draft candidata; si
+  hay cero o más de una, no adivina y deja el estado inconsistente visible).
 - `AgentRuntimeAdapter` (`backend/app/services/agent_runtime_adapter.py`) es
   la interfaz que aísla el dominio nuevo de Ultravox. `UltravoxLegacyRuntimeAdapter`
   implementa `compile_settings()` resolviendo prompt/voz/`provider_agent_id`
@@ -174,20 +202,45 @@ VoiceClient / Ultravox             (sin cambios, no tocado por esta fase)
 
 ## Compilador
 
-`backend/app/services/agent_compiler_service.py` expone
-`compile_runtime_session_spec(agent, version) -> dict`, un primer
-`AgentCompiler` que arma:
+`backend/app/services/agent_compiler_service.py` expone `AgentCompilerService`
+(y el wrapper de función `compile_runtime_session_spec(agent, version)` para
+llamadores sin estado), que compila a `RuntimeSessionSpecV1` -- un contrato
+Pydantic tipado y versionado (`backend/app/schemas/runtime_session.py`), ya
+no un `dict` informal:
 
 ```json
 {
-  "agent_id": "...", "agent_version_id": "...", "tenant_id": "...",
-  "instructions": {...}, "behavior": {...},
+  "spec_version": "1",
+  "session_id": null,
+  "tenant_id": "...", "agent_id": "...", "agent_version_id": "...",
+  "identity": {"name": "...", "description": "..."},
+  "instructions": {"role": "...", "objective": "...", "system_prompt": "...", "greeting": "...", "closing": "..."},
+  "behavior": {"response_style": "balanced", "interruptions": "balanced", "turn_detection": "automatic", "confirmation_strategy": "important_data", "agent_first": true},
   "language": "es", "timezone": "America/Bogota",
-  "pipeline": {"pipeline_type": "realtime", "realtime": {...}}
+  "runtime": {"pipeline_type": "realtime", "realtime": {"provider": "ultravox", "model": "ultravox", "settings": {}}},
+  "context": {}
 }
 ```
 
-Sin secretos. No se persiste; se calcula bajo demanda.
+`runtime` es una unión discriminada por `pipeline_type` (`RealtimeRuntimeSpec`
+implementado; `CascadeRuntimeSpec`/`HalfCascadeRuntimeSpec` existen sólo como
+forma estructural futura -- `AgentService.validate_runtime_selection` sigue
+rechazando cualquier `pipeline_type` distinto de `realtime` al guardar, así
+que el compilador nunca produce esas variantes hoy). El esquema no importa
+ningún modelo SQLAlchemy (un runtime futuro en otro proceso/deploy no
+necesita `TenantAgent`/`TenantAgentVersion`/`TenantVoiceAgentConfig` para
+entenderlo) y nunca lleva secretos (API keys, tokens, credenciales SIP) --
+esos los resuelve el runtime en ejecución.
+
+`compile()` valida que `version.agent_id == agent.id` y
+`version.tenant_id == agent.tenant_id` (lanza `AgentCompilerError` si no), y
+por defecto rechaza compilar una versión en `draft` salvo que el llamador
+pase `allow_draft=True` explícitamente (modo preview/test futuro).
+`compile_published(agent)` es el único punto de entrada que un flujo de
+ejecución real debería usar: siempre compila `agent.published_version`,
+nunca el draft actual, y falla si no hay versión publicada. No se persiste
+nada; se calcula bajo demanda. `UltravoxLegacyRuntimeAdapter` ya consume
+`RuntimeSessionSpecV1` tipado en vez de un `dict` (`agent_runtime_adapter.py`).
 
 ## Seguridad y multi-tenancy
 
@@ -330,13 +383,18 @@ LiveKit Room
 - No hay spec de Playwright para Agent Builder (creación, edición,
   publicación, versiones, selector de proveedor/modelo) — sí existe cobertura
   backend completa (`test_agent_builder.py`, `test_voice_registry.py`,
-  `test_migration_agent_builder_backfill.py`).
-- No se probó la UI en un navegador real en ninguna de las dos fases; sólo se
+  `test_migration_agent_builder_backfill.py`, `test_agent_compiler.py`).
+- No se probó la UI en un navegador real en ninguna de las fases; sólo se
   verificó que el build genera las rutas y que lint/typecheck pasan.
 - El aislamiento multi-tenant y la validación del Registry están cubiertos a
-  nivel API; no hay test que ejercite `AgentCompilerService` directamente
-  (es una función pura sin efectos secundarios, pero no tiene su propio
-  archivo de test).
+  nivel API. `AgentCompilerService` ya tiene su propio archivo de test
+  (`test_agent_compiler.py`): compila a `RuntimeSessionSpecV1`, valida
+  mismatch de tenant/agent, binding inválido, ausencia de secretos en el
+  resultado, y la restricción draft/`allow_draft`/`compile_published`.
+- La migración `202609070001` no se verificó contra PostgreSQL real (no hay
+  Docker/daemon disponible en este entorno) — sólo contra SQLite con FK
+  habilitadas. Ejecutar `alembic upgrade head` contra Postgres antes de
+  desplegar a un entorno que ya tenga `202609060001` aplicada.
 
 ### 6. Migración de datos — limitación conocida
 

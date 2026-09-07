@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import Any, NoReturn
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Body, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.auth.deps import AuthContext, require_roles
@@ -13,6 +13,7 @@ from app.db.session import get_db
 from app.schemas.agents import (
     AgentCreateRequest,
     AgentDraftUpdateRequest,
+    AgentPublishRequest,
     AgentResponse,
     AgentUpdateRequest,
     AgentVersionResponse,
@@ -182,12 +183,18 @@ def create_agent_next_draft(
 @router.post("/{agent_id}/publish", response_model=AgentResponse)
 def publish_agent(
     agent_id: str,
+    body: AgentPublishRequest | None = Body(default=None),
     context: AuthContext = Depends(require_agent_write),
     db: Session = Depends(get_db),
 ) -> Any:
     service = AgentService(db)
+    expected_draft_version_id = body.expected_draft_version_id if body else None
     try:
-        return service.response(service.publish(context.tenant.id, agent_id, context.user.id))
+        return service.response(
+            service.publish(
+                context.tenant.id, agent_id, context.user.id, expected_draft_version_id
+            )
+        )
     except SERVICE_ERRORS as exc:
         _raise_service_error(exc)
 

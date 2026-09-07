@@ -4,6 +4,7 @@ import { requestAgentEndpoint } from './crm';
 import type {
   AgentCreateRequest,
   AgentDraftUpdateRequest,
+  AgentPublishRequest,
   AgentResponse,
   AgentUpdateRequest,
   AgentVersionResponse,
@@ -51,8 +52,18 @@ export function createAgentNextDraft(accessToken: string, agentId: string) {
   return requestAgentEndpoint<AgentVersionResponse>('POST', `${agentId}/draft`, accessToken);
 }
 
-export function publishAgent(accessToken: string, agentId: string) {
-  return requestAgentEndpoint<AgentResponse>('POST', `${agentId}/publish`, accessToken);
+export function publishAgent(
+  accessToken: string,
+  agentId: string,
+  payload?: AgentPublishRequest
+) {
+  return requestAgentEndpoint<AgentResponse>(
+    'POST',
+    `${agentId}/publish`,
+    accessToken,
+    undefined,
+    payload
+  );
 }
 
 export function archiveAgent(accessToken: string, agentId: string) {

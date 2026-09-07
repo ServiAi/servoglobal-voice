@@ -73,9 +73,12 @@ export async function createAgentNextDraftAction(
 
 export async function publishAgentAction(
   locale: string,
-  agentId: string
+  agentId: string,
+  expectedDraftVersionId?: string
 ): Promise<FetchResult<AgentResponse>> {
-  const result = await withAccessToken((token) => publishAgent(token, agentId));
+  const result = await withAccessToken((token) =>
+    publishAgent(token, agentId, { expected_draft_version_id: expectedDraftVersionId })
+  );
   if (result.ok) revalidateAgents(locale, agentId);
   return result;
 }

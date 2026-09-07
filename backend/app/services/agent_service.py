@@ -136,7 +136,12 @@ class AgentService:
     def update_draft(
         self, tenant_id: str, agent_id: str, body: AgentDraftUpdateRequest
     ) -> TenantAgentVersion:
-        agent = self.get_agent(tenant_id, agent_id)
+        # Single transaction for TenantAgent identity + TenantAgentVersion
+        # draft content: the frontend used to PATCH these as two independent
+        # requests, which could leave agent.name/description out of sync
+        # with version.identity_json if one request failed after the other
+        # succeeded.
+        agent = self._locked_agent(tenant_id, agent_id)
         self._ensure_mutable(agent)
         if agent.draft_version_id is None:
             raise AgentConflictError(
@@ -144,6 +149,8 @@ class AgentService:
             )
         self._validate_voice_agent_config(tenant_id, body.voice_agent_config_id)
         version = self._get_version(tenant_id, agent.draft_version_id)
+        agent.name = body.name
+        agent.description = body.description
         version.language = body.language
         version.timezone = body.timezone
         version.identity_json = AgentIdentity(
@@ -207,11 +214,28 @@ class AgentService:
         self.db.refresh(draft)
         return draft
 
-    def publish(self, tenant_id: str, agent_id: str, user_id: str | None) -> TenantAgent:
+    def publish(
+        self,
+        tenant_id: str,
+        agent_id: str,
+        user_id: str | None,
+        expected_draft_version_id: str | None = None,
+    ) -> TenantAgent:
         agent = self._locked_agent(tenant_id, agent_id)
         self._ensure_mutable(agent)
         if agent.draft_version_id is None:
             raise AgentConflictError("Agent has no draft to publish.")
+        if (
+            expected_draft_version_id is not None
+            and expected_draft_version_id != agent.draft_version_id
+        ):
+            # The draft was saved and/or published by someone else (another
+            # tab, another admin) between the caller reading it and this
+            # publish call. Refuse rather than publish a version the caller
+            # never saw.
+            raise AgentConflictError(
+                "Draft has changed since it was last saved. Reload and try again."
+            )
         draft = self._get_version(tenant_id, agent.draft_version_id)
         if not draft.instructions_json.get("system_prompt", "").strip():
             raise AgentValidationError("system_prompt is required before publishing.")
