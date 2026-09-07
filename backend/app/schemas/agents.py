@@ -45,11 +45,22 @@ class AgentCreateRequest(_StrictModel):
 
 
 class AgentUpdateRequest(_StrictModel):
+    """Legacy identity-only update, kept for API compatibility.
+
+    The Agent Builder UI no longer uses this: it PATCHes name/description
+    together with the rest of the draft via AgentDraftUpdateRequest so both
+    land in one transaction. This endpoint still works standalone for any
+    other caller, but on a mutable agent with an open draft it will leave
+    that draft's identity_json snapshot stale until the draft is next saved.
+    """
+
     name: str = Field(min_length=1, max_length=160)
     description: str | None = Field(default=None, max_length=2000)
 
 
 class AgentDraftUpdateRequest(_StrictModel):
+    name: str = Field(min_length=1, max_length=160)
+    description: str | None = Field(default=None, max_length=2000)
     language: str = Field(default="es", min_length=2, max_length=16)
     timezone: str = Field(default="America/Bogota", max_length=80)
     instructions: AgentInstructions = AgentInstructions()
@@ -58,6 +69,14 @@ class AgentDraftUpdateRequest(_StrictModel):
     pipeline_type: Literal["realtime"] = "realtime"
     provider: str = Field(default="ultravox", max_length=40)
     model: str = Field(default="ultravox", max_length=80)
+
+
+class AgentPublishRequest(_StrictModel):
+    """Optional concurrency guard: when set, publish fails with a conflict
+    if the agent's current draft_version_id no longer matches (someone else
+    saved or published a different draft in the meantime)."""
+
+    expected_draft_version_id: str | None = None
 
 
 class AgentResponse(_StrictModel):

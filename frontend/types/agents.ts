@@ -45,6 +45,8 @@ export type AgentUpdateRequest = {
 };
 
 export type AgentDraftUpdateRequest = {
+  name: string;
+  description?: string | null;
   language: string;
   timezone: string;
   instructions: AgentInstructions;
@@ -53,6 +55,10 @@ export type AgentDraftUpdateRequest = {
   pipeline_type: 'realtime';
   provider: string;
   model: string;
+};
+
+export type AgentPublishRequest = {
+  expected_draft_version_id?: string | null;
 };
 
 export type AgentResponse = {

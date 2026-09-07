@@ -39,6 +39,7 @@ tenant_agents = sa.table(
     sa.column("description", sa.String),
     sa.column("status", sa.String),
     sa.column("published_version_id", sa.String),
+    sa.column("draft_version_id", sa.String),
     sa.column("created_at", sa.DateTime),
     sa.column("updated_at", sa.DateTime),
 )
@@ -174,15 +175,17 @@ def _backfill_from_voice_agent_configs() -> None:
     agent_rows = []
     version_rows = []
     published_version_updates = []
+    draft_version_updates = []
     for config in configs:
         agent_id = str(uuid.uuid4())
         version_id = str(uuid.uuid4())
         agent_status = "active" if config.status == "active" else "draft"
-        # tenant_agents.published_version_id and tenant_agent_versions.agent_id
-        # form a circular FK: neither table's rows can be inserted first with
-        # the reference already populated. Insert agents with
-        # published_version_id NULL, insert versions (agent_id already
-        # exists), then backfill published_version_id in a separate UPDATE.
+        # tenant_agents.published_version_id/draft_version_id and
+        # tenant_agent_versions.agent_id form a circular FK: neither table's
+        # rows can be inserted first with the reference already populated.
+        # Insert agents with both version pointers NULL, insert versions
+        # (agent_id already exists), then backfill the pointer in a separate
+        # UPDATE.
         agent_rows.append(
             {
                 "id": agent_id,
@@ -191,12 +194,15 @@ def _backfill_from_voice_agent_configs() -> None:
                 "description": config.description,
                 "status": agent_status,
                 "published_version_id": None,
+                "draft_version_id": None,
                 "created_at": now,
                 "updated_at": now,
             }
         )
         if agent_status == "active":
             published_version_updates.append({"agent_id": agent_id, "version_id": version_id})
+        else:
+            draft_version_updates.append({"agent_id": agent_id, "version_id": version_id})
         version_rows.append(
             {
                 "id": version_id,
@@ -243,6 +249,13 @@ def _backfill_from_voice_agent_configs() -> None:
             .where(tenant_agents.c.id == sa.bindparam("agent_id"))
             .values(published_version_id=sa.bindparam("version_id")),
             published_version_updates,
+        )
+    if draft_version_updates:
+        bind.execute(
+            sa.update(tenant_agents)
+            .where(tenant_agents.c.id == sa.bindparam("agent_id"))
+            .values(draft_version_id=sa.bindparam("version_id")),
+            draft_version_updates,
         )
 
 

@@ -66,6 +66,24 @@ class AgentBuilderTests(Integration2ATestCase):
     def _create(self, **overrides):
         return self.client.post("/api/v1/agents", json=self._payload(**overrides))
 
+    def _draft_payload(self, name: str = "Sandra", description: str | None = "Asesora comercial", **overrides) -> dict:
+        payload = {
+            "name": name,
+            "description": description,
+            "language": "es",
+            "timezone": "America/Bogota",
+            "instructions": {
+                "role": "Asesora comercial",
+                "objective": "Vender",
+                "system_prompt": "Prompt actualizado",
+                "greeting": "Hola",
+                "closing": "Gracias",
+            },
+            "behavior": self._payload()["behavior"],
+        }
+        payload.update(overrides)
+        return payload
+
     # -- feature gate --
 
     def test_feature_disabled_returns_403(self) -> None:
@@ -139,6 +157,8 @@ class AgentBuilderTests(Integration2ATestCase):
         agent_id = self._create().json()["id"]
         payload = self._payload()
         update_payload = {
+            "name": payload["name"],
+            "description": payload["description"],
             "language": payload["language"],
             "timezone": payload["timezone"],
             "instructions": payload["instructions"],
@@ -163,6 +183,8 @@ class AgentBuilderTests(Integration2ATestCase):
         self._enable_feature()
         agent_id = self._create().json()["id"]
         update_payload = {
+            "name": "Sandra renombrada",
+            "description": "Descripcion actualizada",
             "language": "es",
             "timezone": "America/Bogota",
             "instructions": {
@@ -185,17 +207,96 @@ class AgentBuilderTests(Integration2ATestCase):
         self.assertEqual(
             patch_response.json()["runtime_binding"]["realtime"]["provider"], "ultravox"
         )
+        self.assertEqual(patch_response.json()["identity"]["name"], "Sandra renombrada")
+
+        agent_after_draft_save = self.client.get(f"/api/v1/agents/{agent_id}").json()
+        self.assertEqual(agent_after_draft_save["name"], "Sandra renombrada")
 
         publish_response = self.client.post(f"/api/v1/agents/{agent_id}/publish")
         self.assertEqual(publish_response.status_code, 200, publish_response.text)
         body = publish_response.json()
         self.assertEqual(body["status"], "active")
+        self.assertEqual(body["name"], "Sandra renombrada")
         self.assertIsNone(body["draft_version_id"])
         self.assertIsNotNone(body["published_version_id"])
 
         versions = self.client.get(f"/api/v1/agents/{agent_id}/versions").json()
         self.assertEqual(len(versions), 1)
         self.assertEqual(versions[0]["status"], "published")
+
+    def test_publish_matching_expected_draft_version_id_succeeds(self) -> None:
+        self._enable_feature()
+        agent_id = self._create().json()["id"]
+        draft = self.client.get(f"/api/v1/agents/{agent_id}/draft").json()
+        response = self.client.post(
+            f"/api/v1/agents/{agent_id}/publish",
+            json={"expected_draft_version_id": draft["id"]},
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["published_version_id"], draft["id"])
+
+    def test_publish_rejects_stale_expected_draft_version_id(self) -> None:
+        self._enable_feature()
+        agent_id = self._create().json()["id"]
+        response = self.client.post(
+            f"/api/v1/agents/{agent_id}/publish",
+            json={"expected_draft_version_id": "not-the-current-draft"},
+        )
+        self.assertEqual(response.status_code, 409, response.text)
+
+        # Nothing was published: the agent is still in draft with the
+        # original draft version untouched.
+        agent = self.client.get(f"/api/v1/agents/{agent_id}").json()
+        self.assertEqual(agent["status"], "draft")
+        self.assertIsNone(agent["published_version_id"])
+        self.assertIsNotNone(agent["draft_version_id"])
+
+    def test_publish_saves_and_publishes_exactly_the_edited_content(self) -> None:
+        # Reproduces the "Save Draft" -> "Publish" flow the frontend now
+        # always performs: PATCH the draft with the on-screen content, then
+        # publish the exact version id that PATCH returned.
+        self._enable_feature()
+        agent_id = self._create().json()["id"]
+        draft_response = self.client.patch(
+            f"/api/v1/agents/{agent_id}/draft",
+            json=self._draft_payload(
+                name="Editado en pantalla", description="Texto visible"
+            ),
+        )
+        self.assertEqual(draft_response.status_code, 200, draft_response.text)
+        saved_draft_id = draft_response.json()["id"]
+
+        publish_response = self.client.post(
+            f"/api/v1/agents/{agent_id}/publish",
+            json={"expected_draft_version_id": saved_draft_id},
+        )
+        self.assertEqual(publish_response.status_code, 200, publish_response.text)
+        self.assertEqual(publish_response.json()["published_version_id"], saved_draft_id)
+        self.assertEqual(publish_response.json()["name"], "Editado en pantalla")
+
+        versions = self.client.get(f"/api/v1/agents/{agent_id}/versions").json()
+        published = next(v for v in versions if v["id"] == saved_draft_id)
+        self.assertEqual(published["instructions"]["system_prompt"], "Prompt actualizado")
+
+    def test_update_draft_rollback_leaves_agent_and_version_consistent(self) -> None:
+        # An invalid voice_agent_config_id fails validation mid-update; the
+        # whole transaction (agent identity + version snapshot) must roll
+        # back together rather than leaving name/description half-applied.
+        self._enable_feature()
+        agent_id = self._create(name="Nombre original").json()["id"]
+        tenant_b, _ = self._seed_tenant_user(slug="tenant-rollback", email="rollback@example.com")
+        config_b = self._seed_voice_agent_config(tenant_b.id, "va-rollback")
+
+        response = self.client.patch(
+            f"/api/v1/agents/{agent_id}/draft",
+            json=self._draft_payload(name="Nombre que no debe quedar", voice_agent_config_id=config_b),
+        )
+        self.assertEqual(response.status_code, 422, response.text)
+
+        agent = self.client.get(f"/api/v1/agents/{agent_id}").json()
+        self.assertEqual(agent["name"], "Nombre original")
+        draft = self.client.get(f"/api/v1/agents/{agent_id}/draft").json()
+        self.assertEqual(draft["identity"]["name"], "Nombre original")
 
     def test_edit_after_publish_creates_v2_and_supersedes_v1(self) -> None:
         self._enable_feature()
