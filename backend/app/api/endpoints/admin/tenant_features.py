@@ -8,11 +8,13 @@ from app.db.session import get_db
 from app.models.identity import User
 from app.models.tenant_features import TenantFeatureGrant
 from app.schemas.tenant_features import (
+    AgentBuilderFeatureUpdate,
     TenantFeatureResponse,
     VoiceExperiencesFeatureUpdate,
     WhatsAppBusinessCallingFeatureUpdate,
 )
 from app.services.tenant_feature_service import (
+    AGENT_BUILDER,
     TenantFeatureService,
     TenantFeatureTenantNotFoundError,
     VOICE_EXPERIENCES,
@@ -62,6 +64,29 @@ def set_voice_experiences_feature(
             feature_key=VOICE_EXPERIENCES,
             enabled=body.enabled,
             limits=body.limits.model_dump(),
+            enabled_by_user_id=user.id,
+        )
+    except TenantFeatureTenantNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return _response(grant)
+
+
+@router.put(
+    "/{tenant_id}/features/agent-builder-v2",
+    response_model=TenantFeatureResponse,
+)
+def set_agent_builder_feature(
+    tenant_id: str,
+    body: AgentBuilderFeatureUpdate,
+    user: User = Depends(get_current_internal_user),
+    db: Session = Depends(get_db),
+) -> TenantFeatureResponse:
+    try:
+        grant = TenantFeatureService(db).set_feature(
+            tenant_id=tenant_id,
+            feature_key=AGENT_BUILDER,
+            enabled=body.enabled,
+            limits={},
             enabled_by_user_id=user.id,
         )
     except TenantFeatureTenantNotFoundError as exc:

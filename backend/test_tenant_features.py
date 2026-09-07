@@ -25,6 +25,7 @@ from app.main import app
 from app.models.identity import Tenant, TenantMembership, User
 from app.models.tenant_features import TenantFeatureGrant
 from app.services.tenant_feature_service import (
+    AGENT_BUILDER,
     TenantFeatureService,
     TenantFeatureDisabledError,
     UnknownTenantFeatureError,
@@ -194,6 +195,12 @@ class TenantFeatureTests(unittest.TestCase):
             json={"enabled": enabled},
         )
 
+    def _put_agent_builder(self, tenant_id: str, enabled: bool = True):
+        return self.client.put(
+            f"/api/v1/admin/tenants/{tenant_id}/features/agent-builder-v2",
+            json={"enabled": enabled},
+        )
+
     # ---- P1: authorization -------------------------------------------------
 
     def test_internal_user_can_list_features_for_any_tenant(self) -> None:
@@ -349,6 +356,30 @@ class TenantFeatureTests(unittest.TestCase):
             service = TenantFeatureService(db)
             self.assertTrue(service.is_enabled(self.tenant_a_id, WHATSAPP_BUSINESS_CALLING))
             self.assertFalse(service.is_enabled(self.tenant_b_id, WHATSAPP_BUSINESS_CALLING))
+
+    # ---- agent_builder_v2 feature -------------------------------------------
+
+    def test_agent_builder_can_be_toggled(self) -> None:
+        response = self._put_agent_builder(self.tenant_a_id)
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["feature_key"], AGENT_BUILDER)
+        self.assertTrue(body["enabled"])
+        self.assertEqual(body["limits"], {})
+        with SessionLocal() as db:
+            self.assertTrue(
+                TenantFeatureService(db).is_enabled(self.tenant_a_id, AGENT_BUILDER)
+            )
+
+    def test_agent_builder_is_isolated_between_tenants(self) -> None:
+        self.assertEqual(self._put_agent_builder(self.tenant_a_id, True).status_code, 200)
+        self.assertEqual(self._put_agent_builder(self.tenant_b_id, False).status_code, 200)
+
+        with SessionLocal() as db:
+            service = TenantFeatureService(db)
+            self.assertTrue(service.is_enabled(self.tenant_a_id, AGENT_BUILDER))
+            self.assertFalse(service.is_enabled(self.tenant_b_id, AGENT_BUILDER))
 
     # ---- P2: IntegrityError handling ---------------------------------------
 

@@ -26,6 +26,7 @@ import { CircularLoader, CircularLoadingState } from '@/components/ui/circular-l
 
 import {
   type TenantDetail,
+  type TenantFeatureGrant,
   type TenantPlanPayload,
 } from '@/lib/api/tenants';
 import {
@@ -35,10 +36,12 @@ import {
   deleteTenantMembership,
   fetchTenantDetail,
   sendMembershipPasswordReset,
+  setAgentBuilderFeature,
   updateTenant,
   updateTenantPlan,
 } from '@/lib/api/admin-tenants-client';
 import { getAdminAccessRedirect } from '@/lib/auth/admin-client';
+import { AgentBuilderFeatureToggle } from '@/components/tenant-usage/AgentBuilderFeatureToggle';
 import { PlanUpdateForm } from '@/components/tenant-usage/PlanUpdateForm';
 import { TenantSavingsComparison } from '@/components/tenant-usage/TenantSavingsComparison';
 import { TenantUsageAlerts } from '@/components/tenant-usage/TenantUsageAlerts';
@@ -116,6 +119,7 @@ type TenantDetailClientProps = {
   tenantId: string;
   initialTenant: TenantDetail | null;
   initialError?: string | null;
+  initialFeatures?: TenantFeatureGrant[];
 };
 
 export function TenantDetailClient({
@@ -123,12 +127,17 @@ export function TenantDetailClient({
   tenantId,
   initialTenant,
   initialError = null,
+  initialFeatures = [],
 }: TenantDetailClientProps) {
   const router = useRouter();
 
   const [tenant, setTenant] = useState<TenantDetail | null>(initialTenant);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(initialError);
+  const [features, setFeatures] = useState<TenantFeatureGrant[]>(initialFeatures);
+  const [agentBuilderSaving, setAgentBuilderSaving] = useState(false);
+  const agentBuilderEnabled =
+    features.find((f) => f.feature_key === 'agent_builder_v2')?.enabled ?? false;
 
   // Edit state
   const [editing, setEditing] = useState(false);
@@ -221,6 +230,21 @@ export function TenantDetailClient({
 
     if (result.ok) {
       await load();
+    } else if (!redirectOnAccessFailure(result.status)) {
+      setError(result.detail);
+    }
+  };
+
+  const handleToggleAgentBuilder = async (enabled: boolean) => {
+    setAgentBuilderSaving(true);
+    setError(null);
+    const result = await setAgentBuilderFeature(tenantId, enabled);
+    setAgentBuilderSaving(false);
+    if (result.ok) {
+      setFeatures((prev) => {
+        const next = prev.filter((f) => f.feature_key !== 'agent_builder_v2');
+        return [...next, result.data];
+      });
     } else if (!redirectOnAccessFailure(result.status)) {
       setError(result.detail);
     }
@@ -595,6 +619,15 @@ export function TenantDetailClient({
             <p className="text-xs text-zinc-500 dark:text-zinc-400">agentes configurados</p>
           </div>
         </section>
+      </div>
+
+      {/* Feature flags */}
+      <div className="mt-6">
+        <AgentBuilderFeatureToggle
+          enabled={agentBuilderEnabled}
+          saving={agentBuilderSaving}
+          onToggle={handleToggleAgentBuilder}
+        />
       </div>
 
       {/* Memberships Section */}
