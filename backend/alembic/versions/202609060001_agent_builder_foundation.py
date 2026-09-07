@@ -173,10 +173,16 @@ def _backfill_from_voice_agent_configs() -> None:
     now = datetime.now(timezone.utc)
     agent_rows = []
     version_rows = []
+    published_version_updates = []
     for config in configs:
         agent_id = str(uuid.uuid4())
         version_id = str(uuid.uuid4())
         agent_status = "active" if config.status == "active" else "draft"
+        # tenant_agents.published_version_id and tenant_agent_versions.agent_id
+        # form a circular FK: neither table's rows can be inserted first with
+        # the reference already populated. Insert agents with
+        # published_version_id NULL, insert versions (agent_id already
+        # exists), then backfill published_version_id in a separate UPDATE.
         agent_rows.append(
             {
                 "id": agent_id,
@@ -184,11 +190,13 @@ def _backfill_from_voice_agent_configs() -> None:
                 "name": config.display_name,
                 "description": config.description,
                 "status": agent_status,
-                "published_version_id": version_id if agent_status == "active" else None,
+                "published_version_id": None,
                 "created_at": now,
                 "updated_at": now,
             }
         )
+        if agent_status == "active":
+            published_version_updates.append({"agent_id": agent_id, "version_id": version_id})
         version_rows.append(
             {
                 "id": version_id,
@@ -228,6 +236,14 @@ def _backfill_from_voice_agent_configs() -> None:
 
     op.bulk_insert(tenant_agents, agent_rows)
     op.bulk_insert(tenant_agent_versions, version_rows)
+
+    if published_version_updates:
+        bind.execute(
+            sa.update(tenant_agents)
+            .where(tenant_agents.c.id == sa.bindparam("agent_id"))
+            .values(published_version_id=sa.bindparam("version_id")),
+            published_version_updates,
+        )
 
 
 def downgrade() -> None:

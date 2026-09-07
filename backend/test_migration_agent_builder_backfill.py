@@ -14,7 +14,7 @@ os.environ["DATABASE_URL"] = f"sqlite:///./{TEST_DB_PATH.as_posix()}"
 
 from alembic.operations import Operations
 from alembic.runtime.migration import MigrationContext
-from sqlalchemy import create_engine, select
+from sqlalchemy import create_engine, event, select
 from sqlalchemy.orm import sessionmaker
 
 from app.db.base import Base
@@ -42,6 +42,16 @@ class AgentBuilderBackfillMigrationTests(unittest.TestCase):
         if TEST_DB_PATH.exists():
             TEST_DB_PATH.unlink()
         self.engine = create_engine(f"sqlite:///./{TEST_DB_PATH.as_posix()}")
+
+        # SQLite ignores foreign keys unless explicitly told to enforce them;
+        # without this, an insert-order bug like a circular FK violation
+        # (caught for real only by Postgres) would pass here silently.
+        @event.listens_for(self.engine, "connect")
+        def _enable_sqlite_fk(dbapi_connection, _record):
+            cursor = dbapi_connection.cursor()
+            cursor.execute("PRAGMA foreign_keys=ON")
+            cursor.close()
+
         Base.metadata.create_all(self.engine)
         self.Session = sessionmaker(bind=self.engine)
         self.migration = _load_migration("202609060001")
