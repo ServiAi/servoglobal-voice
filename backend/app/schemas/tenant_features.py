@@ -29,6 +29,12 @@ class WhatsAppBusinessCallingFeatureUpdate(BaseModel):
     enabled: bool
 
 
+class AgentBuilderFeatureUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool
+
+
 class TenantFeatureResponse(BaseModel):
     feature_key: str
     enabled: bool
