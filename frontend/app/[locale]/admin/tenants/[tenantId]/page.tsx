@@ -1,5 +1,5 @@
 import { locales, type Locale } from '@/i18n';
-import { fetchTenantDetail } from '@/lib/api/tenants';
+import { fetchTenantDetail, fetchTenantFeatures } from '@/lib/api/tenants';
 import {
   redirectAdminAccessFailure,
   requireInternalAdminAccess,
@@ -23,7 +23,10 @@ export default async function TenantDetailPage({ params }: Props) {
   const returnTo = `/${locale}/admin/tenants/${tenantId}`;
   const { accessToken } = await requireInternalAdminAccess(locale, returnTo);
 
-  const result = await fetchTenantDetail(accessToken, tenantId);
+  const [result, featuresResult] = await Promise.all([
+    fetchTenantDetail(accessToken, tenantId),
+    fetchTenantFeatures(accessToken, tenantId),
+  ]);
 
   if (!result.ok) {
     redirectAdminAccessFailure(result.status, locale, returnTo);
@@ -35,6 +38,7 @@ export default async function TenantDetailPage({ params }: Props) {
       tenantId={tenantId}
       initialTenant={result.ok ? result.data : null}
       initialError={result.ok ? null : result.detail}
+      initialFeatures={featuresResult.ok ? featuresResult.data : []}
     />
   );
 }

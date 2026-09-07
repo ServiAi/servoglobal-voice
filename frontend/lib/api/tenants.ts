@@ -344,3 +344,36 @@ export function addTenantAgent(
     }
   );
 }
+
+export type TenantFeatureGrant = {
+  feature_key: string;
+  enabled: boolean;
+  limits: Record<string, number>;
+  created_at: string;
+  updated_at: string;
+};
+
+export function fetchTenantFeatures(
+  accessToken: string,
+  tenantId: string
+): Promise<FetchResult<TenantFeatureGrant[]>> {
+  return adminFetch<TenantFeatureGrant[]>(
+    `/api/v1/admin/tenants/${tenantId}/features`,
+    accessToken
+  );
+}
+
+export function setAgentBuilderFeature(
+  accessToken: string,
+  tenantId: string,
+  enabled: boolean
+): Promise<FetchResult<TenantFeatureGrant>> {
+  return adminFetch<TenantFeatureGrant>(
+    `/api/v1/admin/tenants/${tenantId}/features/agent-builder-v2`,
+    accessToken,
+    {
+      method: 'PUT',
+      body: JSON.stringify({ enabled }),
+    }
+  );
+}

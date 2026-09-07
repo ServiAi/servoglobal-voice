@@ -6,6 +6,7 @@ import {
   type TenantCreatePayload,
   type TenantDetail,
   type TenantDeleteResult,
+  type TenantFeatureGrant,
   type TenantListItem,
   type TenantPlanPayload,
   type TenantPlanUpdateResult,
@@ -20,6 +21,7 @@ export type {
   TenantCreatePayload,
   TenantDetail,
   TenantDeleteResult,
+  TenantFeatureGrant,
   TenantListItem,
   TenantPlanKey,
   TenantPlanPayload,
@@ -170,6 +172,27 @@ export function addTenantAgent(
     {
       method: 'POST',
       body: JSON.stringify(payload),
+    }
+  );
+}
+
+export function fetchTenantFeatures(
+  tenantId: string
+): Promise<FetchResult<TenantFeatureGrant[]>> {
+  return localAdminFetch<TenantFeatureGrant[]>(
+    `/api/admin/tenants/${encodeURIComponent(tenantId)}/features`
+  );
+}
+
+export function setAgentBuilderFeature(
+  tenantId: string,
+  enabled: boolean
+): Promise<FetchResult<TenantFeatureGrant>> {
+  return localAdminFetch<TenantFeatureGrant>(
+    `/api/admin/tenants/${encodeURIComponent(tenantId)}/features/agent-builder-v2`,
+    {
+      method: 'PUT',
+      body: JSON.stringify({ enabled }),
     }
   );
 }
