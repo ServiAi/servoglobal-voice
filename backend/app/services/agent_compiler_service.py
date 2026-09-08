@@ -35,6 +35,13 @@ class AgentCompilerService:
                 "explicitly for preview/test use -- production execution "
                 "must compile the published version only."
             )
+        runtime_binding = dict(version.runtime_binding_json)
+        realtime = runtime_binding.get("realtime")
+        voice_config = version.voice_agent_config
+        if isinstance(realtime, dict) and voice_config and voice_config.default_voice:
+            realtime = dict(realtime)
+            realtime["settings"] = {"voice": voice_config.default_voice, **realtime.get("settings", {})}
+            runtime_binding["realtime"] = realtime
         try:
             return RuntimeSessionSpecV1(
                 session_id=session_id,
@@ -46,7 +53,7 @@ class AgentCompilerService:
                 behavior=AgentBehavior.model_validate(version.behavior_json),
                 language=version.language,
                 timezone=version.timezone,
-                runtime=version.runtime_binding_json,
+                runtime=runtime_binding,
                 context=context or {},
             )
         except ValidationError as exc:

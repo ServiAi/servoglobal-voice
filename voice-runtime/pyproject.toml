@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "serviglobal-voice-runtime"
+version = "0.1.0"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+  "httpx==0.28.1",
+  "pydantic==2.11.7",
+  "pydantic-settings==2.10.1",
+  "PyJWT==2.10.1",
+  "livekit-agents==1.7.1",
+  "livekit-plugins-ultravox==1.7.1",
+]
+
+[project.optional-dependencies]
+test = ["pytest==8.4.1", "pytest-asyncio==1.1.0"]
+
+[tool.setuptools.packages.find]
+where = ["src"]

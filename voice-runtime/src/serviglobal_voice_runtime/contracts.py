@@ -1,28 +1,37 @@
-"""RuntimeSessionSpec: the typed, versioned contract between Agent Builder
-and any future voice runtime (LiveKit, OpenAI Realtime, ...).
-
-Deliberately pure Pydantic with no SQLAlchemy imports -- a runtime process
-consuming this contract in a separate deploy must never need TenantAgent,
-TenantAgentVersion, or TenantVoiceAgentConfig to understand it. Never put
-secrets (API keys, SIP passwords, OAuth tokens) in this contract; those are
-resolved by the runtime at execution time via a credential resolver, not
-carried here.
-"""
-
 from __future__ import annotations
 
-from typing import Annotated, Literal
+from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from app.schemas.agents import AgentBehavior, AgentIdentity, AgentInstructions
 
-
-class _StrictModel(BaseModel):
+class StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class RealtimeModelSpec(_StrictModel):
+class AgentIdentity(StrictModel):
+    name: str
+    description: str | None = None
+
+
+class AgentInstructions(StrictModel):
+    role: str = ""
+    objective: str = ""
+    system_prompt: str = ""
+    greeting: str = ""
+    closing: str = ""
+
+
+class AgentBehavior(StrictModel):
+    response_style: Literal["precise", "balanced", "creative"] = "balanced"
+    interruptions: Literal["conservative", "balanced", "responsive"] = "balanced"
+    turn_detection: Literal["automatic", "conservative", "balanced", "responsive"] = "automatic"
+    confirmation_strategy: Literal["important_data", "always", "never"] = "important_data"
+    agent_first: bool = True
+
+
+class RealtimeModelSpec(StrictModel):
     provider: str
     model: str
     settings: dict = Field(default_factory=dict)
@@ -35,49 +44,23 @@ class RealtimeModelSpec(_StrictModel):
         return value
 
 
-class RealtimeRuntimeSpec(_StrictModel):
+class RealtimeRuntimeSpec(StrictModel):
     pipeline_type: Literal["realtime"]
     realtime: RealtimeModelSpec
 
 
-class CascadeRuntimeSpec(_StrictModel):
-    """Structural placeholder only. No cascade adapter exists yet, and
-    AgentService.validate_runtime_selection never allows a version to be
-    saved with this pipeline_type -- the compiler should never actually
-    produce one today."""
-
-    pipeline_type: Literal["cascade"]
-
-
-class HalfCascadeRuntimeSpec(_StrictModel):
-    """Structural placeholder only, same status as CascadeRuntimeSpec."""
-
-    pipeline_type: Literal["half_cascade"]
-
-
-RuntimeSpec = Annotated[
-    RealtimeRuntimeSpec | CascadeRuntimeSpec | HalfCascadeRuntimeSpec,
-    Field(discriminator="pipeline_type"),
-]
-
-
-class RuntimeSessionSpecV1(_StrictModel):
+class RuntimeSessionSpecV1(StrictModel):
     spec_version: Literal["1"] = "1"
     session_id: str | None = None
-
     tenant_id: str
     agent_id: str
     agent_version_id: str
-
     identity: AgentIdentity
     instructions: AgentInstructions
     behavior: AgentBehavior
-
     language: str
     timezone: str
-
-    runtime: RuntimeSpec
-
+    runtime: RealtimeRuntimeSpec
     context: dict = Field(default_factory=dict)
 
     @field_validator("context")
@@ -93,3 +76,14 @@ class RuntimeSessionSpecV1(_StrictModel):
                 if isinstance(item, dict):
                     pending.append(item)
         return value
+
+
+class RuntimeEventV1(StrictModel):
+    spec_version: Literal["1"] = "1"
+    event_id: str
+    session_id: str
+    event_type: Literal["voice.session.started", "voice.session.connected", "voice.session.ended", "voice.session.failed", "voice.transcript.final"]
+    source: Literal["voice-runtime", "livekit", "ultravox"] = "voice-runtime"
+    sequence: int | None = None
+    payload: dict = Field(default_factory=dict)
+    occurred_at: datetime

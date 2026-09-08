@@ -10,6 +10,13 @@ class Settings(BaseSettings):
     ULTRAVOX_WEBHOOK_SIGNATURE_TOLERANCE_SECONDS: int = 60
     ULTRAVOX_ALLOW_UNSIGNED_WEBHOOKS: bool = False
     VOICE_TOOL_SHARED_SECRET: str = ""
+    VOICE_RUNTIME_SERVICE_SECRET: str = ""
+    VOICE_RUNTIME_JWT_ISSUER: str = "serviglobal-voice-runtime"
+    VOICE_RUNTIME_JWT_AUDIENCE: str = "serviglobal-control-plane"
+    LIVEKIT_URL: str = ""
+    LIVEKIT_API_KEY: str = ""
+    LIVEKIT_API_SECRET: str = ""
+    LIVEKIT_AGENT_NAME: str = "serviglobal-voice-runtime"
     PORT: int = 8000
     DEFAULT_AGENT_ID: str | None = None
     DATABASE_URL: str = "postgresql+psycopg://serviai:serviai@localhost:5432/serviai"
