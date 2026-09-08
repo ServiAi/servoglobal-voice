@@ -57,6 +57,7 @@ from app.api.endpoints import asterisk_provisioning
 from app.api.endpoints import scheduling
 from app.api.endpoints import agents
 from app.api.endpoints import voice_registry
+from app.api.endpoints import voice_runtime
 
 app.include_router(notifications.router)
 app.include_router(chatwoot_webhook.router)
@@ -86,6 +87,7 @@ app.include_router(asterisk_provisioning.router)
 app.include_router(scheduling.router)
 app.include_router(agents.router)
 app.include_router(voice_registry.router)
+app.include_router(voice_runtime.router)
 
 @app.get("/health")
 def health_check():

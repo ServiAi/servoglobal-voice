@@ -44,6 +44,7 @@ from app.models.voice_submissions import (
     TenantVoiceExperienceSubmissionValue,
     VoicePublicRateLimitWindow,
 )
+from app.models.voice_sessions import VoiceSession, VoiceSessionEvent
 
 __all__ = [
     "AccessAuditLog",
@@ -74,6 +75,8 @@ __all__ = [
     "TenantVoiceContextSession",
     "TenantVoiceRuntimeCall",
     "VoicePublicRateLimitWindow",
+    "VoiceSession",
+    "VoiceSessionEvent",
     "TenantWhatsAppConfig",
     "TenantWhatsAppFlow",
     "TenantWhatsAppTemplate",
