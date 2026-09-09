@@ -27,6 +27,7 @@ class VoiceModel:
     provider_key: str
     key: str
     name: str
+    execution_model_id: str
     model_type: Literal["stt", "llm", "tts", "realtime"]
     implementation_status: Literal["planned", "available", "deprecated"]
     capabilities: dict[str, bool] = field(default_factory=dict)
@@ -64,6 +65,7 @@ _MODELS: tuple[VoiceModel, ...] = (
         provider_key="ultravox",
         key="ultravox",
         name="Ultravox Realtime",
+        execution_model_id="fixie-ai/ultravox",
         model_type="realtime",
         implementation_status="available",
         capabilities={
@@ -127,3 +129,13 @@ def validate_runtime_selection(pipeline_type: str, provider_key: str, model_key:
         raise VoiceRegistryValidationError(
             f"Model '{model_key}' is not available for provider '{provider_key}'."
         )
+
+
+def resolve_execution_model_id(provider_key: str, model_key: str) -> str:
+    validate_runtime_selection("realtime", provider_key, model_key)
+    model = get_model(f"{provider_key}:{model_key}")
+    if model is None or not model.execution_model_id:
+        raise VoiceRegistryValidationError(
+            f"Model '{model_key}' is not available for provider '{provider_key}'."
+        )
+    return model.execution_model_id

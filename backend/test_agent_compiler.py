@@ -85,7 +85,8 @@ class AgentCompilerServiceTests(unittest.TestCase):
         self.assertEqual(spec.timezone, "America/Bogota")
         self.assertEqual(spec.runtime.pipeline_type, "realtime")
         self.assertEqual(spec.runtime.realtime.provider, "ultravox")
-        self.assertEqual(spec.runtime.realtime.model, "ultravox")
+        self.assertEqual(spec.runtime.realtime.model, "fixie-ai/ultravox")
+        self.assertEqual(version.runtime_binding_json["realtime"]["model"], "ultravox")
         self.assertEqual(spec.context, {})
         self.assertIsNone(spec.session_id)
 

@@ -6,6 +6,37 @@ from _integrations_2a_test_base import Integration2ATestCase
 
 
 class VoiceRegistryTests(Integration2ATestCase):
+    def test_resolves_logical_ultravox_model_to_execution_id(self) -> None:
+        from app.domain.voice_registry import resolve_execution_model_id
+
+        self.assertEqual(
+            resolve_execution_model_id("ultravox", "ultravox"),
+            "fixie-ai/ultravox",
+        )
+
+    def test_execution_model_resolution_fails_closed(self) -> None:
+        from unittest.mock import patch
+
+        from app.domain import voice_registry
+
+        with self.assertRaises(voice_registry.VoiceRegistryValidationError):
+            voice_registry.resolve_execution_model_id("unknown", "ultravox")
+        with self.assertRaises(voice_registry.VoiceRegistryValidationError):
+            voice_registry.resolve_execution_model_id("ultravox", "unknown")
+
+        planned = voice_registry.VoiceModel(
+            id="ultravox:planned",
+            provider_key="ultravox",
+            key="planned",
+            name="Planned",
+            execution_model_id="provider/planned",
+            model_type="realtime",
+            implementation_status="planned",
+        )
+        with patch.dict(voice_registry._MODELS_BY_ID, {planned.id: planned}):
+            with self.assertRaises(voice_registry.VoiceRegistryValidationError):
+                voice_registry.resolve_execution_model_id("ultravox", "planned")
+
     def test_list_providers_shows_ultravox_active_and_rest_planned(self) -> None:
         response = self.client.get("/api/v1/voice/providers")
         self.assertEqual(response.status_code, 200, response.text)
@@ -23,6 +54,7 @@ class VoiceRegistryTests(Integration2ATestCase):
         models = response.json()
         self.assertEqual(len(models), 1)
         self.assertEqual(models[0]["id"], "ultravox:ultravox")
+        self.assertEqual(models[0]["execution_model_id"], "fixie-ai/ultravox")
         self.assertEqual(models[0]["implementation_status"], "available")
 
         empty = self.client.get("/api/v1/voice/models", params={"type": "stt"})

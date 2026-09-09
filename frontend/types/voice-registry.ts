@@ -22,6 +22,7 @@ export type VoiceModelResponse = {
   provider_key: string;
   key: string;
   name: string;
+  execution_model_id: string;
   model_type: VoiceModelType;
   implementation_status: VoiceModelImplementationStatus;
   capabilities: Record<string, boolean>;

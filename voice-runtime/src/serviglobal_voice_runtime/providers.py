@@ -23,7 +23,12 @@ def language_hint(language: str) -> str:
 
 
 def ultravox_options(spec: RuntimeSessionSpecV1, api_key: str) -> dict[str, Any]:
-    configured = spec.runtime.realtime.settings
+    realtime = spec.runtime.realtime
+    if realtime.provider != "ultravox":
+        raise UnsupportedRuntimeProviderError("Ultravox runtime requires provider 'ultravox'")
+    if not realtime.model.strip():
+        raise UnsupportedRuntimeProviderError("Ultravox runtime requires a non-empty execution model")
+    configured = realtime.settings
     supported = {"voice", "temperature", "max_duration"}
     unknown = set(configured) - supported
     if unknown:
@@ -38,7 +43,7 @@ def ultravox_options(spec: RuntimeSessionSpecV1, api_key: str) -> dict[str, Any]
     if spec.behavior.agent_first and spec.instructions.greeting:
         prompt_parts.append(f"Begin with exactly this greeting: {spec.instructions.greeting}")
     options: dict[str, Any] = {
-        "model": spec.runtime.realtime.model,
+        "model": realtime.model,
         "api_key": api_key,
         "system_prompt": "\n\n".join(filter(None, prompt_parts)),
         "language_hint": language_hint(spec.language),
@@ -90,8 +95,8 @@ class UltravoxLiveKitRuntime:
 
         await send_event("voice.session.started", payload={"livekit_job_id": ctx.job.id})
         try:
-            await session.start(room=ctx.room, agent=Agent(instructions=options["system_prompt"]))
             await ctx.connect()
+            await session.start(room=ctx.room, agent=Agent(instructions=options["system_prompt"]))
             await send_event("voice.session.connected", payload={})
             await done.wait()
         except Exception:

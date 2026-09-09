@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pydantic import ValidationError
 
+from app.domain.voice_registry import VoiceRegistryValidationError, resolve_execution_model_id
 from app.models.agents import TenantAgent, TenantAgentVersion
 from app.schemas.agents import AgentBehavior, AgentIdentity, AgentInstructions
 from app.schemas.runtime_session import RuntimeSessionSpecV1
@@ -38,9 +39,20 @@ class AgentCompilerService:
         runtime_binding = dict(version.runtime_binding_json)
         realtime = runtime_binding.get("realtime")
         voice_config = version.voice_agent_config
-        if isinstance(realtime, dict) and voice_config and voice_config.default_voice:
+        if isinstance(realtime, dict):
             realtime = dict(realtime)
-            realtime["settings"] = {"voice": voice_config.default_voice, **realtime.get("settings", {})}
+            try:
+                realtime["model"] = resolve_execution_model_id(
+                    str(realtime.get("provider") or ""),
+                    str(realtime.get("model") or ""),
+                )
+            except VoiceRegistryValidationError as exc:
+                raise AgentCompilerError(f"Invalid runtime binding: {exc}") from exc
+            if voice_config and voice_config.default_voice:
+                realtime["settings"] = {
+                    "voice": voice_config.default_voice,
+                    **realtime.get("settings", {}),
+                }
             runtime_binding["realtime"] = realtime
         try:
             return RuntimeSessionSpecV1(

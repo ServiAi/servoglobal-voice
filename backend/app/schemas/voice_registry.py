@@ -29,6 +29,7 @@ class VoiceModelResponse(_StrictModel):
     provider_key: str
     key: str
     name: str
+    execution_model_id: str
     model_type: Literal["stt", "llm", "tts", "realtime"]
     implementation_status: Literal["planned", "available", "deprecated"]
     capabilities: dict[str, bool]
