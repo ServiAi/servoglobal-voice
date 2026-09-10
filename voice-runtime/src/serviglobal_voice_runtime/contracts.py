@@ -82,7 +82,19 @@ class RuntimeEventV1(StrictModel):
     spec_version: Literal["1"] = "1"
     event_id: str
     session_id: str
-    event_type: Literal["voice.session.started", "voice.session.connected", "voice.session.ended", "voice.session.failed", "voice.transcript.final"]
+    event_type: Literal[
+        "voice.session.started",
+        "voice.agent.ready",
+        "voice.participant.connected",
+        "voice.audio.input.started",
+        "voice.session.connected",
+        "voice.transcript.final",
+        "voice.audio.output.started",
+        "voice.audio.output.completed",
+        "voice.participant.disconnected",
+        "voice.session.ended",
+        "voice.session.failed",
+    ]
     source: Literal["voice-runtime", "livekit", "ultravox"] = "voice-runtime"
     sequence: int | None = None
     payload: dict = Field(default_factory=dict)

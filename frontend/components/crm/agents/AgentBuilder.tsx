@@ -15,6 +15,7 @@ import { ActionDialog } from '@/components/crm/voice-experiences/ActionDialog';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { AgentStatusBadge } from './AgentStatusBadge';
+import { AgentVoiceTest } from './AgentVoiceTest';
 import type { VoiceAgentConfigResponse } from '@/types/crm';
 import type {
   AgentBehavior,
@@ -321,8 +322,12 @@ export function AgentBuilder({
             <AgentStatusBadge status={agent.status} />
           </div>
         </div>
-        {editable && !archived ? (
-          <ActionDialog
+        <div className="flex items-center gap-2">
+          {agent.status === 'active' && agent.published_version_id && providers.some((provider) => provider.status === 'active') ? (
+            <AgentVoiceTest agentId={agent.id} agentName={agent.name} />
+          ) : null}
+          {editable && !archived ? (
+            <ActionDialog
             trigger={
               <Button type="button" variant="ghost" size="sm">
                 <Archive className="mr-1.5 size-4" aria-hidden="true" />
@@ -335,8 +340,9 @@ export function AgentBuilder({
             cancelLabel={t('common.cancel')}
             destructive
             onConfirm={handleArchive}
-          />
-        ) : null}
+            />
+          ) : null}
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-2 border-b border-border pb-3">

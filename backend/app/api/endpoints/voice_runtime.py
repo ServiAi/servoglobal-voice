@@ -1,12 +1,17 @@
 from __future__ import annotations
 
+import logging
+from datetime import timedelta
+from uuid import uuid4
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.auth.deps import AuthContext, require_roles
+from app.core.config import settings
 from app.db.session import get_db
 from app.schemas.runtime_session import RuntimeSessionSpecV1
-from app.schemas.voice_sessions import RuntimeEventAck, RuntimeEventV1, VoiceSessionCreateRequest, VoiceSessionResponse
+from app.schemas.voice_sessions import RuntimeEventAck, RuntimeEventV1, VoiceSessionCreateRequest, VoiceSessionResponse, WebRTCParticipantTokenResponse
 from app.security.voice_runtime_auth import require_voice_runtime
 from app.services.agent_compiler_service import AgentCompilerError, AgentCompilerService
 from app.services.tenant_feature_service import TenantFeatureDisabledError, TenantFeatureService, VOICE_RUNTIME_V2
@@ -15,6 +20,7 @@ from app.services.voice_session_service import VoiceSessionError, VoiceSessionNo
 
 router = APIRouter(tags=["Voice Runtime"])
 WRITE_ROLES = ["platform_admin", "tenant_admin"]
+logger = logging.getLogger(__name__)
 
 
 @router.post("/api/v1/voice/sessions", response_model=VoiceSessionResponse, status_code=status.HTTP_201_CREATED)
@@ -32,6 +38,73 @@ async def create_voice_session(
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     except VoiceSessionError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/api/v1/voice/sessions/{session_id}/webrtc-token", response_model=WebRTCParticipantTokenResponse)
+def create_webrtc_participant_token(
+    session_id: str,
+    context: AuthContext = Depends(require_roles(WRITE_ROLES)),
+    db: Session = Depends(get_db),
+) -> WebRTCParticipantTokenResponse:
+    try:
+        TenantFeatureService(db).require_enabled(context.tenant_id, VOICE_RUNTIME_V2)
+        session = VoiceSessionService(db).get(session_id, tenant_id=context.tenant_id)
+        if session.status in {"ended", "failed", "cancelled"}:
+            raise VoiceSessionError("Voice session is terminal.")
+        if session.channel != "webrtc" or session.runtime_engine != "livekit" or not session.livekit_room_name:
+            raise VoiceSessionError("Voice session is not ready for LiveKit WebRTC.")
+        if not all((settings.LIVEKIT_URL, settings.LIVEKIT_API_KEY, settings.LIVEKIT_API_SECRET)):
+            raise VoiceSessionError("LiveKit WebRTC is not configured.")
+
+        from livekit import api
+
+        ttl_seconds = max(30, min(settings.VOICE_WEBRTC_TOKEN_TTL_SECONDS, 600))
+        token = (
+            api.AccessToken(settings.LIVEKIT_API_KEY, settings.LIVEKIT_API_SECRET)
+            .with_identity(f"web-{uuid4()}")
+            .with_ttl(timedelta(seconds=ttl_seconds))
+            .with_grants(
+                api.VideoGrants(
+                    room_join=True,
+                    room=session.livekit_room_name,
+                    can_subscribe=True,
+                    can_publish=True,
+                    can_publish_data=False,
+                    can_publish_sources=["microphone"],
+                    room_create=False,
+                    room_admin=False,
+                    room_record=False,
+                    ingress_admin=False,
+                    can_update_own_metadata=False,
+                )
+            )
+            .to_jwt()
+        )
+        logger.info(
+            "Voice WebRTC participant token issued",
+            extra={
+                "tenant_id": session.tenant_id,
+                "voice_session_id": session.id,
+                "agent_id": session.agent_id,
+                "agent_version_id": session.agent_version_id,
+                "livekit_room_name": session.livekit_room_name,
+                "runtime_engine": session.runtime_engine,
+                "channel": session.channel,
+            },
+        )
+        return WebRTCParticipantTokenResponse(
+            voice_session_id=session.id,
+            server_url=settings.LIVEKIT_URL,
+            room_name=session.livekit_room_name,
+            participant_token=token,
+            expires_in=ttl_seconds,
+        )
+    except TenantFeatureDisabledError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except VoiceSessionNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except VoiceSessionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @router.get("/api/v1/internal/voice-runtime/sessions/{session_id}/spec", response_model=RuntimeSessionSpecV1, dependencies=[Depends(require_voice_runtime)])
@@ -56,7 +129,7 @@ def post_runtime_event(session_id: str, body: RuntimeEventV1, db: Session = Depe
         session = service.get(session_id)
         allowed_payload = {
             key: value for key, value in body.payload.items()
-            if key in {"livekit_job_id", "provider_session_id", "end_reason", "error_code", "speaker", "text", "timestamp"}
+            if key in {"livekit_job_id", "provider_session_id", "end_reason", "error_code", "speaker", "text", "timestamp", "participant_identity", "track_source"}
         }
         _, duplicate = service.record_event(session, body.event_type, source=body.source, event_id=body.event_id, sequence=body.sequence, payload=allowed_payload, occurred_at=body.occurred_at, commit=False)
         if duplicate:
@@ -66,6 +139,8 @@ def post_runtime_event(session_id: str, body: RuntimeEventV1, db: Session = Depe
             session.livekit_job_id = str(allowed_payload["livekit_job_id"])[:160]
         if "provider_session_id" in allowed_payload:
             session.provider_session_id = str(allowed_payload["provider_session_id"])[:255]
+        if body.event_type == "voice.session.ended" and session.status == "connected":
+            service.transition(session, "ending", commit=False)
         target = {
             "voice.session.started": "starting",
             "voice.session.connected": "connected",

@@ -9,9 +9,17 @@ from pydantic import BaseModel, ConfigDict, Field
 class VoiceSessionCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     agent_id: str
-    channel: Literal["internal_test"] = "internal_test"
+    channel: Literal["webrtc", "internal_test"] = "internal_test"
     direction: Literal["internal"] = "internal"
     idempotency_key: str | None = Field(default=None, min_length=1, max_length=160)
+
+
+class WebRTCParticipantTokenResponse(BaseModel):
+    voice_session_id: str
+    server_url: str
+    room_name: str
+    participant_token: str
+    expires_in: int
 
 
 class VoiceSessionResponse(BaseModel):
@@ -47,10 +55,16 @@ class RuntimeEventV1(BaseModel):
     session_id: str
     event_type: Literal[
         "voice.session.started",
+        "voice.agent.ready",
+        "voice.participant.connected",
+        "voice.audio.input.started",
         "voice.session.connected",
         "voice.session.ended",
         "voice.session.failed",
         "voice.transcript.final",
+        "voice.audio.output.started",
+        "voice.audio.output.completed",
+        "voice.participant.disconnected",
     ]
     source: Literal["voice-runtime", "livekit", "ultravox"] = "voice-runtime"
     sequence: int | None = Field(default=None, ge=0)

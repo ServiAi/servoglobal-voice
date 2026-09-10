@@ -1,7 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import type { FetchResult } from '@/lib/api/crm';
+import { requestVoiceEndpoint, type FetchResult } from '@/lib/api/crm';
 import {
   archiveAgent,
   createAgent,
@@ -96,4 +96,44 @@ export async function fetchAgentVersionsAction(
   agentId: string
 ): Promise<FetchResult<AgentVersionResponse[]>> {
   return withAccessToken((token) => fetchAgentVersions(token, agentId));
+}
+
+export type VoiceSessionResponse = {
+  id: string;
+  status: string;
+  livekit_room_name: string | null;
+};
+
+export type WebRTCParticipantTokenResponse = {
+  voice_session_id: string;
+  server_url: string;
+  room_name: string;
+  participant_token: string;
+  expires_in: number;
+};
+
+export async function createVoiceTestSessionAction(
+  agentId: string,
+  idempotencyKey: string
+): Promise<FetchResult<VoiceSessionResponse>> {
+  return withAccessToken((token) =>
+    requestVoiceEndpoint<VoiceSessionResponse>('POST', 'sessions', token, undefined, {
+      agent_id: agentId,
+      channel: 'webrtc',
+      direction: 'internal',
+      idempotency_key: idempotencyKey,
+    })
+  );
+}
+
+export async function createVoiceTestTokenAction(
+  sessionId: string
+): Promise<FetchResult<WebRTCParticipantTokenResponse>> {
+  return withAccessToken((token) =>
+    requestVoiceEndpoint<WebRTCParticipantTokenResponse>(
+      'POST',
+      `sessions/${sessionId}/webrtc-token`,
+      token
+    )
+  );
 }

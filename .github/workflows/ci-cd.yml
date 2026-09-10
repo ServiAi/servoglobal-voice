@@ -7,6 +7,20 @@ on:
     branches: [develop]
 
 jobs:
+  voice-runtime-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install standalone Voice Runtime
+        working-directory: voice-runtime
+        run: pip install .
+      - name: Voice Runtime unit tests
+        working-directory: voice-runtime
+        run: python -m unittest discover -s tests -v
+
   backend-tests:
     runs-on: ubuntu-latest
     services:
@@ -110,6 +124,9 @@ jobs:
         run: npm run lint
       - working-directory: frontend
         run: npx tsc --noEmit --incremental false
+      - name: LiveKit adapter tests
+        working-directory: frontend
+        run: npx playwright test --config=playwright.voice-runtime.config.ts
       - working-directory: frontend
         run: npm run build
       # Public voice runtime E2E: unauthenticated, no Auth0, no staging egress.

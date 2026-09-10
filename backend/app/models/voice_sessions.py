@@ -23,7 +23,7 @@ class VoiceSession(Base, TimestampMixin):
             "status IN ('requested','dispatching','dispatched','starting','connected','ending','ended','failed','cancelled')",
             name="ck_voice_sessions_status",
         ),
-        sa.CheckConstraint("channel IN ('web','sip','internal_test')", name="ck_voice_sessions_channel"),
+        sa.CheckConstraint("channel IN ('web','webrtc','sip','internal_test')", name="ck_voice_sessions_channel"),
         sa.CheckConstraint("direction IN ('inbound','outbound','internal')", name="ck_voice_sessions_direction"),
     )
 
