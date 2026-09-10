@@ -82,10 +82,25 @@ class UltravoxLifecycleTests(unittest.IsolatedAsyncioTestCase):
         started = asyncio.Event()
         closed = {"model": 0, "session": 0}
         sessions = []
+        realtime_sessions = []
+        handled_ultravox_events = []
+
+        class FakeCallStartedEvent:
+            def __init__(self, call_id):
+                self.call_id = call_id
+
+        class FakeRealtimeSession:
+            def __init__(self, realtime_model):
+                self.realtime_model = realtime_model
+                realtime_sessions.append(self)
+
+            def _handle_ultravox_event(self, event):
+                handled_ultravox_events.append(event)
 
         class FakeModel:
             def __init__(self, **options):
                 self.options = options
+                self._sessions = set()
 
             async def aclose(self):
                 closed["model"] += 1
@@ -93,6 +108,7 @@ class UltravoxLifecycleTests(unittest.IsolatedAsyncioTestCase):
         class FakeSession:
             def __init__(self, **kwargs):
                 self.handlers = {}
+                self.llm = kwargs["llm"]
                 sessions.append(self)
 
             def on(self, event_name, callback=None):
@@ -110,6 +126,7 @@ class UltravoxLifecycleTests(unittest.IsolatedAsyncioTestCase):
 
             async def start(self, **kwargs):
                 order.append("start")
+                self.realtime_session = self.llm.session()
                 started.set()
 
             async def aclose(self):
@@ -157,7 +174,11 @@ class UltravoxLifecycleTests(unittest.IsolatedAsyncioTestCase):
         agents.Agent = FakeAgent
         agents.AgentSession = FakeSession
         plugins.ultravox = types.SimpleNamespace(
-            realtime=types.SimpleNamespace(RealtimeModel=FakeModel)
+            realtime=types.SimpleNamespace(
+                RealtimeModel=FakeModel,
+                RealtimeSession=FakeRealtimeSession,
+                events=types.SimpleNamespace(CallStartedEvent=FakeCallStartedEvent),
+            )
         )
         livekit.rtc = types.SimpleNamespace(
             ParticipantKind=types.SimpleNamespace(PARTICIPANT_KIND_AGENT=4),
@@ -182,6 +203,30 @@ class UltravoxLifecycleTests(unittest.IsolatedAsyncioTestCase):
             await asyncio.sleep(0)
             self.assertIn("voice.agent.ready", [event[0] for event in events])
             self.assertNotIn("voice.session.connected", [event[0] for event in events])
+
+            call_started = FakeCallStartedEvent("ultravox-call-1")
+            other_ultravox_event = object()
+            realtime_sessions[0]._handle_ultravox_event(call_started)
+            realtime_sessions[0]._handle_ultravox_event(call_started)
+            realtime_sessions[0]._handle_ultravox_event(other_ultravox_event)
+            await asyncio.sleep(0)
+            provider_events = [event for event in events if event[0] == "voice.provider.session.started"]
+            self.assertEqual(
+                provider_events,
+                [
+                    (
+                        "voice.provider.session.started",
+                        {
+                            "source": "ultravox",
+                            "payload": {"provider_session_id": "ultravox-call-1"},
+                        },
+                    )
+                ],
+            )
+            self.assertEqual(
+                handled_ultravox_events,
+                [call_started, call_started, other_ultravox_event],
+            )
 
             participant = types.SimpleNamespace(identity="web-random", kind=0)
             ctx.room.emit("participant_connected", participant)

@@ -66,7 +66,35 @@ class UltravoxLiveKitRuntime:
         from livekit.plugins import ultravox
 
         options = ultravox_options(spec, self.settings.ULTRAVOX_API_KEY)
-        model = ultravox.realtime.RealtimeModel(**options)
+
+        class RuntimeRealtimeSession(ultravox.realtime.RealtimeSession):
+            def __init__(self, realtime_model: Any) -> None:
+                super().__init__(realtime_model)
+                self._provider_session_started = False
+
+            def _handle_ultravox_event(self, event: Any) -> None:
+                super()._handle_ultravox_event(event)
+                if (
+                    isinstance(event, ultravox.realtime.events.CallStartedEvent)
+                    and not self._provider_session_started
+                ):
+                    self._provider_session_started = True
+                    asyncio.create_task(self._emit_provider_session_started(event.call_id))
+
+            async def _emit_provider_session_started(self, provider_session_id: str) -> None:
+                await send_event(
+                    "voice.provider.session.started",
+                    source="ultravox",
+                    payload={"provider_session_id": provider_session_id},
+                )
+
+        class RuntimeRealtimeModel(ultravox.realtime.RealtimeModel):
+            def session(self, *, turn_detection_disabled: bool = False) -> RuntimeRealtimeSession:
+                session = RuntimeRealtimeSession(realtime_model=self)
+                self._sessions.add(session)
+                return session
+
+        model = RuntimeRealtimeModel(**options)
         session = AgentSession(llm=model, allow_interruptions=spec.behavior.interruptions != "conservative")
         closed = False
         done = asyncio.Event()
