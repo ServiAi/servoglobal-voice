@@ -55,6 +55,7 @@ class RuntimeEventV1(BaseModel):
     session_id: str
     event_type: Literal[
         "voice.session.started",
+        "voice.provider.session.started",
         "voice.agent.ready",
         "voice.participant.connected",
         "voice.audio.input.started",
