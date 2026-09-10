@@ -176,7 +176,23 @@ class AgentService:
             raise AgentConflictError("Agent already has an editable draft.")
         if agent.published_version_id is None:
             raise AgentConflictError("Agent has no published version to branch from.")
-        published = self._get_version(tenant_id, agent.published_version_id)
+        draft = self._new_draft_from_published(agent, user_id)
+        try:
+            self.db.commit()
+        except IntegrityError as exc:
+            self.db.rollback()
+            if _matches_constraint(
+                exc, VERSION_CONSTRAINT, "tenant_agent_versions.agent_id, tenant_agent_versions.version"
+            ):
+                raise AgentConflictError("A concurrent draft already won.") from exc
+            raise
+        self.db.refresh(draft)
+        return draft
+
+    def _new_draft_from_published(
+        self, agent: TenantAgent, user_id: str | None
+    ) -> TenantAgentVersion:
+        published = self._get_version(agent.tenant_id, agent.published_version_id)
         next_version_number = (
             self.db.scalar(
                 select(func.max(TenantAgentVersion.version)).where(
@@ -187,7 +203,7 @@ class AgentService:
         ) + 1
         draft = TenantAgentVersion(
             agent_id=agent.id,
-            tenant_id=tenant_id,
+            tenant_id=agent.tenant_id,
             version=next_version_number,
             status="draft",
             language=published.language,
@@ -200,18 +216,8 @@ class AgentService:
             created_by_user_id=user_id,
         )
         self.db.add(draft)
-        try:
-            self.db.flush()
-            agent.draft_version_id = draft.id
-            self.db.commit()
-        except IntegrityError as exc:
-            self.db.rollback()
-            if _matches_constraint(
-                exc, VERSION_CONSTRAINT, "tenant_agent_versions.agent_id, tenant_agent_versions.version"
-            ):
-                raise AgentConflictError("A concurrent draft already won.") from exc
-            raise
-        self.db.refresh(draft)
+        self.db.flush()
+        agent.draft_version_id = draft.id
         return draft
 
     def publish(
@@ -254,6 +260,40 @@ class AgentService:
         self.db.refresh(agent)
         return agent
 
+    def unpublish(
+        self, tenant_id: str, agent_id: str, user_id: str | None
+    ) -> TenantAgent:
+        agent = self._locked_agent(tenant_id, agent_id)
+        self._ensure_mutable(agent)
+        if agent.published_version_id is None:
+            raise AgentConflictError("Agent is not published.")
+        published = self._get_version(tenant_id, agent.published_version_id)
+        draft = (
+            self._get_version(tenant_id, agent.draft_version_id)
+            if agent.draft_version_id
+            else self._new_draft_from_published(agent, user_id)
+        )
+        published.status = "superseded"
+        agent.published_version_id = None
+        agent.status = "draft"
+        try:
+            self.db.commit()
+        except IntegrityError as exc:
+            self.db.rollback()
+            if _matches_constraint(
+                exc, VERSION_CONSTRAINT, "tenant_agent_versions.agent_id, tenant_agent_versions.version"
+            ):
+                raise AgentConflictError("A concurrent draft already won.") from exc
+            raise
+        self._record_event(
+            agent,
+            "agent_unpublished",
+            user_id,
+            {"version": published.version, "draft_version": draft.version},
+        )
+        self.db.refresh(agent)
+        return agent
+
     def archive_agent(
         self, tenant_id: str, agent_id: str, user_id: str | None
     ) -> TenantAgent:
@@ -266,6 +306,27 @@ class AgentService:
         self._record_event(agent, "agent_archived", user_id, {})
         self.db.refresh(agent)
         return agent
+
+    def delete_agent(self, tenant_id: str, agent_id: str, user_id: str | None) -> None:
+        from app.models.voice_sessions import VoiceSession
+
+        agent = self._locked_agent(tenant_id, agent_id)
+        if agent.status != "archived":
+            raise AgentConflictError("Agent must be archived before deletion.")
+        if self.db.scalar(select(VoiceSession.id).where(VoiceSession.agent_id == agent.id)):
+            raise AgentConflictError("Agent with voice sessions cannot be deleted.")
+        resource_id = agent.id
+        self.db.delete(agent)
+        self.db.commit()
+        self.event_service.record_event(
+            tenant_id=agent.tenant_id,
+            provider="agent_builder",
+            event_type="agent_deleted",
+            status="success",
+            resource_type="agent",
+            resource_id=resource_id,
+            metadata={"actor_user_id": user_id, "status": "deleted"},
+        )
 
     def list_versions(self, tenant_id: str, agent_id: str) -> list[TenantAgentVersion]:
         agent = self.get_agent(tenant_id, agent_id)

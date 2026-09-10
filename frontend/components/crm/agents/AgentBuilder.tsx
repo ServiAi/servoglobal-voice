@@ -8,7 +8,10 @@ import {
   archiveAgentAction,
   createAgentAction,
   createAgentNextDraftAction,
+  deleteAgentAction,
+  fetchAgentVersionsAction,
   publishAgentAction,
+  unpublishAgentAction,
   updateAgentDraftAction,
 } from '@/app/[locale]/(tenant)/voice-ai/agents/actions';
 import { ActionDialog } from '@/components/crm/voice-experiences/ActionDialog';
@@ -131,6 +134,7 @@ export function AgentBuilder({
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [branching, setBranching] = useState(false);
+  const [lifecycleBusy, setLifecycleBusy] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
@@ -286,11 +290,56 @@ export function AgentBuilder({
 
   async function handleArchive() {
     if (!agent) return;
+    setLifecycleBusy(true);
+    setServerError(null);
     const result = await archiveAgentAction(locale, agent.id);
+    setLifecycleBusy(false);
     if (result.ok) {
       setAgent(result.data);
       setDraft(null);
+    } else {
+      setServerError(t(result.status === 409 ? 'errors.conflict' : 'errors.generic'));
     }
+  }
+
+  async function handleUnpublish() {
+    if (!agent) return;
+    setLifecycleBusy(true);
+    setServerError(null);
+    const result = await unpublishAgentAction(locale, agent.id);
+    if (!result.ok) {
+      setLifecycleBusy(false);
+      setServerError(t(result.status === 409 ? 'errors.conflict' : 'errors.generic'));
+      return;
+    }
+    setAgent(result.data);
+    const versionsResult = await fetchAgentVersionsAction(agent.id);
+    setLifecycleBusy(false);
+    if (!versionsResult.ok) {
+      setServerError(t('errors.generic'));
+      return;
+    }
+    const editableDraft =
+      versionsResult.data.find((version) => version.id === result.data.draft_version_id) ?? null;
+    setDraft(editableDraft);
+    setVersions(versionsResult.data);
+    if (editableDraft) setForm(toForm(result.data, editableDraft));
+    setSaved(false);
+    setTab('general');
+  }
+
+  async function handleDelete() {
+    if (!agent) return;
+    setLifecycleBusy(true);
+    setServerError(null);
+    const result = await deleteAgentAction(locale, agent.id);
+    if (!result.ok) {
+      setLifecycleBusy(false);
+      setServerError(t(result.status === 409 ? 'errors.deleteConflict' : 'errors.generic'));
+      return;
+    }
+    router.push(`/${locale}/voice-ai/agents`);
+    router.refresh();
   }
 
   if (mode === 'create') {
@@ -326,10 +375,25 @@ export function AgentBuilder({
           {agent.status === 'active' && agent.published_version_id && providers.some((provider) => provider.status === 'active') ? (
             <AgentVoiceTest agentId={agent.id} agentName={agent.name} />
           ) : null}
+          {canEdit && agent.status === 'active' && agent.published_version_id ? (
+            <ActionDialog
+              trigger={
+                <Button type="button" variant="outline" size="sm" disabled={lifecycleBusy}>
+                  {t('actions.unpublish')}
+                </Button>
+              }
+              title={t('confirm.unpublish.title')}
+              description={t('confirm.unpublish.description')}
+              confirmLabel={t('actions.unpublish')}
+              cancelLabel={t('common.cancel')}
+              busy={lifecycleBusy}
+              onConfirm={handleUnpublish}
+            />
+          ) : null}
           {editable && !archived ? (
             <ActionDialog
             trigger={
-              <Button type="button" variant="ghost" size="sm">
+              <Button type="button" variant="ghost" size="sm" disabled={lifecycleBusy}>
                 <Archive className="mr-1.5 size-4" aria-hidden="true" />
                 {t('actions.archive')}
               </Button>
@@ -339,7 +403,24 @@ export function AgentBuilder({
             confirmLabel={t('actions.archive')}
             cancelLabel={t('common.cancel')}
             destructive
+            busy={lifecycleBusy}
             onConfirm={handleArchive}
+            />
+          ) : null}
+          {canEdit && archived ? (
+            <ActionDialog
+              trigger={
+                <Button type="button" variant="destructive" size="sm" disabled={lifecycleBusy}>
+                  {t('actions.delete')}
+                </Button>
+              }
+              title={t('confirm.delete.title')}
+              description={t('confirm.delete.description')}
+              confirmLabel={t('confirm.delete.confirmLabel')}
+              cancelLabel={t('common.cancel')}
+              destructive
+              busy={lifecycleBusy}
+              onConfirm={handleDelete}
             />
           ) : null}
         </div>

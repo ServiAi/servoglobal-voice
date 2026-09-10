@@ -22,6 +22,7 @@ La especificación ejecutable completa está disponible en `/docs` y `/openapi.j
 | `/api/v1/admin` | Tenants, planes, uso, membresías, agentes e integraciones administradas. |
 | `/api/v1/admin/notifications` | Administración tenant de capacidades, reglas, destinatarios y entregas. El tenant se deriva del contexto autenticado. |
 | `/api/v1/admin/tenants/{tenant_id}/features` | Grants de funcionalidades por tenant para administradores de plataforma. |
+| `/api/v1/agents` | Agent Builder tenant: borradores, publicación, despublicación, archivo y eliminación segura. |
 | `/api/v1/voice` | Inicio de llamadas, operación de voz, context schemas y administración privada de Voice Experiences. |
 | `/api/v1/voice/tools` | Disponibilidad y booking para agentes internos protegidos. |
 | `/api/v1/webhook/whatsapp` | Verificación y eventos Meta. |
@@ -38,6 +39,14 @@ La especificación ejecutable completa está disponible en `/docs` y `/openapi.j
 - `POST /api/v1/crm/leads/{lead_id}/actions/whatsapp` y `GET .../messages`.
 - `POST /api/v1/crm/leads/{lead_id}/actions/call` y `GET .../calls`.
 - `GET /api/v1/crm/leads/{lead_id}/call-summary` y generación de asset.
+
+## Agent Builder
+
+- `POST /api/v1/agents/{agent_id}/publish` publica el borrador actual como versión inmutable.
+- `POST /api/v1/agents/{agent_id}/unpublish` retira la versión activa y crea o conserva un borrador editable con toda su configuración.
+- `POST /api/v1/agents/{agent_id}/archive` deja el agente en solo lectura.
+- `DELETE /api/v1/agents/{agent_id}` elimina únicamente agentes archivados sin sesiones de voz asociadas; responde `409` cuando debe conservarse la trazabilidad.
+- Todas las rutas derivan el tenant de `AuthContext`; las mutaciones requieren `platform_admin` o `tenant_admin`.
 
 ## Integraciones destacadas
 

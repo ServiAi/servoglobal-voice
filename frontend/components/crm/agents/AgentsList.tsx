@@ -4,7 +4,11 @@ import { useState, useTransition } from 'react';
 import Link from 'next/link';
 import { ArrowRight, Bot, Clock3, Plus, RotateCcw, ShieldAlert, Sparkles } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { archiveAgentAction } from '@/app/[locale]/(tenant)/voice-ai/agents/actions';
+import {
+  archiveAgentAction,
+  deleteAgentAction,
+  unpublishAgentAction,
+} from '@/app/[locale]/(tenant)/voice-ai/agents/actions';
 import { ActionDialog } from '@/components/crm/voice-experiences/ActionDialog';
 import { Button } from '@/components/ui/button';
 import { AgentStatusBadge } from './AgentStatusBadge';
@@ -34,6 +38,32 @@ export function AgentsList({ locale, canEdit, initialAgents, gateState }: Props)
       setAgents((current) =>
         current.map((agent) => (agent.id === result.data.id ? result.data : agent))
       );
+    });
+  };
+
+  const unpublish = (agentId: string) => {
+    startTransition(async () => {
+      setError(null);
+      const result = await unpublishAgentAction(locale, agentId);
+      if (!result.ok) {
+        setError(t(result.status === 409 ? 'errors.conflict' : 'errors.generic'));
+        return;
+      }
+      setAgents((current) =>
+        current.map((agent) => (agent.id === result.data.id ? result.data : agent))
+      );
+    });
+  };
+
+  const remove = (agentId: string) => {
+    startTransition(async () => {
+      setError(null);
+      const result = await deleteAgentAction(locale, agentId);
+      if (!result.ok) {
+        setError(t(result.status === 409 ? 'errors.deleteConflict' : 'errors.generic'));
+        return;
+      }
+      setAgents((current) => current.filter((agent) => agent.id !== agentId));
     });
   };
 
@@ -138,6 +168,21 @@ export function AgentsList({ locale, canEdit, initialAgents, gateState }: Props)
                       <ArrowRight className="ml-1.5 size-4" aria-hidden="true" />
                     </Link>
                   </Button>
+                  {canEdit && agent.status === 'active' && agent.published_version_id ? (
+                    <ActionDialog
+                      trigger={
+                        <Button type="button" size="sm" variant="ghost" disabled={isPending}>
+                          {t('actions.unpublish')}
+                        </Button>
+                      }
+                      title={t('confirm.unpublish.title')}
+                      description={t('confirm.unpublish.description')}
+                      confirmLabel={t('actions.unpublish')}
+                      cancelLabel={t('common.cancel')}
+                      busy={isPending}
+                      onConfirm={() => unpublish(agent.id)}
+                    />
+                  ) : null}
                   {canEdit && agent.status !== 'archived' ? (
                     <ActionDialog
                       trigger={
@@ -155,10 +200,28 @@ export function AgentsList({ locale, canEdit, initialAgents, gateState }: Props)
                     />
                   ) : null}
                   {agent.status === 'archived' ? (
-                    <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                      <RotateCcw className="size-3.5" aria-hidden="true" />
-                      {t('list.archivedNotice')}
-                    </span>
+                    <>
+                      <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                        <RotateCcw className="size-3.5" aria-hidden="true" />
+                        {t('list.archivedNotice')}
+                      </span>
+                      {canEdit ? (
+                        <ActionDialog
+                          trigger={
+                            <Button type="button" size="sm" variant="destructive" disabled={isPending}>
+                              {t('actions.delete')}
+                            </Button>
+                          }
+                          title={t('confirm.delete.title')}
+                          description={t('confirm.delete.description')}
+                          confirmLabel={t('confirm.delete.confirmLabel')}
+                          cancelLabel={t('common.cancel')}
+                          destructive
+                          busy={isPending}
+                          onConfirm={() => remove(agent.id)}
+                        />
+                      ) : null}
+                    </>
                   ) : null}
                 </div>
               </div>
