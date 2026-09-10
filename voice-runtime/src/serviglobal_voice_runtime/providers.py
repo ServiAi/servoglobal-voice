@@ -61,6 +61,7 @@ class UltravoxLiveKitRuntime:
         self.settings = settings
 
     async def run(self, ctx: Any, spec: RuntimeSessionSpecV1, send_event: EventSender) -> None:
+        from livekit import rtc
         from livekit.agents import Agent, AgentSession
         from livekit.plugins import ultravox
 
@@ -69,35 +70,145 @@ class UltravoxLiveKitRuntime:
         session = AgentSession(llm=model, allow_interruptions=spec.behavior.interruptions != "conservative")
         closed = False
         done = asyncio.Event()
+        participant_joined = asyncio.Event()
+        connected = False
+        input_started = False
+        output_started = False
+        participant_identities: set[str] = set()
 
-        async def close_resources(*, emit_ended: bool) -> None:
+        def is_human(participant: Any) -> bool:
+            return participant.kind != rtc.ParticipantKind.PARTICIPANT_KIND_AGENT
+
+        async def emit_participant_connected(participant: Any) -> None:
+            identity = str(participant.identity)
+            if identity in participant_identities:
+                return
+            participant_identities.add(identity)
+            participant_joined.set()
+            await send_event(
+                "voice.participant.connected",
+                source="livekit",
+                payload={"participant_identity": identity},
+            )
+
+        def on_participant_connected(participant: Any) -> None:
+            if is_human(participant):
+                asyncio.create_task(emit_participant_connected(participant))
+
+        async def emit_input_started() -> None:
+            nonlocal input_started
+            if input_started:
+                return
+            input_started = True
+            await send_event(
+                "voice.audio.input.started",
+                source="livekit",
+                payload={"track_source": "microphone"},
+            )
+
+        def on_track_published(publication: Any, participant: Any) -> None:
+            if is_human(participant) and publication.source == rtc.TrackSource.SOURCE_MICROPHONE:
+                asyncio.create_task(emit_input_started())
+
+        async def close_resources(*, emit_ended: bool, reason: str = "unknown") -> None:
             nonlocal closed
             if closed:
                 return
             closed = True
             try:
-                await session.aclose()
-                await model.aclose()
+                ctx.room.off("participant_connected", on_participant_connected)
+                ctx.room.off("participant_disconnected", on_participant_disconnected)
+                ctx.room.off("track_published", on_track_published)
+                session.off("user_input_transcribed", on_transcript)
+                session.off("agent_state_changed", on_agent_state_changed)
+                try:
+                    await session.aclose()
+                finally:
+                    await model.aclose()
                 if emit_ended:
-                    await send_event("voice.session.ended", payload={"end_reason": "unknown"})
+                    await send_event("voice.session.ended", payload={"end_reason": reason})
             finally:
                 done.set()
 
         async def cleanup() -> None:
-            await close_resources(emit_ended=True)
+            await close_resources(emit_ended=True, reason="runtime_shutdown")
 
         ctx.add_shutdown_callback(cleanup)
 
-        @session.on("user_input_transcribed")
+        async def emit_transcript(event: Any) -> None:
+            nonlocal connected
+            await emit_input_started()
+            await send_event(
+                "voice.transcript.final",
+                source="livekit",
+                payload={"speaker": "user", "text": event.transcript},
+            )
+            if not connected:
+                connected = True
+                await send_event("voice.session.connected", source="livekit", payload={})
+
         def on_transcript(event: Any) -> None:
             if event.is_final:
-                asyncio.create_task(send_event("voice.transcript.final", source="livekit", payload={"speaker": "user", "text": event.transcript}))
+                asyncio.create_task(emit_transcript(event))
+
+        async def emit_agent_state(event: Any) -> None:
+            nonlocal output_started
+            if event.new_state == "speaking" and not output_started:
+                output_started = True
+                await send_event("voice.audio.output.started", source="livekit", payload={})
+            elif event.old_state == "speaking" and output_started:
+                output_started = False
+                await send_event("voice.audio.output.completed", source="livekit", payload={})
+
+        def on_agent_state_changed(event: Any) -> None:
+            asyncio.create_task(emit_agent_state(event))
+
+        async def emit_participant_disconnected(participant: Any) -> None:
+            identity = str(participant.identity)
+            if identity not in participant_identities:
+                return
+            await send_event(
+                "voice.participant.disconnected",
+                source="livekit",
+                payload={"participant_identity": identity},
+            )
+            try:
+                await close_resources(
+                    emit_ended=True,
+                    reason="participant_disconnected",
+                )
+            finally:
+                ctx.shutdown("human participant disconnected")
+
+        def on_participant_disconnected(participant: Any) -> None:
+            asyncio.create_task(emit_participant_disconnected(participant))
+
+        session.on("user_input_transcribed", on_transcript)
+        session.on("agent_state_changed", on_agent_state_changed)
+        ctx.room.on("participant_connected", on_participant_connected)
+        ctx.room.on("participant_disconnected", on_participant_disconnected)
+        ctx.room.on("track_published", on_track_published)
 
         await send_event("voice.session.started", payload={"livekit_job_id": ctx.job.id})
         try:
             await ctx.connect()
+            for participant in ctx.room.remote_participants.values():
+                on_participant_connected(participant)
             await session.start(room=ctx.room, agent=Agent(instructions=options["system_prompt"]))
-            await send_event("voice.session.connected", payload={})
+            await send_event("voice.agent.ready", source="livekit", payload={})
+            try:
+                await asyncio.wait_for(
+                    participant_joined.wait(),
+                    timeout=self.settings.VOICE_RUNTIME_PARTICIPANT_WAIT_SECONDS,
+                )
+            except TimeoutError:
+                await send_event(
+                    "voice.session.failed",
+                    payload={"error_code": "participant_join_timeout"},
+                )
+                await close_resources(emit_ended=False)
+                ctx.shutdown("participant join timeout")
+                return
             await done.wait()
         except Exception:
             await close_resources(emit_ended=False)

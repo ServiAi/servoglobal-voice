@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     HEALTH_PORT: int = 8081
     CONTROL_PLANE_TIMEOUT_SECONDS: float = Field(default=5.0, gt=0, le=30)
     CONTROL_PLANE_MAX_ATTEMPTS: int = Field(default=3, ge=1, le=5)
+    VOICE_RUNTIME_PARTICIPANT_WAIT_SECONDS: int = Field(default=60, ge=10, le=300)
 
 
 def load_settings() -> Settings:

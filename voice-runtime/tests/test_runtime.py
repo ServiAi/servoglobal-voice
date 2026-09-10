@@ -78,8 +78,10 @@ class UltravoxLifecycleTests(unittest.IsolatedAsyncioTestCase):
         from serviglobal_voice_runtime.providers import UltravoxLiveKitRuntime
 
         order = []
+        events = []
         started = asyncio.Event()
         closed = {"model": 0, "session": 0}
+        sessions = []
 
         class FakeModel:
             def __init__(self, **options):
@@ -90,10 +92,21 @@ class UltravoxLifecycleTests(unittest.IsolatedAsyncioTestCase):
 
         class FakeSession:
             def __init__(self, **kwargs):
-                pass
+                self.handlers = {}
+                sessions.append(self)
 
-            def on(self, event_name):
-                return lambda callback: callback
+            def on(self, event_name, callback=None):
+                if callback is None:
+                    return lambda decorated: self.on(event_name, decorated)
+                self.handlers[event_name] = callback
+                return callback
+
+            def off(self, event_name, callback):
+                if self.handlers.get(event_name) is callback:
+                    del self.handlers[event_name]
+
+            def emit(self, event_name, event):
+                self.handlers[event_name](event)
 
             async def start(self, **kwargs):
                 order.append("start")
@@ -106,16 +119,37 @@ class UltravoxLifecycleTests(unittest.IsolatedAsyncioTestCase):
             def __init__(self, **kwargs):
                 pass
 
+        class FakeRoom:
+            def __init__(self):
+                self.handlers = {}
+                self.remote_participants = {}
+
+            def on(self, event_name, callback):
+                self.handlers[event_name] = callback
+
+            def off(self, event_name, callback):
+                if self.handlers.get(event_name) is callback:
+                    del self.handlers[event_name]
+
+            def emit(self, event_name, *args):
+                self.handlers[event_name](*args)
+
         class FakeContext:
-            room = object()
             job = types.SimpleNamespace(id="job-1")
             shutdown_callback = None
+
+            def __init__(self):
+                self.room = FakeRoom()
+                self.shutdown_reasons = []
 
             def add_shutdown_callback(self, callback):
                 self.shutdown_callback = callback
 
             async def connect(self):
                 order.append("connect")
+
+            def shutdown(self, reason):
+                self.shutdown_reasons.append(reason)
 
         livekit = types.ModuleType("livekit")
         agents = types.ModuleType("livekit.agents")
@@ -125,12 +159,16 @@ class UltravoxLifecycleTests(unittest.IsolatedAsyncioTestCase):
         plugins.ultravox = types.SimpleNamespace(
             realtime=types.SimpleNamespace(RealtimeModel=FakeModel)
         )
+        livekit.rtc = types.SimpleNamespace(
+            ParticipantKind=types.SimpleNamespace(PARTICIPANT_KIND_AGENT=4),
+            TrackSource=types.SimpleNamespace(SOURCE_MICROPHONE=2),
+        )
         livekit.agents = agents
         livekit.plugins = plugins
         ctx = FakeContext()
 
-        async def send_event(*args, **kwargs):
-            pass
+        async def send_event(event_type, **kwargs):
+            events.append((event_type, kwargs))
 
         with patch.dict(
             sys.modules,
@@ -141,10 +179,51 @@ class UltravoxLifecycleTests(unittest.IsolatedAsyncioTestCase):
             )
             await asyncio.wait_for(started.wait(), timeout=1)
             self.assertEqual(order, ["connect", "start"])
+            await asyncio.sleep(0)
+            self.assertIn("voice.agent.ready", [event[0] for event in events])
+            self.assertNotIn("voice.session.connected", [event[0] for event in events])
+
+            participant = types.SimpleNamespace(identity="web-random", kind=0)
+            ctx.room.emit("participant_connected", participant)
+            ctx.room.emit(
+                "track_published",
+                types.SimpleNamespace(source=2),
+                participant,
+            )
+            sessions[0].emit(
+                "user_input_transcribed",
+                types.SimpleNamespace(is_final=True, transcript="Hola Sandra"),
+            )
+            sessions[0].emit(
+                "agent_state_changed",
+                types.SimpleNamespace(old_state="thinking", new_state="speaking"),
+            )
+            sessions[0].emit(
+                "agent_state_changed",
+                types.SimpleNamespace(old_state="speaking", new_state="listening"),
+            )
+            await asyncio.sleep(0)
+            await asyncio.sleep(0)
+            event_names = [event[0] for event in events]
+            self.assertIn("voice.participant.connected", event_names)
+            self.assertIn("voice.audio.input.started", event_names)
+            self.assertIn("voice.transcript.final", event_names)
+            self.assertIn("voice.session.connected", event_names)
+            self.assertIn("voice.audio.output.started", event_names)
+            self.assertIn("voice.audio.output.completed", event_names)
+            self.assertLess(
+                event_names.index("voice.transcript.final"),
+                event_names.index("voice.session.connected"),
+            )
+
+            ctx.room.emit("participant_disconnected", participant)
+            await asyncio.wait_for(task, timeout=1)
             await ctx.shutdown_callback()
             await ctx.shutdown_callback()
-            await task
             self.assertEqual(closed, {"model": 1, "session": 1})
+            self.assertIn("voice.participant.disconnected", [event[0] for event in events])
+            self.assertIn("voice.session.ended", [event[0] for event in events])
+            self.assertEqual(ctx.shutdown_reasons, ["human participant disconnected"])
 
 
 if __name__ == "__main__":

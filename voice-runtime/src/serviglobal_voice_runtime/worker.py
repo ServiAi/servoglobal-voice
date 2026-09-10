@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any
 
 from .config import Settings
 from .control_plane import ControlPlaneClient
 from .providers import RealtimeProviderFactory
+
+logger = logging.getLogger(__name__)
 
 
 def parse_session_id(metadata: str) -> str:
@@ -30,9 +33,14 @@ async def run_job(ctx: Any, settings: Settings) -> None:
         async def send_event(event_type: str, **kwargs: Any) -> None:
             await client.send_event(session_id, event_type, **kwargs)
 
-        ctx.log_context_fields = {"voice_session_id": spec.session_id, "tenant_id": spec.tenant_id, "agent_id": spec.agent_id, "agent_version_id": spec.agent_version_id, "room_name": ctx.room.name, "provider": spec.runtime.realtime.provider, "livekit_job_id": ctx.job.id}
+        ctx.log_context_fields = {"voice_session_id": spec.session_id, "tenant_id": spec.tenant_id, "agent_id": spec.agent_id, "agent_version_id": spec.agent_version_id, "livekit_room_name": ctx.room.name, "provider": spec.runtime.realtime.provider, "livekit_job_id": ctx.job.id, "runtime_engine": "livekit"}
+        logger.info("Voice runtime job starting", extra=ctx.log_context_fields)
         await RealtimeProviderFactory(settings).resolve(spec.runtime.realtime.provider).run(ctx, spec, send_event)
-    except Exception:
+    except Exception as exc:
+        logger.error(
+            "Voice runtime job failed",
+            extra={"voice_session_id": session_id, "error_type": type(exc).__name__},
+        )
         if session_id:
             try:
                 await client.send_event(session_id, "voice.session.failed", payload={"error_code": "runtime_failed"})

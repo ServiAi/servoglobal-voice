@@ -12,6 +12,8 @@ La UI de notificaciones se compone de `NotificationsWorkspace`, `RulesPanel`, `R
 
 Voice Experiences usa Server Components para resolver autenticación, permisos y datos iniciales. Sus clientes tipados son `server-only` y las mutaciones pasan por Server Actions; ningún bearer token llega a componentes cliente. El builder comparte un formulario controlado entre wizard y editor, administra schemas versionados y genera una vista previa React local que no usa micrófono, WebRTC ni endpoints de ejecución.
 
+Agent Builder incorpora una prueba WebRTC detrás de `voice_runtime_v2`. Sus Server Actions crean la `VoiceSession` y solicitan el token sin exponer el bearer al cliente. `LiveKitVoiceRuntimeAdapter` es el único dueño del micrófono en este flujo, reproduce tracks remotos y libera Room, tracks, elementos de audio y listeners al finalizar. El adapter legacy Ultravox permanece separado para las experiencias públicas existentes.
+
 El tema visual (`logo_url`, `primary_color`, `background_color`, `color_scheme`) vive dentro de `theme_json`, se versiona junto con el resto del contenido en cada publicación y se resuelve con la misma función (`resolveVoiceTheme`) tanto en la vista previa del editor como en el formulario público, para que ambos rendericen de forma idéntica. `color_scheme` es `light` por defecto para preservar las experiencias publicadas antes de esta funcionalidad.
 
 Cada experiencia publicada expone además `/{locale}/voice/{slug}/embed`: la misma página pública (mismo submission, Turnstile, `context_token` y WebRTC) sin cabecera de sitio ni márgenes de página completa, pensada para incrustarse en un `<iframe>`. Un `ResizeObserver` dentro del formulario notifica su altura al documento padre vía `postMessage` (`voice-embed:resize`). El middleware de Next.js agrega `Content-Security-Policy: frame-ancestors *` únicamente a esa ruta `/embed`; el resto del sitio no declara política de framing. El SDK vanilla `frontend/public/voice-embed.v1.js` (sin build propio) monta el iframe como inline, botón flotante o modal disparado por un selector CSS del sitio anfitrión, y expone `window.VoiceEmbed` para uso imperativo desde React. El panel "Compartir / Incrustar" del listado de experiencias genera el enlace público (usando `experience.default_locale`, no el idioma del administrador) y los fragmentos de código (HTML/React/iframe) para cada modo.
@@ -21,6 +23,8 @@ Cada experiencia publicada expone además `/{locale}/voice/{slug}/embed`: la mis
 FastAPI organiza routers en `backend/app/api/endpoints/`, reglas de negocio en `backend/app/services/`, contratos en `schemas/` y persistencia SQLAlchemy en `models/`. `backend/app/main.py` ensambla middleware, CORS y routers.
 
 El dominio Agent Builder (`backend/app/models/agents.py`, `agent_service.py`, `agent_compiler_service.py`, `agent_runtime_adapter.py`, `api/endpoints/agents.py`) introduce `TenantAgent`/`TenantAgentVersion` como fuente de verdad provider-agnostic del agente, separada de `TenantVoiceAgentConfig` (config legacy ligada a Ultravox). Ver `docs-local/fase-4/AGENT_BUILDER_ARCHITECTURE.md` para el diseño completo, el estado de compatibilidad y lo que queda para la siguiente fase (Provider/Model/Capability Registry, `RuntimeBinding` como tabla, LiveKit).
+
+Voice Runtime separa Control Plane y Data Plane. El backend fija la versión publicada, crea una Room determinista y despacha el job; `voice-runtime/` obtiene el spec por HTTP/JWT interno y ejecuta `AgentSession` con Ultravox, sin DB. El navegador recibe un token corto tenant-scoped para esa misma Room con grants de micrófono exclusivamente. El estado `connected` requiere el primer transcript final; agent ready, participante, entrada y salida de audio se registran como eventos detallados.
 
 El subsistema de notificaciones separa administración (`notification_admin_service.py`), creación segura de eventos (`notification_event_pipeline.py`), planificación (`notification_orchestrator.py`), condiciones/destinatarios/variables, claims, reintentos, recuperación y ejecución WhatsApp. `backend/app/workers/notification_worker.py` procesa entregas vencidas fuera del proceso web y requiere PostgreSQL.
 
@@ -39,6 +43,15 @@ PostgreSQL es la base principal. Alembic administra el esquema. Los dominios per
 - Los secretos por tenant se cifran; las respuestas sólo indican presencia mediante campos como `has_secret`.
 
 ## Flujos principales
+
+### Prueba WebRTC de agente
+
+1. Un administrador tenant crea una `VoiceSession` `webrtc`; el backend deriva tenant y fija la versión publicada.
+2. LiveKit crea el dispatch en `sg-vs-{session_id}` y el runtime obtiene `RuntimeSessionSpecV1`.
+3. El navegador obtiene un token room-scoped, entra a esa misma Room y publica un único micrófono.
+4. El runtime ignora al participant agente, registra al humano y `AgentSession` entrega su audio a Ultravox.
+5. El primer transcript final marca la sesión `connected`; la respuesta vuelve como track LiveKit y el browser la reproduce.
+6. Al colgar, participante, adapter, `AgentSession` y modelo liberan recursos y la sesión termina. Sin participante, el runtime aplica timeout configurable.
 
 ### Llamada a CRM
 
