@@ -75,5 +75,5 @@ export function unpublishAgent(accessToken: string, agentId: string) {
 }
 
 export function deleteAgent(accessToken: string, agentId: string) {
-  return requestAgentEndpoint<null>('DELETE', agentId, accessToken);
+  return requestAgentEndpoint<null>('POST', `${agentId}/delete`, accessToken);
 }

@@ -238,3 +238,13 @@ def delete_agent(
         service.delete_agent(context.tenant.id, agent_id, context.user.id)
     except SERVICE_ERRORS as exc:
         _raise_service_error(exc)
+
+
+@router.post("/{agent_id}/delete", status_code=status.HTTP_204_NO_CONTENT)
+def delete_agent_action(
+    agent_id: str,
+    context: AuthContext = Depends(require_agent_write),
+    db: Session = Depends(get_db),
+) -> None:
+    """Delete through an action route for clients or proxies that reject DELETE."""
+    return delete_agent(agent_id, context, db)
