@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class _StrictModel(BaseModel):
@@ -31,7 +31,40 @@ class AgentBehavior(_StrictModel):
     agent_first: bool = True
 
 
-class AgentCreateRequest(_StrictModel):
+class ProviderAgentReference(_StrictModel):
+    agent_id: str = Field(min_length=1, max_length=120)
+    observed_published_revision_id: str | None = Field(default=None, max_length=120)
+
+
+class AgentVoiceConfig(_StrictModel):
+    mode: Literal["provider"] = "provider"
+    provider: str = Field(max_length=40)
+    voice_id: str = Field(min_length=1, max_length=160)
+
+
+class ProviderManagedOverrides(_StrictModel):
+    join_timeout: str | None = Field(default=None, max_length=24)
+    max_duration: str | None = Field(default=None, max_length=24)
+    recording_enabled: bool | None = None
+    initial_output_medium: Literal["MESSAGE_MEDIUM_VOICE", "MESSAGE_MEDIUM_TEXT"] | None = None
+
+
+class _RuntimeSelection(_StrictModel):
+    management_mode: Literal["serviglobal_managed", "provider_managed"] = "serviglobal_managed"
+    provider_agent: ProviderAgentReference | None = None
+    voice: AgentVoiceConfig | None = None
+    provider_overrides: ProviderManagedOverrides | None = None
+
+    @model_validator(mode="after")
+    def validate_management_mode(self):
+        if self.management_mode == "provider_managed" and self.provider_agent is None:
+            raise ValueError("provider_agent is required for provider_managed agents")
+        if self.management_mode == "serviglobal_managed" and self.provider_agent is not None:
+            raise ValueError("provider_agent is only valid for provider_managed agents")
+        return self
+
+
+class AgentCreateRequest(_RuntimeSelection):
     name: str = Field(min_length=1, max_length=160)
     description: str | None = Field(default=None, max_length=2000)
     language: str = Field(default="es", min_length=2, max_length=16)
@@ -58,7 +91,7 @@ class AgentUpdateRequest(_StrictModel):
     description: str | None = Field(default=None, max_length=2000)
 
 
-class AgentDraftUpdateRequest(_StrictModel):
+class AgentDraftUpdateRequest(_RuntimeSelection):
     name: str = Field(min_length=1, max_length=160)
     description: str | None = Field(default=None, max_length=2000)
     language: str = Field(default="es", min_length=2, max_length=16)

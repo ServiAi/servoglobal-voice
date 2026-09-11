@@ -9,7 +9,7 @@
 
 Variables base:
 
-- Backend: `DATABASE_URL`, `PORT`, Auth0, Ultravox y `INTEGRATIONS_ENCRYPTION_KEY`.
+- Backend: `DATABASE_URL`, `PORT`, Auth0 e `INTEGRATIONS_ENCRYPTION_KEY`. La API key de Ultravox se configura por tenant en Integraciones; no existe una credencial global de fallback.
 - Frontend: `NEXT_PUBLIC_API_URL`, Auth0 y Turnstile cuando se use la demo pública.
 - Integraciones opcionales: Cal.com, Google Calendar, Resend/storage, WhatsApp y secretos de webhooks/herramientas internas. Chatwoot ya no usa variables de entorno globales para credenciales por tenant (`CHATWOOT_API_TOKEN`/`CHATWOOT_ACCOUNT_ID`/`CHATWOOT_INBOX_ID` fueron retiradas); se configura por tenant en `Settings → Integrations → Chatwoot`. La excepción es el modo "managed": `CHATWOOT_PLATFORM_API_TOKEN` (token de Super Admin/Platform App de la instancia compartida) y `BACKEND_PUBLIC_BASE_URL` (URL pública de este backend, usada para registrar el `outgoing_url` del Agent Bot) son globales y necesarios sólo para `POST /api/v1/integrations/chatwoot/provision`; sin ellos, el modo "external" (formulario manual) sigue funcionando igual.
 - Worker de notificaciones: `NOTIFICATION_WORKER_BATCH_SIZE`, `NOTIFICATION_WORKER_POLL_SECONDS`, `NOTIFICATION_WORKER_LEASE_SECONDS`, `NOTIFICATION_WORKER_MAX_ATTEMPTS`, tiempos de retry/jitter y parámetros de recuperación. Los defaults y rangos válidos están en `backend/app/core/config.py`.
@@ -201,6 +201,8 @@ Bórrelas a mano (UI de Chatwoot o Rails console) cuando convenga; mientras tant
 - Confirmar que respuestas de configuración exponen `has_secret`, no el secreto.
 - Confirmar aislamiento tenant en consultas, archivos y eventos.
 - Voice Runtime nunca almacena ni recibe por variable de entorno una API key de proveedor de voz; se resuelve por `session_id` desde el Control Plane (`GET /internal/voice-runtime/sessions/{session_id}/credentials/{provider}`) y vive sólo en memoria durante el job.
+- Antes de declarar E2E provider-managed, ejecutar un canary A/B real con dos tenants, dos cuentas/claves y recursos privados diferentes. En ambos verificar catálogo, preview, call, runtime v2, rollback legacy, LiveKit, audio bidireccional, transcripts, lifecycle y `provider_session_id`, además del aislamiento cruzado.
+- `call_creation_failed` confirma que no se obtuvo una call utilizable. `call_creation_outcome_unknown` indica que Ultravox pudo aceptar el POST; reconciliar antes de cualquier intento manual para evitar duplicados.
 - Revisar manualmente coincidencias sensibles con el comando definido en `docs-local/fase-3/agent-rules/SECURITY_AND_LOGGING_RULES.md`.
 
 ## Diagnóstico rápido

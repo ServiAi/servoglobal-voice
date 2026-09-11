@@ -5,6 +5,12 @@ from collections.abc import Awaitable, Callable
 from typing import Any, Protocol
 
 from .config import Settings
+from .call_factory import (
+    CallCreationFailed,
+    CallCreationOutcomeUnknown,
+    ManagedAgentHttpSession,
+    UltravoxAgentCallFactory,
+)
 from .contracts import RuntimeSessionSpecV1
 from .credentials import ProviderCredentialResolver
 
@@ -72,6 +78,52 @@ class UltravoxLiveKitRuntime:
         from livekit.plugins import ultravox
 
         options = ultravox_options(spec, credential.api_key)
+        managed_http_session = None
+        owned_http_session = None
+        if spec.runtime.realtime.management_mode == "provider_managed":
+            import aiohttp
+
+            provider_agent = spec.runtime.realtime.provider_agent or {}
+            agent_id = str(provider_agent.get("agent_id") or "")
+            if not agent_id:
+                raise UnsupportedRuntimeProviderError("provider_managed requires provider_agent.agent_id")
+            owned_http_session = aiohttp.ClientSession(
+                timeout=aiohttp.ClientTimeout(total=15.0)
+            )
+            factory = UltravoxAgentCallFactory(owned_http_session)
+
+            async def create_managed_call():
+                try:
+                    return await factory.create(
+                        api_key=credential.api_key,
+                        agent_id=agent_id,
+                        observed_revision_id=provider_agent.get("observed_published_revision_id"),
+                        session_id=spec.session_id,
+                        local_agent_id=spec.agent_id,
+                        context=spec.context,
+                        overrides=spec.runtime.realtime.provider_overrides,
+                        input_sample_rate=16000,
+                        output_sample_rate=24000,
+                    )
+                except CallCreationOutcomeUnknown:
+                    await send_event(
+                        "voice.session.failed",
+                        source="ultravox",
+                        payload={"error_code": "call_creation_outcome_unknown"},
+                    )
+                    raise
+                except CallCreationFailed:
+                    await send_event(
+                        "voice.session.failed",
+                        source="ultravox",
+                        payload={"error_code": "call_creation_failed"},
+                    )
+                    raise
+
+            managed_http_session = ManagedAgentHttpSession(
+                owned_http_session, create_managed_call
+            )
+            options["http_session"] = managed_http_session
 
         class RuntimeRealtimeSession(ultravox.realtime.RealtimeSession):
             def __init__(self, realtime_model: Any) -> None:
@@ -158,7 +210,11 @@ class UltravoxLiveKitRuntime:
                 try:
                     await session.aclose()
                 finally:
-                    await model.aclose()
+                    try:
+                        await model.aclose()
+                    finally:
+                        if owned_http_session is not None:
+                            await owned_http_session.close()
                 if emit_ended:
                     await send_event("voice.session.ended", payload={"end_reason": reason})
             finally:
@@ -228,7 +284,8 @@ class UltravoxLiveKitRuntime:
             await ctx.connect()
             for participant in ctx.room.remote_participants.values():
                 on_participant_connected(participant)
-            await session.start(room=ctx.room, agent=Agent(instructions=options["system_prompt"]))
+            instructions = "" if spec.runtime.realtime.management_mode == "provider_managed" else options["system_prompt"]
+            await session.start(room=ctx.room, agent=Agent(instructions=instructions))
             await send_event("voice.agent.ready", source="livekit", payload={})
             try:
                 await asyncio.wait_for(

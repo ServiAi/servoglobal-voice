@@ -213,6 +213,17 @@ async def create_call(
     await verify_turnstile(request.turnstile_token)
     TenantUsageService(db).ensure_tenant_can_start_call_by_slug(settings.BOOTSTRAP_TENANT_SLUG)
     tenant = _bootstrap_tenant(db)
+    from app.services.voice_config_service import VoiceConfigService
+
+    voice_config_service = VoiceConfigService(db)
+    try:
+        provider_config = voice_config_service.get_active_provider_config(tenant.id, "ultravox")
+        api_key = voice_config_service.decrypt_api_key(provider_config)
+    except ValueError:
+        logger.warning("Tenant voice provider credential is unavailable")
+        raise HTTPException(
+            status_code=503, detail="Voice calling is temporarily unavailable."
+        ) from None
 
     from datetime import datetime
     import pytz
@@ -233,7 +244,11 @@ async def create_call(
     try:
         # The provider agent is resolved server-side (DEFAULT_AGENT_ID); the
         # browser never selects an agent id or system prompt.
-        join_url = await create_call_session(template_context=context)
+        join_url = await create_call_session(
+            api_key,
+            agent_id=provider_config.default_voice_agent_id or settings.DEFAULT_AGENT_ID,
+            template_context=context,
+        )
 
         # Registrar el inicio de la demo en el CRM
         if context:
@@ -266,6 +281,18 @@ async def create_outbound_call(
     await verify_turnstile(request.turnstile_token)
     TenantUsageService(db).ensure_tenant_can_start_call_by_slug(settings.BOOTSTRAP_TENANT_SLUG)
     tenant = _bootstrap_tenant(db)
+    from app.services.voice_config_service import VoiceConfigService
+
+    voice_config_service = VoiceConfigService(db)
+    try:
+        provider_config = voice_config_service.get_active_provider_config(tenant.id, "ultravox")
+        api_key = voice_config_service.decrypt_api_key(provider_config)
+    except ValueError:
+        logger.warning("Tenant voice provider credential is unavailable")
+        raise HTTPException(
+            status_code=503, detail="Voice calling is temporarily unavailable."
+        ) from None
+    configured_agent_id = provider_config.default_voice_agent_id or settings.DEFAULT_AGENT_ID
 
     try:
         from datetime import datetime
@@ -305,13 +332,15 @@ async def create_outbound_call(
             result = await create_scheduled_sip_call_via_pbx(
                 phone=request.phone,
                 schedule_time=request.schedule_time,
-                agent_id=request.agent_id,
+                api_key=api_key,
+                agent_id=configured_agent_id,
                 template_context=context,
             )
         else:
             result = await create_sip_call_via_pbx(
                 phone=request.phone,
-                agent_id=request.agent_id,
+                api_key=api_key,
+                agent_id=configured_agent_id,
                 template_context=context if context else None,
             )
 

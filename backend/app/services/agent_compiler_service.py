@@ -41,6 +41,7 @@ class AgentCompilerService:
         voice_config = version.voice_agent_config
         if isinstance(realtime, dict):
             realtime = dict(realtime)
+            realtime.setdefault("management_mode", "serviglobal_managed")
             try:
                 realtime["model"] = resolve_execution_model_id(
                     str(realtime.get("provider") or ""),

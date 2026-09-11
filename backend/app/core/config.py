@@ -4,7 +4,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    ULTRAVOX_API_KEY: str
     ULTRAVOX_MODEL: str = "fixie-ai/ultravox-70b"
     ULTRAVOX_WEBHOOK_SECRET: str = ""
     ULTRAVOX_WEBHOOK_SIGNATURE_TOLERANCE_SECONDS: int = 60

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import unittest
+from types import SimpleNamespace
+from unittest.mock import patch
 
 from sqlalchemy import select
 
@@ -10,6 +12,7 @@ from app.models.integrations import TenantIntegrationEvent, TenantVoiceAgentConf
 from app.schemas.agents import AgentCreateRequest
 from app.services.agent_service import AgentService
 from app.services.tenant_feature_service import AGENT_BUILDER, TenantFeatureService
+from app.schemas.ultravox_admin import UltravoxToolSummary
 
 
 class AgentBuilderTests(Integration2ATestCase):
@@ -149,7 +152,14 @@ class AgentBuilderTests(Integration2ATestCase):
         draft = self.client.get(f"/api/v1/agents/{agent_id}/draft").json()
         self.assertEqual(
             draft["runtime_binding"],
-            {"pipeline_type": "realtime", "realtime": {"provider": "ultravox", "model": "ultravox"}},
+            {
+                "pipeline_type": "realtime",
+                "realtime": {
+                    "provider": "ultravox",
+                    "model": "ultravox",
+                    "management_mode": "serviglobal_managed",
+                },
+            },
         )
 
     def test_update_draft_rejects_unavailable_model(self) -> None:
@@ -350,7 +360,46 @@ class AgentBuilderTests(Integration2ATestCase):
         self.assertEqual(body["instructions"], payload["instructions"])
         self.assertEqual(body["behavior"], payload["behavior"])
         self.assertEqual(body["voice_agent_config_id"], self.voice_agent_config_id)
-        self.assertEqual(body["runtime_binding"]["realtime"], {"provider": "ultravox", "model": "ultravox"})
+        self.assertEqual(
+            body["runtime_binding"]["realtime"],
+            {
+                "provider": "ultravox",
+                "model": "ultravox",
+                "management_mode": "serviglobal_managed",
+            },
+        )
+
+    def test_provider_managed_link_is_stored_only_in_version_binding(self) -> None:
+        self._enable_feature()
+        remote = SimpleNamespace(
+            agent_id="remote-agent-1",
+            published_revision_id="revision-live",
+            tools=[UltravoxToolSummary(name="hangUp", classification="provider_native")],
+            has_unsupported_client_tools=False,
+        )
+        with patch(
+            "app.services.ultravox_admin_service.UltravoxAdminService.validate_provider_agent_link",
+            return_value=remote,
+        ):
+            response = self._create(
+                model="ultravox-v0.7",
+                management_mode="provider_managed",
+                provider_agent={
+                    "agent_id": "remote-agent-1",
+                    "observed_published_revision_id": "revision-stale",
+                },
+            )
+        self.assertEqual(response.status_code, 201, response.text)
+        body = response.json()
+        draft = self.client.get(f"/api/v1/agents/{body['id']}/draft").json()
+        self.assertEqual(
+            draft["runtime_binding"]["realtime"]["provider_agent"],
+            {
+                "agent_id": "remote-agent-1",
+                "observed_published_revision_id": "revision-live",
+            },
+        )
+        self.assertNotIn("provider_agent_id", body)
 
     def test_unpublish_reuses_an_existing_editable_draft(self) -> None:
         self._enable_feature()

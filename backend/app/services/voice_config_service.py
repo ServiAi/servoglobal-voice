@@ -90,31 +90,18 @@ class VoiceConfigService:
         return self.secret_manager.decrypt_secret(config.webhook_secret_encrypted)
 
     def test_connection(self, tenant_id: str, provider: str = "ultravox") -> tuple[str, str | None]:
-        from app.services.voice_client import VoiceClient, VoiceClientConfig
+        from app.services.ultravox_provider_client import UltravoxProviderClient
 
         config = self.get_active_provider_config(tenant_id, provider)
-        client = VoiceClient()
-        client_config = VoiceClientConfig(
-            provider=config.provider,
-            api_key=self.decrypt_api_key(config),
-            base_url=config.base_url,
-        )
-
         try:
-            headers = {
-                "X-API-Key": client_config.api_key,
-            }
-            base_url = client_config.base_url or "https://api.ultravox.ai"
-            url = f"{base_url.rstrip('/')}/api/calls?limit=1"
-            import httpx
-            with httpx.Client() as client_http:
-                response = client_http.get(url, headers=headers, timeout=10.0)
-                response.raise_for_status()
+            UltravoxProviderClient().list_agents(
+                self.decrypt_api_key(config), cursor=None, page_size=1, search=None
+            )
 
             self.mark_health(config, status="active", error_message=None)
             return "active", None
         except Exception as exc:
-            message = client.sanitize_voice_error(exc)
+            message = getattr(exc, "code", "provider_unavailable")
             self.mark_health(config, status="error", error_message=message)
             return "error", message
 
@@ -148,7 +135,7 @@ class VoiceConfigService:
             provider=config.provider,
             status=config.status,
             display_name=config.display_name,
-            base_url=config.base_url,
+            base_url="https://api.ultravox.ai",
             default_voice_agent_id=config.default_voice_agent_id,
             default_from_number=config.default_from_number,
             default_language=config.default_language,

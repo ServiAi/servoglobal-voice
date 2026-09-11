@@ -30,6 +30,7 @@ import type {
   AgentVersionResponse,
 } from '@/types/agents';
 import type { VoiceModelResponse, VoiceProviderResponse } from '@/types/voice-registry';
+import type { UltravoxAgentSummary } from '@/types/ultravox-admin';
 
 const FIELD_CLASS =
   'min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/60 focus:ring-2 focus:ring-primary/15 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground';
@@ -57,6 +58,10 @@ type FormState = {
   pipeline_type: 'realtime';
   provider: string;
   model: string;
+  management_mode: 'serviglobal_managed' | 'provider_managed';
+  provider_agent_id: string;
+  observed_published_revision_id: string;
+  provider_agent_name: string;
 };
 
 function defaultForm(): FormState {
@@ -75,6 +80,10 @@ function defaultForm(): FormState {
     pipeline_type: 'realtime',
     provider: 'ultravox',
     model: 'ultravox',
+    management_mode: 'serviglobal_managed',
+    provider_agent_id: '',
+    observed_published_revision_id: '',
+    provider_agent_name: '',
   };
 }
 
@@ -94,6 +103,10 @@ function toForm(agent: AgentResponse, draft: AgentVersionResponse): FormState {
     pipeline_type: draft.runtime_binding.pipeline_type,
     provider: draft.runtime_binding.realtime.provider,
     model: draft.runtime_binding.realtime.model,
+    management_mode: draft.runtime_binding.realtime.management_mode ?? 'serviglobal_managed',
+    provider_agent_id: draft.runtime_binding.realtime.provider_agent?.agent_id ?? '',
+    observed_published_revision_id: draft.runtime_binding.realtime.provider_agent?.observed_published_revision_id ?? '',
+    provider_agent_name: draft.runtime_binding.realtime.provider_agent?.agent_id ?? '',
   };
 }
 
@@ -109,6 +122,12 @@ type Props = {
   initialAgent?: AgentResponse | null;
   initialDraft?: AgentVersionResponse | null;
   initialVersions?: AgentVersionResponse[];
+  initialProviderAgent?: {
+    agentId: string;
+    name: string;
+    observedPublishedRevisionId: string | null;
+  } | null;
+  providerAgents?: UltravoxAgentSummary[];
 };
 
 export function AgentBuilder({
@@ -121,6 +140,8 @@ export function AgentBuilder({
   initialAgent = null,
   initialDraft = null,
   initialVersions = [],
+  initialProviderAgent = null,
+  providerAgents = [],
 }: Props) {
   const t = useTranslations('crm.agentBuilder');
   const router = useRouter();
@@ -129,7 +150,19 @@ export function AgentBuilder({
   const [versions, setVersions] = useState(initialVersions);
   const [tab, setTab] = useState<Tab>('general');
   const [form, setForm] = useState<FormState>(() =>
-    agent && draft ? toForm(agent, draft) : defaultForm()
+    agent && draft
+      ? toForm(agent, draft)
+      : initialProviderAgent
+        ? {
+            ...defaultForm(),
+            name: initialProviderAgent.name,
+            model: 'ultravox-v0.7',
+            management_mode: 'provider_managed',
+            provider_agent_id: initialProviderAgent.agentId,
+            observed_published_revision_id: initialProviderAgent.observedPublishedRevisionId ?? '',
+            provider_agent_name: initialProviderAgent.name,
+          }
+        : defaultForm()
   );
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
@@ -188,6 +221,11 @@ export function AgentBuilder({
       pipeline_type: form.pipeline_type,
       provider: form.provider,
       model: form.model,
+      management_mode: form.management_mode,
+      provider_agent: form.management_mode === 'provider_managed' ? {
+        agent_id: form.provider_agent_id,
+        observed_published_revision_id: form.observed_published_revision_id || null,
+      } : null,
     });
     setSaving(false);
     if (!result.ok) {
@@ -215,6 +253,11 @@ export function AgentBuilder({
       pipeline_type: form.pipeline_type,
       provider: form.provider,
       model: form.model,
+      management_mode: form.management_mode,
+      provider_agent: form.management_mode === 'provider_managed' ? {
+        agent_id: form.provider_agent_id,
+        observed_published_revision_id: form.observed_published_revision_id || null,
+      } : null,
     };
   }
 
@@ -345,7 +388,28 @@ export function AgentBuilder({
   if (mode === 'create') {
     return (
       <div className="space-y-6">
-        <GeneralFields field={field} disabled={!canEdit} t={t} />
+        <GeneralFields field={field} disabled={!canEdit} providerManaged={form.management_mode === 'provider_managed'} t={t} />
+        <VoiceFields
+          pipelineType={form.pipeline_type}
+          provider={form.provider}
+          model={form.model}
+          providers={providers}
+          models={models}
+          voiceAgentConfigId={form.voice_agent_config_id}
+          voiceAgents={voiceAgents}
+          managementMode={form.management_mode}
+          providerAgentId={form.provider_agent_id}
+          providerAgentName={form.provider_agent_name}
+          observedRevisionId={form.observed_published_revision_id}
+          currentRevisionId={providerAgents.find((item) => item.agent_id === form.provider_agent_id)?.published_revision_id ?? null}
+          hasBlockingTools={providerAgents.find((item) => item.agent_id === form.provider_agent_id)?.has_unsupported_client_tools ?? false}
+          disabled={!canEdit}
+          onManagementModeChange={(value) => setForm((current) => ({ ...current, management_mode: value, model: value === 'provider_managed' ? 'ultravox-v0.7' : 'ultravox' }))}
+          onProviderChange={(value) => setForm((current) => ({ ...current, provider: value }))}
+          onModelChange={(value) => setForm((current) => ({ ...current, model: value }))}
+          onVoiceAgentConfigChange={(value) => setForm((current) => ({ ...current, voice_agent_config_id: value }))}
+          t={t}
+        />
         {serverError ? <ErrorBanner message={serverError} /> : null}
         <div className="flex justify-end">
           <Button onClick={handleCreate} disabled={!canEdit || saving || !form.name.trim()}>
@@ -459,7 +523,7 @@ export function AgentBuilder({
       ) : (
         <>
           {tab === 'general' ? (
-            <GeneralFields field={field} disabled={!editable || !hasDraft} t={t} />
+            <GeneralFields field={field} disabled={!editable || !hasDraft} providerManaged={form.management_mode === 'provider_managed'} t={t} />
           ) : null}
 
           {tab === 'behavior' ? (
@@ -480,7 +544,17 @@ export function AgentBuilder({
               models={models}
               voiceAgentConfigId={form.voice_agent_config_id}
               voiceAgents={voiceAgents}
-              disabled={!editable || !hasDraft}
+              managementMode={form.management_mode}
+              providerAgentId={form.provider_agent_id}
+              providerAgentName={form.provider_agent_name}
+              observedRevisionId={form.observed_published_revision_id}
+              currentRevisionId={providerAgents.find((item) => item.agent_id === form.provider_agent_id)?.published_revision_id ?? null}
+              hasBlockingTools={providerAgents.find((item) => item.agent_id === form.provider_agent_id)?.has_unsupported_client_tools ?? false}
+              disabled={!editable || !hasDraft || form.management_mode === 'provider_managed'}
+              onManagementModeChange={(value) => {
+                setForm((current) => ({ ...current, management_mode: value, model: value === 'provider_managed' ? 'ultravox-v0.7' : 'ultravox' }));
+                setSaved(false);
+              }}
               onProviderChange={(value) => {
                 setForm((current) => ({ ...current, provider: value }));
                 setSaved(false);
@@ -535,12 +609,14 @@ function ErrorBanner({ message }: { message: string }) {
 function GeneralFields({
   field,
   disabled,
+  providerManaged,
   t,
 }: {
   field: <K extends keyof FormState>(
     key: K
   ) => { value: string; onChange: (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void };
   disabled: boolean;
+  providerManaged: boolean;
   t: ReturnType<typeof useTranslations>;
 }) {
   return (
@@ -567,23 +643,23 @@ function GeneralFields({
         </label>
         <label className="flex flex-col gap-1.5 text-sm">
           <span className="font-medium text-foreground">{t('fields.role')}</span>
-          <input className={FIELD_CLASS} disabled={disabled} {...field('role')} />
+          <input className={FIELD_CLASS} disabled={disabled || providerManaged} {...field('role')} />
         </label>
         <label className="flex flex-col gap-1.5 text-sm">
           <span className="font-medium text-foreground">{t('fields.objective')}</span>
-          <input className={FIELD_CLASS} disabled={disabled} {...field('objective')} />
+          <input className={FIELD_CLASS} disabled={disabled || providerManaged} {...field('objective')} />
         </label>
         <label className="flex flex-col gap-1.5 text-sm sm:col-span-2">
           <span className="font-medium text-foreground">{t('fields.systemPrompt')}</span>
-          <textarea className={`${FIELD_CLASS} min-h-32`} disabled={disabled} {...field('system_prompt')} />
+          <textarea className={`${FIELD_CLASS} min-h-32`} disabled={disabled || providerManaged} {...field('system_prompt')} />
         </label>
         <label className="flex flex-col gap-1.5 text-sm">
           <span className="font-medium text-foreground">{t('fields.greeting')}</span>
-          <input className={FIELD_CLASS} disabled={disabled} {...field('greeting')} />
+          <input className={FIELD_CLASS} disabled={disabled || providerManaged} {...field('greeting')} />
         </label>
         <label className="flex flex-col gap-1.5 text-sm">
           <span className="font-medium text-foreground">{t('fields.closing')}</span>
-          <input className={FIELD_CLASS} disabled={disabled} {...field('closing')} />
+          <input className={FIELD_CLASS} disabled={disabled || providerManaged} {...field('closing')} />
         </label>
       </CardContent>
     </Card>
@@ -697,7 +773,14 @@ function VoiceFields({
   models,
   voiceAgentConfigId,
   voiceAgents,
+  managementMode,
+  providerAgentId,
+  providerAgentName,
+  observedRevisionId,
+  currentRevisionId,
+  hasBlockingTools,
   disabled,
+  onManagementModeChange,
   onProviderChange,
   onModelChange,
   onVoiceAgentConfigChange,
@@ -710,7 +793,14 @@ function VoiceFields({
   models: VoiceModelResponse[];
   voiceAgentConfigId: string;
   voiceAgents: VoiceAgentConfigResponse[];
+  managementMode: 'serviglobal_managed' | 'provider_managed';
+  providerAgentId: string;
+  providerAgentName: string;
+  observedRevisionId: string;
+  currentRevisionId: string | null;
+  hasBlockingTools: boolean;
   disabled: boolean;
+  onManagementModeChange: (value: 'serviglobal_managed' | 'provider_managed') => void;
   onProviderChange: (value: string) => void;
   onModelChange: (value: string) => void;
   onVoiceAgentConfigChange: (value: string) => void;
@@ -749,6 +839,31 @@ function VoiceFields({
 
       <Card>
         <CardHeader>
+          <CardTitle className="text-base">{t('providerManaged.title')}</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <label className="flex flex-col gap-1.5 text-sm">
+            <span className="font-medium text-foreground">{t('providerManaged.source')}</span>
+            <select className={FIELD_CLASS} disabled={disabled || Boolean(providerAgentId)} value={managementMode} onChange={(event) => onManagementModeChange(event.target.value as 'serviglobal_managed' | 'provider_managed')}>
+              <option value="serviglobal_managed">{t('providerManaged.serviglobal')}</option>
+              <option value="provider_managed" disabled={!providerAgentId}>{t('providerManaged.ultravox')}</option>
+            </select>
+          </label>
+          {managementMode === 'provider_managed' ? (
+            <div className="rounded-lg border border-cyan-500/30 bg-cyan-500/5 p-4 text-sm">
+              <p className="font-medium">{providerAgentName || providerAgentId}</p>
+              <p className="mt-1 text-muted-foreground">{t('providerManaged.remoteId', { id: providerAgentId })}</p>
+              <p className="text-muted-foreground">{t('providerManaged.revision', { revision: observedRevisionId || t('providerManaged.unpublished') })}</p>
+              {currentRevisionId && observedRevisionId && currentRevisionId !== observedRevisionId ? <p className="mt-2 font-medium text-amber-700">{t('providerManaged.drift', { revision: currentRevisionId })}</p> : null}
+              {hasBlockingTools ? <p className="mt-2 font-medium text-destructive">{t('providerManaged.blockedTools')}</p> : null}
+              <p className="mt-2 text-xs text-muted-foreground">{t('providerManaged.help')}</p>
+            </div>
+          ) : null}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle className="text-base">{t('voice.providerModel')}</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
@@ -756,7 +871,7 @@ function VoiceFields({
             <span className="font-medium text-foreground">{t('voice.provider')}</span>
             <select
               className={FIELD_CLASS}
-              disabled={disabled}
+              disabled={disabled || managementMode === 'provider_managed'}
               value={provider}
               onChange={(e) => onProviderChange(e.target.value)}
             >
@@ -772,7 +887,7 @@ function VoiceFields({
             <span className="font-medium text-foreground">{t('voice.model')}</span>
             <select
               className={FIELD_CLASS}
-              disabled={disabled || realtimeModels.length === 0}
+              disabled={disabled || managementMode === 'provider_managed' || realtimeModels.length === 0}
               value={model}
               onChange={(e) => onModelChange(e.target.value)}
             >
@@ -803,7 +918,7 @@ function VoiceFields({
         ) : null}
       </Card>
 
-      <Card>
+      {managementMode === 'serviglobal_managed' ? <Card>
         <CardHeader>
           <CardTitle className="text-base">{t('voice.linkTitle')}</CardTitle>
         </CardHeader>
@@ -826,7 +941,7 @@ function VoiceFields({
             <span className="text-xs text-muted-foreground">{t('voice.linkHelp')}</span>
           </label>
         </CardContent>
-      </Card>
+      </Card> : null}
     </div>
   );
 }

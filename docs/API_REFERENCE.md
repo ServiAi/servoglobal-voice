@@ -46,6 +46,8 @@ La especificación ejecutable completa está disponible en `/docs` y `/openapi.j
 - `POST /api/v1/agents/{agent_id}/unpublish` retira la versión activa y crea o conserva un borrador editable con toda su configuración.
 - `POST /api/v1/agents/{agent_id}/archive` deja el agente en solo lectura.
 - `POST /api/v1/agents/{agent_id}/delete` elimina únicamente agentes archivados sin sesiones de voz asociadas; responde `409` cuando debe conservarse la trazabilidad. `DELETE /api/v1/agents/{agent_id}` se conserva por compatibilidad.
+- `/api/v1/integrations/voice/providers/ultravox/agents` y `.../voices` exponen catálogos tenant-scoped con cursores opacos. `POST .../agents/{agent_id}/import` crea un agente/draft independiente. `GET .../voices/{voice_id}/preview` valida primero el recurso y siempre obtiene la muestra del endpoint de preview; nunca se exponen `definition` ni `previewUrl`.
+- Agent Builder acepta `management_mode=provider_managed` con `provider_agent.agent_id`; `observed_published_revision_id` se guarda sólo en el binding versionado. Bindings sin modo se interpretan como `serviglobal_managed`.
 - Todas las rutas derivan el tenant de `AuthContext`; las mutaciones requieren `platform_admin` o `tenant_admin`.
 
 ## Integraciones destacadas
