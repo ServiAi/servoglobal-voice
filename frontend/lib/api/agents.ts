@@ -69,3 +69,11 @@ export function publishAgent(
 export function archiveAgent(accessToken: string, agentId: string) {
   return requestAgentEndpoint<AgentResponse>('POST', `${agentId}/archive`, accessToken);
 }
+
+export function unpublishAgent(accessToken: string, agentId: string) {
+  return requestAgentEndpoint<AgentResponse>('POST', `${agentId}/unpublish`, accessToken);
+}
+
+export function deleteAgent(accessToken: string, agentId: string) {
+  return requestAgentEndpoint<null>('DELETE', agentId, accessToken);
+}

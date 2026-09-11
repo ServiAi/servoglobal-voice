@@ -210,3 +210,31 @@ def archive_agent(
         return service.response(service.archive_agent(context.tenant.id, agent_id, context.user.id))
     except SERVICE_ERRORS as exc:
         _raise_service_error(exc)
+
+
+@router.post("/{agent_id}/unpublish", response_model=AgentResponse)
+def unpublish_agent(
+    agent_id: str,
+    context: AuthContext = Depends(require_agent_write),
+    db: Session = Depends(get_db),
+) -> Any:
+    service = AgentService(db)
+    try:
+        return service.response(
+            service.unpublish(context.tenant.id, agent_id, context.user.id)
+        )
+    except SERVICE_ERRORS as exc:
+        _raise_service_error(exc)
+
+
+@router.delete("/{agent_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_agent(
+    agent_id: str,
+    context: AuthContext = Depends(require_agent_write),
+    db: Session = Depends(get_db),
+) -> None:
+    service = AgentService(db)
+    try:
+        service.delete_agent(context.tenant.id, agent_id, context.user.id)
+    except SERVICE_ERRORS as exc:
+        _raise_service_error(exc)

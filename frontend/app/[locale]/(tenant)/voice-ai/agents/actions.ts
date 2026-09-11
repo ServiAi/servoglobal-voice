@@ -6,8 +6,10 @@ import {
   archiveAgent,
   createAgent,
   createAgentNextDraft,
+  deleteAgent,
   fetchAgentVersions,
   publishAgent,
+  unpublishAgent,
   updateAgent,
   updateAgentDraft,
 } from '@/lib/api/agents';
@@ -88,6 +90,24 @@ export async function archiveAgentAction(
   agentId: string
 ): Promise<FetchResult<AgentResponse>> {
   const result = await withAccessToken((token) => archiveAgent(token, agentId));
+  if (result.ok) revalidateAgents(locale, agentId);
+  return result;
+}
+
+export async function unpublishAgentAction(
+  locale: string,
+  agentId: string
+): Promise<FetchResult<AgentResponse>> {
+  const result = await withAccessToken((token) => unpublishAgent(token, agentId));
+  if (result.ok) revalidateAgents(locale, agentId);
+  return result;
+}
+
+export async function deleteAgentAction(
+  locale: string,
+  agentId: string
+): Promise<FetchResult<null>> {
+  const result = await withAccessToken((token) => deleteAgent(token, agentId));
   if (result.ok) revalidateAgents(locale, agentId);
   return result;
 }

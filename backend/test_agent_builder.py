@@ -318,6 +318,47 @@ class AgentBuilderTests(Integration2ATestCase):
         by_version = {v["version"]: v["status"] for v in versions}
         self.assertEqual(by_version, {1: "superseded", 2: "published"})
 
+    def test_unpublish_opens_a_fully_editable_draft(self) -> None:
+        self._enable_feature()
+        agent_id = self._create().json()["id"]
+        self.client.post(f"/api/v1/agents/{agent_id}/publish")
+
+        response = self.client.post(f"/api/v1/agents/{agent_id}/unpublish")
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["status"], "draft")
+        self.assertIsNone(response.json()["published_version_id"])
+        self.assertIsNotNone(response.json()["draft_version_id"])
+
+        payload = self._draft_payload(
+            name="Agente editable",
+            description="Todo editable",
+            language="en",
+            timezone="America/New_York",
+            voice_agent_config_id=self.voice_agent_config_id,
+        )
+        updated = self.client.patch(f"/api/v1/agents/{agent_id}/draft", json=payload)
+        self.assertEqual(updated.status_code, 200, updated.text)
+        body = updated.json()
+        self.assertEqual(body["identity"]["name"], "Agente editable")
+        self.assertEqual(body["language"], "en")
+        self.assertEqual(body["timezone"], "America/New_York")
+        self.assertEqual(body["instructions"], payload["instructions"])
+        self.assertEqual(body["behavior"], payload["behavior"])
+        self.assertEqual(body["voice_agent_config_id"], self.voice_agent_config_id)
+        self.assertEqual(body["runtime_binding"]["realtime"], {"provider": "ultravox", "model": "ultravox"})
+
+    def test_unpublish_reuses_an_existing_editable_draft(self) -> None:
+        self._enable_feature()
+        agent_id = self._create().json()["id"]
+        self.client.post(f"/api/v1/agents/{agent_id}/publish")
+        draft_id = self.client.post(f"/api/v1/agents/{agent_id}/draft").json()["id"]
+
+        response = self.client.post(f"/api/v1/agents/{agent_id}/unpublish")
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["draft_version_id"], draft_id)
+        versions = self.client.get(f"/api/v1/agents/{agent_id}/versions").json()
+        self.assertEqual(len([version for version in versions if version["status"] == "draft"]), 1)
+
     def test_archived_agent_is_immutable(self) -> None:
         self._enable_feature()
         agent_id = self._create().json()["id"]
@@ -334,6 +375,43 @@ class AgentBuilderTests(Integration2ATestCase):
             ).status_code,
             409,
         )
+
+    def test_only_an_archived_agent_can_be_deleted(self) -> None:
+        self._enable_feature()
+        agent_id = self._create().json()["id"]
+        self.assertEqual(self.client.delete(f"/api/v1/agents/{agent_id}").status_code, 409)
+
+        self.client.post(f"/api/v1/agents/{agent_id}/publish")
+        self.client.post(f"/api/v1/agents/{agent_id}/archive")
+        response = self.client.delete(f"/api/v1/agents/{agent_id}")
+        self.assertEqual(response.status_code, 204, response.text)
+        self.assertEqual(self.client.get(f"/api/v1/agents/{agent_id}").status_code, 404)
+
+    def test_agent_with_voice_sessions_keeps_its_audit_history(self) -> None:
+        from app.models.voice_sessions import VoiceSession
+
+        self._enable_feature()
+        agent_id = self._create().json()["id"]
+        published_version_id = self.client.post(
+            f"/api/v1/agents/{agent_id}/publish"
+        ).json()["published_version_id"]
+        with SessionLocal() as db:
+            db.add(
+                VoiceSession(
+                    tenant_id=self.tenant.id,
+                    agent_id=agent_id,
+                    agent_version_id=published_version_id,
+                    channel="internal_test",
+                    direction="internal",
+                    provider="ultravox",
+                )
+            )
+            db.commit()
+
+        self.client.post(f"/api/v1/agents/{agent_id}/archive")
+        response = self.client.delete(f"/api/v1/agents/{agent_id}")
+        self.assertEqual(response.status_code, 409, response.text)
+        self.assertEqual(self.client.get(f"/api/v1/agents/{agent_id}").status_code, 200)
 
     # -- legacy compatibility --
 
@@ -371,7 +449,9 @@ class AgentBuilderTests(Integration2ATestCase):
         )
         self.assertEqual(self.client.get(f"/api/v1/agents/{other_id}/draft").status_code, 404)
         self.assertEqual(self.client.post(f"/api/v1/agents/{other_id}/publish").status_code, 404)
+        self.assertEqual(self.client.post(f"/api/v1/agents/{other_id}/unpublish").status_code, 404)
         self.assertEqual(self.client.post(f"/api/v1/agents/{other_id}/archive").status_code, 404)
+        self.assertEqual(self.client.delete(f"/api/v1/agents/{other_id}").status_code, 404)
         self.assertEqual(
             self.client.get(f"/api/v1/agents/{other_id}/versions").status_code, 404
         )

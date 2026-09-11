@@ -1319,7 +1319,7 @@
       "versionStatus": { "draft": "Draft", "published": "Published", "superseded": "Superseded" },
       "featureDisabled": { "title": "Feature not enabled", "description": "Agent Builder is not enabled for this tenant." },
       "accessDenied": { "title": "Access restricted", "description": "Your role does not have permission to manage agents." },
-      "errors": { "loadTitle": "Could not load", "generic": "Something went wrong. Please try again.", "conflict": "That action is not valid for the agent's current state.", "validation": "Please check the form fields.", "publishValidation": "The system prompt is required before publishing." },
+      "errors": { "loadTitle": "Could not load", "generic": "Something went wrong. Please try again.", "conflict": "That action is not valid for the agent's current state.", "deleteConflict": "Only an archived agent without associated voice sessions can be deleted.", "validation": "Please check the form fields.", "publishValidation": "The system prompt is required before publishing." },
       "list": {
         "eyebrow": "ServiGlobal agents",
         "count": "{count, plural, =0 {No agents} one {# agent} other {# agents}}",
@@ -1331,8 +1331,12 @@
         "open": "Open",
         "archivedNotice": "Archived"
       },
-      "actions": { "archive": "Archive" },
-      "confirm": { "archive": { "title": "Archive agent", "description": "The agent will no longer be available for editing or publishing. Contact support to revert this." } },
+      "actions": { "unpublish": "Unpublish", "archive": "Archive", "delete": "Delete" },
+      "confirm": {
+        "unpublish": { "title": "Unpublish agent", "description": "The agent will no longer be available for calls and an editable draft will be opened with its current configuration." },
+        "archive": { "title": "Archive agent", "description": "The agent will no longer be available for editing or publishing." },
+        "delete": { "title": "Permanently delete agent", "description": "The agent and its versions will be deleted. This is only possible when it is archived and has no associated voice sessions. This action cannot be undone.", "confirmLabel": "Delete permanently" }
+      },
       "common": { "cancel": "Cancel" },
       "tabs": { "general": "General", "behavior": "Behavior", "voice": "Voice & models", "versions": "Versions" },
       "fields": {
