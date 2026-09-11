@@ -12,8 +12,10 @@ from _integrations_2a_test_base import Integration2ATestCase
 from app.core.config import settings
 from app.db.session import SessionLocal
 from app.models.agents import TenantAgent, TenantAgentVersion
+from app.schemas.integrations import VoiceProviderConfigRequest
 from app.security.voice_runtime_auth import create_runtime_token, require_voice_runtime
 from app.services.livekit_runtime_backend import RuntimeDispatchResult
+from app.services.voice_config_service import VoiceConfigService
 from app.services.voice_runtime_dispatcher import VoiceRuntimeDispatcher
 from app.services.tenant_feature_service import TenantFeatureService, VOICE_RUNTIME_V2
 from app.services.voice_session_service import VoiceSessionService
@@ -72,6 +74,21 @@ class VoiceRuntimeControlPlaneTests(Integration2ATestCase):
                 self.user.id,
             )
 
+    def _configure_ultravox(self, tenant_id: str, api_key: str, *, status: str = "active") -> None:
+        with SessionLocal() as db:
+            VoiceConfigService(db).upsert_provider_config(
+                tenant_id,
+                VoiceProviderConfigRequest(provider="ultravox", status=status, api_key=api_key),
+            )
+
+    def _get_credential(self, session_id: str, provider: str = "ultravox"):
+        with patch.object(settings, "VOICE_RUNTIME_SERVICE_SECRET", "x" * 32):
+            token = create_runtime_token()
+            return self.client.get(
+                f"/api/v1/internal/voice-runtime/sessions/{session_id}/credentials/{provider}",
+                headers={"Authorization": f"Bearer {token}"},
+            )
+
     def test_short_lived_runtime_jwt(self) -> None:
         with patch.object(settings, "VOICE_RUNTIME_SERVICE_SECRET", "x" * 32):
             token = create_runtime_token()
@@ -97,6 +114,88 @@ class VoiceRuntimeControlPlaneTests(Integration2ATestCase):
             self.assertEqual(session.livekit_room_name, f"sg-vs-{session.id}")
             self.assertEqual(session.livekit_dispatch_id, "dispatch-1")
             self.assertEqual(session.status, "dispatched")
+
+    def test_runtime_credential_resolves_the_tenants_configured_key(self) -> None:
+        self._configure_ultravox(self.tenant.id, "tenant-a-key")
+        session_id = self._dispatched_session()
+
+        response = self._get_credential(session_id)
+
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json(), {"provider": "ultravox", "api_key": "tenant-a-key", "base_url": None})
+
+    def test_runtime_credential_requires_valid_runtime_authentication(self) -> None:
+        self._configure_ultravox(self.tenant.id, "tenant-a-key")
+        session_id = self._dispatched_session()
+
+        response = self.client.get(f"/api/v1/internal/voice-runtime/sessions/{session_id}/credentials/ultravox")
+
+        self.assertEqual(response.status_code, 401)
+
+    def test_runtime_credential_rejects_unknown_session(self) -> None:
+        response = self._get_credential("00000000-0000-0000-0000-000000000000")
+        self.assertEqual(response.status_code, 404)
+
+    def test_runtime_credential_rejects_provider_not_bound_to_session(self) -> None:
+        self._configure_ultravox(self.tenant.id, "tenant-a-key")
+        session_id = self._dispatched_session()
+
+        response = self._get_credential(session_id, provider="openai")
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_runtime_credential_rejects_unsupported_provider(self) -> None:
+        session_id = self._dispatched_session()
+
+        response = self._get_credential(session_id, provider="not-a-real-provider")
+
+        self.assertEqual(response.status_code, 422)
+
+    def test_runtime_credential_rejects_inactive_integration(self) -> None:
+        self._configure_ultravox(self.tenant.id, "tenant-a-key", status="inactive")
+        session_id = self._dispatched_session()
+
+        response = self._get_credential(session_id)
+
+        self.assertEqual(response.status_code, 409)
+        self.assertNotIn("tenant-a-key", response.text)
+
+    def test_runtime_credential_rejects_configured_provider_without_api_key(self) -> None:
+        from app.models.integrations import TenantVoiceProviderConfig
+
+        with SessionLocal() as db:
+            db.add(TenantVoiceProviderConfig(tenant_id=self.tenant.id, provider="ultravox", status="active"))
+            db.commit()
+        session_id = self._dispatched_session()
+
+        response = self._get_credential(session_id)
+
+        self.assertEqual(response.status_code, 409)
+
+    def test_runtime_credential_rejects_terminal_session(self) -> None:
+        self._configure_ultravox(self.tenant.id, "tenant-a-key")
+        session_id = self._dispatched_session()
+        with SessionLocal() as db:
+            VoiceSessionService(db).get(session_id).status = "ended"
+            db.commit()
+
+        response = self._get_credential(session_id)
+
+        self.assertEqual(response.status_code, 409)
+
+    def test_runtime_credential_is_isolated_per_tenant(self) -> None:
+        other_tenant, _ = self._seed_tenant_user(slug="tenant-b", email="tenant-b@example.com")
+        self._configure_ultravox(self.tenant.id, "tenant-a-key")
+        self._configure_ultravox(other_tenant.id, "tenant-b-key")
+        session_a = self._dispatched_session(self.tenant.id)
+        session_b = self._dispatched_session(other_tenant.id)
+
+        response_a = self._get_credential(session_a)
+        response_b = self._get_credential(session_b)
+
+        self.assertEqual(response_a.json()["api_key"], "tenant-a-key")
+        self.assertEqual(response_b.json()["api_key"], "tenant-b-key")
+        self.assertNotEqual(response_a.json()["api_key"], response_b.json()["api_key"])
 
     def test_webrtc_token_is_short_lived_room_scoped_and_microphone_only(self) -> None:
         self._enable_runtime()
