@@ -309,6 +309,11 @@ class AgentBuilderTests(Integration2ATestCase):
         next_draft = self.client.post(f"/api/v1/agents/{agent_id}/draft")
         self.assertEqual(next_draft.status_code, 201, next_draft.text)
         self.assertEqual(next_draft.json()["version"], 2)
+        self.assertEqual(next_draft.json()["identity"]["name"], "Sandra")
+        self.assertEqual(
+            next_draft.json()["instructions"]["system_prompt"],
+            self._payload()["instructions"]["system_prompt"],
+        )
 
         # Cannot branch a second draft while one is already open.
         self.assertEqual(self.client.post(f"/api/v1/agents/{agent_id}/draft").status_code, 409)
@@ -379,13 +384,21 @@ class AgentBuilderTests(Integration2ATestCase):
     def test_only_an_archived_agent_can_be_deleted(self) -> None:
         self._enable_feature()
         agent_id = self._create().json()["id"]
-        self.assertEqual(self.client.delete(f"/api/v1/agents/{agent_id}").status_code, 409)
+        self.assertEqual(self.client.post(f"/api/v1/agents/{agent_id}/delete").status_code, 409)
 
         self.client.post(f"/api/v1/agents/{agent_id}/publish")
         self.client.post(f"/api/v1/agents/{agent_id}/archive")
-        response = self.client.delete(f"/api/v1/agents/{agent_id}")
+        response = self.client.post(f"/api/v1/agents/{agent_id}/delete")
         self.assertEqual(response.status_code, 204, response.text)
         self.assertEqual(self.client.get(f"/api/v1/agents/{agent_id}").status_code, 404)
+
+    def test_delete_method_remains_supported(self) -> None:
+        self._enable_feature()
+        agent_id = self._create().json()["id"]
+        self.client.post(f"/api/v1/agents/{agent_id}/archive")
+
+        response = self.client.delete(f"/api/v1/agents/{agent_id}")
+        self.assertEqual(response.status_code, 204, response.text)
 
     def test_agent_with_voice_sessions_keeps_its_audit_history(self) -> None:
         from app.models.voice_sessions import VoiceSession
@@ -451,6 +464,7 @@ class AgentBuilderTests(Integration2ATestCase):
         self.assertEqual(self.client.post(f"/api/v1/agents/{other_id}/publish").status_code, 404)
         self.assertEqual(self.client.post(f"/api/v1/agents/{other_id}/unpublish").status_code, 404)
         self.assertEqual(self.client.post(f"/api/v1/agents/{other_id}/archive").status_code, 404)
+        self.assertEqual(self.client.post(f"/api/v1/agents/{other_id}/delete").status_code, 404)
         self.assertEqual(self.client.delete(f"/api/v1/agents/{other_id}").status_code, 404)
         self.assertEqual(
             self.client.get(f"/api/v1/agents/{other_id}/versions").status_code, 404

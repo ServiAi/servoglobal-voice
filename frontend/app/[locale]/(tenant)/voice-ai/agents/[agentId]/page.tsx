@@ -1,7 +1,12 @@
 import { getTranslations } from 'next-intl/server';
 import { notFound, redirect } from 'next/navigation';
 import { AgentBuilder } from '@/components/crm/agents/AgentBuilder';
-import { fetchAgent, fetchAgentDraft, fetchAgentVersions } from '@/lib/api/agents';
+import {
+  createAgentNextDraft,
+  fetchAgent,
+  fetchAgentDraft,
+  fetchAgentVersions,
+} from '@/lib/api/agents';
 import { fetchVoiceAgents } from '@/lib/api/crm';
 import { fetchVoiceModels, fetchVoiceProviders } from '@/lib/api/voice-registry';
 import { getAccessToken } from '@/lib/auth/server';
@@ -41,10 +46,19 @@ export default async function AgentEditorPage({
   }
 
   const agent = agentResult.data;
-  const [draftResult, versionsResult] = await Promise.all([
-    fetchAgentDraft(accessToken, agent.id),
-    fetchAgentVersions(accessToken, agent.id),
-  ]);
+  let draftResult = await fetchAgentDraft(accessToken, agent.id);
+  if (
+    !draftResult.ok &&
+    draftResult.status === 409 &&
+    agent.status === 'active' &&
+    canEditAgents(profileResult.profile)
+  ) {
+    draftResult = await createAgentNextDraft(accessToken, agent.id);
+    if (!draftResult.ok && draftResult.status === 409) {
+      draftResult = await fetchAgentDraft(accessToken, agent.id);
+    }
+  }
+  const versionsResult = await fetchAgentVersions(accessToken, agent.id);
 
   return (
     <AgentBuilder

@@ -45,7 +45,7 @@ La especificación ejecutable completa está disponible en `/docs` y `/openapi.j
 - `POST /api/v1/agents/{agent_id}/publish` publica el borrador actual como versión inmutable.
 - `POST /api/v1/agents/{agent_id}/unpublish` retira la versión activa y crea o conserva un borrador editable con toda su configuración.
 - `POST /api/v1/agents/{agent_id}/archive` deja el agente en solo lectura.
-- `DELETE /api/v1/agents/{agent_id}` elimina únicamente agentes archivados sin sesiones de voz asociadas; responde `409` cuando debe conservarse la trazabilidad.
+- `POST /api/v1/agents/{agent_id}/delete` elimina únicamente agentes archivados sin sesiones de voz asociadas; responde `409` cuando debe conservarse la trazabilidad. `DELETE /api/v1/agents/{agent_id}` se conserva por compatibilidad.
 - Todas las rutas derivan el tenant de `AuthContext`; las mutaciones requieren `platform_admin` o `tenant_admin`.
 
 ## Integraciones destacadas
