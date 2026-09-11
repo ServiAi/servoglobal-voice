@@ -6,6 +6,7 @@ from typing import Any, Protocol
 
 from .config import Settings
 from .contracts import RuntimeSessionSpecV1
+from .credentials import ProviderCredentialResolver
 
 EventSender = Callable[..., Awaitable[None]]
 
@@ -57,15 +58,20 @@ def ultravox_options(spec: RuntimeSessionSpecV1, api_key: str) -> dict[str, Any]
 
 
 class UltravoxLiveKitRuntime:
-    def __init__(self, settings: Settings) -> None:
+    def __init__(self, settings: Settings, credential_resolver: ProviderCredentialResolver) -> None:
         self.settings = settings
+        self.credential_resolver = credential_resolver
 
     async def run(self, ctx: Any, spec: RuntimeSessionSpecV1, send_event: EventSender) -> None:
+        if not spec.session_id:
+            raise UnsupportedRuntimeProviderError("Ultravox runtime requires a resolved session_id")
+        credential = await self.credential_resolver.resolve(session_id=spec.session_id, provider="ultravox")
+
         from livekit import rtc
         from livekit.agents import Agent, AgentSession
         from livekit.plugins import ultravox
 
-        options = ultravox_options(spec, self.settings.ULTRAVOX_API_KEY)
+        options = ultravox_options(spec, credential.api_key)
 
         class RuntimeRealtimeSession(ultravox.realtime.RealtimeSession):
             def __init__(self, realtime_model: Any) -> None:
@@ -244,10 +250,11 @@ class UltravoxLiveKitRuntime:
 
 
 class RealtimeProviderFactory:
-    def __init__(self, settings: Settings) -> None:
+    def __init__(self, settings: Settings, credential_resolver: ProviderCredentialResolver) -> None:
         self.settings = settings
+        self.credential_resolver = credential_resolver
 
     def resolve(self, provider: str) -> RealtimeProvider:
         if provider == "ultravox":
-            return UltravoxLiveKitRuntime(self.settings)
+            return UltravoxLiveKitRuntime(self.settings, self.credential_resolver)
         raise UnsupportedRuntimeProviderError(f"Runtime provider is not implemented: {provider}")

@@ -6,6 +6,7 @@ from typing import Any
 
 from .config import Settings
 from .control_plane import ControlPlaneClient
+from .credentials import ControlPlaneCredentialResolver, ProviderCredentialError
 from .providers import RealtimeProviderFactory
 
 logger = logging.getLogger(__name__)
@@ -21,8 +22,18 @@ def parse_session_id(metadata: str) -> str:
     return value["session_id"]
 
 
+async def _report_failure(client: ControlPlaneClient, session_id: str | None, error_code: str) -> None:
+    if not session_id:
+        return
+    try:
+        await client.send_event(session_id, "voice.session.failed", payload={"error_code": error_code})
+    except Exception:
+        pass
+
+
 async def run_job(ctx: Any, settings: Settings) -> None:
     client = ControlPlaneClient(settings)
+    credential_resolver = ControlPlaneCredentialResolver(client)
     session_id: str | None = None
     try:
         session_id = parse_session_id(ctx.job.metadata)
@@ -35,17 +46,20 @@ async def run_job(ctx: Any, settings: Settings) -> None:
 
         ctx.log_context_fields = {"voice_session_id": spec.session_id, "tenant_id": spec.tenant_id, "agent_id": spec.agent_id, "agent_version_id": spec.agent_version_id, "livekit_room_name": ctx.room.name, "provider": spec.runtime.realtime.provider, "livekit_job_id": ctx.job.id, "runtime_engine": "livekit"}
         logger.info("Voice runtime job starting", extra=ctx.log_context_fields)
-        await RealtimeProviderFactory(settings).resolve(spec.runtime.realtime.provider).run(ctx, spec, send_event)
+        await RealtimeProviderFactory(settings, credential_resolver).resolve(spec.runtime.realtime.provider).run(ctx, spec, send_event)
+    except ProviderCredentialError as exc:
+        logger.error(
+            "Voice runtime credential resolution failed",
+            extra={"voice_session_id": session_id, "error_type": type(exc).__name__},
+        )
+        await _report_failure(client, session_id, "provider_credentials_unavailable")
+        raise
     except Exception as exc:
         logger.error(
             "Voice runtime job failed",
             extra={"voice_session_id": session_id, "error_type": type(exc).__name__},
         )
-        if session_id:
-            try:
-                await client.send_event(session_id, "voice.session.failed", payload={"error_code": "runtime_failed"})
-            except Exception:
-                pass
+        await _report_failure(client, session_id, "runtime_failed")
         raise
     finally:
         await client.aclose()
