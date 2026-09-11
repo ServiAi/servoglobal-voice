@@ -13,7 +13,6 @@ class Settings(BaseSettings):
     LIVEKIT_API_KEY: str
     LIVEKIT_API_SECRET: str
     LIVEKIT_AGENT_NAME: str = "serviglobal-voice-runtime"
-    ULTRAVOX_API_KEY: str
     LOG_LEVEL: str = "INFO"
     ENVIRONMENT: str = "development"
     HEALTH_PORT: int = 8081

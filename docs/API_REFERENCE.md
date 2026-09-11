@@ -119,9 +119,10 @@ La respuesta omite el identificador del tenant, el usuario que realizó el cambi
 | `POST /api/v1/voice/sessions` | Crea una `VoiceSession` para el agente publicado del tenant autenticado y ejecuta el dispatch LiveKit. Para browser usa `{agent_id, channel: "webrtc", direction: "internal", idempotency_key}`; no acepta `tenant_id` ni room. |
 | `POST /api/v1/voice/sessions/{session_id}/webrtc-token` | Emite un token LiveKit de máximo 10 minutos, limitado a `session.livekit_room_name`, subscribe y publicación exclusiva de micrófono. Rechaza sesiones ajenas, terminales, sin room o con runtime distinto de LiveKit. |
 | `GET /api/v1/internal/voice-runtime/sessions/{session_id}/spec` | Entrega `RuntimeSessionSpecV1` al runtime autenticado por JWT interno; nunca incluye secretos. |
+| `GET /api/v1/internal/voice-runtime/sessions/{session_id}/credentials/{provider}` | Resuelve la credencial del proveedor de voz para el tenant dueño de esa `VoiceSession`, descifrada desde `TenantVoiceProviderConfig`. Ligado a `session_id`, no a un `tenant_id` enviado por el runtime; rechaza sesión inexistente o provider no asociado (`404`), provider desconocido (`422`) e integración inactiva o sin API key (`409`). |
 | `POST /api/v1/internal/voice-runtime/sessions/{session_id}/events` | Persiste eventos runtime idempotentes y sanitizados; sólo started/connected/ended/failed cambian el estado principal. |
 
-La respuesta del token contiene `voice_session_id`, `server_url`, `room_name`, `participant_token` y `expires_in`. El participant token es sensible y efímero: no se registra ni se persiste. Las rutas tenant derivan el tenant de `AuthContext`; las internas no aceptan `tenant_id`.
+La respuesta del token contiene `voice_session_id`, `server_url`, `room_name`, `participant_token` y `expires_in`. El participant token es sensible y efímero: no se registra ni se persiste. Las rutas tenant derivan el tenant de `AuthContext`; las internas no aceptan `tenant_id`. La credencial del proveedor sólo viaja por este endpoint interno autenticado hacia `voice-runtime`; nunca aparece en `RuntimeSessionSpecV1`, metadata de LiveKit, eventos o logs.
 
 ## Voice Context Experiences
 

@@ -9,6 +9,13 @@ import jwt
 
 from .config import Settings
 from .contracts import RuntimeEventV1, RuntimeSessionSpecV1
+from .credentials import (
+    ProviderCredential,
+    ProviderCredentialNotConfiguredError,
+    ProviderCredentialSessionNotFoundError,
+    ProviderCredentialUnavailableError,
+    ProviderCredentialUnsupportedError,
+)
 
 
 class ControlPlaneError(RuntimeError):
@@ -48,6 +55,23 @@ class ControlPlaneClient:
     async def get_session_spec(self, session_id: str) -> RuntimeSessionSpecV1:
         response = await self._request("GET", f"/api/v1/internal/voice-runtime/sessions/{session_id}/spec")
         return RuntimeSessionSpecV1.model_validate(response.json())
+
+    async def get_provider_credential(self, *, session_id: str, provider: str) -> ProviderCredential:
+        try:
+            response = await self._request(
+                "GET", f"/api/v1/internal/voice-runtime/sessions/{session_id}/credentials/{provider}"
+            )
+        except ControlPlaneError as exc:
+            status_code = exc.__cause__.response.status_code if isinstance(exc.__cause__, httpx.HTTPStatusError) else None
+            if status_code == 404:
+                raise ProviderCredentialSessionNotFoundError("Voice session or provider not found") from exc
+            if status_code == 409:
+                raise ProviderCredentialNotConfiguredError("Provider credentials are not available for this tenant") from exc
+            if status_code == 422:
+                raise ProviderCredentialUnsupportedError("Provider is not supported") from exc
+            raise ProviderCredentialUnavailableError("Unable to resolve provider credential") from exc
+        data = response.json()
+        return ProviderCredential(provider=data["provider"], api_key=data["api_key"], base_url=data.get("base_url"))
 
     async def send_event(self, session_id: str, event_type: str, *, source: str = "voice-runtime", payload: dict | None = None, sequence: int | None = None) -> None:
         event = RuntimeEventV1(event_id=str(uuid4()), session_id=session_id, event_type=event_type, source=source, sequence=sequence, payload=payload or {}, occurred_at=datetime.now(timezone.utc))

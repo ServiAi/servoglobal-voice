@@ -10,11 +10,14 @@ from sqlalchemy.orm import Session
 from app.api.auth.deps import AuthContext, require_roles
 from app.core.config import settings
 from app.db.session import get_db
+from app.domain.voice_registry import get_provider
 from app.schemas.runtime_session import RuntimeSessionSpecV1
+from app.schemas.voice_credentials import ProviderCredentialResponse
 from app.schemas.voice_sessions import RuntimeEventAck, RuntimeEventV1, VoiceSessionCreateRequest, VoiceSessionResponse, WebRTCParticipantTokenResponse
 from app.security.voice_runtime_auth import require_voice_runtime
 from app.services.agent_compiler_service import AgentCompilerError, AgentCompilerService
 from app.services.tenant_feature_service import TenantFeatureDisabledError, TenantFeatureService, VOICE_RUNTIME_V2
+from app.services.voice_config_service import VoiceConfigService
 from app.services.voice_runtime_dispatcher import VoiceRuntimeDispatcher
 from app.services.voice_session_service import VoiceSessionError, VoiceSessionNotFoundError, VoiceSessionService
 
@@ -118,6 +121,43 @@ def get_runtime_session_spec(session_id: str, db: Session = Depends(get_db)) -> 
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except (VoiceSessionError, AgentCompilerError) as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@router.get(
+    "/api/v1/internal/voice-runtime/sessions/{session_id}/credentials/{provider}",
+    response_model=ProviderCredentialResponse,
+    dependencies=[Depends(require_voice_runtime)],
+)
+def get_runtime_provider_credential(session_id: str, provider: str, db: Session = Depends(get_db)) -> ProviderCredentialResponse:
+    """Resolve the tenant-scoped provider credential for one VoiceSession.
+
+    Credential resolution is bound to session_id, not a bare tenant_id: the
+    caller cannot request an arbitrary tenant's key, only the key for the
+    provider already recorded on this specific session. The API key never
+    appears in RuntimeSessionSpecV1, LiveKit metadata, or logs -- only in
+    this response, over the authenticated internal channel.
+    """
+    if get_provider(provider) is None:
+        raise HTTPException(status_code=422, detail="Unsupported voice provider.")
+    try:
+        session = VoiceSessionService(db).get(session_id)
+    except VoiceSessionNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Voice session not found.") from exc
+    if session.provider != provider:
+        raise HTTPException(status_code=404, detail="Provider is not associated with this voice session.")
+    if session.status in {"ended", "failed", "cancelled"}:
+        raise HTTPException(status_code=409, detail="Voice session is terminal.")
+    voice_config_service = VoiceConfigService(db)
+    try:
+        config = voice_config_service.get_active_provider_config(session.tenant_id, provider)
+        api_key = voice_config_service.decrypt_api_key(config)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail="provider_credentials_unavailable") from exc
+    logger.info(
+        "Voice runtime credential resolved",
+        extra={"tenant_id": session.tenant_id, "voice_session_id": session.id, "provider": provider},
+    )
+    return ProviderCredentialResponse(provider=provider, api_key=api_key, base_url=config.base_url)
 
 
 @router.post("/api/v1/internal/voice-runtime/sessions/{session_id}/events", response_model=RuntimeEventAck, dependencies=[Depends(require_voice_runtime)])

@@ -200,6 +200,7 @@ Bórrelas a mano (UI de Chatwoot o Rails console) cuando convenga; mientras tant
 - No registrar Authorization, tokens, API keys, payloads completos, HTML, adjuntos o PII sensible.
 - Confirmar que respuestas de configuración exponen `has_secret`, no el secreto.
 - Confirmar aislamiento tenant en consultas, archivos y eventos.
+- Voice Runtime nunca almacena ni recibe por variable de entorno una API key de proveedor de voz; se resuelve por `session_id` desde el Control Plane (`GET /internal/voice-runtime/sessions/{session_id}/credentials/{provider}`) y vive sólo en memoria durante el job.
 - Revisar manualmente coincidencias sensibles con el comando definido en `docs-local/fase-3/agent-rules/SECURITY_AND_LOGGING_RULES.md`.
 
 ## Diagnóstico rápido

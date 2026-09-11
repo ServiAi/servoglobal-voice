@@ -9,6 +9,7 @@ from unittest.mock import patch
 
 from serviglobal_voice_runtime.config import Settings
 from serviglobal_voice_runtime.contracts import RuntimeSessionSpecV1
+from serviglobal_voice_runtime.credentials import ProviderCredential
 from serviglobal_voice_runtime.providers import RealtimeProviderFactory, UnsupportedRuntimeProviderError, language_hint, ultravox_options
 from serviglobal_voice_runtime.worker import parse_session_id
 
@@ -20,8 +21,19 @@ def settings() -> Settings:
         LIVEKIT_URL="wss://example.livekit.cloud",
         LIVEKIT_API_KEY="key",
         LIVEKIT_API_SECRET="secret",
-        ULTRAVOX_API_KEY="ultravox-key",
     )
+
+
+class FakeCredentialResolver:
+    """Stands in for ControlPlaneCredentialResolver: no HTTP, no Control Plane."""
+
+    def __init__(self, credential: ProviderCredential) -> None:
+        self.credential = credential
+        self.calls: list[tuple[str, str]] = []
+
+    async def resolve(self, *, session_id: str, provider: str) -> ProviderCredential:
+        self.calls.append((session_id, provider))
+        return self.credential
 
 
 def spec(*, provider="ultravox", model="fixie-ai/ultravox", **runtime_settings) -> RuntimeSessionSpecV1:
@@ -57,8 +69,9 @@ class RuntimeTests(unittest.TestCase):
     def test_invalid_temperature_and_unknown_provider_fail_closed(self) -> None:
         with self.assertRaises(UnsupportedRuntimeProviderError):
             ultravox_options(spec(temperature=1.1), "key")
+        resolver = FakeCredentialResolver(ProviderCredential(provider="ultravox", api_key="key"))
         with self.assertRaises(UnsupportedRuntimeProviderError):
-            RealtimeProviderFactory(settings()).resolve("openai")
+            RealtimeProviderFactory(settings(), resolver).resolve("openai")
 
     def test_ultravox_contract_rejects_invalid_provider_and_empty_model(self) -> None:
         with self.assertRaises(UnsupportedRuntimeProviderError):
@@ -71,6 +84,35 @@ class RuntimeTests(unittest.TestCase):
         data["context"] = {"nested": {"api_key": "must-not-pass"}}
         with self.assertRaises(ValueError):
             RuntimeSessionSpecV1.model_validate(data)
+
+    def test_settings_do_not_require_a_global_ultravox_api_key(self) -> None:
+        self.assertFalse(hasattr(settings(), "ULTRAVOX_API_KEY"))
+
+
+class UltravoxCredentialResolutionTests(unittest.IsolatedAsyncioTestCase):
+    async def test_ultravox_requires_a_resolved_session_id(self) -> None:
+        from serviglobal_voice_runtime.providers import UltravoxLiveKitRuntime
+
+        data = spec().model_dump()
+        data["session_id"] = None
+        session_less_spec = RuntimeSessionSpecV1.model_validate(data)
+        resolver = FakeCredentialResolver(ProviderCredential(provider="ultravox", api_key="tenant-key"))
+        runtime = UltravoxLiveKitRuntime(settings(), resolver)
+
+        with self.assertRaises(UnsupportedRuntimeProviderError):
+            await runtime.run(None, session_less_spec, lambda *args, **kwargs: None)
+        self.assertEqual(resolver.calls, [])
+
+    async def test_ultravox_never_falls_back_to_a_global_credential(self) -> None:
+        from serviglobal_voice_runtime.providers import UltravoxLiveKitRuntime
+
+        class ExplodingCredentialResolver:
+            async def resolve(self, *, session_id: str, provider: str) -> ProviderCredential:
+                raise AssertionError("must not be reached for this test setup")
+
+        # Constructing the runtime and settings requires no ULTRAVOX_API_KEY anywhere.
+        runtime = UltravoxLiveKitRuntime(settings(), ExplodingCredentialResolver())
+        self.assertFalse(hasattr(runtime.settings, "ULTRAVOX_API_KEY"))
 
 
 class UltravoxLifecycleTests(unittest.IsolatedAsyncioTestCase):
@@ -191,15 +233,19 @@ class UltravoxLifecycleTests(unittest.IsolatedAsyncioTestCase):
         async def send_event(event_type, **kwargs):
             events.append((event_type, kwargs))
 
+        resolver = FakeCredentialResolver(ProviderCredential(provider="ultravox", api_key="tenant-a-key"))
+
         with patch.dict(
             sys.modules,
             {"livekit": livekit, "livekit.agents": agents, "livekit.plugins": plugins},
         ):
             task = asyncio.create_task(
-                UltravoxLiveKitRuntime(settings()).run(ctx, spec(), send_event)
+                UltravoxLiveKitRuntime(settings(), resolver).run(ctx, spec(), send_event)
             )
             await asyncio.wait_for(started.wait(), timeout=1)
             self.assertEqual(order, ["connect", "start"])
+            self.assertEqual(resolver.calls, [("session-1", "ultravox")])
+            self.assertEqual(sessions[0].llm.options["api_key"], "tenant-a-key")
             await asyncio.sleep(0)
             self.assertIn("voice.agent.ready", [event[0] for event in events])
             self.assertNotIn("voice.session.connected", [event[0] for event in events])
