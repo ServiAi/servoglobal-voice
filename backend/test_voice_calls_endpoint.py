@@ -119,6 +119,16 @@ class LegacyPublicCallEndpointTests(unittest.TestCase):
         async def _noop_turnstile(token):
             return None
 
+        class _VoiceConfigService:
+            def __init__(self, _db):
+                pass
+
+            def get_active_provider_config(self, tenant_id, provider):
+                return type("ProviderConfig", (), {"default_voice_agent_id": "tenant-agent"})()
+
+            def decrypt_api_key(self, _config):
+                return "tenant-key"
+
         return (
             patch("app.api.endpoints.voice.verify_turnstile", _noop_turnstile),
             patch(
@@ -128,15 +138,18 @@ class LegacyPublicCallEndpointTests(unittest.TestCase):
             patch("app.api.endpoints.voice.TenantUsageService"),
             patch("app.api.endpoints.voice.run_demo_start_notification_task"),
             patch("app.api.endpoints.voice.create_call_session", call_session),
+            patch("app.services.voice_config_service.VoiceConfigService", _VoiceConfigService),
         )
 
     def test_accepts_legitimate_landing_payload(self) -> None:
-        async def ok_session(template_context=None):
+        async def ok_session(api_key, agent_id=None, template_context=None):
             # The browser never selects an agent id or system prompt.
+            self.assertEqual(api_key, "tenant-key")
+            self.assertEqual(agent_id, "tenant-agent")
             return "https://join.example.test/call"
 
         patches = self._patched_endpoint(call_session=ok_session)
-        with patches[0], patches[1], patches[2], patches[3], patches[4]:
+        with patches[0], patches[1], patches[2], patches[3], patches[4], patches[5]:
             response = self.client.post("/api/v1/calls", json=_valid_landing_payload())
         self.assertEqual(response.status_code, 200, response.text)
         self.assertEqual(response.json(), {"joinUrl": "https://join.example.test/call"})
@@ -147,11 +160,11 @@ class LegacyPublicCallEndpointTests(unittest.TestCase):
         provider_agent_id = "agent_provider_9f8e7d"
         secret = f"{token} {private_url} {provider_agent_id}"
 
-        async def failing_session(template_context=None):
+        async def failing_session(api_key, agent_id=None, template_context=None):
             raise RuntimeError(secret)
 
         patches = self._patched_endpoint(call_session=failing_session)
-        with patches[0], patches[1], patches[2], patches[3], patches[4]:
+        with patches[0], patches[1], patches[2], patches[3], patches[4], patches[5]:
             with self.assertLogs("app.api.endpoints.voice", level="ERROR") as logs:
                 response = self.client.post("/api/v1/calls", json=_valid_landing_payload())
 

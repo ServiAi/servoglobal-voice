@@ -1338,6 +1338,7 @@
         "delete": { "title": "Permanently delete agent", "description": "The agent and its versions will be deleted. This is only possible when it is archived and has no associated voice sessions. This action cannot be undone.", "confirmLabel": "Delete permanently" }
       },
       "common": { "cancel": "Cancel" },
+      "providerManaged": { "title": "Management", "source": "Source of truth", "serviglobal": "ServiGlobal", "ultravox": "Ultravox", "remoteId": "Remote ID: {id}", "revision": "Observed revision: {revision}", "unpublished": "unpublished", "drift": "Drift detected. Current published revision: {revision}", "blockedTools": "The current revision contains unsupported client tools and cannot run.", "help": "Prompt, voice and tools remain controlled by Ultravox. They are revalidated before every call." },
       "tabs": { "general": "General", "behavior": "Behavior", "voice": "Voice & models", "versions": "Versions" },
       "fields": {
         "name": "Name", "description": "Description", "language": "Language", "timezone": "Timezone",
@@ -1483,6 +1484,17 @@
         "fields": { "title": "Context fields", "editableHint": "Order is set by the position assigned when each field is created.", "readOnlyHint": "Active and archived versions preserve history. Open or create a draft to edit its fields.", "add": "Add field", "edit": "Edit field", "delete": "Delete field", "empty": "This schema has no fields yet.", "key": "Key", "label": "Label", "fieldType": "Type", "collectionMode": "Collection mode", "description": "Description", "sensitivity": "Sensitivity", "required": "Required field", "options": "Options", "optionsHint": "value|Label, one option per line", "validation": "Validation JSON", "invalidJson": "Validation must be a valid JSON object.", "saved": "Field saved.", "confirmDelete": { "title": "Delete this field?", "description": "{label} will be removed from the current draft." } }
       },
       "common": { "cancel": "Cancel", "create": "Create", "save": "Save", "saving": "Saving…", "saved": "Saved", "loading": "Loading…", "back": "Back" }
+    },
+    "ultravoxAdmin": {
+      "tabs": { "connection": "Connection", "agents": "Agents", "voices": "Voices", "status": "Status" },
+      "ariaLabel": "Ultravox administration", "search": "Search", "filter": "Filter", "refresh": "Refresh",
+      "agentsTitle": "Ultravox-managed agents", "agentsHelp": "Linking keeps Ultravox as the source of truth. Importing creates an independent draft.",
+      "connectionRequired": "Enable the tenant-scoped connection to access private resources.", "observedRevision": "Observed revision: {revision}", "unpublished": "unpublished",
+      "blockedTools": "Contains client tools without a safe mapping; execution will be blocked.", "use": "Use in ServiGlobal", "import": "Import",
+      "imported": "Agent imported as an independent draft.", "importedWarnings": "Imported with {count} warning(s).",
+      "voicesTitle": "Voices", "voicesHelp": "Capabilities are normalized by ServiGlobal; the remote definition is never exposed.", "unknownLanguage": "Language not specified", "externalBilling": "External billing", "includedBilling": "Included", "listen": "Listen",
+      "backendMissing": "The backend URL is not configured.", "previewFailed": "The voice sample could not be loaded.",
+      "connection": "Connection", "active": "Active", "notConfigured": "Not configured", "visibleAgents": "Visible agents", "blockingCount": "With blocking tools"
     }
   },
   "publicVoiceExperience": {

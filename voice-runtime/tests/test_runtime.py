@@ -85,6 +85,16 @@ class RuntimeTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             RuntimeSessionSpecV1.model_validate(data)
 
+    def test_contract_rejects_unregistered_overrides_and_secret_extensions(self) -> None:
+        data = spec().model_dump()
+        data["runtime"]["realtime"]["provider_overrides"] = {"selectedTools": []}
+        with self.assertRaises(ValueError):
+            RuntimeSessionSpecV1.model_validate(data)
+        data = spec().model_dump()
+        data["runtime"]["realtime"]["provider_extensions"] = {"sharedSecrets": {}}
+        with self.assertRaises(ValueError):
+            RuntimeSessionSpecV1.model_validate(data)
+
     def test_settings_do_not_require_a_global_ultravox_api_key(self) -> None:
         self.assertFalse(hasattr(settings(), "ULTRAVOX_API_KEY"))
 

@@ -8,6 +8,7 @@ from .config import Settings
 from .control_plane import ControlPlaneClient
 from .credentials import ControlPlaneCredentialResolver, ProviderCredentialError
 from .providers import RealtimeProviderFactory
+from .call_factory import CallCreationFailed, CallCreationOutcomeUnknown
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +54,20 @@ async def run_job(ctx: Any, settings: Settings) -> None:
             extra={"voice_session_id": session_id, "error_type": type(exc).__name__},
         )
         await _report_failure(client, session_id, "provider_credentials_unavailable")
+        raise
+    except CallCreationOutcomeUnknown as exc:
+        logger.error(
+            "Voice provider call creation outcome unknown",
+            extra={"voice_session_id": session_id, "error_type": type(exc).__name__},
+        )
+        await _report_failure(client, session_id, "call_creation_outcome_unknown")
+        raise
+    except CallCreationFailed as exc:
+        logger.error(
+            "Voice provider call creation failed",
+            extra={"voice_session_id": session_id, "error_type": type(exc).__name__},
+        )
+        await _report_failure(client, session_id, "call_creation_failed")
         raise
     except Exception as exc:
         logger.error(

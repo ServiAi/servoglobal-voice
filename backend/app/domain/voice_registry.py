@@ -81,6 +81,27 @@ _MODELS: tuple[VoiceModel, ...] = (
             "temperature": ParameterSpec(supported=False),
         },
     ),
+    VoiceModel(
+        id="ultravox:ultravox-v0.7",
+        provider_key="ultravox",
+        key="ultravox-v0.7",
+        name="Ultravox v0.7",
+        # Logical alias: the physical plugin model remains behind this registry boundary.
+        execution_model_id="fixie-ai/ultravox",
+        model_type="realtime",
+        implementation_status="available",
+        capabilities={
+            "tools": True,
+            "voice_selection": True,
+            "voice_preview": True,
+            "provider_managed": True,
+            "turn_detection": True,
+            "interruptions": True,
+            "transcription": True,
+            "function_calling": True,
+        },
+        parameters={"temperature": ParameterSpec(supported=False)},
+    ),
 )
 
 _PROVIDERS_BY_KEY = {provider.key: provider for provider in _PROVIDERS}

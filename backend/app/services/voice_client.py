@@ -103,8 +103,7 @@ class VoiceClient:
         )
         pbx_uri = f"sip:{number.e164}@{route.host}:{route.port}"
 
-        base_url = config.base_url or "https://api.ultravox.ai"
-        url = f"{base_url.rstrip('/')}/api/agents/{agent_id}/calls"
+        url = f"https://api.ultravox.ai/api/agents/{agent_id}/calls"
 
         headers = {
             "X-API-Key": config.api_key,
@@ -156,8 +155,7 @@ class VoiceClient:
         *,
         provider_call_id: str,
     ) -> dict[str, Any]:
-        base_url = config.base_url or "https://api.ultravox.ai"
-        url = f"{base_url.rstrip('/')}/api/calls/{provider_call_id}"
+        url = f"https://api.ultravox.ai/api/calls/{provider_call_id}"
 
         headers = {
             "X-API-Key": config.api_key,

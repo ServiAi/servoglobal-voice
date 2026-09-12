@@ -9,6 +9,7 @@ import {
 } from '@/lib/api/agents';
 import { fetchVoiceAgents } from '@/lib/api/crm';
 import { fetchVoiceModels, fetchVoiceProviders } from '@/lib/api/voice-registry';
+import { fetchUltravoxAgent } from '@/lib/api/ultravox-admin';
 import { getAccessToken } from '@/lib/auth/server';
 import { fetchMeProfile } from '@/lib/api/me';
 import { canEditAgents, canReadAgents } from '@/lib/permissions/agents';
@@ -58,7 +59,15 @@ export default async function AgentEditorPage({
       draftResult = await fetchAgentDraft(accessToken, agent.id);
     }
   }
-  const versionsResult = await fetchAgentVersions(accessToken, agent.id);
+  const linkedProviderAgentId = draftResult.ok
+    ? draftResult.data.runtime_binding.realtime.provider_agent?.agent_id
+    : null;
+  const [versionsResult, providerAgentResult] = await Promise.all([
+    fetchAgentVersions(accessToken, agent.id),
+    linkedProviderAgentId
+      ? fetchUltravoxAgent(accessToken, linkedProviderAgentId)
+      : Promise.resolve(null),
+  ]);
 
   return (
     <AgentBuilder
@@ -71,6 +80,7 @@ export default async function AgentEditorPage({
       initialAgent={agent}
       initialDraft={draftResult.ok ? draftResult.data : null}
       initialVersions={versionsResult.ok ? versionsResult.data : []}
+      providerAgents={providerAgentResult?.ok ? [providerAgentResult.data] : []}
     />
   );
 }

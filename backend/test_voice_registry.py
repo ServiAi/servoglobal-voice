@@ -13,6 +13,10 @@ class VoiceRegistryTests(Integration2ATestCase):
             resolve_execution_model_id("ultravox", "ultravox"),
             "fixie-ai/ultravox",
         )
+        self.assertEqual(
+            resolve_execution_model_id("ultravox", "ultravox-v0.7"),
+            "fixie-ai/ultravox",
+        )
 
     def test_execution_model_resolution_fails_closed(self) -> None:
         from unittest.mock import patch
@@ -52,10 +56,9 @@ class VoiceRegistryTests(Integration2ATestCase):
         response = self.client.get("/api/v1/voice/models", params={"type": "realtime"})
         self.assertEqual(response.status_code, 200, response.text)
         models = response.json()
-        self.assertEqual(len(models), 1)
-        self.assertEqual(models[0]["id"], "ultravox:ultravox")
-        self.assertEqual(models[0]["execution_model_id"], "fixie-ai/ultravox")
-        self.assertEqual(models[0]["implementation_status"], "available")
+        self.assertEqual({model["id"] for model in models}, {"ultravox:ultravox", "ultravox:ultravox-v0.7"})
+        self.assertTrue(all(model["execution_model_id"] == "fixie-ai/ultravox" for model in models))
+        self.assertTrue(all(model["implementation_status"] == "available" for model in models))
 
         empty = self.client.get("/api/v1/voice/models", params={"type": "stt"})
         self.assertEqual(empty.json(), [])

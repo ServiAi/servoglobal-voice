@@ -35,6 +35,7 @@ def _ultravox_call_metadata(template_context: dict | None = None) -> dict[str, s
 
 
 async def create_call_session(
+    api_key: str,
     agent_id: str | None = None,
     system_prompt: str | None = None,
     template_context: dict | None = None,
@@ -44,7 +45,7 @@ async def create_call_session(
     """
     url = "https://api.ultravox.ai/api/calls"
     headers = {
-        "X-API-Key": settings.ULTRAVOX_API_KEY,
+        "X-API-Key": api_key,
         "Content-Type": "application/json",
     }
 
@@ -87,6 +88,7 @@ async def create_call_session(
 
 async def create_sip_call_via_pbx(
     phone: str,
+    api_key: str,
     agent_id: str | None = None,
     template_context: dict | None = None,
     system_prompt: str | None = None,
@@ -102,7 +104,7 @@ async def create_sip_call_via_pbx(
         raise ValueError("Agent ID requerido (DEFAULT_AGENT_ID o parámetro).")
 
     headers = {
-        "X-API-Key": settings.ULTRAVOX_API_KEY,
+        "X-API-Key": api_key,
         "Content-Type": "application/json",
     }
 
@@ -167,6 +169,7 @@ async def create_sip_call_via_pbx(
 async def create_scheduled_sip_call_via_pbx(
     phone: str,
     schedule_time: str,
+    api_key: str,
     agent_id: str | None = None,
     template_context: dict | None = None,
     system_prompt: str | None = None,
@@ -182,7 +185,7 @@ async def create_scheduled_sip_call_via_pbx(
         raise ValueError("Agent ID required (DEFAULT_AGENT_ID or parameter).")
 
     headers = {
-        "X-API-Key": settings.ULTRAVOX_API_KEY,
+        "X-API-Key": api_key,
         "Content-Type": "application/json",
     }
 

@@ -37,6 +37,13 @@ export type AgentCreateRequest = {
   pipeline_type: 'realtime';
   provider: string;
   model: string;
+  management_mode?: 'serviglobal_managed' | 'provider_managed';
+  provider_agent?: ProviderAgentReference | null;
+};
+
+export type ProviderAgentReference = {
+  agent_id: string;
+  observed_published_revision_id?: string | null;
 };
 
 export type AgentUpdateRequest = {
@@ -55,6 +62,8 @@ export type AgentDraftUpdateRequest = {
   pipeline_type: 'realtime';
   provider: string;
   model: string;
+  management_mode?: 'serviglobal_managed' | 'provider_managed';
+  provider_agent?: ProviderAgentReference | null;
 };
 
 export type AgentPublishRequest = {
@@ -75,7 +84,17 @@ export type AgentResponse = {
 
 export type AgentRuntimeBinding = {
   pipeline_type: 'realtime';
-  realtime: { provider: string; model: string };
+  realtime: {
+    provider: string;
+    model: string;
+    management_mode?: 'serviglobal_managed' | 'provider_managed';
+    provider_agent?: ProviderAgentReference | null;
+    provider_extensions?: {
+      observed_revision_drift?: boolean;
+      tools?: Array<{ name: string; classification: string }>;
+      warnings?: string[];
+    };
+  };
 };
 
 export type AgentVersionResponse = {

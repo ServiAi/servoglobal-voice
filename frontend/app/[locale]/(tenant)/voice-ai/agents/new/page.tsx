@@ -11,10 +11,13 @@ export const dynamic = 'force-dynamic';
 
 export default async function NewAgentPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ locale: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { locale } = await params;
+  const query = await searchParams;
   const accessToken = await getAccessToken();
   if (!accessToken) redirect(`/api/auth/login?returnTo=/${locale}/voice-ai/agents/new`);
 
@@ -43,6 +46,11 @@ export default async function NewAgentPage({
       voiceAgents={voiceAgentsResult.ok ? voiceAgentsResult.data : []}
       providers={providersResult.ok ? providersResult.data : []}
       models={modelsResult.ok ? modelsResult.data : []}
+      initialProviderAgent={query.management_mode === 'provider_managed' && typeof query.provider_agent_id === 'string' ? {
+        agentId: query.provider_agent_id,
+        name: typeof query.provider_agent_name === 'string' ? query.provider_agent_name : query.provider_agent_id,
+        observedPublishedRevisionId: typeof query.observed_published_revision_id === 'string' ? query.observed_published_revision_id : null,
+      } : null}
     />
   );
 }

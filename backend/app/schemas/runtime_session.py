@@ -26,12 +26,50 @@ class RealtimeModelSpec(_StrictModel):
     provider: str
     model: str
     settings: dict = Field(default_factory=dict)
+    management_mode: Literal["serviglobal_managed", "provider_managed"] = "serviglobal_managed"
+    provider_agent: dict | None = None
+    voice: dict | None = None
+    provider_overrides: dict = Field(default_factory=dict)
+    provider_extensions: dict = Field(default_factory=dict)
 
     @field_validator("settings")
     @classmethod
     def reject_secret_settings(cls, value: dict) -> dict:
         if any(part in str(key).lower() for key in value for part in ("api_key", "secret", "token", "password", "authorization")):
             raise ValueError("Runtime settings contain a forbidden secret field")
+        return value
+
+    @field_validator("provider_agent")
+    @classmethod
+    def validate_provider_agent(cls, value: dict | None) -> dict | None:
+        if value is not None and (
+            set(value) - {"agent_id", "observed_published_revision_id"}
+            or not isinstance(value.get("agent_id"), str)
+        ):
+            raise ValueError("Invalid provider agent reference")
+        return value
+
+    @field_validator("provider_overrides")
+    @classmethod
+    def validate_provider_overrides(cls, value: dict) -> dict:
+        allowed = {"join_timeout", "max_duration", "recording_enabled", "initial_output_medium"}
+        if set(value) - allowed:
+            raise ValueError("Runtime provider overrides are not allowlisted")
+        return value
+
+    @field_validator("provider_extensions")
+    @classmethod
+    def reject_secret_extensions(cls, value: dict) -> dict:
+        pending: list[object] = [value]
+        while pending:
+            current = pending.pop()
+            if isinstance(current, dict):
+                for key, item in current.items():
+                    if any(part in str(key).lower() for part in ("api_key", "secret", "token", "password", "authorization", "header")):
+                        raise ValueError("Provider extensions contain a forbidden secret field")
+                    pending.append(item)
+            elif isinstance(current, list):
+                pending.extend(current)
         return value
 
 

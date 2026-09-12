@@ -157,7 +157,7 @@ def get_runtime_provider_credential(session_id: str, provider: str, db: Session 
         "Voice runtime credential resolved",
         extra={"tenant_id": session.tenant_id, "voice_session_id": session.id, "provider": provider},
     )
-    return ProviderCredentialResponse(provider=provider, api_key=api_key, base_url=config.base_url)
+    return ProviderCredentialResponse(provider=provider, api_key=api_key, base_url=None)
 
 
 @router.post("/api/v1/internal/voice-runtime/sessions/{session_id}/events", response_model=RuntimeEventAck, dependencies=[Depends(require_voice_runtime)])

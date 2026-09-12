@@ -100,9 +100,7 @@ class AgentService:
             ).model_dump(),
             instructions_json=body.instructions.model_dump(),
             behavior_json=body.behavior.model_dump(),
-            runtime_binding_json=self._build_runtime_binding(
-                body.pipeline_type, body.provider, body.model
-            ),
+            runtime_binding_json=self._build_runtime_binding_for_tenant(tenant_id, body),
             voice_agent_config_id=body.voice_agent_config_id,
             created_by_user_id=user_id,
         )
@@ -158,9 +156,7 @@ class AgentService:
         ).model_dump()
         version.instructions_json = body.instructions.model_dump()
         version.behavior_json = body.behavior.model_dump()
-        version.runtime_binding_json = self._build_runtime_binding(
-            body.pipeline_type, body.provider, body.model
-        )
+        version.runtime_binding_json = self._build_runtime_binding_for_tenant(tenant_id, body)
         version.voice_agent_config_id = body.voice_agent_config_id
         self.db.commit()
         self._record_event(agent, "agent_draft_updated", None, {"version": version.version})
@@ -243,8 +239,21 @@ class AgentService:
                 "Draft has changed since it was last saved. Reload and try again."
             )
         draft = self._get_version(tenant_id, agent.draft_version_id)
-        if not draft.instructions_json.get("system_prompt", "").strip():
+        realtime = draft.runtime_binding_json.get("realtime", {})
+        management_mode = realtime.get("management_mode", "serviglobal_managed")
+        if management_mode == "serviglobal_managed" and not draft.instructions_json.get("system_prompt", "").strip():
             raise AgentValidationError("system_prompt is required before publishing.")
+        if management_mode == "provider_managed":
+            provider_agent = realtime.get("provider_agent") or {}
+            try:
+                from app.services.ultravox_admin_service import UltravoxAdminService
+                from app.services.ultravox_provider_client import UltravoxProviderError
+
+                UltravoxAdminService(self.db).validate_execution_preflight(
+                    tenant_id, str(provider_agent.get("agent_id") or "")
+                )
+            except (ValueError, UltravoxProviderError) as exc:
+                raise AgentValidationError(str(exc)) from exc
         previous_published_id = agent.published_version_id
         now = datetime.now(timezone.utc)
         draft.status = "published"
@@ -384,8 +393,38 @@ class AgentService:
             raise AgentValidationError(str(exc)) from exc
         return {
             "pipeline_type": pipeline_type,
-            "realtime": {"provider": provider, "model": model},
+            "realtime": {
+                "provider": provider,
+                "model": model,
+                "management_mode": "serviglobal_managed",
+            },
         }
+
+    def _build_runtime_binding_for_tenant(self, tenant_id: str, body: Any) -> dict:
+        binding = self._build_runtime_binding(body.pipeline_type, body.provider, body.model)
+        realtime = binding["realtime"]
+        realtime["management_mode"] = body.management_mode
+        if body.voice is not None:
+            realtime["voice"] = body.voice.model_dump()
+        if body.provider_overrides is not None:
+            realtime["provider_overrides"] = body.provider_overrides.model_dump(exclude_none=True)
+        if body.management_mode == "provider_managed":
+            if body.provider != "ultravox" or body.provider_agent is None:
+                raise AgentValidationError("Unsupported provider-managed configuration.")
+            from app.services.ultravox_admin_service import UltravoxAdminService
+
+            remote = UltravoxAdminService(self.db).validate_provider_agent_link(
+                tenant_id, body.provider_agent.agent_id
+            )
+            realtime["provider_agent"] = {
+                "agent_id": remote.agent_id,
+                "observed_published_revision_id": remote.published_revision_id,
+            }
+            realtime["provider_extensions"] = {
+                "tools": [tool.model_dump() for tool in remote.tools],
+                "has_unsupported_client_tools": remote.has_unsupported_client_tools,
+            }
+        return binding
 
     @staticmethod
     def _ensure_mutable(agent: TenantAgent) -> None:

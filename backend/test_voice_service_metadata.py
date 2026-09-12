@@ -3,7 +3,6 @@ import unittest
 from unittest.mock import patch
 import httpx
 
-os.environ.setdefault("ULTRAVOX_API_KEY", "test-ultravox-key")
 os.environ.setdefault("DEFAULT_AGENT_ID", "agent-default")
 os.environ.setdefault("BOOTSTRAP_TENANT_SLUG", "serviglobal-ia")
 os.environ.setdefault("ASTERISK_PUBLIC_HOST", "pbx.example.test")
@@ -60,7 +59,6 @@ class VoiceServiceMetadataTests(unittest.IsolatedAsyncioTestCase):
             "joinUrl": "https://join.example.test/call",
             "callId": "call-test",
         }
-        settings.ULTRAVOX_API_KEY = "test-ultravox-key"
         settings.DEFAULT_AGENT_ID = "agent-default"
         settings.BOOTSTRAP_TENANT_SLUG = "serviglobal-ia"
         settings.ASTERISK_PUBLIC_HOST = "pbx.example.test"
@@ -70,7 +68,7 @@ class VoiceServiceMetadataTests(unittest.IsolatedAsyncioTestCase):
     async def test_web_call_session_includes_tenant_slug_metadata(self):
         context = {"lead": "demo", "context_id": "ctx-1", "form_submission_id": "form-1"}
         with patch("app.services.voice_service.httpx.AsyncClient", CapturingAsyncClient):
-            join_url = await create_call_session(template_context=context)
+            join_url = await create_call_session(api_key="tenant-key", template_context=context)
 
         self.assertEqual(join_url, "https://join.example.test/call")
         sent_payload = CapturingAsyncClient.posts[0]["json"]
@@ -90,6 +88,7 @@ class VoiceServiceMetadataTests(unittest.IsolatedAsyncioTestCase):
         with patch("app.services.voice_service.httpx.AsyncClient", CapturingAsyncClient):
             result = await create_sip_call_via_pbx(
                 phone="3001112233",
+                api_key="tenant-key",
                 template_context=context,
             )
 
@@ -116,6 +115,7 @@ class VoiceServiceMetadataTests(unittest.IsolatedAsyncioTestCase):
             result = await create_scheduled_sip_call_via_pbx(
                 phone="3001112233",
                 schedule_time="2026-05-20T15:00:00Z",
+                api_key="tenant-key",
                 template_context=context,
             )
 
@@ -140,6 +140,7 @@ class VoiceServiceMetadataTests(unittest.IsolatedAsyncioTestCase):
             with self.assertLogs("app.services.voice_service", level="INFO") as log_capture:
                 await create_sip_call_via_pbx(
                     phone="3001112233",
+                    api_key="tenant-key",
                     template_context=context,
                 )
 
@@ -158,6 +159,7 @@ class VoiceServiceMetadataTests(unittest.IsolatedAsyncioTestCase):
                 await create_scheduled_sip_call_via_pbx(
                     phone="3001112233",
                     schedule_time="2026-05-20T15:00:00Z",
+                    api_key="tenant-key",
                     template_context=context,
                 )
 
@@ -175,6 +177,7 @@ class VoiceServiceMetadataTests(unittest.IsolatedAsyncioTestCase):
             with self.assertLogs("app.services.voice_service", level="INFO") as log_capture:
                 await create_sip_call_via_pbx(
                     phone="3001112233",
+                    api_key="tenant-key",
                     template_context=context,
                 )
         log_output = "\n".join(log_capture.output)
@@ -200,6 +203,7 @@ class VoiceServiceMetadataTests(unittest.IsolatedAsyncioTestCase):
                 try:
                     await create_sip_call_via_pbx(
                         phone="3001112233",
+                        api_key="tenant-key",
                         template_context=context,
                     )
                 except httpx.HTTPStatusError:

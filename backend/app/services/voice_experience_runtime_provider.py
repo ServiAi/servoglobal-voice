@@ -35,8 +35,7 @@ class VoiceExperienceRuntimeProvider:
         self.timeout_seconds = timeout_seconds
 
     def _credentials(self, config: TenantVoiceProviderConfig) -> tuple[str, dict[str, str]]:
-        base_url = (config.base_url or "https://api.ultravox.ai").rstrip("/")
-        return base_url, {"X-API-Key": self.config_service.decrypt_api_key(config)}
+        return "https://api.ultravox.ai", {"X-API-Key": self.config_service.decrypt_api_key(config)}
 
     def create_webrtc_call(
         self,
