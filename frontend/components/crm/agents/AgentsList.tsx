@@ -7,6 +7,7 @@ import { useTranslations } from 'next-intl';
 import {
   archiveAgentAction,
   deleteAgentAction,
+  publishAgentAction,
   unpublishAgentAction,
 } from '@/app/[locale]/(tenant)/voice-ai/agents/actions';
 import { ActionDialog } from '@/components/crm/voice-experiences/ActionDialog';
@@ -52,6 +53,20 @@ export function AgentsList({ locale, canEdit, initialAgents, gateState }: Props)
       setAgents((current) =>
         current.map((agent) => (agent.id === result.data.id ? result.data : agent))
       );
+    });
+  };
+
+  const publish = (agent: AgentResponse) => {
+    const draftVersionId = agent.draft_version_id;
+    if (!draftVersionId) return;
+    startTransition(async () => {
+      setError(null);
+      const result = await publishAgentAction(locale, agent.id, draftVersionId);
+      if (!result.ok) {
+        setError(t(result.status === 422 ? 'errors.publishValidation' : result.status === 409 ? 'errors.conflict' : 'errors.generic'));
+        return;
+      }
+      setAgents((current) => current.map((item) => item.id === result.data.id ? result.data : item));
     });
   };
 
@@ -168,6 +183,17 @@ export function AgentsList({ locale, canEdit, initialAgents, gateState }: Props)
                       <ArrowRight className="ml-1.5 size-4" aria-hidden="true" />
                     </Link>
                   </Button>
+                  {canEdit && agent.status === 'draft' && agent.draft_version_id ? (
+                    <ActionDialog
+                      trigger={<Button type="button" size="sm" variant="ghost" disabled={isPending}>{t('actions.publish')}</Button>}
+                      title={t('confirm.publish.title')}
+                      description={t('confirm.publish.description')}
+                      confirmLabel={t('actions.publish')}
+                      cancelLabel={t('common.cancel')}
+                      busy={isPending}
+                      onConfirm={() => publish(agent)}
+                    />
+                  ) : null}
                   {canEdit && agent.status === 'active' && agent.published_version_id ? (
                     <ActionDialog
                       trigger={

@@ -52,7 +52,7 @@ def create_webrtc_participant_token(
     try:
         TenantFeatureService(db).require_enabled(context.tenant_id, VOICE_RUNTIME_V2)
         session = VoiceSessionService(db).get(session_id, tenant_id=context.tenant_id)
-        if session.status in {"ended", "failed", "cancelled"}:
+        if session.status in {"ended", "failed", "cancelled"} or session.agent_id is None:
             raise VoiceSessionError("Voice session is terminal.")
         if session.channel != "webrtc" or session.runtime_engine != "livekit" or not session.livekit_room_name:
             raise VoiceSessionError("Voice session is not ready for LiveKit WebRTC.")
@@ -114,7 +114,7 @@ def create_webrtc_participant_token(
 def get_runtime_session_spec(session_id: str, db: Session = Depends(get_db)) -> RuntimeSessionSpecV1:
     try:
         session = VoiceSessionService(db).get(session_id)
-        if session.status in {"ended", "failed", "cancelled"}:
+        if session.status in {"ended", "failed", "cancelled"} or session.agent_id is None:
             raise VoiceSessionError("Voice session is terminal.")
         return AgentCompilerService().compile(session.agent, session.agent_version, session_id=session.id)
     except VoiceSessionNotFoundError as exc:

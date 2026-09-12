@@ -26,8 +26,10 @@ class VoiceSessionResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: str
     tenant_id: str
-    agent_id: str
-    agent_version_id: str
+    agent_id: str | None
+    agent_version_id: str | None
+    deleted_agent_id: str | None = None
+    deleted_agent_version_id: str | None = None
     channel: str
     direction: str
     runtime_engine: str
