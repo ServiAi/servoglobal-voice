@@ -368,6 +368,13 @@ class AgentBuilderTests(Integration2ATestCase):
                 "management_mode": "serviglobal_managed",
             },
         )
+        republished = self.client.post(
+            f"/api/v1/agents/{agent_id}/publish",
+            json={"expected_draft_version_id": body["id"]},
+        )
+        self.assertEqual(republished.status_code, 200, republished.text)
+        self.assertEqual(republished.json()["published_version_id"], body["id"])
+        self.assertEqual(republished.json()["name"], "Agente editable")
 
     def test_provider_managed_link_is_stored_only_in_version_binding(self) -> None:
         self._enable_feature()
@@ -449,8 +456,8 @@ class AgentBuilderTests(Integration2ATestCase):
         response = self.client.delete(f"/api/v1/agents/{agent_id}")
         self.assertEqual(response.status_code, 204, response.text)
 
-    def test_agent_with_voice_sessions_keeps_its_audit_history(self) -> None:
-        from app.models.voice_sessions import VoiceSession
+    def test_archived_agent_with_ended_voice_sessions_can_be_deleted_without_losing_history(self) -> None:
+        from app.models.voice_sessions import VoiceSession, VoiceSessionEvent
 
         self._enable_feature()
         agent_id = self._create().json()["id"]
@@ -458,20 +465,47 @@ class AgentBuilderTests(Integration2ATestCase):
             f"/api/v1/agents/{agent_id}/publish"
         ).json()["published_version_id"]
         with SessionLocal() as db:
-            db.add(
-                VoiceSession(
+            session = VoiceSession(
                     tenant_id=self.tenant.id,
                     agent_id=agent_id,
                     agent_version_id=published_version_id,
                     channel="internal_test",
                     direction="internal",
                     provider="ultravox",
+                    status="ended",
+                    provider_session_id="provider-call-1",
                 )
-            )
+            db.add(session)
+            db.flush()
+            db.add(VoiceSessionEvent(tenant_id=self.tenant.id, voice_session_id=session.id, event_type="voice.session.ended", source="control-plane"))
             db.commit()
+            session_id = session.id
 
         self.client.post(f"/api/v1/agents/{agent_id}/archive")
-        response = self.client.delete(f"/api/v1/agents/{agent_id}")
+        response = self.client.post(f"/api/v1/agents/{agent_id}/delete")
+        self.assertEqual(response.status_code, 204, response.text)
+        self.assertEqual(self.client.get(f"/api/v1/agents/{agent_id}").status_code, 404)
+        with SessionLocal() as db:
+            history = db.get(VoiceSession, session_id)
+            self.assertIsNotNone(history)
+            self.assertIsNone(history.agent_id)
+            self.assertIsNone(history.agent_version_id)
+            self.assertEqual(history.deleted_agent_id, agent_id)
+            self.assertEqual(history.deleted_agent_version_id, published_version_id)
+            self.assertEqual(history.provider_session_id, "provider-call-1")
+            self.assertEqual(len(history.events), 1)
+
+    def test_archived_agent_with_live_voice_session_cannot_be_deleted(self) -> None:
+        from app.models.voice_sessions import VoiceSession
+
+        self._enable_feature()
+        agent_id = self._create().json()["id"]
+        version_id = self.client.post(f"/api/v1/agents/{agent_id}/publish").json()["published_version_id"]
+        with SessionLocal() as db:
+            db.add(VoiceSession(tenant_id=self.tenant.id, agent_id=agent_id, agent_version_id=version_id, channel="internal_test", direction="internal", provider="ultravox", status="connected"))
+            db.commit()
+        self.client.post(f"/api/v1/agents/{agent_id}/archive")
+        response = self.client.post(f"/api/v1/agents/{agent_id}/delete")
         self.assertEqual(response.status_code, 409, response.text)
         self.assertEqual(self.client.get(f"/api/v1/agents/{agent_id}").status_code, 200)
 

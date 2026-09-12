@@ -29,8 +29,10 @@ class VoiceSession(Base, TimestampMixin):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
     tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False)
-    agent_id: Mapped[str] = mapped_column(ForeignKey("tenant_agents.id"), nullable=False)
-    agent_version_id: Mapped[str] = mapped_column(ForeignKey("tenant_agent_versions.id"), nullable=False)
+    agent_id: Mapped[str | None] = mapped_column(ForeignKey("tenant_agents.id", ondelete="SET NULL"), nullable=True)
+    agent_version_id: Mapped[str | None] = mapped_column(ForeignKey("tenant_agent_versions.id", ondelete="SET NULL"), nullable=True)
+    deleted_agent_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    deleted_agent_version_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     crm_voice_call_id: Mapped[str | None] = mapped_column(ForeignKey("crm_voice_calls.id", ondelete="SET NULL"), nullable=True)
     channel: Mapped[str] = mapped_column(String(24), nullable=False)
     direction: Mapped[str] = mapped_column(String(24), nullable=False)
@@ -81,5 +83,13 @@ class VoiceSessionEvent(Base):
 
 @event.listens_for(VoiceSession, "before_update")
 def _keep_agent_version_immutable(_mapper, _connection, target: VoiceSession) -> None:
-    if inspect(target).attrs.agent_version_id.history.has_changes():
+    history = inspect(target).attrs.agent_version_id.history
+    if history.has_changes() and not (
+        target.status in {"ended", "failed", "cancelled"}
+        and target.agent_id is None
+        and target.agent_version_id is None
+        and history.deleted
+        and target.deleted_agent_version_id == history.deleted[0]
+        and target.deleted_agent_id is not None
+    ):
         raise ValueError("VoiceSession.agent_version_id is immutable")

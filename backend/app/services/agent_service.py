@@ -322,9 +322,20 @@ class AgentService:
         agent = self._locked_agent(tenant_id, agent_id)
         if agent.status != "archived":
             raise AgentConflictError("Agent must be archived before deletion.")
-        if self.db.scalar(select(VoiceSession.id).where(VoiceSession.agent_id == agent.id)):
-            raise AgentConflictError("Agent with voice sessions cannot be deleted.")
+        sessions = list(self.db.scalars(select(VoiceSession).where(
+            VoiceSession.tenant_id == tenant_id, VoiceSession.agent_id == agent.id
+        )).all())
+        if any(session.status not in {"ended", "failed", "cancelled"} for session in sessions):
+            raise AgentConflictError("Agent has a voice session that has not ended.")
+        for session in sessions:
+            session.deleted_agent_id = session.agent_id
+            session.deleted_agent_version_id = session.agent_version_id
+            session.agent_id = None
+            session.agent_version_id = None
         resource_id = agent.id
+        agent.published_version_id = None
+        agent.draft_version_id = None
+        self.db.flush()
         self.db.delete(agent)
         self.db.commit()
         self.event_service.record_event(
