@@ -1319,7 +1319,7 @@
       "versionStatus": { "draft": "Borrador", "published": "Publicada", "superseded": "Reemplazada" },
       "featureDisabled": { "title": "Funcionalidad no habilitada", "description": "Agent Builder no está habilitado para este tenant." },
       "accessDenied": { "title": "Acceso restringido", "description": "Tu rol no tiene permiso para administrar agentes." },
-      "errors": { "loadTitle": "No se pudo cargar", "generic": "Ocurrió un error inesperado. Intenta de nuevo.", "conflict": "La acción no es válida en el estado actual del agente.", "deleteConflict": "Solo se puede eliminar un agente archivado cuando todas sus sesiones de voz hayan terminado.", "validation": "Revisa los campos del formulario.", "publishValidation": "Revisa la configuración del agente antes de publicar." },
+      "errors": { "loadTitle": "No se pudo cargar", "generic": "Ocurrió un error inesperado. Intenta de nuevo.", "conflict": "La acción no es válida en el estado actual del agente.", "deleteConflict": "No se pudo eliminar el agente. Actualiza la página y vuelve a intentarlo.", "deleteRequiresArchived": "El agente aún no figura como archivado en el servidor. Actualiza la página antes de eliminarlo.", "deleteActiveSession": "Hay una sesión de voz reciente sin cerrar. Debe terminar antes de borrar el agente; las sesiones sin actualización registrada durante 24 horas se reconciliarán al eliminarlo.", "validation": "Revisa los campos del formulario.", "publishValidation": "Revisa la configuración del agente antes de publicar." },
       "list": {
         "eyebrow": "Agentes ServiGlobal",
         "count": "{count, plural, =0 {Sin agentes} one {# agente} other {# agentes}}",
@@ -1336,7 +1336,7 @@
         "publish": { "title": "Publicar agente", "description": "Se publicará el borrador guardado y el agente quedará disponible para llamadas." },
         "unpublish": { "title": "Despublicar agente", "description": "El agente dejará de estar disponible para llamadas y se abrirá un borrador editable con toda su configuración actual." },
         "archive": { "title": "Archivar agente", "description": "El agente dejará de estar disponible para edición o publicación." },
-        "delete": { "title": "Eliminar agente definitivamente", "description": "Se eliminarán el agente y sus versiones. Las sesiones finalizadas y sus eventos se conservarán como historial desvinculado. Las sesiones activas deben terminar primero. Esta acción no se puede deshacer.", "confirmLabel": "Eliminar definitivamente" }
+        "delete": { "title": "Eliminar agente definitivamente", "description": "Se eliminarán el agente y sus versiones. Se conservará el historial de sesiones; las que lleven 24 horas sin actualización registrada se cerrarán como fallidas. Una sesión reciente aún puede impedir el borrado. Esta acción no se puede deshacer.", "confirmLabel": "Eliminar definitivamente" }
       },
       "common": { "cancel": "Cancelar" },
       "providerManaged": { "title": "Administración", "source": "Fuente de verdad", "serviglobal": "ServiGlobal", "ultravox": "Ultravox", "remoteId": "ID remoto: {id}", "revision": "Revisión observada: {revision}", "unpublished": "sin publicar", "drift": "Drift detectado. Revisión publicada actual: {revision}", "blockedTools": "La revisión actual contiene tools cliente no soportadas y no puede ejecutarse.", "help": "Prompt, voz y tools permanecen controlados por Ultravox. Se revalidan antes de cada llamada." },

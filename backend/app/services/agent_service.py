@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from sqlalchemy import func, select
@@ -318,16 +318,31 @@ class AgentService:
 
     def delete_agent(self, tenant_id: str, agent_id: str, user_id: str | None) -> None:
         from app.models.voice_sessions import VoiceSession
+        from app.services.voice_session_service import VoiceSessionService
 
         agent = self._locked_agent(tenant_id, agent_id)
         if agent.status != "archived":
-            raise AgentConflictError("Agent must be archived before deletion.")
+            raise AgentConflictError("agent_delete_requires_archived")
         sessions = list(self.db.scalars(select(VoiceSession).where(
             VoiceSession.tenant_id == tenant_id, VoiceSession.agent_id == agent.id
         )).all())
-        if any(session.status not in {"ended", "failed", "cancelled"} for session in sessions):
-            raise AgentConflictError("Agent has a voice session that has not ended.")
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
         for session in sessions:
+            if session.status in {"ended", "failed", "cancelled"}:
+                continue
+            last_update = session.updated_at or session.requested_at
+            if last_update.replace(tzinfo=last_update.tzinfo or timezone.utc) > cutoff:
+                raise AgentConflictError("agent_delete_has_recent_session")
+        voice_sessions = VoiceSessionService(self.db)
+        for session in sessions:
+            if session.status not in {"ended", "failed", "cancelled"}:
+                session.error_code = "agent_deleted_stale_session"
+                session.error_message_sanitized = "Voice session expired before archived agent deletion."
+                voice_sessions.transition(session, "failed", commit=False)
+                voice_sessions.record_event(
+                    session, "voice.session.failed", source="control-plane",
+                    payload={"error_code": session.error_code}, commit=False,
+                )
             session.deleted_agent_id = session.agent_id
             session.deleted_agent_version_id = session.agent_version_id
             session.agent_id = None

@@ -75,7 +75,11 @@ export function AgentsList({ locale, canEdit, initialAgents, gateState }: Props)
       setError(null);
       const result = await deleteAgentAction(locale, agentId);
       if (!result.ok) {
-        setError(t(result.status === 409 ? 'errors.deleteConflict' : 'errors.generic'));
+        setError(t(
+          result.detail === 'agent_delete_has_recent_session' ? 'errors.deleteActiveSession'
+            : result.detail === 'agent_delete_requires_archived' ? 'errors.deleteRequiresArchived'
+              : result.status === 409 ? 'errors.deleteConflict' : 'errors.generic'
+        ));
         return;
       }
       setAgents((current) => current.filter((agent) => agent.id !== agentId));
