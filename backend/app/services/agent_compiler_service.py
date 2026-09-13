@@ -61,11 +61,8 @@ class AgentCompilerService:
                     "voice_id": voice_config.default_voice, "settings": {},
                 }
 
-            # Legacy runtime bridge: voice-runtime still only reads
-            # settings.voice (see voice-runtime/providers.py::ultravox_options)
-            # until a later phase wires it to read realtime.voice directly.
-            # Keep populating it exactly as before so live calls keep working
-            # unchanged through this phase.
+            # Keep the legacy settings.voice bridge for older runtime consumers.
+            # The current runtime prefers realtime.voice when present.
             if voice_config and voice_config.default_voice:
                 realtime["settings"] = {
                     "voice": voice_config.default_voice,
