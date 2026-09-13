@@ -13,7 +13,7 @@ Este procedimiento valida el circuito real. No sustituir sus evidencias con mock
 
 Variables del backend: `VOICE_RUNTIME_SERVICE_SECRET`, `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `LIVEKIT_AGENT_NAME` y opcionalmente `VOICE_WEBRTC_TOKEN_TTL_SECONDS`.
 
-Variables del runtime: `CONTROL_PLANE_BASE_URL`, `VOICE_RUNTIME_SERVICE_SECRET`, `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `LIVEKIT_AGENT_NAME`, `ULTRAVOX_API_KEY` y opcionalmente `VOICE_RUNTIME_PARTICIPANT_WAIT_SECONDS`.
+Variables del runtime: `CONTROL_PLANE_BASE_URL`, `VOICE_RUNTIME_SERVICE_SECRET`, `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `LIVEKIT_AGENT_NAME` y opcionalmente `VOICE_RUNTIME_PARTICIPANT_WAIT_SECONDS`. La clave Ultravox se resuelve exclusivamente desde la `VoiceSession` por el Control Plane; no configurar una clave global ni siquiera para rollback.
 
 No copiar valores de estas variables al reporte, screenshots o logs.
 
@@ -68,6 +68,10 @@ Se permiten `tenant_id`, `voice_session_id`, `agent_id`, `agent_version_id`, `li
 - Sesión zombie: revisar participant disconnected, shutdown callback y timeout configurado.
 
 ## Registro del resultado
+
+### Canary A/B obligatorio
+
+Ejecutar el flujo anterior en staging para dos tenants distintos, cada uno con su propia cuenta y clave Ultravox, agente y voz privados. Verificar que A no puede consultar agentes, voces, previews ni iniciar calls de B, y viceversa. Para cada tenant registrar sólo fecha, commit, IDs técnicos sanitizados, eventos de `VoiceSession`, `provider_session_id`, transcript final y confirmación humana de audio bidireccional. Repetir la prueba en ambos caminos (`provider_managed` y `serviglobal_managed`) cuando correspondan. No declarar E2E con un solo tenant, mocks o eventos de audio sin reproducción audible.
 
 | Nivel | Estado actual | Evidencia requerida |
 | --- | --- | --- |

@@ -498,23 +498,81 @@ class AgentBuilderTests(Integration2ATestCase):
             self.assertEqual(history.provider_session_id, "provider-call-1")
             self.assertEqual(len(history.events), 1)
 
-    def test_archived_agent_with_live_voice_session_cannot_be_deleted(self) -> None:
+    def test_archived_agent_with_live_voice_session_closes_room_and_preserves_history(self) -> None:
         from app.models.voice_sessions import VoiceSession
+        from unittest.mock import AsyncMock, patch
 
         self._enable_feature()
         agent_id = self._create().json()["id"]
         version_id = self.client.post(f"/api/v1/agents/{agent_id}/publish").json()["published_version_id"]
         with SessionLocal() as db:
-            db.add(VoiceSession(tenant_id=self.tenant.id, agent_id=agent_id, agent_version_id=version_id, channel="internal_test", direction="internal", provider="ultravox", status="connected"))
+            session = VoiceSession(tenant_id=self.tenant.id, agent_id=agent_id, agent_version_id=version_id, channel="internal_test", direction="internal", provider="ultravox", status="connected")
+            db.add(session)
             db.commit()
+            session_id = session.id
+        self.client.post(f"/api/v1/agents/{agent_id}/archive")
+        with patch("app.services.livekit_runtime_backend.LiveKitRuntimeBackend.close_session_room", new_callable=AsyncMock) as close:
+            response = self.client.post(f"/api/v1/agents/{agent_id}/delete")
+            close.assert_awaited_once_with(session_id)
+        self.assertEqual(response.status_code, 204, response.text)
+        with SessionLocal() as db:
+            history = db.get(VoiceSession, session_id)
+            self.assertEqual(history.status, "cancelled")
+            self.assertEqual(history.end_reason, "agent_deleted")
+            self.assertEqual(history.deleted_agent_id, agent_id)
+            self.assertIsNone(history.agent_id)
+            self.assertIn("voice.session.cancelled", [event.event_type for event in history.events])
+
+    def test_archived_agent_room_close_failure_keeps_agent_and_session(self) -> None:
+        from app.models.voice_sessions import VoiceSession
+        from unittest.mock import AsyncMock, patch
+
+        self._enable_feature()
+        agent_id = self._create().json()["id"]
+        version_id = self.client.post(f"/api/v1/agents/{agent_id}/publish").json()["published_version_id"]
+        with SessionLocal() as db:
+            session = VoiceSession(tenant_id=self.tenant.id, agent_id=agent_id, agent_version_id=version_id, channel="webrtc", direction="internal", provider="ultravox", status="connected")
+            db.add(session)
+            db.commit()
+            session_id = session.id
+        self.client.post(f"/api/v1/agents/{agent_id}/archive")
+        with patch("app.services.livekit_runtime_backend.LiveKitRuntimeBackend.close_session_room", new_callable=AsyncMock, side_effect=RuntimeError("unavailable")):
+            response = self.client.post(f"/api/v1/agents/{agent_id}/delete")
+        self.assertEqual(response.status_code, 409, response.text)
+        self.assertEqual(response.json()["detail"], "agent_delete_room_close_failed")
+        self.assertEqual(self.client.get(f"/api/v1/agents/{agent_id}").json()["status"], "archived")
+        with SessionLocal() as db:
+            history = db.get(VoiceSession, session_id)
+            self.assertEqual(history.status, "connected")
+            self.assertEqual(history.agent_id, agent_id)
+
+    def test_archived_agent_with_dispatch_in_flight_can_retry_after_room_is_known(self) -> None:
+        from app.models.voice_sessions import VoiceSession
+        from unittest.mock import AsyncMock, patch
+
+        self._enable_feature()
+        agent_id = self._create().json()["id"]
+        version_id = self.client.post(f"/api/v1/agents/{agent_id}/publish").json()["published_version_id"]
+        with SessionLocal() as db:
+            session = VoiceSession(tenant_id=self.tenant.id, agent_id=agent_id, agent_version_id=version_id, channel="webrtc", direction="internal", provider="ultravox", status="dispatching")
+            db.add(session)
+            db.commit()
+            session_id = session.id
         self.client.post(f"/api/v1/agents/{agent_id}/archive")
         response = self.client.post(f"/api/v1/agents/{agent_id}/delete")
         self.assertEqual(response.status_code, 409, response.text)
-        self.assertEqual(response.json()["detail"], "agent_delete_has_recent_session")
-        self.assertEqual(self.client.get(f"/api/v1/agents/{agent_id}").status_code, 200)
+        self.assertEqual(response.json()["detail"], "agent_delete_session_dispatching")
+        with SessionLocal() as db:
+            db.get(VoiceSession, session_id).livekit_room_name = f"sg-vs-{session_id}"
+            db.commit()
+        with patch("app.services.livekit_runtime_backend.LiveKitRuntimeBackend.close_session_room", new_callable=AsyncMock) as close:
+            response = self.client.post(f"/api/v1/agents/{agent_id}/delete")
+            close.assert_awaited_once_with(session_id)
+        self.assertEqual(response.status_code, 204, response.text)
 
     def test_archived_agent_with_stale_voice_session_is_deleted_and_history_reconciled(self) -> None:
         from app.models.voice_sessions import VoiceSession
+        from unittest.mock import AsyncMock, patch
 
         self._enable_feature()
         agent_id = self._create().json()["id"]
@@ -530,18 +588,19 @@ class AgentBuilderTests(Integration2ATestCase):
             db.commit()
             session_id = session.id
         self.client.post(f"/api/v1/agents/{agent_id}/archive")
-        response = self.client.post(f"/api/v1/agents/{agent_id}/delete")
+        with patch("app.services.livekit_runtime_backend.LiveKitRuntimeBackend.close_session_room", new_callable=AsyncMock):
+            response = self.client.post(f"/api/v1/agents/{agent_id}/delete")
         self.assertEqual(response.status_code, 204, response.text)
         self.assertEqual(self.client.get(f"/api/v1/agents/{agent_id}").status_code, 404)
         with SessionLocal() as db:
             history = db.get(VoiceSession, session_id)
-            self.assertEqual(history.status, "failed")
-            self.assertEqual(history.error_code, "agent_deleted_stale_session")
+            self.assertEqual(history.status, "cancelled")
+            self.assertEqual(history.end_reason, "agent_deleted")
             self.assertEqual(history.deleted_agent_id, agent_id)
             self.assertEqual(history.deleted_agent_version_id, version_id)
             self.assertIsNone(history.agent_id)
             self.assertIsNone(history.agent_version_id)
-            self.assertIn("voice.session.failed", [event.event_type for event in history.events])
+            self.assertIn("voice.session.cancelled", [event.event_type for event in history.events])
 
     # -- legacy compatibility --
 

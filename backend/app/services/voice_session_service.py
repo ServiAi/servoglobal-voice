@@ -23,8 +23,8 @@ TRANSITIONS = {
     "dispatching": {"dispatched", "failed", "cancelled"},
     "dispatched": {"starting", "ended", "failed", "cancelled"},
     "starting": {"connected", "ended", "failed", "cancelled"},
-    "connected": {"ending", "ended", "failed"},
-    "ending": {"ended", "failed"},
+    "connected": {"ending", "ended", "failed", "cancelled"},
+    "ending": {"ended", "failed", "cancelled"},
     "ended": set(),
     "failed": set(),
     "cancelled": set(),
@@ -40,7 +40,7 @@ class VoiceSessionService:
             existing = self.db.scalar(select(VoiceSession).where(VoiceSession.tenant_id == tenant_id, VoiceSession.idempotency_key == idempotency_key))
             if existing:
                 return existing
-        agent = self.db.scalar(select(TenantAgent).where(TenantAgent.id == agent_id, TenantAgent.tenant_id == tenant_id))
+        agent = self.db.scalar(select(TenantAgent).where(TenantAgent.id == agent_id, TenantAgent.tenant_id == tenant_id).with_for_update())
         if agent is None or agent.status != "active" or not agent.published_version_id:
             raise VoiceSessionError("An active agent with a published version is required.")
         version = self.db.scalar(select(TenantAgentVersion).where(TenantAgentVersion.id == agent.published_version_id, TenantAgentVersion.agent_id == agent.id, TenantAgentVersion.tenant_id == tenant_id, TenantAgentVersion.status == "published"))

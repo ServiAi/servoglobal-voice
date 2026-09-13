@@ -379,7 +379,9 @@ export function AgentBuilder({
     if (!result.ok) {
       setLifecycleBusy(false);
       setServerError(t(
-        result.detail === 'agent_delete_has_recent_session' ? 'errors.deleteActiveSession'
+        result.detail === 'agent_delete_room_close_failed' ? 'errors.deleteRoomCloseFailed'
+          : result.detail === 'agent_delete_session_dispatching' ? 'errors.deleteDispatching'
+            : result.detail === 'agent_delete_session_unverified' ? 'errors.deleteSessionUnverified'
           : result.detail === 'agent_delete_requires_archived' ? 'errors.deleteRequiresArchived'
             : result.status === 409 ? 'errors.deleteConflict' : 'errors.generic'
       ));
@@ -591,7 +593,7 @@ export function AgentBuilder({
                 <Save className="mr-2 size-4" aria-hidden="true" />
                 {t('saveDraft')}
               </Button>
-              <Button onClick={handlePublish} disabled={publishing || !form.system_prompt.trim()}>
+              <Button onClick={handlePublish} disabled={publishing || (form.management_mode === 'serviglobal_managed' && !form.system_prompt.trim())}>
                 {t('publish')}
               </Button>
             </div>

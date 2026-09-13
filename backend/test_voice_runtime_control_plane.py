@@ -24,10 +24,14 @@ from app.services.voice_session_service import VoiceSessionService
 class FakeBackend:
     def __init__(self) -> None:
         self.calls = 0
+        self.closed_sessions: list[str] = []
 
     async def dispatch(self, session_id: str) -> RuntimeDispatchResult:
         self.calls += 1
         return RuntimeDispatchResult(f"sg-vs-{session_id}", "dispatch-1")
+
+    async def close_session_room(self, session_id: str) -> None:
+        self.closed_sessions.append(session_id)
 
 
 class VoiceRuntimeControlPlaneTests(Integration2ATestCase):
@@ -114,6 +118,25 @@ class VoiceRuntimeControlPlaneTests(Integration2ATestCase):
             self.assertEqual(session.livekit_room_name, f"sg-vs-{session.id}")
             self.assertEqual(session.livekit_dispatch_id, "dispatch-1")
             self.assertEqual(session.status, "dispatched")
+
+    def test_dispatch_closes_room_if_agent_archived_while_livekit_accepts(self) -> None:
+        import asyncio
+
+        agent_id = self._session()
+
+        class ArchiveDuringDispatch(FakeBackend):
+            async def dispatch(self, session_id: str) -> RuntimeDispatchResult:
+                with SessionLocal() as other_db:
+                    other_db.get(TenantAgent, agent_id).status = "archived"
+                    other_db.commit()
+                return await super().dispatch(session_id)
+
+        with SessionLocal() as db:
+            session = VoiceSessionService(db).create(self.tenant.id, agent_id, channel="internal_test", direction="internal")
+            backend = ArchiveDuringDispatch()
+            asyncio.run(VoiceRuntimeDispatcher(db, backend).dispatch(session))
+            self.assertEqual(session.status, "cancelled")
+            self.assertEqual(backend.closed_sessions, [session.id])
 
     def test_runtime_credential_resolves_the_tenants_configured_key(self) -> None:
         self._configure_ultravox(self.tenant.id, "tenant-a-key")
