@@ -79,6 +79,18 @@ class VoiceRegistryTests(Integration2ATestCase):
         self.assertEqual(capabilities_response.json(), model_response.json()["capabilities"])
         self.assertTrue(capabilities_response.json()["tools"])
 
+    def test_registry_api_response_keeps_capabilities_boolean_and_external_providers_separate(self) -> None:
+        response = self.client.get("/api/v1/voice/models", params={"provider": "ultravox"})
+        self.assertEqual(response.status_code, 200, response.text)
+        models = {model["id"]: model for model in response.json()}
+        for model_id in ("ultravox:ultravox", "ultravox:ultravox-v0.7"):
+            model = models[model_id]
+            self.assertEqual(model["capabilities"]["provider_voice"], True)
+            self.assertEqual(model["capabilities"]["provider_external_voice"], True)
+            self.assertTrue(all(isinstance(v, bool) for v in model["capabilities"].values()))
+            self.assertEqual(model["external_voice_providers"], ["elevenlabs"])
+            self.assertNotIn("external_voice_providers", model["capabilities"])
+
     def test_capabilities_stay_boolean_only(self) -> None:
         from app.domain import voice_registry
 

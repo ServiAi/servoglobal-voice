@@ -39,15 +39,6 @@ class ProviderAgentReference(_StrictModel):
 _FORBIDDEN_VOICE_SETTINGS_KEY_PARTS = (
     "api_key", "apikey", "secret", "token", "password", "authorization", "header",
 )
-_ELEVENLABS_EXTERNAL_VOICE_SETTINGS_KEYS = {
-    "model", "speed", "stability", "similarity_boost", "use_speaker_boost",
-}
-_ELEVENLABS_EXTERNAL_VOICE_RANGES: dict[str, tuple[float, float]] = {
-    "speed": (0.7, 1.2),
-    "stability": (0.0, 1.0),
-    "similarity_boost": (0.0, 1.0),
-}
-_ELEVENLABS_MODEL_MAX_LENGTH = 80
 
 
 class AgentVoiceConfig(_StrictModel):
@@ -60,6 +51,14 @@ class AgentVoiceConfig(_StrictModel):
     to delegate synthesis to a named external TTS provider (e.g. Ultravox's
     externalVoice -> ElevenLabs) using an ID from that provider's own
     namespace, never the realtime provider's voice IDs.
+
+    This schema validates shape only: `mode`/`provider`/`voice_id` types and
+    that `settings` is a plain mapping with no secret-like keys. It
+    deliberately does NOT know which settings keys or ranges a given
+    (mode, provider) actually allows -- that is provider-specific business
+    logic and lives in VoiceSelectionService, which has the sibling realtime
+    provider/model context this schema doesn't, and is the single place
+    that logic should be read or changed.
     """
 
     mode: Literal["provider", "provider_external"] = "provider"
@@ -73,42 +72,6 @@ class AgentVoiceConfig(_StrictModel):
         if any(part in str(key).lower() for key in value for part in _FORBIDDEN_VOICE_SETTINGS_KEY_PARTS):
             raise ValueError("Voice settings contain a forbidden secret field")
         return value
-
-    @model_validator(mode="after")
-    def validate_settings_shape(self):
-        """Local-only shape validation (no registry/DB/network): which
-        settings keys are allowed for a given (mode, provider), and their
-        type/range. Whether `provider` itself is a compatible external voice
-        provider for the chosen realtime model is validated separately by
-        voice_registry.validate_voice_compatibility, which needs the sibling
-        realtime provider/model this schema doesn't have visibility into."""
-        if self.mode == "provider":
-            if self.settings:
-                raise ValueError("Provider voice does not accept custom settings.")
-            return self
-        if self.mode == "provider_external" and self.provider == "elevenlabs":
-            unknown = set(self.settings) - _ELEVENLABS_EXTERNAL_VOICE_SETTINGS_KEYS
-            if unknown:
-                raise ValueError(f"Unsupported voice settings: {', '.join(sorted(unknown))}")
-            for key, (low, high) in _ELEVENLABS_EXTERNAL_VOICE_RANGES.items():
-                if key not in self.settings:
-                    continue
-                value = self.settings[key]
-                if isinstance(value, bool) or not isinstance(value, (int, float)):
-                    raise ValueError(f"Voice setting '{key}' must be a number.")
-                if not low <= value <= high:
-                    raise ValueError(f"Voice setting '{key}' must be between {low} and {high}.")
-            if "use_speaker_boost" in self.settings and not isinstance(self.settings["use_speaker_boost"], bool):
-                raise ValueError("Voice setting 'use_speaker_boost' must be a boolean.")
-            if "model" in self.settings:
-                model_value = self.settings["model"]
-                if (
-                    not isinstance(model_value, str)
-                    or not model_value.strip()
-                    or len(model_value) > _ELEVENLABS_MODEL_MAX_LENGTH
-                ):
-                    raise ValueError("Voice setting 'model' must be a non-empty string.")
-        return self
 
 
 class ProviderManagedOverrides(_StrictModel):
