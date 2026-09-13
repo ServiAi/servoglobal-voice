@@ -378,7 +378,11 @@ export function AgentBuilder({
     const result = await deleteAgentAction(locale, agent.id);
     if (!result.ok) {
       setLifecycleBusy(false);
-      setServerError(t(result.status === 409 ? 'errors.deleteConflict' : 'errors.generic'));
+      setServerError(t(
+        result.detail === 'agent_delete_has_recent_session' ? 'errors.deleteActiveSession'
+          : result.detail === 'agent_delete_requires_archived' ? 'errors.deleteRequiresArchived'
+            : result.status === 409 ? 'errors.deleteConflict' : 'errors.generic'
+      ));
       return;
     }
     router.push(`/${locale}/voice-ai/agents`);

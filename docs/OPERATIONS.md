@@ -196,7 +196,7 @@ Bórrelas a mano (UI de Chatwoot o Rails console) cuando convenga; mientras tant
 
 ## Checklist de seguridad
 
-- Antes de habilitar la eliminación de agentes archivados con historial, aplicar `202609120001_agent_delete_preserve_voice_sessions.py`. La migración conserva sesiones terminales y eventos; su downgrade se bloquea si ya existe una sesión desvinculada. No forzarla ni borrar historial para retroceder.
+- Antes de habilitar la eliminación de agentes archivados con historial, aplicar `202609120001_agent_delete_preserve_voice_sessions.py`. La migración conserva sesiones y eventos; su downgrade se bloquea si ya existe una sesión desvinculada. Al borrar un agente archivado, las sesiones no terminales sin actualización por 24 horas se registran como fallidas y se conservan desvinculadas; las recientes siguen bloqueando el borrado. No forzar la migración ni borrar historial para retroceder.
 - No modificar ni confirmar `.env`, `opencode.jsonc` o secretos.
 - No registrar Authorization, tokens, API keys, payloads completos, HTML, adjuntos o PII sensible.
 - Confirmar que respuestas de configuración exponen `has_secret`, no el secreto.

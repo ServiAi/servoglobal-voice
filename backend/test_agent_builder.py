@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -440,7 +441,9 @@ class AgentBuilderTests(Integration2ATestCase):
     def test_only_an_archived_agent_can_be_deleted(self) -> None:
         self._enable_feature()
         agent_id = self._create().json()["id"]
-        self.assertEqual(self.client.post(f"/api/v1/agents/{agent_id}/delete").status_code, 409)
+        conflict = self.client.post(f"/api/v1/agents/{agent_id}/delete")
+        self.assertEqual(conflict.status_code, 409)
+        self.assertEqual(conflict.json()["detail"], "agent_delete_requires_archived")
 
         self.client.post(f"/api/v1/agents/{agent_id}/publish")
         self.client.post(f"/api/v1/agents/{agent_id}/archive")
@@ -507,7 +510,38 @@ class AgentBuilderTests(Integration2ATestCase):
         self.client.post(f"/api/v1/agents/{agent_id}/archive")
         response = self.client.post(f"/api/v1/agents/{agent_id}/delete")
         self.assertEqual(response.status_code, 409, response.text)
+        self.assertEqual(response.json()["detail"], "agent_delete_has_recent_session")
         self.assertEqual(self.client.get(f"/api/v1/agents/{agent_id}").status_code, 200)
+
+    def test_archived_agent_with_stale_voice_session_is_deleted_and_history_reconciled(self) -> None:
+        from app.models.voice_sessions import VoiceSession
+
+        self._enable_feature()
+        agent_id = self._create().json()["id"]
+        version_id = self.client.post(f"/api/v1/agents/{agent_id}/publish").json()["published_version_id"]
+        stale_at = datetime.now(timezone.utc) - timedelta(days=2)
+        with SessionLocal() as db:
+            session = VoiceSession(
+                tenant_id=self.tenant.id, agent_id=agent_id, agent_version_id=version_id,
+                channel="internal_test", direction="internal", provider="ultravox",
+                status="connected", requested_at=stale_at, updated_at=stale_at,
+            )
+            db.add(session)
+            db.commit()
+            session_id = session.id
+        self.client.post(f"/api/v1/agents/{agent_id}/archive")
+        response = self.client.post(f"/api/v1/agents/{agent_id}/delete")
+        self.assertEqual(response.status_code, 204, response.text)
+        self.assertEqual(self.client.get(f"/api/v1/agents/{agent_id}").status_code, 404)
+        with SessionLocal() as db:
+            history = db.get(VoiceSession, session_id)
+            self.assertEqual(history.status, "failed")
+            self.assertEqual(history.error_code, "agent_deleted_stale_session")
+            self.assertEqual(history.deleted_agent_id, agent_id)
+            self.assertEqual(history.deleted_agent_version_id, version_id)
+            self.assertIsNone(history.agent_id)
+            self.assertIsNone(history.agent_version_id)
+            self.assertIn("voice.session.failed", [event.event_type for event in history.events])
 
     # -- legacy compatibility --
 
