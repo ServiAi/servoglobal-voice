@@ -39,11 +39,31 @@ export type AgentCreateRequest = {
   model: string;
   management_mode?: 'serviglobal_managed' | 'provider_managed';
   provider_agent?: ProviderAgentReference | null;
+  voice?: AgentVoiceConfig | null;
 };
 
 export type ProviderAgentReference = {
   agent_id: string;
   observed_published_revision_id?: string | null;
+};
+
+/** ElevenLabs is the only provider_external target with a real adapter in
+ * V1 (see backend voice_registry.py); the settings keys below are exactly
+ * the allowlist VoiceSelectionService enforces server-side. `model` is a
+ * free string by design -- no closed enum, see Phase D decisions. */
+export type ExternalVoiceSettings = {
+  model?: string;
+  speed?: number;
+  stability?: number;
+  similarity_boost?: number;
+  use_speaker_boost?: boolean;
+};
+
+export type AgentVoiceConfig = {
+  mode: 'provider' | 'provider_external';
+  provider: string;
+  voice_id: string;
+  settings?: ExternalVoiceSettings | Record<string, never>;
 };
 
 export type AgentUpdateRequest = {
@@ -64,6 +84,7 @@ export type AgentDraftUpdateRequest = {
   model: string;
   management_mode?: 'serviglobal_managed' | 'provider_managed';
   provider_agent?: ProviderAgentReference | null;
+  voice?: AgentVoiceConfig | null;
 };
 
 export type AgentPublishRequest = {
@@ -89,6 +110,7 @@ export type AgentRuntimeBinding = {
     model: string;
     management_mode?: 'serviglobal_managed' | 'provider_managed';
     provider_agent?: ProviderAgentReference | null;
+    voice?: AgentVoiceConfig | null;
     provider_extensions?: {
       observed_revision_drift?: boolean;
       tools?: Array<{ name: string; classification: string }>;

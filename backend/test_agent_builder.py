@@ -269,7 +269,9 @@ class AgentBuilderTests(Integration2ATestCase):
              patch("app.services.ultravox_provider_client.UltravoxProviderClient.get_agent", side_effect=guard), \
              patch("app.services.ultravox_provider_client.UltravoxProviderClient.list_voices", side_effect=guard), \
              patch("app.services.ultravox_provider_client.UltravoxProviderClient.get_voice", side_effect=guard), \
-             patch("app.services.ultravox_provider_client.UltravoxProviderClient.get_voice_preview", side_effect=guard):
+             patch("app.services.ultravox_provider_client.UltravoxProviderClient.get_voice_preview", side_effect=guard), \
+             patch("app.services.ultravox_provider_client.UltravoxProviderClient.get_tts_api_keys", side_effect=guard), \
+             patch("app.services.ultravox_provider_client.UltravoxProviderClient.preview_external_voice", side_effect=guard):
             create_response = self._create(
                 voice={"mode": "provider", "provider": "ultravox", "voice_id": "Mark"}
             )
@@ -282,6 +284,117 @@ class AgentBuilderTests(Integration2ATestCase):
                 }),
             )
             self.assertEqual(update_response.status_code, 200, update_response.text)
+
+    # -- publish preflight: voice (Phase D) --
+
+    def test_publish_provider_voice_checks_accessibility_and_succeeds(self) -> None:
+        self._enable_feature()
+        agent_id = self._create(voice={"mode": "provider", "provider": "ultravox", "voice_id": "Mark"}).json()["id"]
+        with patch("app.services.ultravox_admin_service.UltravoxAdminService.get_voice") as mock_get_voice:
+            response = self.client.post(f"/api/v1/agents/{agent_id}/publish")
+        self.assertEqual(response.status_code, 200, response.text)
+        mock_get_voice.assert_called_once_with(self.tenant.id, "Mark")
+
+    def test_publish_provider_voice_blocked_when_not_accessible(self) -> None:
+        self._enable_feature()
+        agent_id = self._create(voice={"mode": "provider", "provider": "ultravox", "voice_id": "Mark"}).json()["id"]
+        from app.services.ultravox_provider_client import UltravoxProviderError
+        with patch(
+            "app.services.ultravox_admin_service.UltravoxAdminService.get_voice",
+            side_effect=UltravoxProviderError("provider_resource_not_found", 404),
+        ):
+            response = self.client.post(f"/api/v1/agents/{agent_id}/publish")
+        self.assertEqual(response.status_code, 422, response.text)
+        self.assertEqual(response.json()["detail"], "voice_not_accessible")
+        self.assertIsNone(self.client.get(f"/api/v1/agents/{agent_id}").json()["published_version_id"])
+
+    def test_publish_provider_voice_outage_preserves_the_safe_provider_error_code(self) -> None:
+        self._enable_feature()
+        agent_id = self._create(voice={"mode": "provider", "provider": "ultravox", "voice_id": "Mark"}).json()["id"]
+        from app.services.ultravox_provider_client import UltravoxProviderError
+        with patch(
+            "app.services.ultravox_admin_service.UltravoxAdminService.get_voice",
+            side_effect=UltravoxProviderError("provider_unavailable", 503),
+        ):
+            response = self.client.post(f"/api/v1/agents/{agent_id}/publish")
+        self.assertEqual(response.status_code, 422, response.text)
+        self.assertEqual(response.json()["detail"], "provider_unavailable")
+
+    def test_publish_provider_external_blocked_without_elevenlabs_byok(self) -> None:
+        self._enable_feature()
+        agent_id = self._create(voice={
+            "mode": "provider_external", "provider": "elevenlabs", "voice_id": "x",
+            "settings": {"model": "eleven_turbo_v2_5"},
+        }).json()["id"]
+        with patch(
+            "app.services.ultravox_admin_service.UltravoxAdminService.validate_external_voice_credentials",
+            side_effect=ValueError("external_tts_credentials_unavailable"),
+        ), patch(
+            "app.services.ultravox_admin_service.UltravoxAdminService.preview_external_voice",
+            side_effect=AssertionError("publish must never generate a preview"),
+        ):
+            response = self.client.post(f"/api/v1/agents/{agent_id}/publish")
+        self.assertEqual(response.status_code, 422, response.text)
+        self.assertEqual(response.json()["detail"], "external_tts_credentials_unavailable")
+        self.assertIsNone(self.client.get(f"/api/v1/agents/{agent_id}").json()["published_version_id"])
+
+    def test_publish_provider_external_succeeds_with_byok_and_never_generates_preview(self) -> None:
+        self._enable_feature()
+        agent_id = self._create(voice={
+            "mode": "provider_external", "provider": "elevenlabs", "voice_id": "x",
+            "settings": {"model": "eleven_turbo_v2_5"},
+        }).json()["id"]
+        with patch(
+            "app.services.ultravox_admin_service.UltravoxAdminService.validate_external_voice_credentials"
+        ) as mock_validate, patch(
+            "app.services.ultravox_admin_service.UltravoxAdminService.preview_external_voice",
+            side_effect=AssertionError("publish must never generate a preview"),
+        ):
+            response = self.client.post(f"/api/v1/agents/{agent_id}/publish")
+        self.assertEqual(response.status_code, 200, response.text)
+        mock_validate.assert_called_once_with(self.tenant.id, "elevenlabs")
+
+    def test_publish_without_voice_configured_skips_voice_preflight(self) -> None:
+        self._enable_feature()
+        agent_id = self._create().json()["id"]
+        guard = AssertionError("no voice configured: publish must not call Ultravox for voice")
+        with patch("app.services.ultravox_admin_service.UltravoxAdminService.get_voice", side_effect=guard), \
+             patch("app.services.ultravox_admin_service.UltravoxAdminService.validate_external_voice_credentials", side_effect=guard):
+            response = self.client.post(f"/api/v1/agents/{agent_id}/publish")
+        self.assertEqual(response.status_code, 200, response.text)
+
+    def test_publish_treats_legacy_default_voice_as_provider_voice_preflight(self) -> None:
+        self._enable_feature()
+        agent_id = self._create(voice_agent_config_id=self.voice_agent_config_id).json()["id"]
+        with patch("app.services.ultravox_admin_service.UltravoxAdminService.get_voice") as mock_get_voice:
+            response = self.client.post(f"/api/v1/agents/{agent_id}/publish")
+        self.assertEqual(response.status_code, 200, response.text)
+        # self.voice_agent_config_id was seeded in setUp with default_voice="nova".
+        mock_get_voice.assert_called_once_with(self.tenant.id, "nova")
+
+    def test_publish_provider_managed_preflight_is_unaffected_by_the_new_voice_preflight(self) -> None:
+        self._enable_feature()
+        remote = SimpleNamespace(
+            agent_id="remote-agent-1", published_revision_id="revision-live",
+            tools=[], has_unsupported_client_tools=False,
+        )
+        guard = AssertionError("provider_managed publish must not run the serviglobal_managed voice preflight")
+        with patch(
+            "app.services.ultravox_admin_service.UltravoxAdminService.validate_provider_agent_link",
+            return_value=remote,
+        ):
+            agent_id = self._create(
+                model="ultravox-v0.7",
+                management_mode="provider_managed",
+                provider_agent={"agent_id": "remote-agent-1"},
+            ).json()["id"]
+        with patch(
+            "app.services.ultravox_admin_service.UltravoxAdminService.validate_execution_preflight",
+            return_value=remote,
+        ), patch("app.services.ultravox_admin_service.UltravoxAdminService.get_voice", side_effect=guard), \
+             patch("app.services.ultravox_admin_service.UltravoxAdminService.validate_external_voice_credentials", side_effect=guard):
+            response = self.client.post(f"/api/v1/agents/{agent_id}/publish")
+        self.assertEqual(response.status_code, 200, response.text)
 
     # -- publish / versioning --
 
@@ -326,7 +439,8 @@ class AgentBuilderTests(Integration2ATestCase):
         agent_after_draft_save = self.client.get(f"/api/v1/agents/{agent_id}").json()
         self.assertEqual(agent_after_draft_save["name"], "Sandra renombrada")
 
-        publish_response = self.client.post(f"/api/v1/agents/{agent_id}/publish")
+        with patch("app.services.ultravox_admin_service.UltravoxAdminService.get_voice"):
+            publish_response = self.client.post(f"/api/v1/agents/{agent_id}/publish")
         self.assertEqual(publish_response.status_code, 200, publish_response.text)
         body = publish_response.json()
         self.assertEqual(body["status"], "active")
@@ -472,10 +586,11 @@ class AgentBuilderTests(Integration2ATestCase):
                 "management_mode": "serviglobal_managed",
             },
         )
-        republished = self.client.post(
-            f"/api/v1/agents/{agent_id}/publish",
-            json={"expected_draft_version_id": body["id"]},
-        )
+        with patch("app.services.ultravox_admin_service.UltravoxAdminService.get_voice"):
+            republished = self.client.post(
+                f"/api/v1/agents/{agent_id}/publish",
+                json={"expected_draft_version_id": body["id"]},
+            )
         self.assertEqual(republished.status_code, 200, republished.text)
         self.assertEqual(republished.json()["published_version_id"], body["id"])
         self.assertEqual(republished.json()["name"], "Agente editable")

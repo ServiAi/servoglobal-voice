@@ -2,7 +2,7 @@
 
 import { useMemo, useState, type ChangeEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import { Archive, Bot, CheckCircle2, Save, Sparkles } from 'lucide-react';
+import { Archive, Bot, CheckCircle2, Loader2, Play, Save, Sparkles } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import {
   archiveAgentAction,
@@ -10,6 +10,8 @@ import {
   createAgentNextDraftAction,
   deleteAgentAction,
   fetchAgentVersionsAction,
+  previewExternalVoiceAction,
+  previewProviderVoiceAction,
   publishAgentAction,
   unpublishAgentAction,
   updateAgentDraftAction,
@@ -28,9 +30,10 @@ import type {
   AgentResponseStyle,
   AgentTurnDetection,
   AgentVersionResponse,
+  AgentVoiceConfig,
 } from '@/types/agents';
 import type { VoiceModelResponse, VoiceProviderResponse } from '@/types/voice-registry';
-import type { UltravoxAgentSummary } from '@/types/ultravox-admin';
+import type { UltravoxAgentSummary, UltravoxVoiceSummary } from '@/types/ultravox-admin';
 
 const FIELD_CLASS =
   'min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/60 focus:ring-2 focus:ring-primary/15 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground';
@@ -62,7 +65,16 @@ type FormState = {
   provider_agent_id: string;
   observed_published_revision_id: string;
   provider_agent_name: string;
+  voice_mode: 'provider' | 'provider_external';
+  voice_id: string;
+  voice_model: string;
+  voice_speed: string;
+  voice_stability: string;
+  voice_similarity_boost: string;
+  voice_use_speaker_boost: boolean;
 };
+
+const DEFAULT_EXTERNAL_VOICE_MODEL = 'eleven_turbo_v2_5';
 
 function defaultForm(): FormState {
   return {
@@ -84,10 +96,19 @@ function defaultForm(): FormState {
     provider_agent_id: '',
     observed_published_revision_id: '',
     provider_agent_name: '',
+    voice_mode: 'provider',
+    voice_id: '',
+    voice_model: DEFAULT_EXTERNAL_VOICE_MODEL,
+    voice_speed: '',
+    voice_stability: '',
+    voice_similarity_boost: '',
+    voice_use_speaker_boost: true,
   };
 }
 
 function toForm(agent: AgentResponse, draft: AgentVersionResponse): FormState {
+  const voice = draft.runtime_binding.realtime.voice ?? null;
+  const settings = (voice?.settings ?? {}) as Record<string, unknown>;
   return {
     name: agent.name,
     description: agent.description ?? '',
@@ -107,7 +128,47 @@ function toForm(agent: AgentResponse, draft: AgentVersionResponse): FormState {
     provider_agent_id: draft.runtime_binding.realtime.provider_agent?.agent_id ?? '',
     observed_published_revision_id: draft.runtime_binding.realtime.provider_agent?.observed_published_revision_id ?? '',
     provider_agent_name: draft.runtime_binding.realtime.provider_agent?.agent_id ?? '',
+    voice_mode: voice?.mode ?? 'provider',
+    voice_id: voice?.voice_id ?? '',
+    voice_model: typeof settings.model === 'string' ? settings.model : DEFAULT_EXTERNAL_VOICE_MODEL,
+    voice_speed: typeof settings.speed === 'number' ? String(settings.speed) : '',
+    voice_stability: typeof settings.stability === 'number' ? String(settings.stability) : '',
+    voice_similarity_boost: typeof settings.similarity_boost === 'number' ? String(settings.similarity_boost) : '',
+    voice_use_speaker_boost: typeof settings.use_speaker_boost === 'boolean' ? settings.use_speaker_boost : true,
   };
+}
+
+/** Builds the AgentVoiceConfig the backend expects from the flat form
+ * fields, or null when no voice_id was entered (the agent then falls back
+ * to the runtime default / legacy voice_agent_config_id link -- see
+ * AgentCompilerService.compile()). Only the fields relevant to the current
+ * voice_mode are serialized; the inactive path's stale field values are
+ * simply never read. */
+function buildVoicePayload(form: FormState): AgentVoiceConfig | null {
+  const voiceId = form.voice_id.trim();
+  if (!voiceId) return null;
+  if (form.voice_mode === 'provider') {
+    return { mode: 'provider', provider: form.provider, voice_id: voiceId, settings: {} };
+  }
+  const settings: NonNullable<AgentVoiceConfig['settings']> = {
+    use_speaker_boost: form.voice_use_speaker_boost,
+  };
+  if (form.voice_model.trim()) settings.model = form.voice_model.trim();
+  if (form.voice_speed.trim()) settings.speed = Number(form.voice_speed);
+  if (form.voice_stability.trim()) settings.stability = Number(form.voice_stability);
+  if (form.voice_similarity_boost.trim()) settings.similarity_boost = Number(form.voice_similarity_boost);
+  return { mode: 'provider_external', provider: 'elevenlabs', voice_id: voiceId, settings };
+}
+
+async function playAudioBase64(base64: string) {
+  const audio = new Audio(`data:audio/wav;base64,${base64}`);
+  try {
+    await audio.play();
+  } catch {
+    // Autoplay can be blocked by the browser; the user already sees the
+    // "Escuchar"/"Probar voz" button reflect the busy state, no further
+    // recovery needed here.
+  }
 }
 
 type Tab = 'general' | 'behavior' | 'voice' | 'versions';
@@ -119,6 +180,7 @@ type Props = {
   voiceAgents: VoiceAgentConfigResponse[];
   providers: VoiceProviderResponse[];
   models: VoiceModelResponse[];
+  providerVoices?: UltravoxVoiceSummary[];
   initialAgent?: AgentResponse | null;
   initialDraft?: AgentVersionResponse | null;
   initialVersions?: AgentVersionResponse[];
@@ -137,6 +199,7 @@ export function AgentBuilder({
   voiceAgents,
   providers,
   models,
+  providerVoices = [],
   initialAgent = null,
   initialDraft = null,
   initialVersions = [],
@@ -170,6 +233,13 @@ export function AgentBuilder({
   const [lifecycleBusy, setLifecycleBusy] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [previewBusy, setPreviewBusy] = useState<'provider' | 'provider_external' | null>(null);
+  // Ephemeral, UI-only: the backend never records whether a voice was
+  // previewed (see Fase D "no persistir estado de preview"). This only
+  // drives a non-blocking reminder banner and resets whenever the external
+  // voice config actually changes, since a stale preview no longer proves
+  // anything about the current settings.
+  const [previewedExternalVoice, setPreviewedExternalVoice] = useState(false);
 
   const archived = agent?.status === 'archived';
   const editable = canEdit && !archived;
@@ -201,6 +271,41 @@ export function AgentBuilder({
     };
   }
 
+  function setVoiceField<K extends keyof FormState>(key: K, value: FormState[K]) {
+    setForm((current) => ({ ...current, [key]: value }));
+    setSaved(false);
+    setPreviewedExternalVoice(false);
+  }
+
+  async function handlePreviewProviderVoice() {
+    const voiceId = form.voice_id.trim();
+    if (!voiceId) return;
+    setPreviewBusy('provider');
+    setServerError(null);
+    const result = await previewProviderVoiceAction(form.provider, voiceId);
+    setPreviewBusy(null);
+    if (!result.ok) {
+      setServerError(t('voice.origin.previewFailed'));
+      return;
+    }
+    await playAudioBase64(result.audioBase64);
+  }
+
+  async function handlePreviewExternalVoice() {
+    const voice = buildVoicePayload(form);
+    if (!voice || voice.mode !== 'provider_external') return;
+    setPreviewBusy('provider_external');
+    setServerError(null);
+    const result = await previewExternalVoiceAction('ultravox', voice);
+    setPreviewBusy(null);
+    if (!result.ok) {
+      setServerError(t('voice.origin.previewFailed'));
+      return;
+    }
+    setPreviewedExternalVoice(true);
+    await playAudioBase64(result.audioBase64);
+  }
+
   async function handleCreate() {
     setSaving(true);
     setServerError(null);
@@ -226,6 +331,7 @@ export function AgentBuilder({
         agent_id: form.provider_agent_id,
         observed_published_revision_id: form.observed_published_revision_id || null,
       } : null,
+      voice: form.management_mode === 'provider_managed' ? null : buildVoicePayload(form),
     });
     setSaving(false);
     if (!result.ok) {
@@ -258,6 +364,7 @@ export function AgentBuilder({
         agent_id: form.provider_agent_id,
         observed_published_revision_id: form.observed_published_revision_id || null,
       } : null,
+      voice: form.management_mode === 'provider_managed' ? null : buildVoicePayload(form),
     };
   }
 
@@ -401,6 +508,7 @@ export function AgentBuilder({
           model={form.model}
           providers={providers}
           models={models}
+          providerVoices={providerVoices}
           voiceAgentConfigId={form.voice_agent_config_id}
           voiceAgents={voiceAgents}
           managementMode={form.management_mode}
@@ -409,11 +517,26 @@ export function AgentBuilder({
           observedRevisionId={form.observed_published_revision_id}
           currentRevisionId={providerAgents.find((item) => item.agent_id === form.provider_agent_id)?.published_revision_id ?? null}
           hasBlockingTools={providerAgents.find((item) => item.agent_id === form.provider_agent_id)?.has_unsupported_client_tools ?? false}
+          voiceMode={form.voice_mode}
+          voiceId={form.voice_id}
+          voiceModel={form.voice_model}
+          voiceSpeed={form.voice_speed}
+          voiceStability={form.voice_stability}
+          voiceSimilarityBoost={form.voice_similarity_boost}
+          voiceUseSpeakerBoost={form.voice_use_speaker_boost}
+          previewBusy={previewBusy}
+          previewedExternalVoice={previewedExternalVoice}
           disabled={!canEdit}
           onManagementModeChange={(value) => setForm((current) => ({ ...current, management_mode: value, model: value === 'provider_managed' ? 'ultravox-v0.7' : 'ultravox' }))}
           onProviderChange={(value) => setForm((current) => ({ ...current, provider: value }))}
           onModelChange={(value) => setForm((current) => ({ ...current, model: value }))}
           onVoiceAgentConfigChange={(value) => setForm((current) => ({ ...current, voice_agent_config_id: value }))}
+          onVoiceModeChange={(value) => setVoiceField('voice_mode', value)}
+          onVoiceIdChange={(value) => setVoiceField('voice_id', value)}
+          onVoiceTextSettingChange={(key, value) => setVoiceField(key, value)}
+          onVoiceSpeakerBoostChange={(value) => setVoiceField('voice_use_speaker_boost', value)}
+          onPreviewProviderVoice={handlePreviewProviderVoice}
+          onPreviewExternalVoice={handlePreviewExternalVoice}
           t={t}
         />
         {serverError ? <ErrorBanner message={serverError} /> : null}
@@ -548,6 +671,7 @@ export function AgentBuilder({
               model={form.model}
               providers={providers}
               models={models}
+              providerVoices={providerVoices}
               voiceAgentConfigId={form.voice_agent_config_id}
               voiceAgents={voiceAgents}
               managementMode={form.management_mode}
@@ -556,6 +680,15 @@ export function AgentBuilder({
               observedRevisionId={form.observed_published_revision_id}
               currentRevisionId={providerAgents.find((item) => item.agent_id === form.provider_agent_id)?.published_revision_id ?? null}
               hasBlockingTools={providerAgents.find((item) => item.agent_id === form.provider_agent_id)?.has_unsupported_client_tools ?? false}
+              voiceMode={form.voice_mode}
+              voiceId={form.voice_id}
+              voiceModel={form.voice_model}
+              voiceSpeed={form.voice_speed}
+              voiceStability={form.voice_stability}
+              voiceSimilarityBoost={form.voice_similarity_boost}
+              voiceUseSpeakerBoost={form.voice_use_speaker_boost}
+              previewBusy={previewBusy}
+              previewedExternalVoice={previewedExternalVoice}
               disabled={!editable || !hasDraft || form.management_mode === 'provider_managed'}
               onManagementModeChange={(value) => {
                 setForm((current) => ({ ...current, management_mode: value, model: value === 'provider_managed' ? 'ultravox-v0.7' : 'ultravox' }));
@@ -573,12 +706,28 @@ export function AgentBuilder({
                 setForm((current) => ({ ...current, voice_agent_config_id: value }));
                 setSaved(false);
               }}
+              onVoiceModeChange={(value) => setVoiceField('voice_mode', value)}
+              onVoiceIdChange={(value) => setVoiceField('voice_id', value)}
+              onVoiceTextSettingChange={(key, value) => setVoiceField(key, value)}
+              onVoiceSpeakerBoostChange={(value) => setVoiceField('voice_use_speaker_boost', value)}
+              onPreviewProviderVoice={handlePreviewProviderVoice}
+              onPreviewExternalVoice={handlePreviewExternalVoice}
               t={t}
             />
           ) : null}
 
           {tab === 'versions' ? (
             <VersionsPanel versions={versions} publishedVersionId={agent.published_version_id} t={t} />
+          ) : null}
+
+          {tab !== 'versions' && hasDraft && editable &&
+          form.management_mode === 'serviglobal_managed' &&
+          form.voice_mode === 'provider_external' &&
+          form.voice_id.trim() &&
+          !previewedExternalVoice ? (
+            <p className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
+              {t('voice.origin.notTestedWarning')}
+            </p>
           ) : null}
 
           {tab !== 'versions' && hasDraft && editable ? (
@@ -777,6 +926,7 @@ function VoiceFields({
   model,
   providers,
   models,
+  providerVoices,
   voiceAgentConfigId,
   voiceAgents,
   managementMode,
@@ -785,11 +935,26 @@ function VoiceFields({
   observedRevisionId,
   currentRevisionId,
   hasBlockingTools,
+  voiceMode,
+  voiceId,
+  voiceModel,
+  voiceSpeed,
+  voiceStability,
+  voiceSimilarityBoost,
+  voiceUseSpeakerBoost,
+  previewBusy,
+  previewedExternalVoice,
   disabled,
   onManagementModeChange,
   onProviderChange,
   onModelChange,
   onVoiceAgentConfigChange,
+  onVoiceModeChange,
+  onVoiceIdChange,
+  onVoiceTextSettingChange,
+  onVoiceSpeakerBoostChange,
+  onPreviewProviderVoice,
+  onPreviewExternalVoice,
   t,
 }: {
   pipelineType: 'realtime';
@@ -797,6 +962,7 @@ function VoiceFields({
   model: string;
   providers: VoiceProviderResponse[];
   models: VoiceModelResponse[];
+  providerVoices: UltravoxVoiceSummary[];
   voiceAgentConfigId: string;
   voiceAgents: VoiceAgentConfigResponse[];
   managementMode: 'serviglobal_managed' | 'provider_managed';
@@ -805,11 +971,29 @@ function VoiceFields({
   observedRevisionId: string;
   currentRevisionId: string | null;
   hasBlockingTools: boolean;
+  voiceMode: 'provider' | 'provider_external';
+  voiceId: string;
+  voiceModel: string;
+  voiceSpeed: string;
+  voiceStability: string;
+  voiceSimilarityBoost: string;
+  voiceUseSpeakerBoost: boolean;
+  previewBusy: 'provider' | 'provider_external' | null;
+  previewedExternalVoice: boolean;
   disabled: boolean;
   onManagementModeChange: (value: 'serviglobal_managed' | 'provider_managed') => void;
   onProviderChange: (value: string) => void;
   onModelChange: (value: string) => void;
   onVoiceAgentConfigChange: (value: string) => void;
+  onVoiceModeChange: (value: 'provider' | 'provider_external') => void;
+  onVoiceIdChange: (value: string) => void;
+  onVoiceTextSettingChange: (
+    key: 'voice_model' | 'voice_speed' | 'voice_stability' | 'voice_similarity_boost',
+    value: string
+  ) => void;
+  onVoiceSpeakerBoostChange: (value: boolean) => void;
+  onPreviewProviderVoice: () => void;
+  onPreviewExternalVoice: () => void;
   t: ReturnType<typeof useTranslations>;
 }) {
   const realtimeModels = models.filter((m) => m.model_type === 'realtime' && m.provider_key === provider);
@@ -923,6 +1107,170 @@ function VoiceFields({
           </CardContent>
         ) : null}
       </Card>
+
+      {managementMode === 'serviglobal_managed' ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">{t('voice.origin.title')}</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex flex-wrap gap-4">
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="radio"
+                  name="voice-origin"
+                  disabled={disabled}
+                  checked={voiceMode === 'provider'}
+                  onChange={() => onVoiceModeChange('provider')}
+                  className="size-4"
+                />
+                <span className="font-medium text-foreground">{t('voice.origin.provider')}</span>
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="radio"
+                  name="voice-origin"
+                  disabled={disabled}
+                  checked={voiceMode === 'provider_external'}
+                  onChange={() => onVoiceModeChange('provider_external')}
+                  className="size-4"
+                />
+                <span className="font-medium text-foreground">{t('voice.origin.providerExternal')}</span>
+              </label>
+            </div>
+
+            {voiceMode === 'provider' ? (
+              <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
+                <label className="flex flex-col gap-1.5 text-sm">
+                  <span className="font-medium text-foreground">{t('voice.origin.catalogVoice')}</span>
+                  <select
+                    className={FIELD_CLASS}
+                    disabled={disabled || providerVoices.length === 0}
+                    value={voiceId}
+                    onChange={(e) => onVoiceIdChange(e.target.value)}
+                  >
+                    <option value="">{providerVoices.length === 0 ? t('voice.origin.noCatalogVoices') : t('voice.linkNone')}</option>
+                    {providerVoices.map((v) => (
+                      <option key={v.voice_id} value={v.voice_id}>
+                        {v.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={disabled || !voiceId.trim() || previewBusy !== null}
+                  onClick={onPreviewProviderVoice}
+                >
+                  {previewBusy === 'provider' ? (
+                    <Loader2 className="mr-2 size-4 animate-spin" aria-hidden="true" />
+                  ) : (
+                    <Play className="mr-2 size-4" aria-hidden="true" />
+                  )}
+                  {t('voice.origin.listen')}
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <label className="flex flex-col gap-1.5 text-sm">
+                  <span className="font-medium text-foreground">{t('voice.origin.externalProviderLabel')}</span>
+                  <input className={FIELD_CLASS} disabled value="ElevenLabs" />
+                </label>
+                <label className="flex flex-col gap-1.5 text-sm">
+                  <span className="font-medium text-foreground">{t('voice.origin.externalVoiceId')}</span>
+                  <input
+                    className={FIELD_CLASS}
+                    disabled={disabled}
+                    value={voiceId}
+                    placeholder={t('voice.origin.externalVoiceIdPlaceholder')}
+                    onChange={(e) => onVoiceIdChange(e.target.value)}
+                  />
+                </label>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="flex flex-col gap-1.5 text-sm">
+                    <span className="font-medium text-foreground">{t('voice.origin.externalModel')}</span>
+                    <input
+                      className={FIELD_CLASS}
+                      disabled={disabled}
+                      value={voiceModel}
+                      onChange={(e) => onVoiceTextSettingChange('voice_model', e.target.value)}
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1.5 text-sm">
+                    <span className="font-medium text-foreground">{t('voice.origin.speed')}</span>
+                    <input
+                      type="number"
+                      step="0.1"
+                      min={0.7}
+                      max={1.2}
+                      className={FIELD_CLASS}
+                      disabled={disabled}
+                      value={voiceSpeed}
+                      onChange={(e) => onVoiceTextSettingChange('voice_speed', e.target.value)}
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1.5 text-sm">
+                    <span className="font-medium text-foreground">{t('voice.origin.stability')}</span>
+                    <input
+                      type="number"
+                      step="0.05"
+                      min={0}
+                      max={1}
+                      className={FIELD_CLASS}
+                      disabled={disabled}
+                      value={voiceStability}
+                      onChange={(e) => onVoiceTextSettingChange('voice_stability', e.target.value)}
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1.5 text-sm">
+                    <span className="font-medium text-foreground">{t('voice.origin.similarityBoost')}</span>
+                    <input
+                      type="number"
+                      step="0.05"
+                      min={0}
+                      max={1}
+                      className={FIELD_CLASS}
+                      disabled={disabled}
+                      value={voiceSimilarityBoost}
+                      onChange={(e) => onVoiceTextSettingChange('voice_similarity_boost', e.target.value)}
+                    />
+                  </label>
+                </div>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    disabled={disabled}
+                    checked={voiceUseSpeakerBoost}
+                    onChange={(e) => onVoiceSpeakerBoostChange(e.target.checked)}
+                    className="size-4 rounded border-input"
+                  />
+                  <span className="font-medium text-foreground">{t('voice.origin.speakerBoost')}</span>
+                </label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={disabled || !voiceId.trim() || previewBusy !== null}
+                  onClick={onPreviewExternalVoice}
+                >
+                  {previewBusy === 'provider_external' ? (
+                    <Loader2 className="mr-2 size-4 animate-spin" aria-hidden="true" />
+                  ) : (
+                    <Play className="mr-2 size-4" aria-hidden="true" />
+                  )}
+                  {t('voice.origin.tryVoice')}
+                </Button>
+                {previewedExternalVoice ? (
+                  <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <CheckCircle2 className="size-3.5 text-cyan-500" aria-hidden="true" />
+                    {t('voice.origin.tested')}
+                  </p>
+                ) : null}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
 
       {managementMode === 'serviglobal_managed' ? <Card>
         <CardHeader>

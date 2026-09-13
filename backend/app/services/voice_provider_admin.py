@@ -5,6 +5,7 @@ from typing import Protocol
 from sqlalchemy.orm import Session
 
 from app.domain.voice_registry import get_provider
+from app.schemas.agents import AgentVoiceConfig
 from app.schemas.ultravox_admin import (
     UltravoxAgentDetail,
     UltravoxAgentPage,
@@ -36,6 +37,7 @@ class VoiceProviderAdminService(Protocol):
     def list_voices(self, tenant_id: str, **filters) -> UltravoxVoicePage: ...
     def get_voice(self, tenant_id: str, voice_id: str) -> UltravoxVoiceSummary: ...
     def preview(self, tenant_id: str, voice_id: str) -> bytes: ...
+    def preview_external_voice(self, tenant_id: str, voice: AgentVoiceConfig) -> bytes: ...
 
 
 # Add an entry here once a provider has a real adapter backing it (see the
