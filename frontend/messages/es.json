@@ -1359,7 +1359,20 @@
         "providerModel": "Proveedor y modelo", "provider": "Proveedor", "model": "Modelo", "noModels": "Sin modelos disponibles",
         "capabilities": {
           "tools": "Herramientas", "voice_selection": "Selección de voz", "turn_detection": "Detección de turno",
-          "interruptions": "Interrupciones", "transcription": "Transcripción", "function_calling": "Function calling", "reasoning": "Razonamiento"
+          "interruptions": "Interrupciones", "transcription": "Transcripción", "function_calling": "Function calling", "reasoning": "Razonamiento",
+          "provider_voice": "Voz del proveedor", "provider_external_voice": "Voz externa (TTS)",
+          "voice_preview": "Preview de voz", "provider_managed": "Administrado por el proveedor"
+        },
+        "origin": {
+          "title": "Origen de voz", "provider": "Catálogo del proveedor", "providerExternal": "TTS externo",
+          "catalogVoice": "Voz", "noCatalogVoices": "No hay voces disponibles en el catálogo del proveedor.",
+          "listen": "Escuchar",
+          "externalProviderLabel": "Proveedor TTS", "externalVoiceId": "Voice ID (ElevenLabs)",
+          "externalVoiceIdPlaceholder": "Ej. 21m00Tcm4TlvDq8ikWAM", "externalModel": "Modelo",
+          "speed": "Velocidad", "stability": "Estabilidad", "similarityBoost": "Similarity Boost", "speakerBoost": "Speaker Boost",
+          "tryVoice": "Probar voz", "tested": "Voz probada.",
+          "previewFailed": "No se pudo generar la muestra de voz. Intenta de nuevo.",
+          "notTestedWarning": "No has probado esta voz externa. Te recomendamos hacerlo antes de publicar."
         },
         "linkTitle": "Vincular agente de voz existente", "linkLabel": "Agente Ultravox",
         "linkNone": "Sin vincular", "linkHelp": "Opcional: usa la voz y el agente ya configurados en Integraciones → Voz."

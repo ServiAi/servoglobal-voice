@@ -13,6 +13,7 @@ import {
   updateAgent,
   updateAgentDraft,
 } from '@/lib/api/agents';
+import { previewExternalVoiceAudio, previewProviderVoiceAudio, type VoicePreviewResult } from '@/lib/api/voice-preview';
 import { getAccessToken } from '@/lib/auth/server';
 import type {
   AgentCreateRequest,
@@ -20,6 +21,7 @@ import type {
   AgentResponse,
   AgentUpdateRequest,
   AgentVersionResponse,
+  AgentVoiceConfig,
 } from '@/types/agents';
 
 async function withAccessToken<T>(
@@ -144,6 +146,24 @@ export async function createVoiceTestSessionAction(
       idempotency_key: idempotencyKey,
     })
   );
+}
+
+export async function previewProviderVoiceAction(
+  provider: string,
+  voiceId: string
+): Promise<VoicePreviewResult> {
+  const accessToken = await getAccessToken();
+  if (!accessToken) return { ok: false, status: 401, detail: 'unauthorized' };
+  return previewProviderVoiceAudio(accessToken, provider, voiceId);
+}
+
+export async function previewExternalVoiceAction(
+  provider: string,
+  voice: AgentVoiceConfig
+): Promise<VoicePreviewResult> {
+  const accessToken = await getAccessToken();
+  if (!accessToken) return { ok: false, status: 401, detail: 'unauthorized' };
+  return previewExternalVoiceAudio(accessToken, provider, voice);
 }
 
 export async function createVoiceTestTokenAction(

@@ -1359,7 +1359,20 @@
         "providerModel": "Provider & model", "provider": "Provider", "model": "Model", "noModels": "No models available",
         "capabilities": {
           "tools": "Tools", "voice_selection": "Voice selection", "turn_detection": "Turn detection",
-          "interruptions": "Interruptions", "transcription": "Transcription", "function_calling": "Function calling", "reasoning": "Reasoning"
+          "interruptions": "Interruptions", "transcription": "Transcription", "function_calling": "Function calling", "reasoning": "Reasoning",
+          "provider_voice": "Provider voice", "provider_external_voice": "External voice (TTS)",
+          "voice_preview": "Voice preview", "provider_managed": "Provider-managed"
+        },
+        "origin": {
+          "title": "Voice origin", "provider": "Provider catalog", "providerExternal": "External TTS",
+          "catalogVoice": "Voice", "noCatalogVoices": "No voices available in the provider catalog.",
+          "listen": "Listen",
+          "externalProviderLabel": "TTS provider", "externalVoiceId": "Voice ID (ElevenLabs)",
+          "externalVoiceIdPlaceholder": "e.g. 21m00Tcm4TlvDq8ikWAM", "externalModel": "Model",
+          "speed": "Speed", "stability": "Stability", "similarityBoost": "Similarity Boost", "speakerBoost": "Speaker Boost",
+          "tryVoice": "Try voice", "tested": "Voice tested.",
+          "previewFailed": "Could not generate the voice sample. Please try again.",
+          "notTestedWarning": "You haven't tried this external voice yet. We recommend doing so before publishing."
         },
         "linkTitle": "Link an existing voice agent", "linkLabel": "Ultravox agent",
         "linkNone": "Not linked", "linkHelp": "Optional: reuse the voice and agent already configured under Integrations → Voice."
