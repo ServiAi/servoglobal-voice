@@ -38,10 +38,15 @@ class VoiceSelectionService:
             validate_voice_compatibility(runtime_provider, runtime_model, voice.mode, voice.provider)
         except VoiceRegistryValidationError as exc:
             raise VoiceSelectionError(str(exc)) from exc
-        self._validate_settings_shape(voice)
+        self.validate_settings(voice)
 
     @staticmethod
-    def _validate_settings_shape(voice: AgentVoiceConfig) -> None:
+    def validate_settings(voice: AgentVoiceConfig) -> None:
+        """The settings-shape half of `validate()`, exposed on its own for
+        callers that have no realtime provider/model context to check
+        registry compatibility against -- e.g. the standalone external-voice
+        preview endpoint, which only ever needs to know whether `voice`'s own
+        (mode, provider, settings) are internally well-formed."""
         if voice.mode == "provider":
             if voice.settings:
                 raise VoiceSelectionError("Provider voice does not accept custom settings.")
