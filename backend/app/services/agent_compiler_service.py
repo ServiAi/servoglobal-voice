@@ -14,10 +14,12 @@ class AgentCompilerError(ValueError):
 
 class AgentCompilerService:
     """Compiles an Agent Builder Agent + AgentVersion into a
-    RuntimeSessionSpecV1 -- the typed contract a future voice runtime
-    consumes. Resolves nothing from providers and carries no secrets; that
-    stays the job of the runtime adapter (see agent_runtime_adapter.py) and,
-    eventually, a credential resolver in the runtime process itself.
+    RuntimeSessionSpecV1 -- the typed contract the voice runtime consumes.
+    Resolves nothing from providers and carries no secrets; that stays the
+    job of the runtime process itself (see
+    voice-runtime/src/serviglobal_voice_runtime/providers.py for the
+    per-provider execution adapters, and .../credentials.py for the
+    per-VoiceSession credential resolver).
     """
 
     def compile(
