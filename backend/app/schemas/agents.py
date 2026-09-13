@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class _StrictModel(BaseModel):
@@ -36,10 +36,79 @@ class ProviderAgentReference(_StrictModel):
     observed_published_revision_id: str | None = Field(default=None, max_length=120)
 
 
+_FORBIDDEN_VOICE_SETTINGS_KEY_PARTS = (
+    "api_key", "apikey", "secret", "token", "password", "authorization", "header",
+)
+_ELEVENLABS_EXTERNAL_VOICE_SETTINGS_KEYS = {
+    "model", "speed", "stability", "similarity_boost", "use_speaker_boost",
+}
+_ELEVENLABS_EXTERNAL_VOICE_RANGES: dict[str, tuple[float, float]] = {
+    "speed": (0.7, 1.2),
+    "stability": (0.0, 1.0),
+    "similarity_boost": (0.0, 1.0),
+}
+_ELEVENLABS_MODEL_MAX_LENGTH = 80
+
+
 class AgentVoiceConfig(_StrictModel):
-    mode: Literal["provider"] = "provider"
+    """A voice selection for a realtime agent.
+
+    `mode="provider"` is a voice known/managed by the realtime provider's own
+    catalog (e.g. an Ultravox voice) -- it does not imply the provider
+    synthesizes the audio itself, only that ServiGlobal doesn't need to know
+    which TTS backs it. `mode="provider_external"` asks the realtime provider
+    to delegate synthesis to a named external TTS provider (e.g. Ultravox's
+    externalVoice -> ElevenLabs) using an ID from that provider's own
+    namespace, never the realtime provider's voice IDs.
+    """
+
+    mode: Literal["provider", "provider_external"] = "provider"
     provider: str = Field(max_length=40)
     voice_id: str = Field(min_length=1, max_length=160)
+    settings: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("settings")
+    @classmethod
+    def reject_secret_settings(cls, value: dict[str, Any]) -> dict[str, Any]:
+        if any(part in str(key).lower() for key in value for part in _FORBIDDEN_VOICE_SETTINGS_KEY_PARTS):
+            raise ValueError("Voice settings contain a forbidden secret field")
+        return value
+
+    @model_validator(mode="after")
+    def validate_settings_shape(self):
+        """Local-only shape validation (no registry/DB/network): which
+        settings keys are allowed for a given (mode, provider), and their
+        type/range. Whether `provider` itself is a compatible external voice
+        provider for the chosen realtime model is validated separately by
+        voice_registry.validate_voice_compatibility, which needs the sibling
+        realtime provider/model this schema doesn't have visibility into."""
+        if self.mode == "provider":
+            if self.settings:
+                raise ValueError("Provider voice does not accept custom settings.")
+            return self
+        if self.mode == "provider_external" and self.provider == "elevenlabs":
+            unknown = set(self.settings) - _ELEVENLABS_EXTERNAL_VOICE_SETTINGS_KEYS
+            if unknown:
+                raise ValueError(f"Unsupported voice settings: {', '.join(sorted(unknown))}")
+            for key, (low, high) in _ELEVENLABS_EXTERNAL_VOICE_RANGES.items():
+                if key not in self.settings:
+                    continue
+                value = self.settings[key]
+                if isinstance(value, bool) or not isinstance(value, (int, float)):
+                    raise ValueError(f"Voice setting '{key}' must be a number.")
+                if not low <= value <= high:
+                    raise ValueError(f"Voice setting '{key}' must be between {low} and {high}.")
+            if "use_speaker_boost" in self.settings and not isinstance(self.settings["use_speaker_boost"], bool):
+                raise ValueError("Voice setting 'use_speaker_boost' must be a boolean.")
+            if "model" in self.settings:
+                model_value = self.settings["model"]
+                if (
+                    not isinstance(model_value, str)
+                    or not model_value.strip()
+                    or len(model_value) > _ELEVENLABS_MODEL_MAX_LENGTH
+                ):
+                    raise ValueError("Voice setting 'model' must be a non-empty string.")
+        return self
 
 
 class ProviderManagedOverrides(_StrictModel):

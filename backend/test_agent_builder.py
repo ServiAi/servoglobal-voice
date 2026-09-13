@@ -180,6 +180,109 @@ class AgentBuilderTests(Integration2ATestCase):
         response = self.client.patch(f"/api/v1/agents/{agent_id}/draft", json=update_payload)
         self.assertEqual(response.status_code, 422, response.text)
 
+    # -- voice contract (Phase A: provider / provider_external) --
+
+    def test_create_accepts_provider_voice(self) -> None:
+        self._enable_feature()
+        response = self._create(voice={"mode": "provider", "provider": "ultravox", "voice_id": "Mark"})
+        self.assertEqual(response.status_code, 201, response.text)
+        draft = self.client.get(f"/api/v1/agents/{response.json()['id']}/draft").json()
+        self.assertEqual(
+            draft["runtime_binding"]["realtime"]["voice"],
+            {"mode": "provider", "provider": "ultravox", "voice_id": "Mark", "settings": {}},
+        )
+
+    def test_create_accepts_provider_external_elevenlabs_voice(self) -> None:
+        self._enable_feature()
+        response = self._create(voice={
+            "mode": "provider_external", "provider": "elevenlabs", "voice_id": "21m00Tcm4TlvDq8ikWAM",
+            "settings": {"model": "eleven_turbo_v2_5", "speed": 1.0, "stability": 0.8},
+        })
+        self.assertEqual(response.status_code, 201, response.text)
+        draft = self.client.get(f"/api/v1/agents/{response.json()['id']}/draft").json()
+        self.assertEqual(draft["runtime_binding"]["realtime"]["voice"]["provider"], "elevenlabs")
+        self.assertEqual(draft["runtime_binding"]["realtime"]["voice"]["settings"]["speed"], 1.0)
+
+    def test_create_rejects_provider_voice_from_a_different_provider(self) -> None:
+        self._enable_feature()
+        response = self._create(voice={"mode": "provider", "provider": "elevenlabs", "voice_id": "x"})
+        self.assertEqual(response.status_code, 422, response.text)
+
+    def test_create_rejects_unsupported_external_voice_provider(self) -> None:
+        self._enable_feature()
+        response = self._create(voice={"mode": "provider_external", "provider": "cartesia", "voice_id": "x"})
+        self.assertEqual(response.status_code, 422, response.text)
+
+    def test_update_draft_accepts_voice(self) -> None:
+        self._enable_feature()
+        agent_id = self._create().json()["id"]
+        response = self.client.patch(
+            f"/api/v1/agents/{agent_id}/draft",
+            json=self._draft_payload(voice={"mode": "provider", "provider": "ultravox", "voice_id": "Jessica"}),
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        draft = self.client.get(f"/api/v1/agents/{agent_id}/draft").json()
+        self.assertEqual(draft["runtime_binding"]["realtime"]["voice"]["voice_id"], "Jessica")
+
+    def test_create_rejects_voice_for_provider_managed_agent(self) -> None:
+        self._enable_feature()
+        # No UltravoxAdminService mock needed: the voice+provider_managed
+        # rejection must happen before any remote provider_agent validation.
+        response = self._create(
+            model="ultravox-v0.7",
+            management_mode="provider_managed",
+            provider_agent={"agent_id": "remote-agent-1"},
+            voice={"mode": "provider", "provider": "ultravox", "voice_id": "Mark"},
+        )
+        self.assertEqual(response.status_code, 422, response.text)
+
+    def test_update_draft_rejects_voice_for_provider_managed_agent(self) -> None:
+        self._enable_feature()
+        remote = SimpleNamespace(
+            agent_id="remote-agent-1", published_revision_id="revision-live",
+            tools=[], has_unsupported_client_tools=False,
+        )
+        with patch(
+            "app.services.ultravox_admin_service.UltravoxAdminService.validate_provider_agent_link",
+            return_value=remote,
+        ):
+            agent_id = self._create(
+                model="ultravox-v0.7",
+                management_mode="provider_managed",
+                provider_agent={"agent_id": "remote-agent-1"},
+            ).json()["id"]
+            response = self.client.patch(
+                f"/api/v1/agents/{agent_id}/draft",
+                json=self._draft_payload(
+                    model="ultravox-v0.7",
+                    management_mode="provider_managed",
+                    provider_agent={"agent_id": "remote-agent-1"},
+                    voice={"mode": "provider", "provider": "ultravox", "voice_id": "Mark"},
+                ),
+            )
+        self.assertEqual(response.status_code, 422, response.text)
+
+    def test_create_and_update_draft_with_voice_never_call_ultravox_provider_client(self) -> None:
+        self._enable_feature()
+        guard = AssertionError("saving a draft must never call the Ultravox provider client")
+        with patch("app.services.ultravox_provider_client.UltravoxProviderClient.list_agents", side_effect=guard), \
+             patch("app.services.ultravox_provider_client.UltravoxProviderClient.get_agent", side_effect=guard), \
+             patch("app.services.ultravox_provider_client.UltravoxProviderClient.list_voices", side_effect=guard), \
+             patch("app.services.ultravox_provider_client.UltravoxProviderClient.get_voice", side_effect=guard), \
+             patch("app.services.ultravox_provider_client.UltravoxProviderClient.get_voice_preview", side_effect=guard):
+            create_response = self._create(
+                voice={"mode": "provider", "provider": "ultravox", "voice_id": "Mark"}
+            )
+            self.assertEqual(create_response.status_code, 201, create_response.text)
+            agent_id = create_response.json()["id"]
+            update_response = self.client.patch(
+                f"/api/v1/agents/{agent_id}/draft",
+                json=self._draft_payload(voice={
+                    "mode": "provider_external", "provider": "elevenlabs", "voice_id": "eleven-x",
+                }),
+            )
+            self.assertEqual(update_response.status_code, 200, update_response.text)
+
     # -- publish / versioning --
 
     def test_publish_requires_system_prompt(self) -> None:

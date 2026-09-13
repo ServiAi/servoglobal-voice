@@ -31,13 +31,38 @@ class AgentBehavior(StrictModel):
     agent_first: bool = True
 
 
+_FORBIDDEN_VOICE_SETTINGS_KEY_PARTS = (
+    "api_key", "apikey", "secret", "token", "password", "authorization", "header",
+)
+
+
+class AgentVoiceConfig(StrictModel):
+    """Manual mirror of backend/app/schemas/agents.py::AgentVoiceConfig --
+    this repo has no shared package between backend and voice-runtime, so the
+    two must be kept in sync by hand (pre-existing duplication, not resolved
+    by this change). Runtime execution does not consume this field yet
+    (that lands in later phases); this only tightens the contract shape."""
+
+    mode: Literal["provider", "provider_external"] = "provider"
+    provider: str
+    voice_id: str
+    settings: dict = Field(default_factory=dict)
+
+    @field_validator("settings")
+    @classmethod
+    def reject_secret_settings(cls, value: dict) -> dict:
+        if any(part in str(key).lower() for key in value for part in _FORBIDDEN_VOICE_SETTINGS_KEY_PARTS):
+            raise ValueError("Voice settings contain a forbidden secret field")
+        return value
+
+
 class RealtimeModelSpec(StrictModel):
     provider: str
     model: str
     settings: dict = Field(default_factory=dict)
     management_mode: Literal["serviglobal_managed", "provider_managed"] = "serviglobal_managed"
     provider_agent: dict | None = None
-    voice: dict | None = None
+    voice: AgentVoiceConfig | None = None
     provider_overrides: dict = Field(default_factory=dict)
     provider_extensions: dict = Field(default_factory=dict)
 

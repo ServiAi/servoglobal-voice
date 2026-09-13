@@ -15,7 +15,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from app.schemas.agents import AgentBehavior, AgentIdentity, AgentInstructions
+from app.schemas.agents import AgentBehavior, AgentIdentity, AgentInstructions, AgentVoiceConfig
 
 
 class _StrictModel(BaseModel):
@@ -28,7 +28,7 @@ class RealtimeModelSpec(_StrictModel):
     settings: dict = Field(default_factory=dict)
     management_mode: Literal["serviglobal_managed", "provider_managed"] = "serviglobal_managed"
     provider_agent: dict | None = None
-    voice: dict | None = None
+    voice: AgentVoiceConfig | None = None
     provider_overrides: dict = Field(default_factory=dict)
     provider_extensions: dict = Field(default_factory=dict)
 
