@@ -40,19 +40,15 @@ class AgentVoiceConfig(StrictModel):
     """Manual mirror of backend/app/schemas/agents.py::AgentVoiceConfig --
     this repo has no shared package between backend and voice-runtime, so the
     two must be kept in sync by hand (pre-existing duplication, not resolved
-    by this change). Runtime execution does not consume this field yet
-    (that lands in later phases); this only tightens the contract shape.
+    by this change). The runtime consumes this field in providers.py.
 
     Deliberately lightweight: only shape (mode/provider/voice_id types) and
     the generic secret-key guard below. Provider-specific rules (e.g. which
     ElevenLabs settings/ranges are valid for provider_external) are NOT
     duplicated here -- the Control Plane (backend VoiceSelectionService)
-    already enforces those before a draft can be saved or published, so by
-    the time a spec reaches this runtime it was built from an already-valid
-    configuration. A later phase (external_voice execution) will add its own
-    defense-in-depth mapper here that rejects unknown settings keys again
-    before they reach the Ultravox plugin call, rather than relying solely
-    on this contract."""
+    already enforces those before a draft can be saved or published. The
+    external_voice mapper in providers.py repeats the provider-specific
+    checks before constructing plugin options as defense in depth."""
 
     mode: Literal["provider", "provider_external"] = "provider"
     provider: str

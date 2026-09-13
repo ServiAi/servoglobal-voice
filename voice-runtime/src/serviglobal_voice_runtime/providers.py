@@ -11,7 +11,7 @@ from .call_factory import (
     ManagedAgentHttpSession,
     UltravoxAgentCallFactory,
 )
-from .contracts import RuntimeSessionSpecV1
+from .contracts import AgentVoiceConfig, RuntimeSessionSpecV1
 from .credentials import ProviderCredentialResolver
 
 EventSender = Callable[..., Awaitable[None]]
@@ -27,6 +27,44 @@ class RealtimeProvider(Protocol):
 
 def language_hint(language: str) -> str:
     return language.split("-", 1)[0].lower()
+
+
+def build_elevenlabs_external_voice(voice: AgentVoiceConfig) -> dict[str, Any]:
+    if voice.mode != "provider_external" or voice.provider != "elevenlabs":
+        raise UnsupportedRuntimeProviderError("Ultravox provider_external only supports ElevenLabs in V1")
+    if not isinstance(voice.voice_id, str) or not voice.voice_id.strip():
+        raise UnsupportedRuntimeProviderError("ElevenLabs external voice requires a non-empty voice_id")
+    settings = voice.settings
+    if not isinstance(settings, dict) or set(settings) - {
+        "model", "speed", "stability", "similarity_boost", "use_speaker_boost"
+    }:
+        raise UnsupportedRuntimeProviderError("Unsupported ElevenLabs external voice setting")
+    model = settings.get("model")
+    if not isinstance(model, str) or not model.strip() or len(model) > 80:
+        raise UnsupportedRuntimeProviderError("ElevenLabs external voice requires a non-empty model")
+
+    for key, low, high in (
+        ("speed", 0.7, 1.2),
+        ("stability", 0.0, 1.0),
+        ("similarity_boost", 0.0, 1.0),
+    ):
+        if key in settings:
+            value = settings[key]
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or not low <= value <= high:
+                raise UnsupportedRuntimeProviderError(f"Invalid ElevenLabs external voice setting: {key}")
+    if "use_speaker_boost" in settings and not isinstance(settings["use_speaker_boost"], bool):
+        raise UnsupportedRuntimeProviderError("Invalid ElevenLabs external voice setting: use_speaker_boost")
+
+    elevenlabs: dict[str, Any] = {"voiceId": voice.voice_id, "model": model}
+    if "speed" in settings:
+        elevenlabs["speed"] = settings["speed"]
+    if "stability" in settings:
+        elevenlabs["stability"] = settings["stability"]
+    if "similarity_boost" in settings:
+        elevenlabs["similarityBoost"] = settings["similarity_boost"]
+    if "use_speaker_boost" in settings:
+        elevenlabs["useSpeakerBoost"] = settings["use_speaker_boost"]
+    return {"elevenLabs": elevenlabs}
 
 
 def ultravox_options(spec: RuntimeSessionSpecV1, api_key: str) -> dict[str, Any]:
@@ -57,22 +95,21 @@ def ultravox_options(spec: RuntimeSessionSpecV1, api_key: str) -> dict[str, Any]
         "first_speaker": "FIRST_SPEAKER_AGENT" if spec.behavior.agent_first else "FIRST_SPEAKER_USER",
         "enable_greeting_prompt": bool(spec.behavior.agent_first and spec.instructions.greeting),
     }
-    for key in supported:
+    for key in ("temperature", "max_duration"):
         if key in configured:
             options[key] = configured[key]
     voice = realtime.voice
-    if voice is not None:
-        if voice.mode == "provider_external":
-            raise UnsupportedRuntimeProviderError(
-                "provider_external voice mode is not implemented by the Ultravox runtime"
-            )
-        if (
-            voice.mode != "provider"
-            or voice.provider != "ultravox"
-            or not voice.voice_id.strip()
-        ):
+    if voice is None:
+        if "voice" in configured:
+            options["voice"] = configured["voice"]
+    elif voice.mode == "provider_external":
+        options["external_voice"] = build_elevenlabs_external_voice(voice)
+    elif voice.mode == "provider":
+        if voice.provider != "ultravox" or not voice.voice_id.strip():
             raise UnsupportedRuntimeProviderError("Ultravox runtime requires a valid Ultravox provider voice")
         options["voice"] = voice.voice_id
+    else:
+        raise UnsupportedRuntimeProviderError("Unsupported Ultravox voice mode")
     return options
 
 
