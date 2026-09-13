@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { AgentBuilder } from '@/components/crm/agents/AgentBuilder';
 import { fetchVoiceAgents } from '@/lib/api/crm';
 import { fetchVoiceModels, fetchVoiceProviders } from '@/lib/api/voice-registry';
+import { fetchProviderVoices } from '@/lib/api/voice-provider-admin';
 import { getAccessToken } from '@/lib/auth/server';
 import { fetchMeProfile } from '@/lib/api/me';
 import { canEditAgents } from '@/lib/permissions/agents';
@@ -21,11 +22,12 @@ export default async function NewAgentPage({
   const accessToken = await getAccessToken();
   if (!accessToken) redirect(`/api/auth/login?returnTo=/${locale}/voice-ai/agents/new`);
 
-  const [profileResult, voiceAgentsResult, providersResult, modelsResult] = await Promise.all([
+  const [profileResult, voiceAgentsResult, providersResult, modelsResult, providerVoicesResult] = await Promise.all([
     fetchMeProfile(accessToken),
     fetchVoiceAgents(accessToken),
     fetchVoiceProviders(accessToken),
     fetchVoiceModels(accessToken),
+    fetchProviderVoices(accessToken, 'ultravox', { pageSize: 50 }),
   ]);
   const canEdit = profileResult.ok && canEditAgents(profileResult.profile);
   if (!canEdit) {
@@ -46,6 +48,7 @@ export default async function NewAgentPage({
       voiceAgents={voiceAgentsResult.ok ? voiceAgentsResult.data : []}
       providers={providersResult.ok ? providersResult.data : []}
       models={modelsResult.ok ? modelsResult.data : []}
+      providerVoices={providerVoicesResult.ok ? providerVoicesResult.data.results : []}
       initialProviderAgent={query.management_mode === 'provider_managed' && typeof query.provider_agent_id === 'string' ? {
         agentId: query.provider_agent_id,
         name: typeof query.provider_agent_name === 'string' ? query.provider_agent_name : query.provider_agent_id,

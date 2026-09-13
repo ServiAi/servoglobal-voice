@@ -11,6 +11,7 @@ const routes = [
   'voice-ai/calls',
   'voice-ai/analytics',
   'voice-ai/telephony',
+  'voice-ai/agents/new',
   'integrations',
   'automations/notifications',
 ];

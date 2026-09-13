@@ -27,4 +27,5 @@ export type VoiceModelResponse = {
   implementation_status: VoiceModelImplementationStatus;
   capabilities: Record<string, boolean>;
   parameters: Record<string, ParameterSpecResponse>;
+  external_voice_providers?: string[];
 };
