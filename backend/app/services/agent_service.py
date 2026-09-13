@@ -255,6 +255,8 @@ class AgentService:
                 )
             except (ValueError, UltravoxProviderError) as exc:
                 raise AgentValidationError(str(exc)) from exc
+        elif management_mode == "serviglobal_managed":
+            self._publish_voice_preflight(tenant_id, draft, realtime)
         previous_published_id = agent.published_version_id
         now = datetime.now(timezone.utc)
         draft.status = "published"
@@ -465,6 +467,53 @@ class AgentService:
                 "has_unsupported_client_tools": remote.has_unsupported_client_tools,
             }
         return binding
+
+    def _publish_voice_preflight(
+        self, tenant_id: str, draft: TenantAgentVersion, realtime: dict
+    ) -> None:
+        """Cheap, blocking publish-time checks for a serviglobal_managed
+        voice -- never generates audio and never calls provider_managed's
+        provider-agent preflight (that stays in its own branch in publish()).
+
+        provider  -> confirm the Ultravox voice is still accessible
+                     (metadata GET only, no TTS credit spent).
+        provider_external -> confirm the tenant's Ultravox account has the
+                     external provider's BYOK key configured, via
+                     /accounts/me/tts_api_keys. Never calls voice_preview:
+                     that would generate audio just to publish.
+
+        If `realtime.voice` isn't set but the agent still has a legacy
+        TenantVoiceAgentConfig.default_voice link, that's synthesized into
+        the same provider-voice shape AgentCompilerService.compile() already
+        uses, so legacy agents get the same accessibility check without any
+        data migration.
+        """
+        voice = realtime.get("voice")
+        if not voice and draft.voice_agent_config and draft.voice_agent_config.default_voice:
+            voice = {
+                "mode": "provider", "provider": "ultravox",
+                "voice_id": draft.voice_agent_config.default_voice, "settings": {},
+            }
+        if not isinstance(voice, dict) or not voice:
+            return
+        voice_mode = voice.get("mode")
+        if voice_mode not in ("provider", "provider_external"):
+            raise AgentValidationError("voice_provider_not_supported")
+
+        from app.services.ultravox_admin_service import UltravoxAdminService
+        from app.services.ultravox_provider_client import UltravoxProviderError
+
+        admin = UltravoxAdminService(self.db)
+        try:
+            if voice_mode == "provider":
+                admin.get_voice(tenant_id, str(voice.get("voice_id") or ""))
+            else:
+                admin.validate_external_voice_credentials(tenant_id, str(voice.get("provider") or ""))
+        except UltravoxProviderError as exc:
+            code = "voice_not_accessible" if exc.code == "provider_resource_not_found" else exc.code
+            raise AgentValidationError(code) from exc
+        except ValueError as exc:
+            raise AgentValidationError(str(exc)) from exc
 
     @staticmethod
     def _ensure_mutable(agent: TenantAgent) -> None:

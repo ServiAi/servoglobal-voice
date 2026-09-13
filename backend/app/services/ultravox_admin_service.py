@@ -4,7 +4,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.schemas.agents import AgentCreateRequest, AgentInstructions
+from app.schemas.agents import AgentCreateRequest, AgentInstructions, AgentVoiceConfig
 from app.schemas.ultravox_admin import (
     UltravoxAgentDetail,
     UltravoxAgentPage,
@@ -16,7 +16,32 @@ from app.schemas.ultravox_admin import (
 )
 from app.services.agent_service import AgentService
 from app.services.voice_config_service import VoiceConfigService
+from app.services.voice_selection_service import VoiceSelectionError, VoiceSelectionService
 from app.services.ultravox_provider_client import UltravoxProviderClient
+
+
+# Explicit ServiGlobal -> Ultravox field mapping for an ElevenLabs external
+# voice, matching the runtime mapper in
+# voice-runtime/src/serviglobal_voice_runtime/providers.py::build_elevenlabs_external_voice
+# field-for-field (see test_ultravox_admin.py for the parity assertion).
+# Backend and voice-runtime are separate deploys/packages with no shared
+# code, so this is intentionally its own small mapper, not a generic
+# camelCase converter -- it only knows these five keys and nothing else.
+_ELEVENLABS_SETTINGS_TO_ULTRAVOX_FIELDS = {
+    "model": "model",
+    "speed": "speed",
+    "stability": "stability",
+    "similarity_boost": "similarityBoost",
+    "use_speaker_boost": "useSpeakerBoost",
+}
+
+
+def build_elevenlabs_external_voice(voice: AgentVoiceConfig) -> dict[str, Any]:
+    elevenlabs: dict[str, Any] = {"voiceId": voice.voice_id}
+    for settings_key, ultravox_key in _ELEVENLABS_SETTINGS_TO_ULTRAVOX_FIELDS.items():
+        if settings_key in voice.settings:
+            elevenlabs[ultravox_key] = voice.settings[settings_key]
+    return {"elevenLabs": elevenlabs}
 
 
 SUPPORTED_TOOLS = {
@@ -188,6 +213,36 @@ class UltravoxAdminService:
         if str(voice.get("voiceId") or "") != voice_id:
             raise ValueError("provider_voice_not_accessible")
         return self.client.get_voice_preview(key, voice_id)
+
+    def preview_external_voice(self, tenant_id: str, voice: AgentVoiceConfig) -> bytes:
+        """Explicit "Probar voz" action for provider_external + elevenlabs.
+        Local-only validation, then a single (no-retry) call to Ultravox's
+        own ad-hoc voice_preview endpoint -- ServiGlobal never resolves or
+        stores an ElevenLabs credential; Ultravox uses the BYOK key already
+        configured on the tenant's Ultravox account."""
+        if voice.mode != "provider_external" or voice.provider != "elevenlabs":
+            raise ValueError("voice_provider_not_supported")
+        try:
+            VoiceSelectionService.validate_settings(voice)
+        except VoiceSelectionError as exc:
+            raise ValueError("voice_settings_invalid") from exc
+        payload = {
+            "name": "ServiGlobal External Voice Preview",
+            "definition": build_elevenlabs_external_voice(voice),
+        }
+        return self.client.preview_external_voice(self._api_key(tenant_id), payload=payload)
+
+    def validate_external_voice_credentials(self, tenant_id: str, provider: str) -> None:
+        """Publish-time preflight for provider_external voices: confirms the
+        tenant's Ultravox account has a BYOK key configured for `provider`,
+        without ever seeing that key's value and without generating audio
+        (no call to voice_preview here)."""
+        if provider != "elevenlabs":
+            raise ValueError("voice_provider_not_supported")
+        keys = self.client.get_tts_api_keys(self._api_key(tenant_id))
+        entry = keys.get("elevenLabs") if isinstance(keys, dict) else None
+        if not isinstance(entry, dict) or not entry:
+            raise ValueError("external_tts_credentials_unavailable")
 
     def import_agent(self, tenant_id: str, agent_id: str, user_id: str | None) -> UltravoxImportResponse:
         raw = self.client.get_agent(self._api_key(tenant_id), agent_id)

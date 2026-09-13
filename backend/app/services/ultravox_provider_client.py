@@ -108,6 +108,47 @@ class UltravoxProviderClient:
             raise UltravoxProviderError("provider_preview_too_large")
         return response.content
 
+    def get_tts_api_keys(self, api_key: str) -> dict[str, Any]:
+        """GET is idempotent, so this reuses the retrying _get helper unlike
+        preview_external_voice below."""
+        return self._get("/api/accounts/me/tts_api_keys", api_key).json()
+
+    def preview_external_voice(self, api_key: str, *, payload: dict[str, Any]) -> bytes:
+        """POST /api/voice_preview generates real audio and can consume the
+        tenant's provider quota, so -- unlike every GET above -- this makes
+        exactly one attempt. No retry on timeout/connection reset/5xx: the
+        user must explicitly press "Probar voz" again rather than have this
+        silently retry a billable generation."""
+        try:
+            with httpx.Client(timeout=self.timeout_seconds) as client:
+                response = client.post(
+                    f"{ULTRAVOX_API_BASE_URL}/api/voice_preview",
+                    headers=self._headers(api_key),
+                    json=payload,
+                )
+        except (
+            httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout,
+            httpx.WriteError, httpx.RemoteProtocolError,
+        ) as exc:
+            raise UltravoxProviderError("provider_unavailable") from exc
+        status = response.status_code
+        if status in {401, 403}:
+            raise UltravoxProviderError("provider_auth_failed", status)
+        if status == 429:
+            raise UltravoxProviderError("provider_rate_limited", status)
+        if status >= 500:
+            raise UltravoxProviderError("provider_unavailable", status)
+        if status >= 400:
+            # Ultravox rejected this specific voiceId/model/settings
+            # combination (e.g. unknown ElevenLabs voice). Never surface the
+            # provider's raw response body to the caller.
+            raise UltravoxProviderError("external_voice_preview_failed", status)
+        if "audio/wav" not in response.headers.get("content-type", ""):
+            raise UltravoxProviderError("provider_invalid_preview")
+        if len(response.content) > 5 * 1024 * 1024:
+            raise UltravoxProviderError("provider_preview_too_large")
+        return response.content
+
     def create_agent_call(
         self, api_key: str, agent_id: str, *, payload: dict[str, Any]
     ) -> UltravoxCallResult:

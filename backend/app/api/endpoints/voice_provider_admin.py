@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.api.auth.deps import AuthContext
 from app.api.endpoints.integrations import require_enabled_integration
 from app.db.session import get_db
+from app.schemas.agents import AgentVoiceConfig
 from app.schemas.ultravox_admin import (
     UltravoxAgentDetail, UltravoxAgentPage, UltravoxImportResponse,
     UltravoxVoicePage, UltravoxVoiceSummary,
@@ -111,3 +112,26 @@ def preview_voice(provider: str, voice_id: str, context: AuthContext = Depends(r
         )
     except (ValueError, UltravoxProviderError) as exc:
         _error(exc)
+
+
+@router.post("/external-voice/preview")
+def preview_external_voice(
+    provider: str,
+    body: AgentVoiceConfig,
+    # "Probar voz" generates real, potentially billable audio, so it uses
+    # WRITE_ROLES (platform_admin, tenant_admin) rather than READ_ROLES --
+    # a tenant_viewer must not be able to trigger provider generation.
+    context: AuthContext = Depends(require_enabled_integration("voice", WRITE_ROLES)),
+    db: Session = Depends(get_db),
+):
+    try:
+        service = get_provider_admin_service(db, provider)
+        audio = service.preview_external_voice(context.tenant.id, body)
+    except (ValueError, UltravoxProviderError) as exc:
+        _error(exc)
+    else:
+        return Response(
+            content=audio,
+            media_type="audio/wav",
+            headers={"Cache-Control": "private, no-store"},
+        )
