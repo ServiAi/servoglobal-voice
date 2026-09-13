@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class _StrictModel(BaseModel):
@@ -36,10 +36,42 @@ class ProviderAgentReference(_StrictModel):
     observed_published_revision_id: str | None = Field(default=None, max_length=120)
 
 
+_FORBIDDEN_VOICE_SETTINGS_KEY_PARTS = (
+    "api_key", "apikey", "secret", "token", "password", "authorization", "header",
+)
+
+
 class AgentVoiceConfig(_StrictModel):
-    mode: Literal["provider"] = "provider"
+    """A voice selection for a realtime agent.
+
+    `mode="provider"` is a voice known/managed by the realtime provider's own
+    catalog (e.g. an Ultravox voice) -- it does not imply the provider
+    synthesizes the audio itself, only that ServiGlobal doesn't need to know
+    which TTS backs it. `mode="provider_external"` asks the realtime provider
+    to delegate synthesis to a named external TTS provider (e.g. Ultravox's
+    externalVoice -> ElevenLabs) using an ID from that provider's own
+    namespace, never the realtime provider's voice IDs.
+
+    This schema validates shape only: `mode`/`provider`/`voice_id` types and
+    that `settings` is a plain mapping with no secret-like keys. It
+    deliberately does NOT know which settings keys or ranges a given
+    (mode, provider) actually allows -- that is provider-specific business
+    logic and lives in VoiceSelectionService, which has the sibling realtime
+    provider/model context this schema doesn't, and is the single place
+    that logic should be read or changed.
+    """
+
+    mode: Literal["provider", "provider_external"] = "provider"
     provider: str = Field(max_length=40)
     voice_id: str = Field(min_length=1, max_length=160)
+    settings: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("settings")
+    @classmethod
+    def reject_secret_settings(cls, value: dict[str, Any]) -> dict[str, Any]:
+        if any(part in str(key).lower() for key in value for part in _FORBIDDEN_VOICE_SETTINGS_KEY_PARTS):
+            raise ValueError("Voice settings contain a forbidden secret field")
+        return value
 
 
 class ProviderManagedOverrides(_StrictModel):

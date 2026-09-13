@@ -31,13 +31,49 @@ class AgentBehavior(StrictModel):
     agent_first: bool = True
 
 
+_FORBIDDEN_VOICE_SETTINGS_KEY_PARTS = (
+    "api_key", "apikey", "secret", "token", "password", "authorization", "header",
+)
+
+
+class AgentVoiceConfig(StrictModel):
+    """Manual mirror of backend/app/schemas/agents.py::AgentVoiceConfig --
+    this repo has no shared package between backend and voice-runtime, so the
+    two must be kept in sync by hand (pre-existing duplication, not resolved
+    by this change). Runtime execution does not consume this field yet
+    (that lands in later phases); this only tightens the contract shape.
+
+    Deliberately lightweight: only shape (mode/provider/voice_id types) and
+    the generic secret-key guard below. Provider-specific rules (e.g. which
+    ElevenLabs settings/ranges are valid for provider_external) are NOT
+    duplicated here -- the Control Plane (backend VoiceSelectionService)
+    already enforces those before a draft can be saved or published, so by
+    the time a spec reaches this runtime it was built from an already-valid
+    configuration. A later phase (external_voice execution) will add its own
+    defense-in-depth mapper here that rejects unknown settings keys again
+    before they reach the Ultravox plugin call, rather than relying solely
+    on this contract."""
+
+    mode: Literal["provider", "provider_external"] = "provider"
+    provider: str
+    voice_id: str
+    settings: dict = Field(default_factory=dict)
+
+    @field_validator("settings")
+    @classmethod
+    def reject_secret_settings(cls, value: dict) -> dict:
+        if any(part in str(key).lower() for key in value for part in _FORBIDDEN_VOICE_SETTINGS_KEY_PARTS):
+            raise ValueError("Voice settings contain a forbidden secret field")
+        return value
+
+
 class RealtimeModelSpec(StrictModel):
     provider: str
     model: str
     settings: dict = Field(default_factory=dict)
     management_mode: Literal["serviglobal_managed", "provider_managed"] = "serviglobal_managed"
     provider_agent: dict | None = None
-    voice: dict | None = None
+    voice: AgentVoiceConfig | None = None
     provider_overrides: dict = Field(default_factory=dict)
     provider_extensions: dict = Field(default_factory=dict)
 

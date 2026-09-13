@@ -79,6 +79,58 @@ class VoiceRegistryTests(Integration2ATestCase):
         self.assertEqual(capabilities_response.json(), model_response.json()["capabilities"])
         self.assertTrue(capabilities_response.json()["tools"])
 
+    def test_registry_api_response_keeps_capabilities_boolean_and_external_providers_separate(self) -> None:
+        response = self.client.get("/api/v1/voice/models", params={"provider": "ultravox"})
+        self.assertEqual(response.status_code, 200, response.text)
+        models = {model["id"]: model for model in response.json()}
+        for model_id in ("ultravox:ultravox", "ultravox:ultravox-v0.7"):
+            model = models[model_id]
+            self.assertEqual(model["capabilities"]["provider_voice"], True)
+            self.assertEqual(model["capabilities"]["provider_external_voice"], True)
+            self.assertTrue(all(isinstance(v, bool) for v in model["capabilities"].values()))
+            self.assertEqual(model["external_voice_providers"], ["elevenlabs"])
+            self.assertNotIn("external_voice_providers", model["capabilities"])
+
+    def test_capabilities_stay_boolean_only(self) -> None:
+        from app.domain import voice_registry
+
+        for model in voice_registry.list_models(provider_key="ultravox"):
+            self.assertTrue(all(isinstance(value, bool) for value in model.capabilities.values()))
+            self.assertIsInstance(model.external_voice_providers, tuple)
+            self.assertTrue(all(isinstance(item, str) for item in model.external_voice_providers))
+
+    def test_voice_compatibility_provider_mode_requires_matching_provider(self) -> None:
+        from app.domain import voice_registry
+
+        for model_key in ("ultravox", "ultravox-v0.7"):
+            voice_registry.validate_voice_compatibility("ultravox", model_key, "provider", "ultravox")
+            with self.assertRaises(voice_registry.VoiceRegistryValidationError):
+                voice_registry.validate_voice_compatibility("ultravox", model_key, "provider", "elevenlabs")
+
+    def test_voice_compatibility_provider_external_requires_supported_provider(self) -> None:
+        from app.domain import voice_registry
+
+        for model_key in ("ultravox", "ultravox-v0.7"):
+            voice_registry.validate_voice_compatibility(
+                "ultravox", model_key, "provider_external", "elevenlabs"
+            )
+            with self.assertRaises(voice_registry.VoiceRegistryValidationError):
+                voice_registry.validate_voice_compatibility(
+                    "ultravox", model_key, "provider_external", "cartesia"
+                )
+            with self.assertRaises(voice_registry.VoiceRegistryValidationError):
+                voice_registry.validate_voice_compatibility(
+                    "ultravox", model_key, "provider_external", "google"
+                )
+
+    def test_voice_compatibility_rejects_unknown_mode_and_model(self) -> None:
+        from app.domain import voice_registry
+
+        with self.assertRaises(voice_registry.VoiceRegistryValidationError):
+            voice_registry.validate_voice_compatibility("ultravox", "ultravox", "native", "ultravox")
+        with self.assertRaises(voice_registry.VoiceRegistryValidationError):
+            voice_registry.validate_voice_compatibility("openai", "gpt-realtime", "provider", "openai")
+
 
 if __name__ == "__main__":
     unittest.main()

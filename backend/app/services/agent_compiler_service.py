@@ -49,6 +49,20 @@ class AgentCompilerService:
                 )
             except VoiceRegistryValidationError as exc:
                 raise AgentCompilerError(f"Invalid runtime binding: {exc}") from exc
+
+            # New voice contract (schemas.agents.AgentVoiceConfig shape): if a
+            # draft or an Ultravox import already populated realtime.voice, it
+            # is the source of truth and is left untouched. Otherwise,
+            # synthesize one from the legacy TenantVoiceAgentConfig link so
+            # old and new agents compile to the same shape.
+            if not realtime.get("voice") and voice_config and voice_config.default_voice:
+                realtime["voice"] = {
+                    "mode": "provider", "provider": "ultravox",
+                    "voice_id": voice_config.default_voice, "settings": {},
+                }
+
+            # Keep the legacy settings.voice bridge for older runtime consumers.
+            # The current runtime prefers realtime.voice when present.
             if voice_config and voice_config.default_voice:
                 realtime["settings"] = {
                     "voice": voice_config.default_voice,

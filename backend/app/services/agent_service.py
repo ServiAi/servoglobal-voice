@@ -23,6 +23,7 @@ from app.schemas.agents import (
 )
 from app.services.integration_event_service import IntegrationEventService
 from app.services.tenant_feature_service import AGENT_BUILDER, TenantFeatureService
+from app.services.voice_selection_service import VoiceSelectionError, VoiceSelectionService
 
 VERSION_CONSTRAINT = "uq_tenant_agent_versions_agent_version"
 
@@ -438,6 +439,12 @@ class AgentService:
         realtime = binding["realtime"]
         realtime["management_mode"] = body.management_mode
         if body.voice is not None:
+            if body.management_mode == "provider_managed":
+                raise AgentValidationError("voice is not configurable for provider_managed agents.")
+            try:
+                VoiceSelectionService().validate(body.provider, body.model, body.voice)
+            except VoiceSelectionError as exc:
+                raise AgentValidationError(str(exc)) from exc
             realtime["voice"] = body.voice.model_dump()
         if body.provider_overrides is not None:
             realtime["provider_overrides"] = body.provider_overrides.model_dump(exclude_none=True)

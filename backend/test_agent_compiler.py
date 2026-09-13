@@ -153,6 +153,56 @@ class AgentCompilerServiceTests(unittest.TestCase):
         with self.assertRaises(AgentCompilerError):
             self.compiler.compile(agent, version)
 
+    def test_preserves_new_voice_contract_when_already_populated(self) -> None:
+        # Exact shape UltravoxAdminService.import_agent() persists today.
+        agent = _agent()
+        version = _published_version(
+            runtime_binding_json={
+                "pipeline_type": "realtime",
+                "realtime": {
+                    "provider": "ultravox", "model": "ultravox",
+                    "voice": {"mode": "provider", "provider": "ultravox", "voice_id": "Jessica"},
+                },
+            }
+        )
+        spec = self.compiler.compile(agent, version)
+        self.assertEqual(spec.runtime.realtime.voice.mode, "provider")
+        self.assertEqual(spec.runtime.realtime.voice.voice_id, "Jessica")
+
+    def test_synthesizes_provider_voice_from_legacy_default_voice_when_voice_is_absent(self) -> None:
+        agent = _agent()
+        version = _published_version()
+        version.voice_agent_config = type("Cfg", (), {"default_voice": "Mark"})()
+        spec = self.compiler.compile(agent, version)
+        self.assertEqual(spec.runtime.realtime.voice.mode, "provider")
+        self.assertEqual(spec.runtime.realtime.voice.provider, "ultravox")
+        self.assertEqual(spec.runtime.realtime.voice.voice_id, "Mark")
+        # Legacy runtime bridge stays populated too until a later phase wires
+        # voice-runtime to read realtime.voice directly.
+        self.assertEqual(spec.runtime.realtime.settings["voice"], "Mark")
+
+    def test_no_voice_and_no_legacy_default_voice_leaves_voice_none(self) -> None:
+        agent = _agent()
+        version = _published_version()
+        spec = self.compiler.compile(agent, version)
+        self.assertIsNone(spec.runtime.realtime.voice)
+
+    def test_new_voice_contract_takes_priority_over_legacy_default_voice(self) -> None:
+        agent = _agent()
+        version = _published_version(
+            runtime_binding_json={
+                "pipeline_type": "realtime",
+                "realtime": {
+                    "provider": "ultravox", "model": "ultravox",
+                    "voice": {"mode": "provider_external", "provider": "elevenlabs", "voice_id": "eleven-x"},
+                },
+            }
+        )
+        version.voice_agent_config = type("Cfg", (), {"default_voice": "Mark"})()
+        spec = self.compiler.compile(agent, version)
+        self.assertEqual(spec.runtime.realtime.voice.mode, "provider_external")
+        self.assertEqual(spec.runtime.realtime.voice.provider, "elevenlabs")
+
     def test_result_never_contains_provider_secrets(self) -> None:
         # Even if a caller stuffed provider-style keys into behavior/context,
         # the compiler must not merge in anything from TenantVoiceAgentConfig

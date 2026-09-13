@@ -36,14 +36,14 @@ class FakeCredentialResolver:
         return self.credential
 
 
-def spec(*, provider="ultravox", model="fixie-ai/ultravox", **runtime_settings) -> RuntimeSessionSpecV1:
+def spec(*, provider="ultravox", model="fixie-ai/ultravox", runtime_voice=None, **runtime_settings) -> RuntimeSessionSpecV1:
     return RuntimeSessionSpecV1.model_validate({
         "spec_version": "1", "session_id": "session-1", "tenant_id": "tenant-1", "agent_id": "agent-1", "agent_version_id": "version-1",
         "identity": {"name": "Sandra", "description": None},
         "instructions": {"role": "Advisor", "objective": "Help", "system_prompt": "Published prompt", "greeting": "Hola", "closing": "Adios"},
         "behavior": {"response_style": "balanced", "interruptions": "balanced", "turn_detection": "automatic", "confirmation_strategy": "important_data", "agent_first": True},
         "language": "es-CO", "timezone": "America/Bogota",
-        "runtime": {"pipeline_type": "realtime", "realtime": {"provider": provider, "model": model, "settings": runtime_settings}},
+        "runtime": {"pipeline_type": "realtime", "realtime": {"provider": provider, "model": model, "settings": runtime_settings, "voice": runtime_voice}},
         "context": {},
     })
 
@@ -62,6 +62,40 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(options["first_speaker"], "FIRST_SPEAKER_AGENT")
         self.assertIn("Published prompt", options["system_prompt"])
         self.assertIn("Hola", options["system_prompt"])
+
+    def test_provider_voice_overrides_legacy_voice(self) -> None:
+        options = ultravox_options(
+            spec(
+                runtime_voice={"mode": "provider", "provider": "ultravox", "voice_id": "NEW_VOICE"},
+                voice="LEGACY_VOICE", temperature=0.3, max_duration="10m",
+            ),
+            "key",
+        )
+        self.assertEqual(options["voice"], "NEW_VOICE")
+        self.assertEqual(options["temperature"], 0.3)
+        self.assertEqual(options["max_duration"], "10m")
+
+    def test_no_voice_uses_plugin_default(self) -> None:
+        self.assertNotIn("voice", ultravox_options(spec(), "key"))
+
+    def test_provider_external_voice_fails_without_legacy_fallback(self) -> None:
+        with self.assertRaisesRegex(UnsupportedRuntimeProviderError, "provider_external voice mode"):
+            ultravox_options(
+                spec(
+                    runtime_voice={"mode": "provider_external", "provider": "elevenlabs", "voice_id": "external"},
+                    voice="LEGACY_VOICE",
+                ),
+                "key",
+            )
+
+    def test_invalid_provider_voice_fails_closed(self) -> None:
+        for provider, voice_id in (("elevenlabs", "voice"), ("ultravox", " ")):
+            with self.subTest(provider=provider, voice_id=voice_id):
+                with self.assertRaises(UnsupportedRuntimeProviderError):
+                    ultravox_options(
+                        spec(runtime_voice={"mode": "provider", "provider": provider, "voice_id": voice_id}),
+                        "key",
+                    )
 
     def test_language_mapping(self) -> None:
         self.assertEqual(language_hint("es-CO"), "es")

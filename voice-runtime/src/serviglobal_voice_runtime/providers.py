@@ -60,6 +60,19 @@ def ultravox_options(spec: RuntimeSessionSpecV1, api_key: str) -> dict[str, Any]
     for key in supported:
         if key in configured:
             options[key] = configured[key]
+    voice = realtime.voice
+    if voice is not None:
+        if voice.mode == "provider_external":
+            raise UnsupportedRuntimeProviderError(
+                "provider_external voice mode is not implemented by the Ultravox runtime"
+            )
+        if (
+            voice.mode != "provider"
+            or voice.provider != "ultravox"
+            or not voice.voice_id.strip()
+        ):
+            raise UnsupportedRuntimeProviderError("Ultravox runtime requires a valid Ultravox provider voice")
+        options["voice"] = voice.voice_id
     return options
 
 

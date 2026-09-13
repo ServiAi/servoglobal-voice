@@ -32,6 +32,11 @@ class VoiceModel:
     implementation_status: Literal["planned", "available", "deprecated"]
     capabilities: dict[str, bool] = field(default_factory=dict)
     parameters: dict[str, ParameterSpec] = field(default_factory=dict)
+    # Which external TTS providers this model can delegate to via its own
+    # provider_external mechanism (e.g. Ultravox externalVoice). Kept as its
+    # own typed field rather than folded into `capabilities`, which stays
+    # strictly dict[str, bool] -- a provider key list is not a boolean flag.
+    external_voice_providers: tuple[str, ...] = field(default_factory=tuple)
 
 
 class VoiceRegistryValidationError(ValueError):
@@ -76,10 +81,19 @@ _MODELS: tuple[VoiceModel, ...] = (
             "transcription": True,
             "function_calling": True,
             "reasoning": False,
+            "provider_voice": True,
+            "provider_external_voice": True,
         },
         parameters={
             "temperature": ParameterSpec(supported=False),
         },
+        # Both ultravox:ultravox and ultravox:ultravox-v0.7 resolve to the
+        # same execution_model_id ("fixie-ai/ultravox") and the same
+        # livekit-plugins-ultravox RealtimeModel(voice=..., external_voice=...)
+        # API -- no evidence found that one supports provider/provider_external
+        # voice and the other doesn't, so both declare the same voice
+        # capabilities here.
+        external_voice_providers=("elevenlabs",),
     ),
     VoiceModel(
         id="ultravox:ultravox-v0.7",
@@ -99,8 +113,11 @@ _MODELS: tuple[VoiceModel, ...] = (
             "interruptions": True,
             "transcription": True,
             "function_calling": True,
+            "provider_voice": True,
+            "provider_external_voice": True,
         },
         parameters={"temperature": ParameterSpec(supported=False)},
+        external_voice_providers=("elevenlabs",),
     ),
 )
 
@@ -150,6 +167,42 @@ def validate_runtime_selection(pipeline_type: str, provider_key: str, model_key:
         raise VoiceRegistryValidationError(
             f"Model '{model_key}' is not available for provider '{provider_key}'."
         )
+
+
+def validate_voice_compatibility(
+    runtime_provider: str, runtime_model: str, voice_mode: str, voice_provider: str
+) -> None:
+    """Pure, static compatibility check between a realtime provider/model
+    selection and a voice configuration's (mode, provider). No DB, no HTTP,
+    no credential resolution: confirming that a specific voice_id actually
+    exists/is accessible for a tenant is a separate, tenant-aware concern
+    (see VoiceSelectionService), not this function's job.
+    """
+    model = get_model(f"{runtime_provider}:{runtime_model}")
+    if model is None or model.model_type != "realtime" or model.implementation_status != "available":
+        raise VoiceRegistryValidationError(
+            f"Model '{runtime_model}' is not available for provider '{runtime_provider}'."
+        )
+    if voice_mode == "provider":
+        if voice_provider != runtime_provider:
+            raise VoiceRegistryValidationError(
+                f"Provider voice must belong to the realtime provider '{runtime_provider}'."
+            )
+        if not model.capabilities.get("provider_voice"):
+            raise VoiceRegistryValidationError(
+                f"'{runtime_provider}:{runtime_model}' does not support provider voice."
+            )
+    elif voice_mode == "provider_external":
+        if not model.capabilities.get("provider_external_voice"):
+            raise VoiceRegistryValidationError(
+                f"'{runtime_provider}:{runtime_model}' does not support provider_external voice."
+            )
+        if voice_provider not in model.external_voice_providers:
+            raise VoiceRegistryValidationError(
+                f"'{runtime_provider}:{runtime_model}' does not support external voice provider '{voice_provider}'."
+            )
+    else:
+        raise VoiceRegistryValidationError(f"Unsupported voice mode '{voice_mode}'.")
 
 
 def resolve_execution_model_id(provider_key: str, model_key: str) -> str:

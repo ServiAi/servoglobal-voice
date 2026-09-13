@@ -34,3 +34,4 @@ class VoiceModelResponse(_StrictModel):
     implementation_status: Literal["planned", "available", "deprecated"]
     capabilities: dict[str, bool]
     parameters: dict[str, ParameterSpecResponse]
+    external_voice_providers: tuple[str, ...] = ()
