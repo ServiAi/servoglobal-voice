@@ -9,7 +9,7 @@ import {
 } from '@/lib/api/agents';
 import { fetchVoiceAgents } from '@/lib/api/crm';
 import { fetchVoiceModels, fetchVoiceProviders } from '@/lib/api/voice-registry';
-import { fetchUltravoxAgent } from '@/lib/api/ultravox-admin';
+import { fetchProviderAgent } from '@/lib/api/voice-provider-admin';
 import { getAccessToken } from '@/lib/auth/server';
 import { fetchMeProfile } from '@/lib/api/me';
 import { canEditAgents, canReadAgents } from '@/lib/permissions/agents';
@@ -65,7 +65,7 @@ export default async function AgentEditorPage({
   const [versionsResult, providerAgentResult] = await Promise.all([
     fetchAgentVersions(accessToken, agent.id),
     linkedProviderAgentId
-      ? fetchUltravoxAgent(accessToken, linkedProviderAgentId)
+      ? fetchProviderAgent(accessToken, 'ultravox', linkedProviderAgentId)
       : Promise.resolve(null),
   ]);
 

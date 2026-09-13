@@ -7,18 +7,23 @@ import { AlertTriangle, Bot, Link2, Loader2, Play, Radio, Volume2 } from 'lucide
 import { Button } from '@/components/ui/button';
 import { VoiceIntegrationCard } from './VoiceIntegrationCard';
 import {
-  fetchUltravoxAgents,
-  fetchUltravoxVoices,
-  importUltravoxAgent,
-  ultravoxVoicePreviewUrl,
-} from '@/lib/api/ultravox-admin';
+  fetchProviderAgents,
+  fetchProviderVoices,
+  importProviderAgent,
+  providerVoicePreviewUrl,
+} from '@/lib/api/voice-provider-admin';
 import type { VoiceAgentConfigResponse, VoiceProviderConfigResponse } from '@/types/crm';
 import type { UltravoxAgentPage, UltravoxVoicePage } from '@/types/ultravox-admin';
 
 type Tab = 'connection' | 'agents' | 'voices' | 'status';
+type VoiceProvider = { key: string; name: string };
 type Props = {
   accessToken: string;
   locale: string;
+  /** Which provider's admin catalog this workspace manages. Ultravox is the
+   * only one with a real backend adapter today (see voice_provider_admin.py);
+   * a future provider plugs in here without rebuilding this component. */
+  provider: VoiceProvider;
   initialConfig?: VoiceProviderConfigResponse;
   initialVoiceAgents: VoiceAgentConfigResponse[];
   initialAgents?: UltravoxAgentPage;
@@ -27,9 +32,10 @@ type Props = {
 
 const tabs: Tab[] = ['connection', 'agents', 'voices', 'status'];
 
-export function UltravoxAdminWorkspace({
+export function VoiceProviderAdminWorkspace({
   accessToken,
   locale,
+  provider,
   initialConfig,
   initialVoiceAgents,
   initialAgents,
@@ -53,8 +59,8 @@ export function UltravoxAdminWorkspace({
     setBusy(kind);
     setMessage(null);
     const result = kind === 'agents'
-      ? await fetchUltravoxAgents(accessToken, { search: search || undefined, pageSize: 50 })
-      : await fetchUltravoxVoices(accessToken, { search: search || undefined, pageSize: 50 });
+      ? await fetchProviderAgents(accessToken, provider.key, { search: search || undefined, pageSize: 50 })
+      : await fetchProviderVoices(accessToken, provider.key, { search: search || undefined, pageSize: 50 });
     if (result.ok) {
       if (kind === 'agents') setAgents(result.data as UltravoxAgentPage);
       else setVoices(result.data as UltravoxVoicePage);
@@ -65,7 +71,7 @@ export function UltravoxAdminWorkspace({
   async function importAgent(agentId: string) {
     setBusy(`import:${agentId}`);
     setMessage(null);
-    const result = await importUltravoxAgent(accessToken, agentId);
+    const result = await importProviderAgent(accessToken, provider.key, agentId);
     if (result.ok) {
       setMessage(result.data.warnings.length
         ? t('importedWarnings', { count: result.data.warnings.length })
@@ -76,7 +82,7 @@ export function UltravoxAdminWorkspace({
   }
 
   async function previewVoice(voiceId: string) {
-    const url = ultravoxVoicePreviewUrl(voiceId);
+    const url = providerVoicePreviewUrl(provider.key, voiceId);
     if (!url) return setMessage(t('backendMissing'));
     setBusy(`preview:${voiceId}`);
     const response = await fetch(url, {
