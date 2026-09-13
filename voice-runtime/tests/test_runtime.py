@@ -8,9 +8,9 @@ import unittest
 from unittest.mock import patch
 
 from serviglobal_voice_runtime.config import Settings
-from serviglobal_voice_runtime.contracts import RuntimeSessionSpecV1
+from serviglobal_voice_runtime.contracts import AgentVoiceConfig, RuntimeSessionSpecV1
 from serviglobal_voice_runtime.credentials import ProviderCredential
-from serviglobal_voice_runtime.providers import RealtimeProviderFactory, UnsupportedRuntimeProviderError, language_hint, ultravox_options
+from serviglobal_voice_runtime.providers import RealtimeProviderFactory, UnsupportedRuntimeProviderError, build_elevenlabs_external_voice, language_hint, ultravox_options
 from serviglobal_voice_runtime.worker import parse_session_id
 
 
@@ -78,15 +78,69 @@ class RuntimeTests(unittest.TestCase):
     def test_no_voice_uses_plugin_default(self) -> None:
         self.assertNotIn("voice", ultravox_options(spec(), "key"))
 
-    def test_provider_external_voice_fails_without_legacy_fallback(self) -> None:
-        with self.assertRaisesRegex(UnsupportedRuntimeProviderError, "provider_external voice mode"):
-            ultravox_options(
-                spec(
-                    runtime_voice={"mode": "provider_external", "provider": "elevenlabs", "voice_id": "external"},
-                    voice="LEGACY_VOICE",
-                ),
-                "key",
-            )
+    def test_elevenlabs_mapper_full_and_minimal(self) -> None:
+        full = AgentVoiceConfig(
+            mode="provider_external", provider="elevenlabs", voice_id="ABC123",
+            settings={"model": "eleven_turbo_v2_5", "speed": 1.0, "stability": 0.8,
+                      "similarity_boost": 0.75, "use_speaker_boost": True},
+        )
+        self.assertEqual(build_elevenlabs_external_voice(full), {
+            "elevenLabs": {"voiceId": "ABC123", "model": "eleven_turbo_v2_5", "speed": 1.0,
+                           "stability": 0.8, "similarityBoost": 0.75, "useSpeakerBoost": True},
+        })
+        minimal = AgentVoiceConfig(
+            mode="provider_external", provider="elevenlabs", voice_id="ABC123",
+            settings={"model": "future_model"},
+        )
+        self.assertEqual(build_elevenlabs_external_voice(minimal), {
+            "elevenLabs": {"voiceId": "ABC123", "model": "future_model"},
+        })
+
+    def test_provider_external_ignores_legacy_voice(self) -> None:
+        options = ultravox_options(spec(
+            runtime_voice={"mode": "provider_external", "provider": "elevenlabs",
+                           "voice_id": "ABC123", "settings": {"model": "future_model"}},
+            voice="LEGACY_VOICE",
+        ), "key")
+        self.assertEqual(options["external_voice"], {
+            "elevenLabs": {"voiceId": "ABC123", "model": "future_model"},
+        })
+        self.assertNotIn("voice", options)
+
+    def test_invalid_elevenlabs_external_voice_fails_closed(self) -> None:
+        cases = (
+            ("cartesia", "ABC123", {"model": "future_model"}),
+            ("elevenlabs", " ", {"model": "future_model"}),
+            ("elevenlabs", "ABC123", {}),
+            ("elevenlabs", "ABC123", {"model": " "}),
+            ("elevenlabs", "ABC123", {"model": "future_model", "foo": "bar"}),
+            ("elevenlabs", "ABC123", {"model": "future_model", "speed": True}),
+            ("elevenlabs", "ABC123", {"model": "future_model", "speed": 0.6}),
+            ("elevenlabs", "ABC123", {"model": "future_model", "speed": float("nan")}),
+            ("elevenlabs", "ABC123", {"model": "future_model", "stability": "high"}),
+            ("elevenlabs", "ABC123", {"model": "future_model", "stability": 1.1}),
+            ("elevenlabs", "ABC123", {"model": "future_model", "stability": float("inf")}),
+            ("elevenlabs", "ABC123", {"model": "future_model", "similarity_boost": True}),
+            ("elevenlabs", "ABC123", {"model": "future_model", "similarity_boost": -0.1}),
+            ("elevenlabs", "ABC123", {"model": "future_model", "use_speaker_boost": "yes"}),
+        )
+        for provider, voice_id, voice_settings in cases:
+            with self.subTest(provider=provider, voice_id=voice_id, settings=voice_settings):
+                with self.assertRaises(UnsupportedRuntimeProviderError):
+                    ultravox_options(spec(runtime_voice={
+                        "mode": "provider_external", "provider": provider,
+                        "voice_id": voice_id, "settings": voice_settings,
+                    }), "key")
+
+    def test_elevenlabs_mapper_rejects_secret_like_setting_after_validation(self) -> None:
+        voice = AgentVoiceConfig(
+            mode="provider_external", provider="elevenlabs", voice_id="ABC123",
+            settings={"model": "future_model"},
+        )
+        voice.settings["api_key"] = "do-not-log"
+        with self.assertRaises(UnsupportedRuntimeProviderError) as caught:
+            build_elevenlabs_external_voice(voice)
+        self.assertNotIn("do-not-log", str(caught.exception))
 
     def test_invalid_provider_voice_fails_closed(self) -> None:
         for provider, voice_id in (("elevenlabs", "voice"), ("ultravox", " ")):
@@ -103,6 +157,8 @@ class RuntimeTests(unittest.TestCase):
     def test_invalid_temperature_and_unknown_provider_fail_closed(self) -> None:
         with self.assertRaises(UnsupportedRuntimeProviderError):
             ultravox_options(spec(temperature=1.1), "key")
+        with self.assertRaises(UnsupportedRuntimeProviderError):
+            ultravox_options(spec(unknown_setting=True), "key")
         resolver = FakeCredentialResolver(ProviderCredential(provider="ultravox", api_key="key"))
         with self.assertRaises(UnsupportedRuntimeProviderError):
             RealtimeProviderFactory(settings(), resolver).resolve("openai")
@@ -134,6 +190,29 @@ class RuntimeTests(unittest.TestCase):
 
 
 class UltravoxCredentialResolutionTests(unittest.IsolatedAsyncioTestCase):
+    async def test_livekit_constructor_receives_external_voice_without_legacy_voice(self) -> None:
+        from livekit.plugins import ultravox
+        from serviglobal_voice_runtime.providers import UltravoxLiveKitRuntime
+
+        class ConstructionStopped(Exception):
+            pass
+
+        resolver = FakeCredentialResolver(ProviderCredential(provider="ultravox", api_key="tenant-key"))
+        runtime = UltravoxLiveKitRuntime(settings(), resolver)
+        external_spec = spec(
+            runtime_voice={"mode": "provider_external", "provider": "elevenlabs",
+                           "voice_id": "ABC123", "settings": {"model": "future_model"}},
+            voice="LEGACY_VOICE",
+        )
+        with patch.object(ultravox.realtime.RealtimeModel, "__init__", side_effect=ConstructionStopped) as init:
+            with self.assertRaises(ConstructionStopped):
+                await runtime.run(None, external_spec, lambda *args, **kwargs: None)
+        self.assertEqual(init.call_args.kwargs["external_voice"], {
+            "elevenLabs": {"voiceId": "ABC123", "model": "future_model"},
+        })
+        self.assertNotIn("voice", init.call_args.kwargs)
+        self.assertEqual(resolver.calls, [("session-1", "ultravox")])
+
     async def test_ultravox_requires_a_resolved_session_id(self) -> None:
         from serviglobal_voice_runtime.providers import UltravoxLiveKitRuntime
 
