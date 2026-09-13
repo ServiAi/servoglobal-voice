@@ -1,5 +1,20 @@
 # Agent Builder — Arquitectura (Fase 1 + Fase 2 + Sprint 0 Hardening)
 
+> **Nota de actualización (Fase F de Voice Provider Abstraction, ver
+> `docs/PROJECT_STATUS.md`)**: este documento describe el estado de la
+> arquitectura en Fase 1/Fase 2/Sprint 0, antes de LiveKit y de la
+> abstracción de voz `AgentVoiceConfig`. Dos afirmaciones de este documento
+> ya no son ciertas y se dejan sin corregir en el resto del texto por ser
+> evidencia histórica (`docs-local/` no es la fuente de verdad; lo son el
+> código actual y `docs/`):
+> 1. **`UltravoxLegacyRuntimeAdapter`**, descrito aquí como el compilador
+>    real de la voz legacy, **nunca tuvo callers** y se eliminó en Fase F.
+>    El flujo real siempre fue (y sigue siendo) directo dentro de
+>    `AgentCompilerService.compile()`.
+> 2. `ultravox:ultravox` **no** es el único `VoiceModel` del registry desde
+>    Fase 0 del Agent Builder: `ultravox:ultravox-v0.7` también existe (ver
+>    `backend/app/domain/voice_registry.py`).
+
 **Sprint 0 Hardening: complete** (backend/frontend; no verificado contra
 PostgreSQL real -- ver "Alembic" en Draft/Publish más abajo). Endureció la
 frontera entre Agent Builder y el futuro Voice Runtime antes de construir
