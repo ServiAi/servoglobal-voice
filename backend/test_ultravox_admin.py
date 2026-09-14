@@ -126,6 +126,15 @@ class UltravoxAdminServiceTests(unittest.TestCase):
         self.service.validate_external_voice_credentials("tenant-a", "elevenlabs")  # no exception
         self.assertEqual(self.client.calls, [("tts_api_keys", "key:tenant-a")])
 
+    def test_validate_external_voice_credentials_requires_nonempty_prefix(self):
+        for entry in ({}, {"prefix": ""}, {"prefix": "   "}, {"prefix": 123}):
+            with self.subTest(entry=entry):
+                self.client.calls.clear()
+                self.client.tts_keys_response = {"elevenLabs": entry}
+                with self.assertRaisesRegex(ValueError, "^external_tts_credentials_unavailable$"):
+                    self.service.validate_external_voice_credentials("tenant-a", "elevenlabs")
+                self.assertEqual(self.client.calls, [("tts_api_keys", "key:tenant-a")])
+
     def test_validate_external_voice_credentials_fails_when_elevenlabs_key_absent(self):
         self.client.tts_keys_response = {}
         with self.assertRaises(ValueError) as ctx:

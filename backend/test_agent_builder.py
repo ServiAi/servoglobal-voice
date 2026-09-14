@@ -203,6 +203,33 @@ class AgentBuilderTests(Integration2ATestCase):
         self.assertEqual(draft["runtime_binding"]["realtime"]["voice"]["provider"], "elevenlabs")
         self.assertEqual(draft["runtime_binding"]["realtime"]["voice"]["settings"]["speed"], 1.0)
 
+    def test_external_voice_without_model_cannot_be_saved_or_published(self) -> None:
+        self._enable_feature()
+        invalid_voice = {
+            "mode": "provider_external", "provider": "elevenlabs",
+            "voice_id": "ABC123", "settings": {},
+        }
+        agents_before = self.client.get("/api/v1/agents").json()
+        response = self._create(voice=invalid_voice)
+        self.assertEqual(response.status_code, 422, response.text)
+        self.assertEqual(self.client.get("/api/v1/agents").json(), agents_before)
+
+        agent_id = self._create().json()["id"]
+        draft_before = self.client.get(f"/api/v1/agents/{agent_id}/draft").json()
+        response = self.client.patch(
+            f"/api/v1/agents/{agent_id}/draft",
+            json=self._draft_payload(voice=invalid_voice),
+        )
+        self.assertEqual(response.status_code, 422, response.text)
+        self.assertEqual(
+            self.client.get(f"/api/v1/agents/{agent_id}/draft").json()["runtime_binding"],
+            draft_before["runtime_binding"],
+        )
+        response = self.client.post(f"/api/v1/agents/{agent_id}/publish")
+        self.assertEqual(response.status_code, 200, response.text)
+        published = self.client.get(f"/api/v1/agents/{agent_id}/versions").json()[0]
+        self.assertNotIn("voice", published["runtime_binding"]["realtime"])
+
     def test_create_rejects_provider_voice_from_a_different_provider(self) -> None:
         self._enable_feature()
         response = self._create(voice={"mode": "provider", "provider": "elevenlabs", "voice_id": "x"})
@@ -281,6 +308,7 @@ class AgentBuilderTests(Integration2ATestCase):
                 f"/api/v1/agents/{agent_id}/draft",
                 json=self._draft_payload(voice={
                     "mode": "provider_external", "provider": "elevenlabs", "voice_id": "eleven-x",
+                    "settings": {"model": "eleven_turbo_v2_5"},
                 }),
             )
             self.assertEqual(update_response.status_code, 200, update_response.text)

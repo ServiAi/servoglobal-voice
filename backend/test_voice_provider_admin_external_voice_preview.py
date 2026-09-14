@@ -112,6 +112,16 @@ class ExternalVoicePreviewEndpointTests(Integration2ATestCase):
             response = self.client.post(_PATH, json=body)
         self.assertEqual(response.status_code, 422, response.text)
 
+    def test_missing_model_is_rejected_before_provider_io(self) -> None:
+        body = {"mode": "provider_external", "provider": "elevenlabs", "voice_id": "ABC123", "settings": {}}
+        with patch(
+            "app.services.ultravox_provider_client.UltravoxProviderClient.preview_external_voice",
+            side_effect=AssertionError("must not generate a preview without a model"),
+        ) as mock_preview:
+            response = self.client.post(_PATH, json=body)
+        self.assertEqual(response.status_code, 422, response.text)
+        mock_preview.assert_not_called()
+
     def test_secret_like_setting_is_rejected(self) -> None:
         body = {"mode": "provider_external", "provider": "elevenlabs", "voice_id": "x", "settings": {"api_key": "leak"}}
         response = self.client.post(_PATH, json=body)

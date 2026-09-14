@@ -241,7 +241,8 @@ class UltravoxAdminService:
             raise ValueError("voice_provider_not_supported")
         keys = self.client.get_tts_api_keys(self._api_key(tenant_id))
         entry = keys.get("elevenLabs") if isinstance(keys, dict) else None
-        if not isinstance(entry, dict) or not entry:
+        prefix = entry.get("prefix") if isinstance(entry, dict) else None
+        if not isinstance(prefix, str) or not prefix.strip():
             raise ValueError("external_tts_credentials_unavailable")
 
     def import_agent(self, tenant_id: str, agent_id: str, user_id: str | None) -> UltravoxImportResponse:

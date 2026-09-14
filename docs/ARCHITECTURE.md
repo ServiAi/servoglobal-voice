@@ -36,6 +36,12 @@ El subsistema de notificaciones separa administración (`notification_admin_serv
 
 PostgreSQL es la base principal. Alembic administra el esquema. Los dominios persistentes son identidad/tenant, llamadas/analítica, CRM, billing/uso, integraciones y notificaciones. Notificaciones usa `tenant_capabilities`, `tenant_notification_rules`, `tenant_notification_recipients`, `domain_events` y `notification_deliveries`. Los binarios de email se almacenan mediante `StorageService` en disco local o S3 compatible; la DB guarda metadata. Chatwoot es multi-tenant vía `tenant_chatwoot_configs` (una Account por tenant, `mode` external/managed, token cifrado, `webhook_key` único) y `tenant_chatwoot_inboxes` (inboxes adicionales opcionales); no hay tabla ni configuración global de credenciales por tenant. La excepción es `CHATWOOT_PLATFORM_API_TOKEN`: un token de Super Admin de la instancia compartida, global y fuera de `tenant_chatwoot_configs`, usado sólo por `ChatwootPlatformClient` para aprovisionar Accounts nuevas en modo managed (crea un usuario `administrator` dedicado por Account, no un Agent Bot — sus tokens no tienen permiso sobre la API de cuenta).
 
+## Voice Provider Abstraction V1
+
+El contrato versionado `AgentVoiceConfig` tiene dos rutas: `mode="provider"` selecciona una voz del catálogo Ultravox y llega a `RealtimeModel(voice=<id>)`; `mode="provider_external"` admite sólo ElevenLabs a través de Ultravox y llega a `RealtimeModel(external_voice={"elevenLabs": ...})`. El runtime no envía `voice` y `external_voice` juntos. Para ElevenLabs son obligatorios `voice_id` y `settings.model` (string libre no vacío, máximo 80 caracteres); `speed`, `stability`, `similarity_boost` y `use_speaker_boost` son opcionales.
+
+El draft se valida localmente, sin I/O. El preview genera audio sólo por acción explícita y puede consumir cuota. Publish realiza un preflight remoto sin generar audio: consulta metadata de la voz de catálogo o confirma BYOK ElevenLabs mediante un `prefix` no vacío en la cuenta Ultravox del tenant. El runtime repite la validación defensiva antes de construir opciones LiveKit. ServiGlobal conserva únicamente la clave Ultravox tenant-scoped; no gestiona una clave ElevenLabs directa.
+
 ## Límites de confianza
 
 - Auth0 autentica la aplicación privada; el backend resuelve usuario, membresía, rol y tenant.
