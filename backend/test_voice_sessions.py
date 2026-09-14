@@ -5,6 +5,8 @@ import unittest
 from _integrations_2a_test_base import Integration2ATestCase
 from app.db.session import SessionLocal
 from app.models.agents import TenantAgent, TenantAgentVersion
+from app.models.crm import CrmContact, CrmLead, CrmPipelineStage
+from app.services.contact_resolution_service import ContactResolutionError
 from app.services.voice_session_service import VoiceSessionError, VoiceSessionService
 
 
@@ -60,6 +62,88 @@ class VoiceSessionTests(Integration2ATestCase):
             session.agent_version_id = "another-version"
             with self.assertRaises(ValueError):
                 db.commit()
+
+    # -- Session Context V1 wiring (Fase E) --
+
+    def _seed_contact_and_lead(self, tenant_id: str) -> tuple[str, str]:
+        with SessionLocal() as db:
+            stage = CrmPipelineStage(tenant_id=tenant_id, key="qualified", name="Qualified", position=1, is_default=True)
+            contact = CrmContact(tenant_id=tenant_id, name="Carlos Pérez", phone="3001112233", phone_normalized="+573001112233", email="carlos@example.com")
+            db.add_all([stage, contact])
+            db.commit()
+            db.refresh(stage)
+            db.refresh(contact)
+            lead = CrmLead(tenant_id=tenant_id, contact_id=contact.id, current_stage_id=stage.id, status="open")
+            db.add(lead)
+            db.commit()
+            db.refresh(lead)
+            return contact.id, lead.id
+
+    def test_session_without_contact_or_lead_gets_an_empty_context_snapshot(self) -> None:
+        agent_id = self._published_agent()
+        with SessionLocal() as db:
+            session = VoiceSessionService(db).create(self.tenant.id, agent_id, channel="webrtc", direction="internal")
+            self.assertIsNotNone(session.session_context_json)
+            self.assertIsNone(session.session_context_json.get("contact"))
+            self.assertIsNone(session.session_context_json.get("lead"))
+
+    def test_session_with_trusted_lead_id_snapshots_resolved_context(self) -> None:
+        agent_id = self._published_agent()
+        contact_id, lead_id = self._seed_contact_and_lead(self.tenant.id)
+        with SessionLocal() as db:
+            session = VoiceSessionService(db).create(
+                self.tenant.id, agent_id, channel="webrtc", direction="internal", lead_id=lead_id
+            )
+            self.assertEqual(session.session_context_json["lead"]["id"], lead_id)
+            self.assertEqual(session.session_context_json["contact"]["id"], contact_id)
+            self.assertEqual(session.session_context_json["source"], "webrtc")
+
+    def test_session_with_cross_tenant_lead_id_is_rejected(self) -> None:
+        agent_id = self._published_agent()
+        other_tenant, _ = self._seed_tenant_user(slug="voice-session-tenant-b", email="vsb@example.com")
+        _, other_lead_id = self._seed_contact_and_lead(other_tenant.id)
+        with SessionLocal() as db:
+            with self.assertRaises(ContactResolutionError):
+                VoiceSessionService(db).create(
+                    self.tenant.id, agent_id, channel="webrtc", direction="internal", lead_id=other_lead_id
+                )
+
+    def test_existing_sessions_without_context_column_stay_compatible(self) -> None:
+        # Simulates a pre-Session-Context-V1 row: session_context_json is
+        # NULL at the DB level, not an empty dict -- the compiler must
+        # still produce a valid, empty RuntimeSessionSpecV1.context.
+        # Uses the logical model key ("ultravox"), not the raw execution
+        # id -- unlike VoiceSessionService.create() (used by every other
+        # test in this file), AgentCompilerService.compile() resolves it
+        # through voice_registry and needs the real key.
+        from app.services.agent_compiler_service import AgentCompilerService
+
+        with SessionLocal() as db:
+            agent = TenantAgent(tenant_id=self.tenant.id, name="Sandra", status="draft")
+            db.add(agent)
+            db.flush()
+            version = TenantAgentVersion(
+                tenant_id=agent.tenant_id, agent_id=agent.id, version=1, status="published",
+                language="es-CO", timezone="America/Bogota", identity_json={"name": "Sandra"},
+                instructions_json={"system_prompt": "Published prompt", "greeting": "Hola"},
+                behavior_json={}, runtime_binding_json={"pipeline_type": "realtime", "realtime": {"provider": "ultravox", "model": "ultravox"}},
+            )
+            db.add(version)
+            db.flush()
+            agent.published_version_id = version.id
+            agent.status = "active"
+            db.commit()
+            agent_id = agent.id
+        with SessionLocal() as db:
+            session = VoiceSessionService(db).create(self.tenant.id, agent_id, channel="webrtc", direction="internal")
+            session.session_context_json = None
+            db.commit()
+            db.refresh(session)
+            spec = AgentCompilerService().compile(
+                session.agent, session.agent_version, session_id=session.id, context=session.session_context_json
+            )
+            self.assertIsNone(spec.context.contact)
+            self.assertEqual(spec.context.variables, {})
 
 
 if __name__ == "__main__":

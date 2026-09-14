@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.models.agents import TenantAgent, TenantAgentVersion
 from app.models.voice_sessions import VoiceSession, VoiceSessionEvent
+from app.services.contact_resolution_service import ContactResolutionService
 
 
 class VoiceSessionError(ValueError):
@@ -35,7 +36,17 @@ class VoiceSessionService:
     def __init__(self, db: Session) -> None:
         self.db = db
 
-    def create(self, tenant_id: str, agent_id: str, *, channel: str, direction: str, idempotency_key: str | None = None) -> VoiceSession:
+    def create(
+        self,
+        tenant_id: str,
+        agent_id: str,
+        *,
+        channel: str,
+        direction: str,
+        idempotency_key: str | None = None,
+        contact_id: str | None = None,
+        lead_id: str | None = None,
+    ) -> VoiceSession:
         if idempotency_key:
             existing = self.db.scalar(select(VoiceSession).where(VoiceSession.tenant_id == tenant_id, VoiceSession.idempotency_key == idempotency_key))
             if existing:
@@ -49,7 +60,23 @@ class VoiceSessionService:
         runtime = version.runtime_binding_json
         if runtime.get("pipeline_type") != "realtime" or not isinstance(runtime.get("realtime"), dict):
             raise VoiceSessionError("Published agent is not configured for realtime voice.")
-        session = VoiceSession(tenant_id=tenant_id, agent_id=agent.id, agent_version_id=version.id, channel=channel, direction=direction, runtime_engine="livekit", pipeline_type="realtime", provider=runtime["realtime"].get("provider", ""), idempotency_key=idempotency_key)
+        # contact_id/lead_id are only ever trusted here: this is the
+        # request-scoped, WRITE_ROLES-authenticated caller of
+        # POST /api/v1/voice/sessions (the WebRTC test-call flow), never a
+        # bare pass-through of unauthenticated/LLM-supplied input. See
+        # ContactResolutionService for the precedence/isolation rules.
+        context = ContactResolutionService(self.db).resolve(
+            tenant_id=tenant_id,
+            contact_id=contact_id,
+            lead_id=lead_id,
+            trusted_ids=True,
+            source="webrtc" if channel == "webrtc" else "manual",
+        )
+        session = VoiceSession(
+            tenant_id=tenant_id, agent_id=agent.id, agent_version_id=version.id, channel=channel, direction=direction,
+            runtime_engine="livekit", pipeline_type="realtime", provider=runtime["realtime"].get("provider", ""),
+            idempotency_key=idempotency_key, session_context_json=context.model_dump(mode="json"),
+        )
         self.db.add(session)
         self.db.flush()
         self.record_event(session, "voice.session.requested", source="control-plane", commit=False)
