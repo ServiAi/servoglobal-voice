@@ -8,7 +8,11 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.domain.voice_registry import VoiceRegistryValidationError, validate_runtime_selection
+from app.domain.voice_registry import (
+    VoiceRegistryValidationError,
+    validate_model_settings,
+    validate_runtime_selection,
+)
 from app.models.agents import TenantAgent, TenantAgentVersion
 from app.models.integrations import TenantVoiceAgentConfig
 from app.schemas.agents import (
@@ -440,6 +444,14 @@ class AgentService:
         binding = self._build_runtime_binding(body.pipeline_type, body.provider, body.model)
         realtime = binding["realtime"]
         realtime["management_mode"] = body.management_mode
+        if body.settings:
+            if body.management_mode == "provider_managed":
+                raise AgentValidationError("settings is not configurable for provider_managed agents.")
+            try:
+                validate_model_settings(body.provider, body.model, body.settings)
+            except VoiceRegistryValidationError as exc:
+                raise AgentValidationError(str(exc)) from exc
+            realtime["settings"] = body.settings
         if body.voice is not None:
             if body.management_mode == "provider_managed":
                 raise AgentValidationError("voice is not configurable for provider_managed agents.")

@@ -19,9 +19,13 @@ class VoiceProviderResponse(_StrictModel):
 
 class ParameterSpecResponse(_StrictModel):
     supported: bool
+    type: Literal["number", "integer", "boolean", "string", "enum"] | None = None
     min: float | None = None
     max: float | None = None
+    step: float | None = None
     default: Any = None
+    options: tuple[str, ...] | None = None
+    advanced: bool = False
 
 
 class VoiceModelResponse(_StrictModel):

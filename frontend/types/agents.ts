@@ -26,6 +26,12 @@ export type AgentBehavior = {
   agent_first: boolean;
 };
 
+/** Provider/model runtime parameters (e.g. temperature). Which keys are
+ * valid for a given (provider, model) comes from VoiceModelResponse.parameters
+ * (see types/voice-registry.ts) -- this type is intentionally a generic bag,
+ * never hardcoded to one provider. */
+export type AgentModelSettings = Record<string, number | boolean | string>;
+
 export type AgentCreateRequest = {
   name: string;
   description?: string | null;
@@ -40,6 +46,7 @@ export type AgentCreateRequest = {
   management_mode?: 'serviglobal_managed' | 'provider_managed';
   provider_agent?: ProviderAgentReference | null;
   voice?: AgentVoiceConfig | null;
+  settings?: AgentModelSettings | Record<string, never>;
 };
 
 export type ProviderAgentReference = {
@@ -85,6 +92,7 @@ export type AgentDraftUpdateRequest = {
   management_mode?: 'serviglobal_managed' | 'provider_managed';
   provider_agent?: ProviderAgentReference | null;
   voice?: AgentVoiceConfig | null;
+  settings?: AgentModelSettings | Record<string, never>;
 };
 
 export type AgentPublishRequest = {
@@ -111,6 +119,7 @@ export type AgentRuntimeBinding = {
     management_mode?: 'serviglobal_managed' | 'provider_managed';
     provider_agent?: ProviderAgentReference | null;
     voice?: AgentVoiceConfig | null;
+    settings?: AgentModelSettings | Record<string, never>;
     provider_extensions?: {
       observed_revision_drift?: boolean;
       tools?: Array<{ name: string; classification: string }>;

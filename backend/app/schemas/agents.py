@@ -41,6 +41,12 @@ _FORBIDDEN_VOICE_SETTINGS_KEY_PARTS = (
 )
 
 
+def _reject_secret_keys(value: dict[str, Any]) -> dict[str, Any]:
+    if any(part in str(key).lower() for key in value for part in _FORBIDDEN_VOICE_SETTINGS_KEY_PARTS):
+        raise ValueError("Settings contain a forbidden secret field")
+    return value
+
+
 class AgentVoiceConfig(_StrictModel):
     """A voice selection for a realtime agent.
 
@@ -69,9 +75,7 @@ class AgentVoiceConfig(_StrictModel):
     @field_validator("settings")
     @classmethod
     def reject_secret_settings(cls, value: dict[str, Any]) -> dict[str, Any]:
-        if any(part in str(key).lower() for key in value for part in _FORBIDDEN_VOICE_SETTINGS_KEY_PARTS):
-            raise ValueError("Voice settings contain a forbidden secret field")
-        return value
+        return _reject_secret_keys(value)
 
 
 class ProviderManagedOverrides(_StrictModel):
@@ -86,6 +90,17 @@ class _RuntimeSelection(_StrictModel):
     provider_agent: ProviderAgentReference | None = None
     voice: AgentVoiceConfig | None = None
     provider_overrides: ProviderManagedOverrides | None = None
+    # Provider/model runtime parameters (e.g. temperature) for a
+    # serviglobal_managed agent. Shape-only here (no secrets); which keys
+    # are actually allowed for a given (provider, model) is registry-driven
+    # business logic, validated by AgentService against
+    # voice_registry.validate_model_settings(), not by this schema.
+    settings: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("settings")
+    @classmethod
+    def reject_secret_runtime_settings(cls, value: dict[str, Any]) -> dict[str, Any]:
+        return _reject_secret_keys(value)
 
     @model_validator(mode="after")
     def validate_management_mode(self):

@@ -163,6 +163,63 @@ class AgentBuilderTests(Integration2ATestCase):
             },
         )
 
+    # -- model settings (temperature etc.) --
+
+    def test_create_accepts_supported_model_setting(self) -> None:
+        self._enable_feature()
+        response = self._create(settings={"temperature": 0.4})
+        self.assertEqual(response.status_code, 201, response.text)
+        draft = self.client.get(f"/api/v1/agents/{response.json()['id']}/draft").json()
+        self.assertEqual(draft["runtime_binding"]["realtime"]["settings"], {"temperature": 0.4})
+
+    def test_create_without_settings_stays_backward_compatible(self) -> None:
+        self._enable_feature()
+        agent_id = self._create().json()["id"]
+        draft = self.client.get(f"/api/v1/agents/{agent_id}/draft").json()
+        self.assertNotIn("settings", draft["runtime_binding"]["realtime"])
+
+    def test_create_rejects_unsupported_setting_key(self) -> None:
+        self._enable_feature()
+        response = self._create(settings={"top_p": 0.9})
+        self.assertEqual(response.status_code, 422, response.text)
+
+    def test_create_rejects_out_of_range_temperature(self) -> None:
+        self._enable_feature()
+        response = self._create(settings={"temperature": 1.5})
+        self.assertEqual(response.status_code, 422, response.text)
+
+    def test_create_rejects_secret_like_setting_key(self) -> None:
+        self._enable_feature()
+        response = self._create(settings={"api_key": "sk-test"})
+        self.assertEqual(response.status_code, 422, response.text)
+
+    def test_provider_managed_rejects_settings(self) -> None:
+        # settings is rejected before any remote Ultravox call is made -- no
+        # need to mock validate_provider_agent_link here.
+        self._enable_feature()
+        response = self._create(
+            management_mode="provider_managed",
+            model="ultravox-v0.7",
+            provider_agent={"agent_id": "remote-1", "observed_published_revision_id": None},
+            settings={"temperature": 0.5},
+        )
+        self.assertEqual(response.status_code, 422, response.text)
+        self.assertIn("settings", response.text)
+
+    def test_update_draft_persists_settings_and_clones_on_next_draft(self) -> None:
+        self._enable_feature()
+        agent_id = self._create().json()["id"]
+        draft_payload = self._draft_payload(settings={"temperature": 0.2})
+        response = self.client.patch(f"/api/v1/agents/{agent_id}/draft", json=draft_payload)
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["runtime_binding"]["realtime"]["settings"], {"temperature": 0.2})
+
+        publish = self.client.post(f"/api/v1/agents/{agent_id}/publish", json={})
+        self.assertEqual(publish.status_code, 200, publish.text)
+        next_draft = self.client.post(f"/api/v1/agents/{agent_id}/draft")
+        self.assertEqual(next_draft.status_code, 201, next_draft.text)
+        self.assertEqual(next_draft.json()["runtime_binding"]["realtime"]["settings"], {"temperature": 0.2})
+
     def test_update_draft_rejects_unavailable_model(self) -> None:
         self._enable_feature()
         agent_id = self._create().json()["id"]

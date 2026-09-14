@@ -1340,7 +1340,7 @@
       },
       "common": { "cancel": "Cancel" },
       "providerManaged": { "title": "Management", "source": "Source of truth", "serviglobal": "ServiGlobal", "ultravox": "Ultravox", "remoteId": "Remote ID: {id}", "revision": "Observed revision: {revision}", "unpublished": "unpublished", "drift": "Drift detected. Current published revision: {revision}", "blockedTools": "The current revision contains unsupported client tools and cannot run.", "help": "Prompt, voice and tools remain controlled by Ultravox. They are revalidated before every call." },
-      "tabs": { "general": "General", "behavior": "Behavior", "voice": "Voice & models", "versions": "Versions" },
+      "tabs": { "general": "General", "behavior": "Behavior", "model": "Model", "voice": "Voice", "versions": "Versions" },
       "fields": {
         "name": "Name", "description": "Description", "language": "Language", "timezone": "Timezone",
         "role": "Role", "objective": "Objective", "systemPrompt": "Prompt / instructions", "greeting": "Greeting", "closing": "Closing",
@@ -1352,6 +1352,12 @@
         "interruptions": { "conservative": "Conservative", "balanced": "Balanced", "responsive": "Responsive" },
         "turnDetection": { "automatic": "Automatic", "conservative": "Conservative", "balanced": "Balanced", "responsive": "Responsive" },
         "confirmationStrategy": { "important_data": "Important data only", "always": "Always", "never": "Never" }
+      },
+      "model": {
+        "parametersTitle": "Supported parameters",
+        "parameters": {
+          "temperature": "Temperature", "max_duration": "Max duration", "useDefault": "Use default"
+        }
       },
       "voice": {
         "pipelineType": "Architecture", "speechToSpeech": "Speech-to-Speech", "ultravox": "Ultravox", "comingSoon": "Coming soon",

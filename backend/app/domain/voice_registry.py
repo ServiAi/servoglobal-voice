@@ -15,10 +15,21 @@ class VoiceProvider:
 
 @dataclass(frozen=True)
 class ParameterSpec:
+    """Describes one provider/model-level runtime setting (e.g. temperature)
+    for both validation and UI rendering. `supported=False` means the key is
+    known but not yet safe to expose -- e.g. because the runtime accepts it
+    without any real type/range validation of its own (see `max_duration`),
+    so this registry has nothing trustworthy to declare for it yet.
+    """
+
     supported: bool
+    type: Literal["number", "integer", "boolean", "string", "enum"] | None = None
     min: float | None = None
     max: float | None = None
+    step: float | None = None
     default: Any = None
+    options: tuple[str, ...] | None = None
+    advanced: bool = False
 
 
 @dataclass(frozen=True)
@@ -84,8 +95,15 @@ _MODELS: tuple[VoiceModel, ...] = (
             "provider_voice": True,
             "provider_external_voice": True,
         },
+        # temperature: livekit-plugins-ultravox==1.7.1's RealtimeModel accepts
+        # it and forwards it to Ultravox, and voice-runtime/providers.py
+        # already range-validates and applies it (0-1). max_duration is also
+        # forwarded by the runtime, but with no type/range validation of its
+        # own -- kept supported=False rather than inventing bounds this
+        # registry can't back up.
         parameters={
-            "temperature": ParameterSpec(supported=False),
+            "temperature": ParameterSpec(supported=True, type="number", min=0.0, max=1.0, step=0.1),
+            "max_duration": ParameterSpec(supported=False),
         },
         # Both ultravox:ultravox and ultravox:ultravox-v0.7 resolve to the
         # same execution_model_id ("fixie-ai/ultravox") and the same
@@ -116,7 +134,10 @@ _MODELS: tuple[VoiceModel, ...] = (
             "provider_voice": True,
             "provider_external_voice": True,
         },
-        parameters={"temperature": ParameterSpec(supported=False)},
+        parameters={
+            "temperature": ParameterSpec(supported=True, type="number", min=0.0, max=1.0, step=0.1),
+            "max_duration": ParameterSpec(supported=False),
+        },
         external_voice_providers=("elevenlabs",),
     ),
 )
@@ -203,6 +224,42 @@ def validate_voice_compatibility(
             )
     else:
         raise VoiceRegistryValidationError(f"Unsupported voice mode '{voice_mode}'.")
+
+
+def validate_model_settings(provider_key: str, model_key: str, settings: dict[str, Any]) -> None:
+    """Pure, static validation of `realtime.settings` against the model's
+    declared `ParameterSpec`s. No DB, no HTTP. Rejects keys the model
+    doesn't declare, keys declared but not `supported`, wrong types, and
+    out-of-range numeric values. Applies no defaults -- an omitted key is
+    simply left unset, exactly as it is today.
+    """
+    model = get_model(f"{provider_key}:{model_key}")
+    if model is None:
+        raise VoiceRegistryValidationError(f"Model '{model_key}' is not available for provider '{provider_key}'.")
+    for key, value in settings.items():
+        spec = model.parameters.get(key)
+        if spec is None or not spec.supported:
+            raise VoiceRegistryValidationError(
+                f"Setting '{key}' is not supported by '{provider_key}:{model_key}'."
+            )
+        if spec.type in ("number", "integer"):
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                raise VoiceRegistryValidationError(f"Setting '{key}' must be a number.")
+            if spec.type == "integer" and not float(value).is_integer():
+                raise VoiceRegistryValidationError(f"Setting '{key}' must be an integer.")
+            if spec.min is not None and value < spec.min:
+                raise VoiceRegistryValidationError(f"Setting '{key}' must be >= {spec.min}.")
+            if spec.max is not None and value > spec.max:
+                raise VoiceRegistryValidationError(f"Setting '{key}' must be <= {spec.max}.")
+        elif spec.type == "boolean":
+            if not isinstance(value, bool):
+                raise VoiceRegistryValidationError(f"Setting '{key}' must be a boolean.")
+        elif spec.type == "string":
+            if not isinstance(value, str) or not value.strip():
+                raise VoiceRegistryValidationError(f"Setting '{key}' must be a non-empty string.")
+        elif spec.type == "enum":
+            if value not in (spec.options or ()):
+                raise VoiceRegistryValidationError(f"Setting '{key}' must be one of {spec.options}.")
 
 
 def resolve_execution_model_id(provider_key: str, model_key: str) -> str:
