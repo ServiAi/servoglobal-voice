@@ -203,6 +203,67 @@ class AgentCompilerServiceTests(unittest.TestCase):
         self.assertEqual(spec.runtime.realtime.voice.mode, "provider_external")
         self.assertEqual(spec.runtime.realtime.voice.provider, "elevenlabs")
 
+    def test_compiles_enabled_tool_bindings_into_compiled_tool_specs(self) -> None:
+        agent = _agent()
+        version = _published_version(
+            runtime_binding_json={
+                "pipeline_type": "realtime",
+                "realtime": {"provider": "ultravox", "model": "ultravox"},
+                "tools": [{"key": "calendar.check_availability", "enabled": True, "config": {}}],
+            }
+        )
+        spec = self.compiler.compile(agent, version)
+        self.assertEqual(len(spec.tools), 1)
+        self.assertEqual(spec.tools[0].key, "calendar.check_availability")
+        self.assertTrue(spec.tools[0].name)
+        self.assertIn("properties", spec.tools[0].input_schema)
+
+    def test_disabled_tool_binding_is_not_compiled(self) -> None:
+        agent = _agent()
+        version = _published_version(
+            runtime_binding_json={
+                "pipeline_type": "realtime",
+                "realtime": {"provider": "ultravox", "model": "ultravox"},
+                "tools": [{"key": "calendar.check_availability", "enabled": False, "config": {}}],
+            }
+        )
+        spec = self.compiler.compile(agent, version)
+        self.assertEqual(spec.tools, [])
+
+    def test_unknown_tool_binding_on_a_published_version_is_skipped_not_raised(self) -> None:
+        # The Registry could change after a version was published -- compile
+        # must never fail because of that; the hard rejection already
+        # happened at publish time.
+        agent = _agent()
+        version = _published_version(
+            runtime_binding_json={
+                "pipeline_type": "realtime",
+                "realtime": {"provider": "ultravox", "model": "ultravox"},
+                "tools": [{"key": "no.longer_exists", "enabled": True, "config": {}}],
+            }
+        )
+        spec = self.compiler.compile(agent, version)
+        self.assertEqual(spec.tools, [])
+
+    def test_config_never_reaches_the_compiled_tool_spec(self) -> None:
+        agent = _agent()
+        version = _published_version(
+            runtime_binding_json={
+                "pipeline_type": "realtime",
+                "realtime": {"provider": "ultravox", "model": "ultravox"},
+                "tools": [{"key": "whatsapp.send_message", "enabled": True, "config": {"template_key": "booking_confirmation"}}],
+            }
+        )
+        spec = self.compiler.compile(agent, version)
+        dumped = spec.model_dump_json()
+        self.assertNotIn("booking_confirmation", dumped)
+
+    def test_no_tools_binding_stays_backward_compatible(self) -> None:
+        agent = _agent()
+        version = _published_version()
+        spec = self.compiler.compile(agent, version)
+        self.assertEqual(spec.tools, [])
+
     def test_result_never_contains_provider_secrets(self) -> None:
         # Even if a caller stuffed provider-style keys into behavior/context,
         # the compiler must not merge in anything from TenantVoiceAgentConfig

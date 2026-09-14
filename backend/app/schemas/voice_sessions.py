@@ -78,3 +78,18 @@ class RuntimeEventV1(BaseModel):
 class RuntimeEventAck(BaseModel):
     accepted: bool = True
     duplicate: bool = False
+
+
+class ToolInvokeRequest(BaseModel):
+    """The voice runtime's request to execute one tool call for a live
+    session. `arguments` are whatever the LLM produced for the tool's
+    input_schema -- validated by AgentService against the bound tool's
+    real ToolDefinition.input_schema before any handler runs, never
+    trusted at face value."""
+
+    model_config = ConfigDict(extra="forbid")
+    arguments: dict = Field(default_factory=dict)
+
+
+class ToolInvokeResponse(BaseModel):
+    result: dict = Field(default_factory=dict)

@@ -13,10 +13,25 @@ from app.db.session import get_db
 from app.domain.voice_registry import get_provider
 from app.schemas.runtime_session import RuntimeSessionSpecV1
 from app.schemas.voice_credentials import ProviderCredentialResponse
-from app.schemas.voice_sessions import RuntimeEventAck, RuntimeEventV1, VoiceSessionCreateRequest, VoiceSessionResponse, WebRTCParticipantTokenResponse
+from app.schemas.voice_sessions import (
+    RuntimeEventAck,
+    RuntimeEventV1,
+    ToolInvokeRequest,
+    ToolInvokeResponse,
+    VoiceSessionCreateRequest,
+    VoiceSessionResponse,
+    WebRTCParticipantTokenResponse,
+)
 from app.security.voice_runtime_auth import require_voice_runtime
 from app.services.agent_compiler_service import AgentCompilerError, AgentCompilerService
 from app.services.tenant_feature_service import TenantFeatureDisabledError, TenantFeatureService, VOICE_RUNTIME_V2
+from app.services.tool_dispatch_service import (
+    ToolArgumentError,
+    ToolDispatchService,
+    ToolExecutionError,
+    ToolNotAvailableError,
+    ToolNotFoundError,
+)
 from app.services.voice_config_service import VoiceConfigService
 from app.services.voice_runtime_dispatcher import VoiceRuntimeDispatcher
 from app.services.voice_session_service import VoiceSessionError, VoiceSessionNotFoundError, VoiceSessionService
@@ -201,3 +216,39 @@ def post_runtime_event(session_id: str, body: RuntimeEventV1, db: Session = Depe
     except VoiceSessionError as exc:
         db.rollback()
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@router.post(
+    "/api/v1/internal/voice-runtime/sessions/{session_id}/tools/{tool_key}/invoke",
+    response_model=ToolInvokeResponse,
+    dependencies=[Depends(require_voice_runtime)],
+)
+def invoke_runtime_tool(
+    session_id: str, tool_key: str, body: ToolInvokeRequest, db: Session = Depends(get_db)
+) -> ToolInvokeResponse:
+    """Executes one tool call on behalf of a live VoiceSession. Re-resolves
+    the session's own published binding from the database rather than
+    trusting the compiled RuntimeSessionSpecV1 the runtime already holds --
+    see ToolDispatchService for why."""
+    try:
+        result = ToolDispatchService(db).invoke(session_id, tool_key, body.arguments)
+        db.commit()
+        return ToolInvokeResponse(result=result)
+    except VoiceSessionNotFoundError as exc:
+        db.rollback()
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except VoiceSessionError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ToolNotFoundError as exc:
+        db.rollback()
+        raise HTTPException(status_code=404, detail=f"tool_not_found:{exc}") from exc
+    except ToolNotAvailableError as exc:
+        db.rollback()
+        raise HTTPException(status_code=422, detail=f"tool_not_available:{exc}") from exc
+    except ToolArgumentError as exc:
+        db.rollback()
+        raise HTTPException(status_code=422, detail=f"tool_argument_invalid:{exc}") from exc
+    except ToolExecutionError as exc:
+        db.rollback()
+        raise HTTPException(status_code=502, detail=f"tool_execution_failed:{exc}") from exc
