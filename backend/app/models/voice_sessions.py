@@ -53,6 +53,13 @@ class VoiceSession(Base, TimestampMixin):
     end_reason: Mapped[str | None] = mapped_column(String(40), nullable=True)
     error_code: Mapped[str | None] = mapped_column(String(80), nullable=True)
     error_message_sanitized: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    # SessionContextV1 snapshot (see app.schemas.session_context), resolved
+    # once by ContactResolutionService at session-creation time. Nullable,
+    # no default at the DB level -- existing sessions and the WebRTC
+    # test-call flow keep working with no context at all. Never refreshed
+    # after creation: it is a point-in-time snapshot for audit, not a live
+    # view of the CRM.
+    session_context_json: Mapped[dict | None] = mapped_column(sa.JSON, nullable=True)
 
     agent = relationship("TenantAgent", foreign_keys=[agent_id])
     agent_version = relationship("TenantAgentVersion", foreign_keys=[agent_version_id])
