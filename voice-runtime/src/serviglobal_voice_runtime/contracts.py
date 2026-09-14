@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -130,6 +131,81 @@ class CompiledToolSpec(StrictModel):
     input_schema: dict
 
 
+_FORBIDDEN_VARIABLE_KEY_PARTS = (
+    "api_key", "apikey", "secret", "token", "password", "authorization", "header",
+)
+_MAX_VARIABLE_KEYS = 20
+_MAX_VARIABLE_KEY_LENGTH = 60
+_MAX_VARIABLE_DEPTH = 2
+_MAX_VARIABLES_SERIALIZED_BYTES = 4000
+
+
+class CallerContext(StrictModel):
+    phone: str | None = Field(default=None, max_length=32)
+
+
+class ContactContext(StrictModel):
+    id: str = Field(min_length=1, max_length=36)
+    name: str | None = Field(default=None, max_length=200)
+    phone: str | None = Field(default=None, max_length=32)
+    email: str | None = Field(default=None, max_length=200)
+
+
+class LeadContext(StrictModel):
+    id: str = Field(min_length=1, max_length=36)
+    status: str | None = Field(default=None, max_length=32)
+    stage: str | None = Field(default=None, max_length=80)
+
+
+class CampaignContext(StrictModel):
+    name: str | None = Field(default=None, max_length=120)
+
+
+class SessionContextV1(StrictModel):
+    """Manual mirror of backend/app/schemas/session_context.py::SessionContextV1
+    (see that file for the full rationale). Every field optional; a
+    VoiceSession with no resolved context stays valid and unchanged."""
+
+    schema_version: Literal["1"] = "1"
+    source: Literal["webrtc", "inbound", "outbound", "campaign", "manual"] | None = None
+    caller: CallerContext | None = None
+    contact: ContactContext | None = None
+    lead: LeadContext | None = None
+    campaign: CampaignContext | None = None
+    variables: dict = Field(default_factory=dict)
+
+    @field_validator("variables")
+    @classmethod
+    def validate_variables(cls, value: dict) -> dict:
+        if len(value) > _MAX_VARIABLE_KEYS:
+            raise ValueError(f"variables cannot have more than {_MAX_VARIABLE_KEYS} keys")
+
+        def check(node: Any, depth: int) -> None:
+            if depth > _MAX_VARIABLE_DEPTH:
+                raise ValueError("variables cannot be nested more than 2 levels deep")
+            if isinstance(node, dict):
+                for key, item in node.items():
+                    if len(str(key)) > _MAX_VARIABLE_KEY_LENGTH:
+                        raise ValueError(f"variable key '{key}' exceeds {_MAX_VARIABLE_KEY_LENGTH} characters")
+                    if any(part in str(key).lower() for part in _FORBIDDEN_VARIABLE_KEY_PARTS):
+                        raise ValueError("variables contain a forbidden secret-like key")
+                    if isinstance(item, (dict, list)):
+                        check(item, depth + 1)
+            elif isinstance(node, list):
+                for item in node:
+                    if isinstance(item, (dict, list)):
+                        check(item, depth + 1)
+
+        check(value, 1)
+        try:
+            serialized = json.dumps(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("variables must be JSON serializable") from exc
+        if len(serialized.encode("utf-8")) > _MAX_VARIABLES_SERIALIZED_BYTES:
+            raise ValueError(f"variables exceed {_MAX_VARIABLES_SERIALIZED_BYTES} bytes serialized")
+        return value
+
+
 class RuntimeSessionSpecV1(StrictModel):
     spec_version: Literal["1"] = "1"
     session_id: str | None = None
@@ -143,21 +219,7 @@ class RuntimeSessionSpecV1(StrictModel):
     timezone: str
     runtime: RealtimeRuntimeSpec
     tools: list[CompiledToolSpec] = Field(default_factory=list)
-    context: dict = Field(default_factory=dict)
-
-    @field_validator("context")
-    @classmethod
-    def reject_secret_context_keys(cls, value: dict) -> dict:
-        forbidden = ("api_key", "secret", "token", "password", "authorization")
-        pending = [value]
-        while pending:
-            current = pending.pop()
-            for key, item in current.items():
-                if any(part in str(key).lower() for part in forbidden):
-                    raise ValueError("Runtime context contains a forbidden secret field")
-                if isinstance(item, dict):
-                    pending.append(item)
-        return value
+    context: SessionContextV1 = Field(default_factory=SessionContextV1)
 
 
 class RuntimeEventV1(StrictModel):

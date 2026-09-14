@@ -16,6 +16,7 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.schemas.agents import AgentBehavior, AgentIdentity, AgentInstructions, AgentVoiceConfig
+from app.schemas.session_context import SessionContextV1
 
 
 class _StrictModel(BaseModel):
@@ -136,18 +137,10 @@ class RuntimeSessionSpecV1(_StrictModel):
 
     tools: list[CompiledToolSpec] = Field(default_factory=list)
 
-    context: dict = Field(default_factory=dict)
-
-    @field_validator("context")
-    @classmethod
-    def reject_secret_context_keys(cls, value: dict) -> dict:
-        forbidden = ("api_key", "secret", "token", "password", "authorization")
-        pending = [value]
-        while pending:
-            current = pending.pop()
-            for key, item in current.items():
-                if any(part in str(key).lower() for part in forbidden):
-                    raise ValueError("Runtime context contains a forbidden secret field")
-                if isinstance(item, dict):
-                    pending.append(item)
-        return value
+    # Typed, versioned business context (caller/contact/lead/campaign/
+    # variables) resolved by ContactResolutionService and snapshotted onto
+    # VoiceSession.session_context_json -- see schemas/session_context.py.
+    # SessionContextV1's own secret-key/size/depth validators cover this
+    # field; an empty dict `{}` (today's default) still validates fine
+    # (every field on SessionContextV1 is optional).
+    context: SessionContextV1 = Field(default_factory=SessionContextV1)

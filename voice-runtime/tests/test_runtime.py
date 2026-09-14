@@ -171,9 +171,39 @@ class RuntimeTests(unittest.TestCase):
 
     def test_contract_rejects_secret_context(self) -> None:
         data = spec().model_dump()
-        data["context"] = {"nested": {"api_key": "must-not-pass"}}
+        data["context"] = {"variables": {"nested": {"api_key": "must-not-pass"}}}
         with self.assertRaises(ValueError):
             RuntimeSessionSpecV1.model_validate(data)
+
+    def test_context_accepts_the_exact_session_context_shape_the_backend_emits(self) -> None:
+        # Parity check against backend/app/schemas/session_context.py::SessionContextV1
+        # -- see ContactResolutionService for the producing side.
+        data = spec().model_dump()
+        data["context"] = {
+            "schema_version": "1",
+            "source": "outbound",
+            "caller": {"phone": "+573001234567"},
+            "contact": {"id": "contact_1", "name": "Carlos Pérez", "phone": "+573001234567", "email": None},
+            "lead": {"id": "lead_1", "status": "open", "stage": "qualified"},
+            "campaign": {"name": "Cobranza septiembre"},
+            "variables": {"debt_amount": 850000},
+        }
+        parsed = RuntimeSessionSpecV1.model_validate(data)
+        self.assertEqual(parsed.context.contact.name, "Carlos Pérez")
+        self.assertEqual(parsed.context.lead.status, "open")
+        self.assertEqual(parsed.context.variables, {"debt_amount": 850000})
+
+    def test_context_rejects_a_bare_lead_id_top_level_key(self) -> None:
+        # Proves the mirror stays as strict as the backend contract: no
+        # arbitrary top-level identity keys, only the typed sub-contexts.
+        data = spec().model_dump()
+        data["context"] = {"lead_id": "lead-9"}
+        with self.assertRaises(ValueError):
+            RuntimeSessionSpecV1.model_validate(data)
+
+    def test_context_defaults_to_empty_for_backward_compatibility(self) -> None:
+        self.assertEqual(spec().context.variables, {})
+        self.assertIsNone(spec().context.caller)
 
     def test_contract_rejects_unregistered_overrides_and_secret_extensions(self) -> None:
         data = spec().model_dump()

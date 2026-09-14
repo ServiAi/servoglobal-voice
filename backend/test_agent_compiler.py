@@ -87,7 +87,7 @@ class AgentCompilerServiceTests(unittest.TestCase):
         self.assertEqual(spec.runtime.realtime.provider, "ultravox")
         self.assertEqual(spec.runtime.realtime.model, "fixie-ai/ultravox")
         self.assertEqual(version.runtime_binding_json["realtime"]["model"], "ultravox")
-        self.assertEqual(spec.context, {})
+        self.assertEqual(spec.context.model_dump(exclude_none=True), {"schema_version": "1", "variables": {}})
         self.assertIsNone(spec.session_id)
 
     def test_module_level_wrapper_matches_service_output(self) -> None:
@@ -97,10 +97,13 @@ class AgentCompilerServiceTests(unittest.TestCase):
         self.assertEqual(spec.agent_version_id, "version-1")
 
     def test_context_is_passed_through_explicitly(self) -> None:
+        # context is now the typed SessionContextV1 (see
+        # schemas/session_context.py) -- arbitrary business data belongs
+        # under `variables`, not as an ad-hoc top-level key.
         agent = _agent()
         version = _published_version()
-        spec = self.compiler.compile(agent, version, context={"lead_id": "lead-9"})
-        self.assertEqual(spec.context, {"lead_id": "lead-9"})
+        spec = self.compiler.compile(agent, version, context={"variables": {"debt_amount": 850000}})
+        self.assertEqual(spec.context.variables, {"debt_amount": 850000})
 
     def test_session_id_is_passed_through(self) -> None:
         agent = _agent()
@@ -270,7 +273,7 @@ class AgentCompilerServiceTests(unittest.TestCase):
         # (api keys, encrypted secrets) -- it never even receives that model.
         agent = _agent()
         version = _published_version()
-        spec = self.compiler.compile(agent, version, context={"note": "plain context value"})
+        spec = self.compiler.compile(agent, version, context={"variables": {"note": "plain context value"}})
         dumped = spec.model_dump_json()
         for forbidden in ("api_key", "secret", "token", "password", "Bearer"):
             self.assertNotIn(forbidden, dumped)
