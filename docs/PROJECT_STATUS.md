@@ -1,6 +1,6 @@
 # Estado funcional del proyecto
 
-Actualizado: 2026-09-13. Fuente: código, migraciones y pruebas del repositorio.
+Actualizado: 2026-09-14. Fuente: código, migraciones y pruebas del repositorio.
 
 | Área | Estado | Implementación actual |
 | --- | --- | --- |
@@ -26,6 +26,12 @@ Actualizado: 2026-09-13. Fuente: código, migraciones y pruebas del repositorio.
 | Voice Context Experiences | Runtime público WebRTC implementado en código | Feature flag, snapshots, submissions y context session one-shot; launch Ultravox tenant-scoped con recovery-first, leases, recovery por `joined`/`ended`, webhook firmado/deduplicado, billing real por `billedDuration`, CRM monotónico, concurrencia PostgreSQL y preflight de micrófono. `submissions=true`; `calls=true`. Ver `docs-local/fase-4/VOICE_EXPERIENCE_WEBRTC_RUNTIME.md`. |
 | Planes y consumo | Operativa | Límites, alertas, resumen administrativo y comparación de ahorro. |
 | Chatwoot | Multi-tenant, "external" y "managed" (Sprint 2 en curso) | Una Account de Chatwoot por tenant vía `TenantChatwootConfig`/`TenantChatwootInbox`, token cifrado, catálogo/config/test/provision en `Settings → Integrations → Chatwoot`. Modo "external" (formulario manual, sin cambios) y modo "managed": `POST /api/v1/integrations/chatwoot/provision` crea, vía la Platform API de Chatwoot, una Account + un usuario `administrator` dedicado (no un Agent Bot — verificado contra la instancia real que los tokens de Agent Bot no tienen permiso ni para crear un contacto) + un inbox `api` + el webhook de cuenta (mismo mecanismo que el operador configura a mano en modo "external"); requiere `CHATWOOT_PLATFORM_API_TOKEN` y `BACKEND_PUBLIC_BASE_URL`. Un fallo antes de crear la Account no persiste nada; uno posterior guarda `status="error"` conservando el `account_id` ya creado para diagnóstico. Validado end-to-end contra la instancia real el 2026-09-02. Webhook tenant-aware en `POST /api/v1/webhooks/chatwoot/{webhook_key}` (resuelve tenant por key, valida `account_id`); ya no responde automáticamente a mensajes entrantes (placeholder retirado). El motor legacy global (`chatwoot_service`) fue eliminado. `sanitize_chatwoot_error` reemplaza cualquier respuesta HTML (proxy, 404, mantenimiento) por un mensaje genérico antes de mostrarla en la UI. Vínculo a agentes de voz queda pendiente. |
+
+## Voice Provider Abstraction V1 — cierre técnico
+
+**Status: technically complete.** El Control Plane exige ahora `settings.model` para ElevenLabs external antes de guardar un draft o generar preview; el preflight BYOK exige un `prefix` string no vacío sin conservarlo ni exponerlo. Las pruebas automáticas locales cubren paridad de validación, preview sin I/O ante entrada inválida y las rutas legacy. **Manual UI/UX and production smoke validation remains a post-deploy operator task**; no se declara E2E ni validación de audio real con esta evidencia.
+
+Limitaciones aceptadas de V1: Agent Builder carga sólo la primera página de hasta 50 voces Ultravox. Mejora futura: búsqueda asíncrona del catálogo, paginación/cursor y debounce, sin depender de las primeras 50. El preview WAV viaja hoy como Base64 por Server Actions; mejora futura: streaming de audio/blob mediante ruta autenticada. El puente legacy `settings.voice` y `default_voice` permanecen para compatibilidad; retirar `settings.voice` es candidato de una limpieza posterior, únicamente tras el smoke manual de agentes antiguos.
 
 ## Persistencia
 

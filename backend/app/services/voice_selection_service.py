@@ -52,6 +52,8 @@ class VoiceSelectionService:
                 raise VoiceSelectionError("Provider voice does not accept custom settings.")
             return
         if voice.mode == "provider_external" and voice.provider == "elevenlabs":
+            if not voice.voice_id.strip():
+                raise VoiceSelectionError("Voice ID must be a non-empty string.")
             settings = voice.settings
             unknown = set(settings) - _ELEVENLABS_SETTINGS_KEYS
             if unknown:
@@ -66,11 +68,10 @@ class VoiceSelectionService:
                     raise VoiceSelectionError(f"Voice setting '{key}' must be between {low} and {high}.")
             if "use_speaker_boost" in settings and not isinstance(settings["use_speaker_boost"], bool):
                 raise VoiceSelectionError("Voice setting 'use_speaker_boost' must be a boolean.")
-            if "model" in settings:
-                model_value = settings["model"]
-                if (
-                    not isinstance(model_value, str)
-                    or not model_value.strip()
-                    or len(model_value) > _ELEVENLABS_MODEL_MAX_LENGTH
-                ):
-                    raise VoiceSelectionError("Voice setting 'model' must be a non-empty string.")
+            model_value = settings.get("model")
+            if (
+                not isinstance(model_value, str)
+                or not model_value.strip()
+                or len(model_value) > _ELEVENLABS_MODEL_MAX_LENGTH
+            ):
+                raise VoiceSelectionError("Voice setting 'model' must be a non-empty string.")

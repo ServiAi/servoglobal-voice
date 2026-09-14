@@ -206,6 +206,32 @@ Bórrelas a mano (UI de Chatwoot o Rails console) cuando convenga; mientras tant
 - `call_creation_failed` confirma que no se obtuvo una call utilizable. `call_creation_outcome_unknown` indica que Ultravox pudo aceptar el POST; reconciliar antes de cualquier intento manual para evitar duplicados.
 - Revisar manualmente coincidencias sensibles con el comando definido en `docs-local/fase-3/agent-rules/SECURITY_AND_LOGGING_RULES.md`.
 
+## Voice Provider Abstraction V1 — MANUAL / POST-DEPLOY
+
+Este checklist corresponde al operador después del deploy. No es evidencia automática ni se marca como realizado en el cierre técnico.
+
+Provider Voice:
+
+- [ ] Abrir Agent Builder y seleccionar Origen de voz → Catálogo del proveedor.
+- [ ] Seleccionar una voz Ultravox, pulsar Escuchar y comprobar el audio.
+- [ ] Guardar, publicar e iniciar una llamada real.
+- [ ] Comprobar que el agente habla con la voz seleccionada.
+
+Provider External / ElevenLabs:
+
+- [ ] Seleccionar TTS externo e introducir Voice ID.
+- [ ] Verificar el modelo por defecto y probar speed, stability y similarity.
+- [ ] Pulsar Probar voz y escuchar el WAV.
+- [ ] Guardar, publicar e iniciar una llamada real.
+- [ ] Confirmar que Ultravox usa ElevenLabs.
+
+Casos negativos y compatibilidad:
+
+- [ ] En un tenant sin BYOK ElevenLabs, intentar publicar y confirmar que publish bloquea.
+- [ ] Publicar y ejecutar un agente antiguo con `default_voice`; comprobar el fallback legacy.
+- [ ] Confirmar que `tenant_viewer` no puede generar ExternalVoice preview y `tenant_admin` sí puede.
+- [ ] Revisar visualmente UI/UX en navegador con Auth0 real y completar el smoke de audio/lifecycle; no usar bypass de Auth0 ni mocks de producción.
+
 ## Diagnóstico rápido
 
 - CORS: comprobar origen exacto, regex/configuración backend y reconstrucción del frontend si cambió su API pública.
