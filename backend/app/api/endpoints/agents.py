@@ -15,6 +15,7 @@ from app.schemas.agents import (
     AgentDraftUpdateRequest,
     AgentPublishRequest,
     AgentResponse,
+    AgentToolCatalogEntryResponse,
     AgentUpdateRequest,
     AgentVersionResponse,
 )
@@ -88,6 +89,22 @@ def create_agent(
     service = AgentService(db)
     try:
         return service.response(service.create_agent(context.tenant.id, body, context.user.id))
+    except SERVICE_ERRORS as exc:
+        _raise_service_error(exc)
+
+
+@router.get("/tools/catalog", response_model=list[AgentToolCatalogEntryResponse])
+def get_tool_catalog(
+    context: AuthContext = Depends(require_agent_read),
+    db: Session = Depends(get_db),
+) -> Any:
+    """The platform Tool Registry, annotated with per-tenant availability
+    (required_integration configured or not) -- drives the "Herramientas"
+    tab. Not agent_id-scoped: the catalog and each tool's availability
+    depend only on the tenant's integrations, not on any one agent."""
+    service = AgentService(db)
+    try:
+        return service.tool_catalog(context.tenant.id)
     except SERVICE_ERRORS as exc:
         _raise_service_error(exc)
 

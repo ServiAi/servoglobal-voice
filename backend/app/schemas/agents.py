@@ -184,6 +184,22 @@ class AgentPublishRequest(_StrictModel):
     expected_draft_version_id: str | None = None
 
 
+class AgentToolCatalogEntryResponse(_StrictModel):
+    """One Tool Registry entry, annotated for the current tenant.
+    `available` is only ever true for `status="available"` tools whose
+    `required_integration` is actually configured for this tenant --
+    `planned` tools always report `available=False` so the Agent Builder
+    UI never lets them be enabled."""
+
+    key: str
+    name: str
+    description: str
+    status: Literal["available", "planned"]
+    required_integration: Literal["booking", "whatsapp", "crm", "chatwoot"] | None
+    available: bool
+    input_schema: dict[str, Any]
+
+
 class AgentResponse(_StrictModel):
     id: str
     name: str

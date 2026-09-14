@@ -8,6 +8,12 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.domain.tool_registry import (
+    ToolRegistryValidationError,
+    get_tool,
+    list_tools,
+    validate_tool_bindings,
+)
 from app.domain.voice_registry import (
     VoiceRegistryValidationError,
     validate_model_settings,
@@ -261,6 +267,7 @@ class AgentService:
                 raise AgentValidationError(str(exc)) from exc
         elif management_mode == "serviglobal_managed":
             self._publish_voice_preflight(tenant_id, draft, realtime)
+            self._publish_tools_preflight(tenant_id, draft)
         previous_published_id = agent.published_version_id
         now = datetime.now(timezone.utc)
         draft.status = "published"
@@ -377,6 +384,30 @@ class AgentService:
             metadata={"actor_user_id": user_id, "status": "deleted"},
         )
 
+    def tool_catalog(self, tenant_id: str) -> list[dict[str, Any]]:
+        """The platform Tool Registry, annotated per-tenant with whether
+        each available tool's required_integration is actually configured
+        -- drives the Agent Builder's "Herramientas" tab (checkbox +
+        "Requiere configurar X" banner) and lets a tenant see the full
+        catalog, including status="planned" entries, without exposing them
+        as bindable."""
+        self.feature_service.require_enabled(tenant_id, AGENT_BUILDER)
+        entries = []
+        for tool in list_tools():
+            available = tool.status == "available" and self._tool_integration_configured(
+                tenant_id, tool.required_integration
+            )
+            entries.append({
+                "key": tool.key,
+                "name": tool.name,
+                "description": tool.description,
+                "status": tool.status,
+                "required_integration": tool.required_integration,
+                "available": available,
+                "input_schema": tool.input_schema,
+            })
+        return entries
+
     def list_versions(self, tenant_id: str, agent_id: str) -> list[TenantAgentVersion]:
         agent = self.get_agent(tenant_id, agent_id)
         return list(
@@ -462,6 +493,14 @@ class AgentService:
             realtime["voice"] = body.voice.model_dump()
         if body.provider_overrides is not None:
             realtime["provider_overrides"] = body.provider_overrides.model_dump(exclude_none=True)
+        if body.tools:
+            if body.management_mode == "provider_managed":
+                raise AgentValidationError("tools is not configurable for provider_managed agents.")
+            try:
+                validate_tool_bindings(body.tools)
+            except ToolRegistryValidationError as exc:
+                raise AgentValidationError(str(exc)) from exc
+            binding["tools"] = [tool.model_dump() for tool in body.tools]
         if body.management_mode == "provider_managed":
             if body.provider != "ultravox" or body.provider_agent is None:
                 raise AgentValidationError("Unsupported provider-managed configuration.")
@@ -526,6 +565,54 @@ class AgentService:
             raise AgentValidationError(code) from exc
         except ValueError as exc:
             raise AgentValidationError(str(exc)) from exc
+
+    def _publish_tools_preflight(self, tenant_id: str, draft: TenantAgentVersion) -> None:
+        """Cheap, blocking publish-time checks for a serviglobal_managed
+        agent's bound tools -- never executes a tool.
+
+        For each `enabled` binding: re-confirms it is still a known,
+        available Registry entry (defense in depth -- the Registry could
+        have changed since the draft was last saved) and that the tenant
+        actually has the tool's required_integration configured. Reuses
+        each service's own tenant-scoped config resolution (the same one
+        the real tool execution path in Phase E will use), so this can
+        never approve a tool the runtime would later fail to run.
+        """
+        bindings = draft.runtime_binding_json.get("tools", [])
+        for binding in bindings:
+            if not binding.get("enabled", True):
+                continue
+            key = str(binding.get("key") or "")
+            tool = get_tool(key)
+            if tool is None:
+                raise AgentValidationError(f"tool_not_found:{key}")
+            if tool.status != "available":
+                raise AgentValidationError(f"tool_not_available:{key}")
+            if not self._tool_integration_configured(tenant_id, tool.required_integration):
+                raise AgentValidationError("tool_integration_not_configured")
+
+    def _tool_integration_configured(self, tenant_id: str, required_integration: str | None) -> bool:
+        """Cheap, tenant-scoped check reusing each integration's own real
+        config resolution -- the same call the tool's actual execution path
+        (Phase E) will make, so this can never say "available" for an
+        integration that would then fail to resolve at call time."""
+        if required_integration == "booking":
+            from app.services.booking_service import BookingService
+
+            try:
+                BookingService(self.db)._effective_config(tenant_id)
+                return True
+            except ValueError:
+                return False
+        if required_integration == "whatsapp":
+            from app.services.whatsapp_config_service import WhatsAppConfigService
+
+            try:
+                WhatsAppConfigService(self.db).get_active_client_config(tenant_id)
+                return True
+            except ValueError:
+                return False
+        return required_integration is None
 
     @staticmethod
     def _ensure_mutable(agent: TenantAgent) -> None:
