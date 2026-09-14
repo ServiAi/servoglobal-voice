@@ -46,6 +46,7 @@ class VoiceSessionService:
         idempotency_key: str | None = None,
         contact_id: str | None = None,
         lead_id: str | None = None,
+        caller_phone: str | None = None,
     ) -> VoiceSession:
         if idempotency_key:
             existing = self.db.scalar(select(VoiceSession).where(VoiceSession.tenant_id == tenant_id, VoiceSession.idempotency_key == idempotency_key))
@@ -60,13 +61,14 @@ class VoiceSessionService:
         runtime = version.runtime_binding_json
         if runtime.get("pipeline_type") != "realtime" or not isinstance(runtime.get("realtime"), dict):
             raise VoiceSessionError("Published agent is not configured for realtime voice.")
-        # contact_id/lead_id are only ever trusted here: this is the
-        # request-scoped, WRITE_ROLES-authenticated caller of
+        # contact_id/lead_id/caller_phone are only ever trusted here: this
+        # is the request-scoped, WRITE_ROLES-authenticated caller of
         # POST /api/v1/voice/sessions (the WebRTC test-call flow), never a
         # bare pass-through of unauthenticated/LLM-supplied input. See
         # ContactResolutionService for the precedence/isolation rules.
         context = ContactResolutionService(self.db).resolve(
             tenant_id=tenant_id,
+            phone=caller_phone,
             contact_id=contact_id,
             lead_id=lead_id,
             trusted_ids=True,

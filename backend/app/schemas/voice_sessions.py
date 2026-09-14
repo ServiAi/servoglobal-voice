@@ -18,6 +18,10 @@ class VoiceSessionCreateRequest(BaseModel):
     # Contact/Lead's resolved SessionContextV1. See ContactResolutionService.
     contact_id: str | None = Field(default=None, min_length=1, max_length=36)
     lead_id: str | None = Field(default=None, min_length=1, max_length=36)
+    # Also trusted-only (see contact_id/lead_id above). Lets an operator
+    # test a caller-scoped tool (e.g. crm.create_lead) against a real
+    # phone number without a real inbound/outbound call existing yet.
+    caller_phone: str | None = Field(default=None, min_length=1, max_length=32)
 
 
 class WebRTCParticipantTokenResponse(BaseModel):

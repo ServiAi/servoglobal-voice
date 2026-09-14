@@ -7,13 +7,22 @@ from app.domain import tool_registry
 
 
 class ToolRegistryTests(unittest.TestCase):
-    def test_catalog_has_the_two_v1_available_tools(self) -> None:
+    def test_catalog_has_the_four_v1_available_tools(self) -> None:
+        # calendar.create_booking and crm.create_lead were reactivated by
+        # Session Context V1 (lead_id/contact_id/caller phone now come
+        # from SessionContextV1 server-side, never the LLM).
         available = {t.key for t in tool_registry.list_tools(status="available")}
-        self.assertEqual(available, {"calendar.check_availability", "whatsapp.send_message"})
+        self.assertEqual(
+            available,
+            {"calendar.check_availability", "whatsapp.send_message", "calendar.create_booking", "crm.create_lead"},
+        )
 
     def test_planned_tools_are_documented_but_not_available(self) -> None:
+        # handoff.chatwoot stays planned: VoiceHandoffService requires a
+        # full legacy TenantVoiceAgentConfig object, unrelated to Session
+        # Context V1 -- see app/domain/tool_registry.py's own comment.
         planned = {t.key for t in tool_registry.list_tools(status="planned")}
-        self.assertEqual(planned, {"calendar.create_booking", "crm.create_lead", "handoff.chatwoot"})
+        self.assertEqual(planned, {"handoff.chatwoot"})
 
     def test_get_tool_returns_none_for_unknown_key(self) -> None:
         self.assertIsNone(tool_registry.get_tool("does.not_exist"))
@@ -38,7 +47,7 @@ class ToolRegistryTests(unittest.TestCase):
 
     def test_validate_tool_bindings_rejects_planned_tool(self) -> None:
         with self.assertRaises(tool_registry.ToolRegistryValidationError) as ctx:
-            tool_registry.validate_tool_bindings([SimpleNamespace(key="calendar.create_booking")])
+            tool_registry.validate_tool_bindings([SimpleNamespace(key="handoff.chatwoot")])
         self.assertIn("tool_not_available", str(ctx.exception))
 
     def test_validate_tool_bindings_rejects_duplicate_key(self) -> None:

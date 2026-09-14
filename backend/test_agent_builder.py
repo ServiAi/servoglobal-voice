@@ -260,7 +260,7 @@ class AgentBuilderTests(Integration2ATestCase):
 
     def test_create_rejects_planned_tool_key(self) -> None:
         self._enable_feature()
-        response = self._create(tools=[{"key": "calendar.create_booking", "enabled": True, "config": {}}])
+        response = self._create(tools=[{"key": "handoff.chatwoot", "enabled": True, "config": {}}])
         self.assertEqual(response.status_code, 422, response.text)
 
     def test_create_rejects_duplicate_tool_key(self) -> None:
@@ -325,8 +325,8 @@ class AgentBuilderTests(Integration2ATestCase):
         by_key = {item["key"]: item for item in before.json()}
         self.assertFalse(by_key["whatsapp.send_message"]["available"])
         self.assertEqual(by_key["whatsapp.send_message"]["status"], "available")
-        self.assertFalse(by_key["calendar.create_booking"]["available"])
-        self.assertEqual(by_key["calendar.create_booking"]["status"], "planned")
+        self.assertFalse(by_key["handoff.chatwoot"]["available"])
+        self.assertEqual(by_key["handoff.chatwoot"]["status"], "planned")
 
         self._configure_whatsapp(self.tenant.id)
         after = self.client.get("/api/v1/agents/tools/catalog").json()

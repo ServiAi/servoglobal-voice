@@ -12,6 +12,7 @@ from _integrations_2a_test_base import Integration2ATestCase
 from app.core.config import settings
 from app.db.session import SessionLocal
 from app.models.agents import TenantAgent, TenantAgentVersion
+from app.models.crm import CrmContact, CrmLead, CrmPipelineStage
 from app.schemas.integrations import VoiceProviderConfigRequest
 from app.security.voice_runtime_auth import create_runtime_token, require_voice_runtime
 from app.services.livekit_runtime_backend import RuntimeDispatchResult
@@ -341,7 +342,15 @@ class AgentToolInvokeEndpointTests(Integration2ATestCase):
     rather than trusting anything the caller (voice-runtime) asserts about
     which tools are bound -- see ToolDispatchService."""
 
-    def _session_with_tools(self, tools: list[dict], tenant_id: str | None = None) -> str:
+    def _session_with_tools(
+        self,
+        tools: list[dict],
+        tenant_id: str | None = None,
+        *,
+        lead_id: str | None = None,
+        contact_id: str | None = None,
+        caller_phone: str | None = None,
+    ) -> str:
         tenant_id = tenant_id or self.tenant.id
         with SessionLocal() as db:
             agent = TenantAgent(tenant_id=tenant_id, name="Tool agent", status="draft")
@@ -362,7 +371,10 @@ class AgentToolInvokeEndpointTests(Integration2ATestCase):
             agent.status = "active"
             agent.published_version_id = version.id
             db.commit()
-            session = VoiceSessionService(db).create(tenant_id, agent.id, channel="internal_test", direction="internal")
+            session = VoiceSessionService(db).create(
+                tenant_id, agent.id, channel="internal_test", direction="internal",
+                lead_id=lead_id, contact_id=contact_id, caller_phone=caller_phone,
+            )
             session.livekit_room_name = f"sg-vs-{session.id}"
             session.status = "dispatched"
             db.commit()
@@ -499,6 +511,92 @@ class AgentToolInvokeEndpointTests(Integration2ATestCase):
         response = self._invoke(session_id, "whatsapp.send_message", {"to_phone": "+573000000001", "template_key": "booking_confirmation"})
         self.assertEqual(response.status_code, 502, response.text)
         self.assertIn("tool_execution_failed", response.text)
+
+    # -- calendar.create_booking / crm.create_lead (Session Context V1) --
+
+    def _seed_contact_and_lead(self, tenant_id: str, *, email: str = "carlos@example.com") -> tuple[str, str]:
+        with SessionLocal() as db:
+            stage = CrmPipelineStage(tenant_id=tenant_id, key="qualified", name="Qualified", position=1, is_default=True)
+            contact = CrmContact(tenant_id=tenant_id, name="Carlos Pérez", phone="3001112233", phone_normalized="+573001112233", email=email)
+            db.add_all([stage, contact])
+            db.commit()
+            db.refresh(stage)
+            db.refresh(contact)
+            lead = CrmLead(tenant_id=tenant_id, contact_id=contact.id, current_stage_id=stage.id, status="open")
+            db.add(lead)
+            db.commit()
+            db.refresh(lead)
+            return contact.id, lead.id
+
+    def test_create_booking_tool_is_not_bound_to_llm_supplied_lead_id(self) -> None:
+        # The LLM-visible input_schema for calendar.create_booking has no
+        # lead_id/contact_id property at all -- passing one is simply an
+        # unknown argument, proving the schema itself can't be used to
+        # smuggle an identity override.
+        _, lead_id = self._seed_contact_and_lead(self.tenant.id)
+        session_id = self._session_with_tools(
+            [{"key": "calendar.create_booking", "enabled": True, "config": {}}], lead_id=lead_id
+        )
+        response = self._invoke(session_id, "calendar.create_booking", {"start": "2026-09-15T15:00:00-05:00", "lead_id": "attacker-supplied-lead"})
+        self.assertEqual(response.status_code, 422, response.text)
+        self.assertIn("tool_argument_invalid", response.text)
+
+    def test_create_booking_fails_closed_without_a_resolved_lead(self) -> None:
+        session_id = self._session_with_tools([{"key": "calendar.create_booking", "enabled": True, "config": {}}])
+        response = self._invoke(session_id, "calendar.create_booking", {"start": "2026-09-15T15:00:00-05:00"})
+        self.assertEqual(response.status_code, 502, response.text)
+        self.assertIn("lead_context_required", response.text)
+
+    def test_create_booking_uses_session_lead_and_contact_never_llm_supplied(self) -> None:
+        contact_id, lead_id = self._seed_contact_and_lead(self.tenant.id)
+        session_id = self._session_with_tools(
+            [{"key": "calendar.create_booking", "enabled": True, "config": {}}], lead_id=lead_id
+        )
+        with patch("app.services.booking_service.BookingService.create_lead_booking") as mocked:
+            from app.models.crm import CrmBooking
+            from datetime import datetime, timezone
+
+            mocked.return_value = CrmBooking(
+                id="booking-1", tenant_id=self.tenant.id, lead_id=lead_id, contact_id=contact_id,
+                provider="calcom", title="x", status="confirmed",
+                start_at=datetime(2026, 9, 15, 20, 0, tzinfo=timezone.utc),
+                end_at=datetime(2026, 9, 15, 20, 30, tzinfo=timezone.utc),
+                timezone="America/Bogota", duration_minutes=30,
+                attendee_name="Carlos Pérez", attendee_email="carlos@example.com",
+            )
+            response = self._invoke(session_id, "calendar.create_booking", {"start": "2026-09-15T15:00:00-05:00"})
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(mocked.call_args.kwargs["lead_id"], lead_id)
+        self.assertEqual(mocked.call_args.kwargs["body"].attendee_email, "carlos@example.com")
+
+    def test_create_lead_tool_ignores_llm_supplied_phone_argument(self) -> None:
+        # phone is not even in the LLM-visible input_schema -- passing one
+        # is an unknown argument, same defense as the lead_id test above.
+        session_id = self._session_with_tools(
+            [{"key": "crm.create_lead", "enabled": True, "config": {}}], caller_phone="+573001112233"
+        )
+        response = self._invoke(session_id, "crm.create_lead", {"name": "Carlos", "phone": "+573009998877"})
+        self.assertEqual(response.status_code, 422, response.text)
+        self.assertIn("tool_argument_invalid", response.text)
+
+    def test_create_lead_fails_closed_without_a_known_caller_phone(self) -> None:
+        session_id = self._session_with_tools([{"key": "crm.create_lead", "enabled": True, "config": {}}])
+        response = self._invoke(session_id, "crm.create_lead", {"name": "Carlos"})
+        self.assertEqual(response.status_code, 502, response.text)
+        self.assertIn("caller_phone_required", response.text)
+
+    def test_create_lead_uses_session_caller_phone_and_creates_a_real_lead(self) -> None:
+        session_id = self._session_with_tools(
+            [{"key": "crm.create_lead", "enabled": True, "config": {}}], caller_phone="+573005556677"
+        )
+        response = self._invoke(session_id, "crm.create_lead", {"name": "Nueva Persona"})
+        self.assertEqual(response.status_code, 200, response.text)
+        result = response.json()["result"]
+        self.assertIn("lead_id", result)
+        with SessionLocal() as db:
+            contact = db.get(CrmContact, result["contact_id"])
+            self.assertEqual(contact.phone_normalized, "+573005556677")
+            self.assertEqual(contact.name, "Nueva Persona")
 
 
 if __name__ == "__main__":

@@ -53,6 +53,7 @@ async def create_voice_session(
         session = VoiceSessionService(db).create(
             context.tenant_id, body.agent_id, channel=body.channel, direction=body.direction,
             idempotency_key=body.idempotency_key, contact_id=body.contact_id, lead_id=body.lead_id,
+            caller_phone=body.caller_phone,
         )
         session = await VoiceRuntimeDispatcher(db).dispatch(session)
         return VoiceSessionResponse.model_validate(session)

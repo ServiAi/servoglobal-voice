@@ -79,40 +79,60 @@ _TOOLS: tuple[ToolDefinition, ...] = (
         },
         required_integration="whatsapp",
     ),
-    # Tier B: the underlying service (BookingService.create_lead_booking)
-    # requires an already-resolved lead_id, and a serviglobal_managed
-    # RuntimeSessionSpecV1 has no lead/contact resolution today. Documented
-    # here so it slots in without a redesign once that resolution exists;
-    # never selectable until it moves to status="available".
+    # Reactivated by Session Context V1: BookingService.create_lead_booking
+    # needs lead_id + the lead's contact (name/email) -- both now come from
+    # SessionContextV1 (ToolDispatchService loads it server-side from
+    # VoiceSession.session_context_json), never from the LLM. `start` must
+    # be a full ISO-8601 datetime with timezone (BookingService.parse_utc_start
+    # requires it); a vague "mañana a las 10" is the LLM's job to resolve
+    # into that shape before calling this tool, same as any other realtime
+    # function-calling agent.
     ToolDefinition(
         key="calendar.create_booking",
         name="Crear cita",
-        description="Crea una cita en el calendario del tenant para un lead ya identificado.",
-        status="planned",
+        description="Crea una cita en el calendario del tenant para el lead identificado en esta llamada. Requiere una fecha y hora exactas en ISO-8601 con zona horaria (ej. 2026-09-15T15:00:00-05:00).",
+        status="available",
         input_schema={
             "type": "object",
             "properties": {
-                "date": {"type": "string", "description": "Fecha y hora deseada."},
+                "start": {"type": "string", "description": "Fecha y hora exactas en ISO-8601 con zona horaria, ej. 2026-09-15T15:00:00-05:00."},
+                "notes": {"type": "string", "description": "Notas opcionales sobre la cita."},
             },
-            "required": ["date"],
+            "required": ["start"],
         },
         required_integration="booking",
     ),
+    # Reactivated by Session Context V1: CrmContactService.get_or_create_contact
+    # + CrmLeadService.get_or_create_open_lead already implement exactly
+    # this "find or create a Contact from a phone, then its open Lead"
+    # path -- no new CRM infrastructure was built for this. `phone` is
+    # deliberately NOT an LLM argument: the handler uses
+    # SessionContextV1.caller.phone (session-derived), never a
+    # model-supplied phone number, to avoid creating a lead under whatever
+    # phone number the model happens to transcribe/hallucinate.
     ToolDefinition(
         key="crm.create_lead",
         name="Crear lead",
-        description="Crea un lead en el CRM a partir de los datos de contacto recogidos en la llamada.",
-        status="planned",
+        description="Crea (o reutiliza) un lead en el CRM para quien llama, usando el teléfono de la llamada y el nombre/correo que indique.",
+        status="available",
         input_schema={
             "type": "object",
             "properties": {
-                "name": {"type": "string", "description": "Nombre del contacto."},
-                "phone": {"type": "string", "description": "Teléfono del contacto."},
+                "name": {"type": "string", "description": "Nombre de la persona."},
+                "email": {"type": "string", "description": "Correo electrónico, si lo indicó."},
             },
-            "required": ["name", "phone"],
+            "required": ["name"],
         },
         required_integration="crm",
     ),
+    # Stays planned: unrelated to Session Context V1.
+    # VoiceHandoffService.trigger_handoff hard-requires a full legacy
+    # TenantVoiceAgentConfig object (handoff_triggers/handoff_chatwoot_inbox_id/
+    # handoff_chatwoot_team_id) -- Agent Builder's TenantAgent/TenantAgentVersion
+    # has no equivalent settings surface for those. Activating this needs a
+    # handoff-configuration surface on the new domain (or a signature
+    # change to trigger_handoff to take plain parameters instead of the
+    # ORM model), which is a separate, explicitly out-of-scope refactor.
     ToolDefinition(
         key="handoff.chatwoot",
         name="Transferir a un humano",
