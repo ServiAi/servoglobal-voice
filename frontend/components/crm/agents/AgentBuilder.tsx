@@ -21,6 +21,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { AgentModelSection } from './AgentModelSection';
 import { AgentStatusBadge } from './AgentStatusBadge';
+import { AgentToolsSection } from './AgentToolsSection';
 import { AgentVoiceTest } from './AgentVoiceTest';
 import type { VoiceAgentConfigResponse } from '@/types/crm';
 import type {
@@ -30,6 +31,7 @@ import type {
   AgentModelSettings,
   AgentResponse,
   AgentResponseStyle,
+  AgentToolCatalogEntry,
   AgentTurnDetection,
   AgentVersionResponse,
   AgentVoiceConfig,
@@ -78,6 +80,9 @@ type FormState = {
   // keyed by the VoiceModelResponse.parameters key. Converted to typed
   // values only at submit time -- see buildModelSettingsPayload.
   model_settings: Record<string, string>;
+  // Keys of AgentToolCatalogEntry the agent has enabled. `config` is
+  // always {} for both V1 tools (see types/agents.ts::AgentToolBinding).
+  enabled_tools: string[];
 };
 
 const DEFAULT_EXTERNAL_VOICE_MODEL = 'eleven_turbo_v2_5';
@@ -110,6 +115,7 @@ function defaultForm(): FormState {
     voice_similarity_boost: '',
     voice_use_speaker_boost: true,
     model_settings: {},
+    enabled_tools: [],
   };
 }
 
@@ -148,6 +154,7 @@ function toForm(agent: AgentResponse, draft: AgentVersionResponse): FormState {
     voice_similarity_boost: typeof settings.similarity_boost === 'number' ? String(settings.similarity_boost) : '',
     voice_use_speaker_boost: typeof settings.use_speaker_boost === 'boolean' ? settings.use_speaker_boost : true,
     model_settings,
+    enabled_tools: (draft.runtime_binding.tools ?? []).filter((tool) => tool.enabled).map((tool) => tool.key),
   };
 }
 
@@ -196,6 +203,37 @@ function buildModelSettingsPayload(form: FormState, selectedModel: VoiceModelRes
   return settings;
 }
 
+/** Only ever binds tools the catalog still reports as `available` -- an
+ * enabled key that became unavailable (or was removed from the Registry)
+ * between load and save is silently dropped rather than resent, mirroring
+ * buildModelSettingsPayload's "never resend what's no longer valid" rule. */
+function buildToolsPayload(form: FormState, catalog: AgentToolCatalogEntry[]) {
+  const availableKeys = new Set(catalog.filter((tool) => tool.available).map((tool) => tool.key));
+  return form.enabled_tools
+    .filter((key) => availableKeys.has(key))
+    .map((key) => ({ key, enabled: true, config: {} }));
+}
+
+/** Publish-time errors carry a stable code as (a prefix of) the response
+ * detail -- see AgentService._publish_tools_preflight/_publish_voice_preflight
+ * on the backend. Draft-save validation errors stay generic (see
+ * VoiceSelectionService/voice_registry.validate_model_settings, which
+ * raise prose messages for inline form issues, not stable codes) -- this
+ * mapping only covers the codes a publish preflight can actually raise. */
+const PUBLISH_ERROR_CODE_KEYS: Record<string, string> = {
+  tool_not_found: 'errors.toolNotFound',
+  tool_not_available: 'errors.toolNotAvailable',
+  tool_integration_not_configured: 'errors.toolIntegrationNotConfigured',
+  voice_not_accessible: 'errors.voiceNotAccessible',
+  external_tts_credentials_unavailable: 'errors.voiceCredentialsUnavailable',
+  provider_credentials_unavailable: 'errors.voiceCredentialsUnavailable',
+};
+
+function publishErrorMessage(t: ReturnType<typeof useTranslations>, detail: string | undefined): string {
+  const code = Object.keys(PUBLISH_ERROR_CODE_KEYS).find((known) => detail?.startsWith(known));
+  return code ? t(PUBLISH_ERROR_CODE_KEYS[code]) : t('errors.publishValidation');
+}
+
 async function playAudioBase64(base64: string) {
   const audio = new Audio(`data:audio/wav;base64,${base64}`);
   try {
@@ -207,7 +245,7 @@ async function playAudioBase64(base64: string) {
   }
 }
 
-type Tab = 'general' | 'behavior' | 'model' | 'voice' | 'versions';
+type Tab = 'general' | 'behavior' | 'model' | 'voice' | 'tools' | 'versions';
 
 type Props = {
   mode: 'create' | 'edit';
@@ -217,6 +255,7 @@ type Props = {
   providers: VoiceProviderResponse[];
   models: VoiceModelResponse[];
   providerVoices?: UltravoxVoiceSummary[];
+  toolCatalog?: AgentToolCatalogEntry[];
   initialAgent?: AgentResponse | null;
   initialDraft?: AgentVersionResponse | null;
   initialVersions?: AgentVersionResponse[];
@@ -236,6 +275,7 @@ export function AgentBuilder({
   providers,
   models,
   providerVoices = [],
+  toolCatalog = [],
   initialAgent = null,
   initialDraft = null,
   initialVersions = [],
@@ -289,6 +329,7 @@ export function AgentBuilder({
         { key: 'behavior' as const, label: t('tabs.behavior') },
         { key: 'model' as const, label: t('tabs.model') },
         { key: 'voice' as const, label: t('tabs.voice') },
+        { key: 'tools' as const, label: t('tabs.tools') },
         ...(mode === 'edit' ? [{ key: 'versions' as const, label: t('tabs.versions') }] : []),
       ],
     [t, mode]
@@ -296,6 +337,16 @@ export function AgentBuilder({
 
   function setBehavior<K extends keyof AgentBehavior>(key: K, value: AgentBehavior[K]) {
     setForm((current) => ({ ...current, behavior: { ...current.behavior, [key]: value } }));
+    setSaved(false);
+  }
+
+  function setToolEnabled(key: string, toolEnabled: boolean) {
+    setForm((current) => ({
+      ...current,
+      enabled_tools: toolEnabled
+        ? [...current.enabled_tools, key]
+        : current.enabled_tools.filter((existing) => existing !== key),
+    }));
     setSaved(false);
   }
 
@@ -381,6 +432,7 @@ export function AgentBuilder({
       } : null,
       voice: form.management_mode === 'provider_managed' ? null : buildVoicePayload(form),
       settings: form.management_mode === 'provider_managed' ? {} : buildModelSettingsPayload(form, selectedModel),
+      tools: form.management_mode === 'provider_managed' ? [] : buildToolsPayload(form, toolCatalog),
     });
     setSaving(false);
     if (!result.ok) {
@@ -415,6 +467,7 @@ export function AgentBuilder({
       } : null,
       voice: form.management_mode === 'provider_managed' ? null : buildVoicePayload(form),
       settings: form.management_mode === 'provider_managed' ? {} : buildModelSettingsPayload(form, selectedModel),
+      tools: form.management_mode === 'provider_managed' ? [] : buildToolsPayload(form, toolCatalog),
     };
   }
 
@@ -454,7 +507,7 @@ export function AgentBuilder({
     setPublishing(false);
     if (!publishResult.ok) {
       setServerError(
-        t(publishResult.status === 422 ? 'errors.publishValidation' : 'errors.generic')
+        publishResult.status === 422 ? publishErrorMessage(t, publishResult.detail) : t('errors.generic')
       );
       return;
     }
@@ -597,6 +650,16 @@ export function AgentBuilder({
           onPreviewExternalVoice={handlePreviewExternalVoice}
           t={t}
         />
+        {form.management_mode === 'serviglobal_managed' ? (
+          <AgentToolsSection
+            locale={locale}
+            catalog={toolCatalog}
+            enabledKeys={form.enabled_tools}
+            disabled={!canEdit}
+            onToggle={setToolEnabled}
+            t={t}
+          />
+        ) : null}
         {serverError ? <ErrorBanner message={serverError} /> : null}
         <div className="flex justify-end">
           <Button onClick={handleCreate} disabled={!canEdit || saving || !form.name.trim()}>
@@ -781,6 +844,17 @@ export function AgentBuilder({
               onVoiceSpeakerBoostChange={(value) => setVoiceField('voice_use_speaker_boost', value)}
               onPreviewProviderVoice={handlePreviewProviderVoice}
               onPreviewExternalVoice={handlePreviewExternalVoice}
+              t={t}
+            />
+          ) : null}
+
+          {tab === 'tools' ? (
+            <AgentToolsSection
+              locale={locale}
+              catalog={toolCatalog}
+              enabledKeys={form.enabled_tools}
+              disabled={!editable || !hasDraft || form.management_mode === 'provider_managed'}
+              onToggle={setToolEnabled}
               t={t}
             />
           ) : null}

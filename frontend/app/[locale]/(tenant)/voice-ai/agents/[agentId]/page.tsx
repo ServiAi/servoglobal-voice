@@ -6,6 +6,7 @@ import {
   fetchAgent,
   fetchAgentDraft,
   fetchAgentVersions,
+  fetchToolCatalog,
 } from '@/lib/api/agents';
 import { fetchVoiceAgents } from '@/lib/api/crm';
 import { fetchVoiceModels, fetchVoiceProviders } from '@/lib/api/voice-registry';
@@ -25,7 +26,7 @@ export default async function AgentEditorPage({
   const accessToken = await getAccessToken();
   if (!accessToken) redirect(`/api/auth/login?returnTo=/${locale}/voice-ai/agents/${agentId}`);
 
-  const [profileResult, agentResult, voiceAgentsResult, providersResult, modelsResult, providerVoicesResult] =
+  const [profileResult, agentResult, voiceAgentsResult, providersResult, modelsResult, providerVoicesResult, toolCatalogResult] =
     await Promise.all([
       fetchMeProfile(accessToken),
       fetchAgent(accessToken, agentId),
@@ -33,6 +34,7 @@ export default async function AgentEditorPage({
       fetchVoiceProviders(accessToken),
       fetchVoiceModels(accessToken),
       fetchProviderVoices(accessToken, 'ultravox', { pageSize: 50 }),
+      fetchToolCatalog(accessToken),
     ]);
   if (!agentResult.ok && agentResult.status === 404) notFound();
 
@@ -79,6 +81,7 @@ export default async function AgentEditorPage({
       providers={providersResult.ok ? providersResult.data : []}
       models={modelsResult.ok ? modelsResult.data : []}
       providerVoices={providerVoicesResult.ok ? providerVoicesResult.data.results : []}
+      toolCatalog={toolCatalogResult.ok ? toolCatalogResult.data : []}
       initialAgent={agent}
       initialDraft={draftResult.ok ? draftResult.data : null}
       initialVersions={versionsResult.ok ? versionsResult.data : []}

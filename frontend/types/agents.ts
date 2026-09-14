@@ -32,6 +32,31 @@ export type AgentBehavior = {
  * never hardcoded to one provider. */
 export type AgentModelSettings = Record<string, number | boolean | string>;
 
+/** A tool bound to a serviglobal_managed agent version. `config` is
+ * binding-time configuration (currently unused by both V1 tools -- kept
+ * for forward compatibility), never the per-call arguments the LLM
+ * supplies at invocation time. */
+export type AgentToolBinding = {
+  key: string;
+  enabled: boolean;
+  config?: Record<string, never>;
+};
+
+/** One app.domain.tool_registry entry annotated for the current tenant --
+ * see GET /api/v1/agents/tools/catalog. `available` is only ever true for
+ * status="available" tools whose required_integration is configured;
+ * "planned" tools always report available=false and must never be
+ * offered as selectable in the UI. */
+export type AgentToolCatalogEntry = {
+  key: string;
+  name: string;
+  description: string;
+  status: 'available' | 'planned';
+  required_integration: 'booking' | 'whatsapp' | 'crm' | 'chatwoot' | null;
+  available: boolean;
+  input_schema: Record<string, unknown>;
+};
+
 export type AgentCreateRequest = {
   name: string;
   description?: string | null;
@@ -47,6 +72,7 @@ export type AgentCreateRequest = {
   provider_agent?: ProviderAgentReference | null;
   voice?: AgentVoiceConfig | null;
   settings?: AgentModelSettings | Record<string, never>;
+  tools?: AgentToolBinding[];
 };
 
 export type ProviderAgentReference = {
@@ -93,6 +119,7 @@ export type AgentDraftUpdateRequest = {
   provider_agent?: ProviderAgentReference | null;
   voice?: AgentVoiceConfig | null;
   settings?: AgentModelSettings | Record<string, never>;
+  tools?: AgentToolBinding[];
 };
 
 export type AgentPublishRequest = {
@@ -126,6 +153,11 @@ export type AgentRuntimeBinding = {
       warnings?: string[];
     };
   };
+  // Top-level, sibling of `realtime` -- never nested inside it, so it can
+  // never collide with the unrelated realtime.provider_extensions.tools
+  // (a read-only classification of an imported provider_managed agent's
+  // own remote tools).
+  tools?: AgentToolBinding[];
 };
 
 export type AgentVersionResponse = {

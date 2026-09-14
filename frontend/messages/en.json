@@ -1319,7 +1319,7 @@
       "versionStatus": { "draft": "Draft", "published": "Published", "superseded": "Superseded" },
       "featureDisabled": { "title": "Feature not enabled", "description": "Agent Builder is not enabled for this tenant." },
       "accessDenied": { "title": "Access restricted", "description": "Your role does not have permission to manage agents." },
-      "errors": { "loadTitle": "Could not load", "generic": "Something went wrong. Please try again.", "conflict": "That action is not valid for the agent's current state.", "deleteConflict": "Could not delete the agent. Refresh the page and try again.", "deleteRequiresArchived": "The server does not show this agent as archived yet. Refresh the page before deleting it.", "deleteRoomCloseFailed": "Could not confirm an active call was closed. The agent remains archived; check LiveKit and try again.", "deleteDispatching": "A session is still starting. Wait a few seconds and try deleting again.", "deleteSessionUnverified": "Could not verify an active session's room. Check its status before deleting the agent.", "validation": "Please check the form fields.", "publishValidation": "Review the agent configuration before publishing." },
+      "errors": { "loadTitle": "Could not load", "generic": "Something went wrong. Please try again.", "conflict": "That action is not valid for the agent's current state.", "deleteConflict": "Could not delete the agent. Refresh the page and try again.", "deleteRequiresArchived": "The server does not show this agent as archived yet. Refresh the page before deleting it.", "deleteRoomCloseFailed": "Could not confirm an active call was closed. The agent remains archived; check LiveKit and try again.", "deleteDispatching": "A session is still starting. Wait a few seconds and try deleting again.", "deleteSessionUnverified": "Could not verify an active session's room. Check its status before deleting the agent.", "validation": "Please check the form fields.", "publishValidation": "Review the agent configuration before publishing.", "toolNotFound": "A selected tool no longer exists in the catalog. Remove it and save again.", "toolNotAvailable": "A selected tool isn't executable yet.", "toolIntegrationNotConfigured": "An enabled tool needs an integration that isn't configured yet.", "voiceNotAccessible": "The configured voice is no longer available from the provider. Choose another one.", "voiceCredentialsUnavailable": "This account is missing credentials for the external voice provider." },
       "list": {
         "eyebrow": "ServiGlobal agents",
         "count": "{count, plural, =0 {No agents} one {# agent} other {# agents}}",
@@ -1340,7 +1340,7 @@
       },
       "common": { "cancel": "Cancel" },
       "providerManaged": { "title": "Management", "source": "Source of truth", "serviglobal": "ServiGlobal", "ultravox": "Ultravox", "remoteId": "Remote ID: {id}", "revision": "Observed revision: {revision}", "unpublished": "unpublished", "drift": "Drift detected. Current published revision: {revision}", "blockedTools": "The current revision contains unsupported client tools and cannot run.", "help": "Prompt, voice and tools remain controlled by Ultravox. They are revalidated before every call." },
-      "tabs": { "general": "General", "behavior": "Behavior", "model": "Model", "voice": "Voice", "versions": "Versions" },
+      "tabs": { "general": "General", "behavior": "Behavior", "model": "Model", "voice": "Voice", "tools": "Tools", "versions": "Versions" },
       "fields": {
         "name": "Name", "description": "Description", "language": "Language", "timezone": "Timezone",
         "role": "Role", "objective": "Objective", "systemPrompt": "Prompt / instructions", "greeting": "Greeting", "closing": "Closing",
@@ -1358,6 +1358,13 @@
         "parameters": {
           "temperature": "Temperature", "max_duration": "Max duration", "useDefault": "Use default"
         }
+      },
+      "tools": {
+        "title": "Available tools",
+        "empty": "No tools are available yet.",
+        "requiresIntegration": "Requires configuring {integration}.",
+        "configureIntegration": "Configure integration",
+        "integration": { "booking": "Scheduling", "whatsapp": "WhatsApp", "crm": "CRM", "chatwoot": "Chatwoot" }
       },
       "voice": {
         "pipelineType": "Architecture", "speechToSpeech": "Speech-to-Speech", "ultravox": "Ultravox", "comingSoon": "Coming soon",
