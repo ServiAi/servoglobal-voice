@@ -118,6 +118,18 @@ class RealtimeRuntimeSpec(StrictModel):
     realtime: RealtimeModelSpec
 
 
+class CompiledToolSpec(StrictModel):
+    """Manual mirror of backend/app/schemas/runtime_session.py::CompiledToolSpec.
+    Carries only what the LLM needs to know a tool exists and how to call
+    it -- never a handler reference or credentials. See tool_dispatcher.py
+    for how this is turned into a registered RawFunctionTool."""
+
+    key: str
+    name: str
+    description: str
+    input_schema: dict
+
+
 class RuntimeSessionSpecV1(StrictModel):
     spec_version: Literal["1"] = "1"
     session_id: str | None = None
@@ -130,6 +142,7 @@ class RuntimeSessionSpecV1(StrictModel):
     language: str
     timezone: str
     runtime: RealtimeRuntimeSpec
+    tools: list[CompiledToolSpec] = Field(default_factory=list)
     context: dict = Field(default_factory=dict)
 
     @field_validator("context")

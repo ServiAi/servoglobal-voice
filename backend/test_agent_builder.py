@@ -9,9 +9,10 @@ from sqlalchemy import select
 
 from _integrations_2a_test_base import Integration2ATestCase
 from app.db.session import SessionLocal
-from app.models.integrations import TenantIntegrationEvent, TenantVoiceAgentConfig
+from app.models.integrations import TenantIntegrationEvent, TenantVoiceAgentConfig, TenantWhatsAppConfig
 from app.schemas.agents import AgentCreateRequest
 from app.services.agent_service import AgentService
+from app.services.secret_manager_service import SecretManager
 from app.services.tenant_feature_service import AGENT_BUILDER, TenantFeatureService
 from app.schemas.ultravox_admin import UltravoxToolSummary
 
@@ -162,6 +163,188 @@ class AgentBuilderTests(Integration2ATestCase):
                 },
             },
         )
+
+    # -- model settings (temperature etc.) --
+
+    def test_create_accepts_supported_model_setting(self) -> None:
+        self._enable_feature()
+        response = self._create(settings={"temperature": 0.4})
+        self.assertEqual(response.status_code, 201, response.text)
+        draft = self.client.get(f"/api/v1/agents/{response.json()['id']}/draft").json()
+        self.assertEqual(draft["runtime_binding"]["realtime"]["settings"], {"temperature": 0.4})
+
+    def test_create_without_settings_stays_backward_compatible(self) -> None:
+        self._enable_feature()
+        agent_id = self._create().json()["id"]
+        draft = self.client.get(f"/api/v1/agents/{agent_id}/draft").json()
+        self.assertNotIn("settings", draft["runtime_binding"]["realtime"])
+
+    def test_create_rejects_unsupported_setting_key(self) -> None:
+        self._enable_feature()
+        response = self._create(settings={"top_p": 0.9})
+        self.assertEqual(response.status_code, 422, response.text)
+
+    def test_create_rejects_out_of_range_temperature(self) -> None:
+        self._enable_feature()
+        response = self._create(settings={"temperature": 1.5})
+        self.assertEqual(response.status_code, 422, response.text)
+
+    def test_create_rejects_secret_like_setting_key(self) -> None:
+        self._enable_feature()
+        response = self._create(settings={"api_key": "sk-test"})
+        self.assertEqual(response.status_code, 422, response.text)
+
+    def test_provider_managed_rejects_settings(self) -> None:
+        # settings is rejected before any remote Ultravox call is made -- no
+        # need to mock validate_provider_agent_link here.
+        self._enable_feature()
+        response = self._create(
+            management_mode="provider_managed",
+            model="ultravox-v0.7",
+            provider_agent={"agent_id": "remote-1", "observed_published_revision_id": None},
+            settings={"temperature": 0.5},
+        )
+        self.assertEqual(response.status_code, 422, response.text)
+        self.assertIn("settings", response.text)
+
+    def test_update_draft_persists_settings_and_clones_on_next_draft(self) -> None:
+        self._enable_feature()
+        agent_id = self._create().json()["id"]
+        draft_payload = self._draft_payload(settings={"temperature": 0.2})
+        response = self.client.patch(f"/api/v1/agents/{agent_id}/draft", json=draft_payload)
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["runtime_binding"]["realtime"]["settings"], {"temperature": 0.2})
+
+        publish = self.client.post(f"/api/v1/agents/{agent_id}/publish", json={})
+        self.assertEqual(publish.status_code, 200, publish.text)
+        next_draft = self.client.post(f"/api/v1/agents/{agent_id}/draft")
+        self.assertEqual(next_draft.status_code, 201, next_draft.text)
+        self.assertEqual(next_draft.json()["runtime_binding"]["realtime"]["settings"], {"temperature": 0.2})
+
+    # -- tools --
+
+    @staticmethod
+    def _configure_whatsapp(tenant_id: str) -> None:
+        with SessionLocal() as db:
+            db.add(TenantWhatsAppConfig(
+                tenant_id=tenant_id,
+                provider="whatsapp_cloud",
+                status="active",
+                phone_number_id="phone-1",
+                display_phone_number="+573000000000",
+                default_language="es",
+                access_token_encrypted=SecretManager().encrypt_secret("EA_test_token_1234567890"),
+            ))
+            db.commit()
+
+    def test_create_persists_enabled_tool_binding(self) -> None:
+        self._enable_feature()
+        response = self._create(tools=[{"key": "calendar.check_availability", "enabled": True, "config": {}}])
+        self.assertEqual(response.status_code, 201, response.text)
+        draft = self.client.get(f"/api/v1/agents/{response.json()['id']}/draft").json()
+        self.assertEqual(
+            draft["runtime_binding"]["tools"],
+            [{"key": "calendar.check_availability", "enabled": True, "config": {}}],
+        )
+
+    def test_create_without_tools_stays_backward_compatible(self) -> None:
+        self._enable_feature()
+        agent_id = self._create().json()["id"]
+        draft = self.client.get(f"/api/v1/agents/{agent_id}/draft").json()
+        self.assertNotIn("tools", draft["runtime_binding"])
+
+    def test_create_rejects_unknown_tool_key(self) -> None:
+        self._enable_feature()
+        response = self._create(tools=[{"key": "does.not_exist", "enabled": True, "config": {}}])
+        self.assertEqual(response.status_code, 422, response.text)
+
+    def test_create_rejects_planned_tool_key(self) -> None:
+        self._enable_feature()
+        response = self._create(tools=[{"key": "calendar.create_booking", "enabled": True, "config": {}}])
+        self.assertEqual(response.status_code, 422, response.text)
+
+    def test_create_rejects_duplicate_tool_key(self) -> None:
+        self._enable_feature()
+        response = self._create(tools=[
+            {"key": "calendar.check_availability", "enabled": True, "config": {}},
+            {"key": "calendar.check_availability", "enabled": False, "config": {}},
+        ])
+        self.assertEqual(response.status_code, 422, response.text)
+
+    def test_provider_managed_rejects_tools(self) -> None:
+        self._enable_feature()
+        response = self._create(
+            management_mode="provider_managed",
+            model="ultravox-v0.7",
+            provider_agent={"agent_id": "remote-1", "observed_published_revision_id": None},
+            tools=[{"key": "calendar.check_availability", "enabled": True, "config": {}}],
+        )
+        self.assertEqual(response.status_code, 422, response.text)
+        self.assertIn("tools", response.text)
+
+    def test_publish_blocks_when_tool_integration_not_configured(self) -> None:
+        self._enable_feature()
+        agent_id = self._create(tools=[{"key": "whatsapp.send_message", "enabled": True, "config": {}}]).json()["id"]
+        with patch("app.services.ultravox_admin_service.UltravoxAdminService.get_voice"):
+            response = self.client.post(f"/api/v1/agents/{agent_id}/publish", json={})
+        self.assertEqual(response.status_code, 422, response.text)
+        self.assertIn("tool_integration_not_configured", response.text)
+
+    def test_publish_succeeds_when_tool_integration_configured(self) -> None:
+        self._enable_feature()
+        self._configure_whatsapp(self.tenant.id)
+        agent_id = self._create(tools=[{"key": "whatsapp.send_message", "enabled": True, "config": {}}]).json()["id"]
+        with patch("app.services.ultravox_admin_service.UltravoxAdminService.get_voice"):
+            response = self.client.post(f"/api/v1/agents/{agent_id}/publish", json={})
+        self.assertEqual(response.status_code, 200, response.text)
+
+    def test_publish_ignores_disabled_tool_with_missing_integration(self) -> None:
+        self._enable_feature()
+        agent_id = self._create(tools=[{"key": "whatsapp.send_message", "enabled": False, "config": {}}]).json()["id"]
+        with patch("app.services.ultravox_admin_service.UltravoxAdminService.get_voice"):
+            response = self.client.post(f"/api/v1/agents/{agent_id}/publish", json={})
+        self.assertEqual(response.status_code, 200, response.text)
+
+    def test_next_draft_clones_tool_bindings(self) -> None:
+        self._enable_feature()
+        self._configure_whatsapp(self.tenant.id)
+        agent_id = self._create(tools=[{"key": "whatsapp.send_message", "enabled": True, "config": {}}]).json()["id"]
+        with patch("app.services.ultravox_admin_service.UltravoxAdminService.get_voice"):
+            self.client.post(f"/api/v1/agents/{agent_id}/publish", json={})
+        next_draft = self.client.post(f"/api/v1/agents/{agent_id}/draft")
+        self.assertEqual(next_draft.status_code, 201, next_draft.text)
+        self.assertEqual(
+            next_draft.json()["runtime_binding"]["tools"],
+            [{"key": "whatsapp.send_message", "enabled": True, "config": {}}],
+        )
+
+    def test_tool_catalog_reflects_tenant_integration_status(self) -> None:
+        self._enable_feature()
+        before = self.client.get("/api/v1/agents/tools/catalog")
+        self.assertEqual(before.status_code, 200, before.text)
+        by_key = {item["key"]: item for item in before.json()}
+        self.assertFalse(by_key["whatsapp.send_message"]["available"])
+        self.assertEqual(by_key["whatsapp.send_message"]["status"], "available")
+        self.assertFalse(by_key["calendar.create_booking"]["available"])
+        self.assertEqual(by_key["calendar.create_booking"]["status"], "planned")
+
+        self._configure_whatsapp(self.tenant.id)
+        after = self.client.get("/api/v1/agents/tools/catalog").json()
+        after_by_key = {item["key"]: item for item in after}
+        self.assertTrue(after_by_key["whatsapp.send_message"]["available"])
+
+    def test_tool_catalog_requires_feature_enabled(self) -> None:
+        self.assertEqual(self.client.get("/api/v1/agents/tools/catalog").status_code, 403)
+
+    def test_tool_catalog_is_tenant_isolated(self) -> None:
+        tenant_b, user_b = self._seed_tenant_user(slug="tenant-tools-b", email="tools-b@example.com")
+        with SessionLocal() as db:
+            TenantFeatureService(db).set_feature(tenant_b.id, AGENT_BUILDER, True, {}, user_b.id)
+        self._configure_whatsapp(tenant_b.id)
+        self._enable_feature()
+        response = self.client.get("/api/v1/agents/tools/catalog")
+        by_key = {item["key"]: item for item in response.json()}
+        self.assertFalse(by_key["whatsapp.send_message"]["available"])
 
     def test_update_draft_rejects_unavailable_model(self) -> None:
         self._enable_feature()

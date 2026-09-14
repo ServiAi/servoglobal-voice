@@ -22,6 +22,16 @@ class ControlPlaneError(RuntimeError):
     pass
 
 
+class ToolInvocationError(RuntimeError):
+    """A tool call was rejected or failed on the Control Plane side. The
+    message is safe to surface to the LLM (it never carries a stack trace
+    or internal detail beyond the backend's own stable error code)."""
+
+    def __init__(self, message: str, *, status_code: int | None = None) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+
+
 class ControlPlaneClient:
     def __init__(self, settings: Settings, client: httpx.AsyncClient | None = None) -> None:
         self.settings = settings
@@ -72,6 +82,31 @@ class ControlPlaneClient:
             raise ProviderCredentialUnavailableError("Unable to resolve provider credential") from exc
         data = response.json()
         return ProviderCredential(provider=data["provider"], api_key=data["api_key"], base_url=data.get("base_url"))
+
+    async def invoke_tool(self, session_id: str, tool_key: str, arguments: dict) -> dict:
+        """Single attempt, no retry: a tool call can be side-effecting (e.g.
+        sends a WhatsApp message) -- retrying a transient 5xx here could
+        silently duplicate a real-world effect, the same reasoning behind
+        UltravoxProviderClient.preview_external_voice's no-retry rule on
+        the backend. Deliberately bypasses `_request`'s retry loop."""
+        try:
+            response = await self.client.request(
+                "POST",
+                f"/api/v1/internal/voice-runtime/sessions/{session_id}/tools/{tool_key}/invoke",
+                headers=self._headers(),
+                json={"arguments": arguments},
+            )
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            detail = None
+            try:
+                detail = exc.response.json().get("detail")
+            except Exception:
+                pass
+            raise ToolInvocationError(detail or "Tool invocation failed", status_code=exc.response.status_code) from exc
+        except (httpx.TimeoutException, httpx.NetworkError) as exc:
+            raise ToolInvocationError("Tool invocation failed") from exc
+        return response.json()["result"]
 
     async def send_event(self, session_id: str, event_type: str, *, source: str = "voice-runtime", payload: dict | None = None, sequence: int | None = None) -> None:
         event = RuntimeEventV1(event_id=str(uuid4()), session_id=session_id, event_type=event_type, source=source, sequence=sequence, payload=payload or {}, occurred_at=datetime.now(timezone.utc))

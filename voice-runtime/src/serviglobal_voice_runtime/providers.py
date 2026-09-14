@@ -12,7 +12,9 @@ from .call_factory import (
     UltravoxAgentCallFactory,
 )
 from .contracts import AgentVoiceConfig, RuntimeSessionSpecV1
+from .control_plane import ControlPlaneClient
 from .credentials import ProviderCredentialResolver
+from .tool_dispatcher import build_tools
 
 EventSender = Callable[..., Awaitable[None]]
 
@@ -114,9 +116,15 @@ def ultravox_options(spec: RuntimeSessionSpecV1, api_key: str) -> dict[str, Any]
 
 
 class UltravoxLiveKitRuntime:
-    def __init__(self, settings: Settings, credential_resolver: ProviderCredentialResolver) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        credential_resolver: ProviderCredentialResolver,
+        control_plane: ControlPlaneClient,
+    ) -> None:
         self.settings = settings
         self.credential_resolver = credential_resolver
+        self.control_plane = control_plane
 
     async def run(self, ctx: Any, spec: RuntimeSessionSpecV1, send_event: EventSender) -> None:
         if not spec.session_id:
@@ -335,7 +343,17 @@ class UltravoxLiveKitRuntime:
             for participant in ctx.room.remote_participants.values():
                 on_participant_connected(participant)
             instructions = "" if spec.runtime.realtime.management_mode == "provider_managed" else options["system_prompt"]
-            await session.start(room=ctx.room, agent=Agent(instructions=instructions))
+            # Tool dispatch is a serviglobal_managed-only capability: a
+            # provider_managed agent's tools remain whatever Ultravox itself
+            # has configured for the imported remote agent -- never
+            # overridden by anything compiled from ServiGlobal's own
+            # runtime_binding_json.
+            tools = (
+                build_tools(self.control_plane, str(spec.session_id), spec.tools)
+                if spec.runtime.realtime.management_mode != "provider_managed"
+                else []
+            )
+            await session.start(room=ctx.room, agent=Agent(instructions=instructions, tools=tools))
             await send_event("voice.agent.ready", source="livekit", payload={})
             try:
                 await asyncio.wait_for(
@@ -357,11 +375,17 @@ class UltravoxLiveKitRuntime:
 
 
 class RealtimeProviderFactory:
-    def __init__(self, settings: Settings, credential_resolver: ProviderCredentialResolver) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        credential_resolver: ProviderCredentialResolver,
+        control_plane: ControlPlaneClient,
+    ) -> None:
         self.settings = settings
         self.credential_resolver = credential_resolver
+        self.control_plane = control_plane
 
     def resolve(self, provider: str) -> RealtimeProvider:
         if provider == "ultravox":
-            return UltravoxLiveKitRuntime(self.settings, self.credential_resolver)
+            return UltravoxLiveKitRuntime(self.settings, self.credential_resolver, self.control_plane)
         raise UnsupportedRuntimeProviderError(f"Runtime provider is not implemented: {provider}")

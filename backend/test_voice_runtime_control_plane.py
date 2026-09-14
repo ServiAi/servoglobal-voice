@@ -333,5 +333,173 @@ class VoiceRuntimeControlPlaneTests(Integration2ATestCase):
             self.assertEqual(session.end_reason, "participant_disconnected")
 
 
+class AgentToolInvokeEndpointTests(Integration2ATestCase):
+    """POST /api/v1/internal/voice-runtime/sessions/{id}/tools/{key}/invoke.
+    Same internal-runtime trust boundary as /spec and /events (see
+    VoiceRuntimeControlPlaneTests above); this endpoint additionally
+    re-resolves the session's own published tool binding from the database
+    rather than trusting anything the caller (voice-runtime) asserts about
+    which tools are bound -- see ToolDispatchService."""
+
+    def _session_with_tools(self, tools: list[dict], tenant_id: str | None = None) -> str:
+        tenant_id = tenant_id or self.tenant.id
+        with SessionLocal() as db:
+            agent = TenantAgent(tenant_id=tenant_id, name="Tool agent", status="draft")
+            db.add(agent)
+            db.flush()
+            version = TenantAgentVersion(
+                tenant_id=tenant_id, agent_id=agent.id, version=1, status="published",
+                language="es-CO", timezone="America/Bogota",
+                identity_json={"name": "Tool agent"}, instructions_json={"system_prompt": "Published"}, behavior_json={},
+                runtime_binding_json={
+                    "pipeline_type": "realtime",
+                    "realtime": {"provider": "ultravox", "model": "fixie-ai/ultravox"},
+                    "tools": tools,
+                },
+            )
+            db.add(version)
+            db.flush()
+            agent.status = "active"
+            agent.published_version_id = version.id
+            db.commit()
+            session = VoiceSessionService(db).create(tenant_id, agent.id, channel="internal_test", direction="internal")
+            session.livekit_room_name = f"sg-vs-{session.id}"
+            session.status = "dispatched"
+            db.commit()
+            return session.id
+
+    def _invoke(self, session_id: str, tool_key: str, arguments: dict | None = None):
+        with patch.object(settings, "VOICE_RUNTIME_SERVICE_SECRET", "x" * 32):
+            token = create_runtime_token()
+            return self.client.post(
+                f"/api/v1/internal/voice-runtime/sessions/{session_id}/tools/{tool_key}/invoke",
+                headers={"Authorization": f"Bearer {token}"},
+                json={"arguments": arguments or {}},
+            )
+
+    def _configure_whatsapp(self, tenant_id: str) -> None:
+        from app.models.integrations import TenantWhatsAppConfig
+        from app.services.secret_manager_service import SecretManager
+
+        with SessionLocal() as db:
+            db.add(TenantWhatsAppConfig(
+                tenant_id=tenant_id, provider="whatsapp_cloud", status="active",
+                phone_number_id="phone-1", display_phone_number="+573000000000",
+                default_language="es",
+                access_token_encrypted=SecretManager().encrypt_secret("EA_test_token_1234567890"),
+            ))
+            db.commit()
+
+    def test_requires_valid_runtime_authentication(self) -> None:
+        session_id = self._session_with_tools([{"key": "calendar.check_availability", "enabled": True, "config": {}}])
+        response = self.client.post(
+            f"/api/v1/internal/voice-runtime/sessions/{session_id}/tools/calendar.check_availability/invoke",
+            json={"arguments": {"date": "mañana"}},
+        )
+        self.assertEqual(response.status_code, 401)
+
+    def test_rejects_tool_not_bound_to_this_session(self) -> None:
+        session_id = self._session_with_tools([])
+        response = self._invoke(session_id, "calendar.check_availability", {"date": "mañana"})
+        self.assertEqual(response.status_code, 404)
+        self.assertIn("tool_not_found", response.text)
+
+    def test_rejects_disabled_binding(self) -> None:
+        session_id = self._session_with_tools([{"key": "calendar.check_availability", "enabled": False, "config": {}}])
+        response = self._invoke(session_id, "calendar.check_availability", {"date": "mañana"})
+        self.assertEqual(response.status_code, 404)
+
+    def test_rejects_a_key_not_in_the_handler_allowlist_even_if_the_registry_says_available(self) -> None:
+        # Defense in depth: this shape could only happen if the Registry and
+        # the handler allowlist ever drifted apart -- proves the dispatcher
+        # never falls back to executing an unrecognized key just because
+        # the (mocked) Registry vouches for it.
+        session_id = self._session_with_tools([{"key": "totally.new_tool", "enabled": True, "config": {}}])
+        with patch("app.services.tool_dispatch_service.get_tool") as mocked:
+            from app.domain.tool_registry import ToolDefinition
+
+            mocked.return_value = ToolDefinition(
+                key="totally.new_tool", name="X", description="X", status="available",
+                input_schema={"type": "object", "properties": {}}, required_integration=None,
+            )
+            response = self._invoke(session_id, "totally.new_tool", {})
+        self.assertEqual(response.status_code, 422, response.text)
+        self.assertIn("tool_not_available", response.text)
+
+    def test_rejects_missing_required_argument(self) -> None:
+        session_id = self._session_with_tools([{"key": "calendar.check_availability", "enabled": True, "config": {}}])
+        response = self._invoke(session_id, "calendar.check_availability", {})
+        self.assertEqual(response.status_code, 422)
+        self.assertIn("tool_argument_invalid", response.text)
+
+    def test_rejects_unknown_argument(self) -> None:
+        session_id = self._session_with_tools([{"key": "calendar.check_availability", "enabled": True, "config": {}}])
+        response = self._invoke(session_id, "calendar.check_availability", {"date": "mañana", "extra": "x"})
+        self.assertEqual(response.status_code, 422)
+
+    def test_rejects_wrong_argument_type(self) -> None:
+        session_id = self._session_with_tools([{"key": "calendar.check_availability", "enabled": True, "config": {}}])
+        response = self._invoke(session_id, "calendar.check_availability", {"date": 123})
+        self.assertEqual(response.status_code, 422)
+
+    def test_whatsapp_tool_succeeds_when_integration_is_configured(self) -> None:
+        self._configure_whatsapp(self.tenant.id)
+        session_id = self._session_with_tools([{"key": "whatsapp.send_message", "enabled": True, "config": {}}])
+        with patch(
+            "app.services.whatsapp_message_service.WhatsAppMessageService.send_template_notification"
+        ) as mocked:
+            from app.services.whatsapp_message_service import WhatsAppSendResult
+
+            mocked.return_value = WhatsAppSendResult(status="sent", provider_message_id="wamid.123")
+            response = self._invoke(session_id, "whatsapp.send_message", {"to_phone": "+573000000001", "template_key": "booking_confirmation"})
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["result"], {"status": "sent", "provider_message_id": "wamid.123"})
+
+    def test_whatsapp_tool_fails_when_integration_is_not_configured(self) -> None:
+        session_id = self._session_with_tools([{"key": "whatsapp.send_message", "enabled": True, "config": {}}])
+        response = self._invoke(session_id, "whatsapp.send_message", {"to_phone": "+573000000001", "template_key": "booking_confirmation"})
+        self.assertEqual(response.status_code, 502)
+        self.assertIn("tool_execution_failed", response.text)
+
+    def test_rejects_terminal_session(self) -> None:
+        session_id = self._session_with_tools([{"key": "calendar.check_availability", "enabled": True, "config": {}}])
+        with SessionLocal() as db:
+            VoiceSessionService(db).get(session_id).status = "ended"
+            db.commit()
+        response = self._invoke(session_id, "calendar.check_availability", {"date": "mañana"})
+        self.assertEqual(response.status_code, 409)
+
+    def test_result_never_contains_the_tools_binding_config(self) -> None:
+        self._configure_whatsapp(self.tenant.id)
+        session_id = self._session_with_tools([
+            {"key": "whatsapp.send_message", "enabled": True, "config": {"internal_note": "should-not-leak"}}
+        ])
+        with patch(
+            "app.services.whatsapp_message_service.WhatsAppMessageService.send_template_notification"
+        ) as mocked:
+            from app.services.whatsapp_message_service import WhatsAppSendResult
+
+            mocked.return_value = WhatsAppSendResult(status="sent", provider_message_id="wamid.123")
+            response = self._invoke(session_id, "whatsapp.send_message", {"to_phone": "+573000000001", "template_key": "booking_confirmation"})
+        self.assertNotIn("should-not-leak", response.text)
+
+    def test_tool_execution_uses_the_sessions_own_tenant_not_any_other(self) -> None:
+        # The internal runtime channel authenticates as "voice-runtime", not
+        # as a tenant user -- tenant isolation here means session_id alone
+        # determines which tenant's integration config is resolved. Proven
+        # by configuring WhatsApp only for tenant A and invoking through a
+        # session that belongs to tenant B: it must fail exactly as it
+        # would for any tenant with no WhatsApp integration, never succeed
+        # by picking up tenant A's config.
+        self._configure_whatsapp(self.tenant.id)
+        other_tenant, _ = self._seed_tenant_user(slug="tenant-tools-c", email="tools-c@example.com")
+        session_id = self._session_with_tools(
+            [{"key": "whatsapp.send_message", "enabled": True, "config": {}}], tenant_id=other_tenant.id
+        )
+        response = self._invoke(session_id, "whatsapp.send_message", {"to_phone": "+573000000001", "template_key": "booking_confirmation"})
+        self.assertEqual(response.status_code, 502, response.text)
+        self.assertIn("tool_execution_failed", response.text)
+
+
 if __name__ == "__main__":
     unittest.main()

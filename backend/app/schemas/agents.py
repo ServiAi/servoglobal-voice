@@ -41,6 +41,12 @@ _FORBIDDEN_VOICE_SETTINGS_KEY_PARTS = (
 )
 
 
+def _reject_secret_keys(value: dict[str, Any]) -> dict[str, Any]:
+    if any(part in str(key).lower() for key in value for part in _FORBIDDEN_VOICE_SETTINGS_KEY_PARTS):
+        raise ValueError("Settings contain a forbidden secret field")
+    return value
+
+
 class AgentVoiceConfig(_StrictModel):
     """A voice selection for a realtime agent.
 
@@ -69,9 +75,28 @@ class AgentVoiceConfig(_StrictModel):
     @field_validator("settings")
     @classmethod
     def reject_secret_settings(cls, value: dict[str, Any]) -> dict[str, Any]:
-        if any(part in str(key).lower() for key in value for part in _FORBIDDEN_VOICE_SETTINGS_KEY_PARTS):
-            raise ValueError("Voice settings contain a forbidden secret field")
-        return value
+        return _reject_secret_keys(value)
+
+
+class AgentToolBinding(_StrictModel):
+    """One tool bound to a serviglobal_managed agent version. `key` is
+    validated against the platform Tool Registry (app.domain.tool_registry)
+    by AgentService, not here -- this schema validates shape only: key
+    length, no duplicate enforcement (that needs the whole list), and no
+    secrets in `config`. `config` is binding-time configuration (e.g. which
+    WhatsApp template to use), never the per-call arguments a tool
+    invocation carries -- those come from the LLM at call time and are
+    validated against ToolDefinition.input_schema separately.
+    """
+
+    key: str = Field(min_length=1, max_length=80)
+    enabled: bool = True
+    config: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("config")
+    @classmethod
+    def reject_secret_config(cls, value: dict[str, Any]) -> dict[str, Any]:
+        return _reject_secret_keys(value)
 
 
 class ProviderManagedOverrides(_StrictModel):
@@ -86,6 +111,21 @@ class _RuntimeSelection(_StrictModel):
     provider_agent: ProviderAgentReference | None = None
     voice: AgentVoiceConfig | None = None
     provider_overrides: ProviderManagedOverrides | None = None
+    # Provider/model runtime parameters (e.g. temperature) for a
+    # serviglobal_managed agent. Shape-only here (no secrets); which keys
+    # are actually allowed for a given (provider, model) is registry-driven
+    # business logic, validated by AgentService against
+    # voice_registry.validate_model_settings(), not by this schema.
+    settings: dict[str, Any] = Field(default_factory=dict)
+    # Tools bound to this agent version. Which keys are known/executable
+    # comes from app.domain.tool_registry, validated by AgentService --
+    # this schema only validates shape (see AgentToolBinding).
+    tools: list[AgentToolBinding] = Field(default_factory=list)
+
+    @field_validator("settings")
+    @classmethod
+    def reject_secret_runtime_settings(cls, value: dict[str, Any]) -> dict[str, Any]:
+        return _reject_secret_keys(value)
 
     @model_validator(mode="after")
     def validate_management_mode(self):
@@ -142,6 +182,22 @@ class AgentPublishRequest(_StrictModel):
     saved or published a different draft in the meantime)."""
 
     expected_draft_version_id: str | None = None
+
+
+class AgentToolCatalogEntryResponse(_StrictModel):
+    """One Tool Registry entry, annotated for the current tenant.
+    `available` is only ever true for `status="available"` tools whose
+    `required_integration` is actually configured for this tenant --
+    `planned` tools always report `available=False` so the Agent Builder
+    UI never lets them be enabled."""
+
+    key: str
+    name: str
+    description: str
+    status: Literal["available", "planned"]
+    required_integration: Literal["booking", "whatsapp", "crm", "chatwoot"] | None
+    available: bool
+    input_schema: dict[str, Any]
 
 
 class AgentResponse(_StrictModel):

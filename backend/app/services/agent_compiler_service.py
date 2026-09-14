@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pydantic import ValidationError
 
+from app.domain.tool_registry import get_tool
 from app.domain.voice_registry import VoiceRegistryValidationError, resolve_execution_model_id
 from app.models.agents import TenantAgent, TenantAgentVersion
 from app.schemas.agents import AgentBehavior, AgentIdentity, AgentInstructions
@@ -71,6 +72,29 @@ class AgentCompilerService:
                     **realtime.get("settings", {}),
                 }
             runtime_binding["realtime"] = realtime
+
+        # Resolve runtime_binding_json["tools"] (key/enabled/config) into
+        # the compiled shape the runtime actually needs (key/name/
+        # description/input_schema), dropping `config` -- the tool-invoke
+        # endpoint re-resolves it itself, so it never needs to transit
+        # through the runtime/LLM. Defensive by design: an unknown or
+        # no-longer-available key on an already-published version is
+        # skipped rather than raising -- the hard validation already
+        # happened at publish time (AgentService._publish_tools_preflight);
+        # compiling a published version must never fail because the
+        # Registry changed afterwards.
+        compiled_tools = []
+        for binding in runtime_binding.pop("tools", []) or []:
+            if not isinstance(binding, dict) or not binding.get("enabled", True):
+                continue
+            tool = get_tool(str(binding.get("key") or ""))
+            if tool is None or tool.status != "available":
+                continue
+            compiled_tools.append({
+                "key": tool.key, "name": tool.name,
+                "description": tool.description, "input_schema": tool.input_schema,
+            })
+
         try:
             return RuntimeSessionSpecV1(
                 session_id=session_id,
@@ -83,6 +107,7 @@ class AgentCompilerService:
                 language=version.language,
                 timezone=version.timezone,
                 runtime=runtime_binding,
+                tools=compiled_tools,
                 context=context or {},
             )
         except ValidationError as exc:

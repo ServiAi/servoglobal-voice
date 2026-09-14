@@ -19,15 +19,19 @@ import {
 import { ActionDialog } from '@/components/crm/voice-experiences/ActionDialog';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { AgentModelSection } from './AgentModelSection';
 import { AgentStatusBadge } from './AgentStatusBadge';
+import { AgentToolsSection } from './AgentToolsSection';
 import { AgentVoiceTest } from './AgentVoiceTest';
 import type { VoiceAgentConfigResponse } from '@/types/crm';
 import type {
   AgentBehavior,
   AgentConfirmationStrategy,
   AgentInterruptions,
+  AgentModelSettings,
   AgentResponse,
   AgentResponseStyle,
+  AgentToolCatalogEntry,
   AgentTurnDetection,
   AgentVersionResponse,
   AgentVoiceConfig,
@@ -72,6 +76,13 @@ type FormState = {
   voice_stability: string;
   voice_similarity_boost: string;
   voice_use_speaker_boost: boolean;
+  // Raw string form of provider/model runtime settings (e.g. temperature),
+  // keyed by the VoiceModelResponse.parameters key. Converted to typed
+  // values only at submit time -- see buildModelSettingsPayload.
+  model_settings: Record<string, string>;
+  // Keys of AgentToolCatalogEntry the agent has enabled. `config` is
+  // always {} for both V1 tools (see types/agents.ts::AgentToolBinding).
+  enabled_tools: string[];
 };
 
 const DEFAULT_EXTERNAL_VOICE_MODEL = 'eleven_turbo_v2_5';
@@ -103,12 +114,19 @@ function defaultForm(): FormState {
     voice_stability: '',
     voice_similarity_boost: '',
     voice_use_speaker_boost: true,
+    model_settings: {},
+    enabled_tools: [],
   };
 }
 
 function toForm(agent: AgentResponse, draft: AgentVersionResponse): FormState {
   const voice = draft.runtime_binding.realtime.voice ?? null;
   const settings = (voice?.settings ?? {}) as Record<string, unknown>;
+  const modelSettings = (draft.runtime_binding.realtime.settings ?? {}) as Record<string, unknown>;
+  const model_settings: Record<string, string> = {};
+  for (const [key, value] of Object.entries(modelSettings)) {
+    model_settings[key] = typeof value === 'boolean' ? String(value) : String(value ?? '');
+  }
   return {
     name: agent.name,
     description: agent.description ?? '',
@@ -135,6 +153,8 @@ function toForm(agent: AgentResponse, draft: AgentVersionResponse): FormState {
     voice_stability: typeof settings.stability === 'number' ? String(settings.stability) : '',
     voice_similarity_boost: typeof settings.similarity_boost === 'number' ? String(settings.similarity_boost) : '',
     voice_use_speaker_boost: typeof settings.use_speaker_boost === 'boolean' ? settings.use_speaker_boost : true,
+    model_settings,
+    enabled_tools: (draft.runtime_binding.tools ?? []).filter((tool) => tool.enabled).map((tool) => tool.key),
   };
 }
 
@@ -160,6 +180,60 @@ function buildVoicePayload(form: FormState): AgentVoiceConfig | null {
   return { mode: 'provider_external', provider: 'elevenlabs', voice_id: voiceId, settings };
 }
 
+/** Converts the raw string form_settings back into typed values, and drops
+ * any key the currently selected model doesn't declare as supported=true --
+ * switching provider/model away from one that supported a parameter must
+ * not silently resend a now-unsupported value. */
+function buildModelSettingsPayload(form: FormState, selectedModel: VoiceModelResponse | null): AgentModelSettings {
+  const settings: AgentModelSettings = {};
+  if (!selectedModel) return settings;
+  for (const [key, spec] of Object.entries(selectedModel.parameters)) {
+    if (!spec.supported) continue;
+    const raw = form.model_settings[key];
+    if (raw === undefined || raw === '') continue;
+    if (spec.type === 'boolean') {
+      settings[key] = raw === 'true';
+    } else if (spec.type === 'number' || spec.type === 'integer') {
+      const parsed = Number(raw);
+      if (!Number.isNaN(parsed)) settings[key] = parsed;
+    } else {
+      settings[key] = raw;
+    }
+  }
+  return settings;
+}
+
+/** Only ever binds tools the catalog still reports as `available` -- an
+ * enabled key that became unavailable (or was removed from the Registry)
+ * between load and save is silently dropped rather than resent, mirroring
+ * buildModelSettingsPayload's "never resend what's no longer valid" rule. */
+function buildToolsPayload(form: FormState, catalog: AgentToolCatalogEntry[]) {
+  const availableKeys = new Set(catalog.filter((tool) => tool.available).map((tool) => tool.key));
+  return form.enabled_tools
+    .filter((key) => availableKeys.has(key))
+    .map((key) => ({ key, enabled: true, config: {} }));
+}
+
+/** Publish-time errors carry a stable code as (a prefix of) the response
+ * detail -- see AgentService._publish_tools_preflight/_publish_voice_preflight
+ * on the backend. Draft-save validation errors stay generic (see
+ * VoiceSelectionService/voice_registry.validate_model_settings, which
+ * raise prose messages for inline form issues, not stable codes) -- this
+ * mapping only covers the codes a publish preflight can actually raise. */
+const PUBLISH_ERROR_CODE_KEYS: Record<string, string> = {
+  tool_not_found: 'errors.toolNotFound',
+  tool_not_available: 'errors.toolNotAvailable',
+  tool_integration_not_configured: 'errors.toolIntegrationNotConfigured',
+  voice_not_accessible: 'errors.voiceNotAccessible',
+  external_tts_credentials_unavailable: 'errors.voiceCredentialsUnavailable',
+  provider_credentials_unavailable: 'errors.voiceCredentialsUnavailable',
+};
+
+function publishErrorMessage(t: ReturnType<typeof useTranslations>, detail: string | undefined): string {
+  const code = Object.keys(PUBLISH_ERROR_CODE_KEYS).find((known) => detail?.startsWith(known));
+  return code ? t(PUBLISH_ERROR_CODE_KEYS[code]) : t('errors.publishValidation');
+}
+
 async function playAudioBase64(base64: string) {
   const audio = new Audio(`data:audio/wav;base64,${base64}`);
   try {
@@ -171,7 +245,7 @@ async function playAudioBase64(base64: string) {
   }
 }
 
-type Tab = 'general' | 'behavior' | 'voice' | 'versions';
+type Tab = 'general' | 'behavior' | 'model' | 'voice' | 'tools' | 'versions';
 
 type Props = {
   mode: 'create' | 'edit';
@@ -181,6 +255,7 @@ type Props = {
   providers: VoiceProviderResponse[];
   models: VoiceModelResponse[];
   providerVoices?: UltravoxVoiceSummary[];
+  toolCatalog?: AgentToolCatalogEntry[];
   initialAgent?: AgentResponse | null;
   initialDraft?: AgentVersionResponse | null;
   initialVersions?: AgentVersionResponse[];
@@ -200,6 +275,7 @@ export function AgentBuilder({
   providers,
   models,
   providerVoices = [],
+  toolCatalog = [],
   initialAgent = null,
   initialDraft = null,
   initialVersions = [],
@@ -244,13 +320,16 @@ export function AgentBuilder({
   const archived = agent?.status === 'archived';
   const editable = canEdit && !archived;
   const hasDraft = draft !== null;
+  const selectedModel = models.find((m) => m.provider_key === form.provider && m.key === form.model) ?? null;
 
   const tabs = useMemo(
     () =>
       [
         { key: 'general' as const, label: t('tabs.general') },
         { key: 'behavior' as const, label: t('tabs.behavior') },
+        { key: 'model' as const, label: t('tabs.model') },
         { key: 'voice' as const, label: t('tabs.voice') },
+        { key: 'tools' as const, label: t('tabs.tools') },
         ...(mode === 'edit' ? [{ key: 'versions' as const, label: t('tabs.versions') }] : []),
       ],
     [t, mode]
@@ -258,6 +337,16 @@ export function AgentBuilder({
 
   function setBehavior<K extends keyof AgentBehavior>(key: K, value: AgentBehavior[K]) {
     setForm((current) => ({ ...current, behavior: { ...current.behavior, [key]: value } }));
+    setSaved(false);
+  }
+
+  function setToolEnabled(key: string, toolEnabled: boolean) {
+    setForm((current) => ({
+      ...current,
+      enabled_tools: toolEnabled
+        ? [...current.enabled_tools, key]
+        : current.enabled_tools.filter((existing) => existing !== key),
+    }));
     setSaved(false);
   }
 
@@ -275,6 +364,16 @@ export function AgentBuilder({
     setForm((current) => ({ ...current, [key]: value }));
     setSaved(false);
     setPreviewedExternalVoice(false);
+  }
+
+  function setModelSettingText(key: string, value: string) {
+    setForm((current) => ({ ...current, model_settings: { ...current.model_settings, [key]: value } }));
+    setSaved(false);
+  }
+
+  function setModelSettingBoolean(key: string, value: boolean) {
+    setForm((current) => ({ ...current, model_settings: { ...current.model_settings, [key]: String(value) } }));
+    setSaved(false);
   }
 
   async function handlePreviewProviderVoice() {
@@ -332,6 +431,8 @@ export function AgentBuilder({
         observed_published_revision_id: form.observed_published_revision_id || null,
       } : null,
       voice: form.management_mode === 'provider_managed' ? null : buildVoicePayload(form),
+      settings: form.management_mode === 'provider_managed' ? {} : buildModelSettingsPayload(form, selectedModel),
+      tools: form.management_mode === 'provider_managed' ? [] : buildToolsPayload(form, toolCatalog),
     });
     setSaving(false);
     if (!result.ok) {
@@ -365,6 +466,8 @@ export function AgentBuilder({
         observed_published_revision_id: form.observed_published_revision_id || null,
       } : null,
       voice: form.management_mode === 'provider_managed' ? null : buildVoicePayload(form),
+      settings: form.management_mode === 'provider_managed' ? {} : buildModelSettingsPayload(form, selectedModel),
+      tools: form.management_mode === 'provider_managed' ? [] : buildToolsPayload(form, toolCatalog),
     };
   }
 
@@ -404,7 +507,7 @@ export function AgentBuilder({
     setPublishing(false);
     if (!publishResult.ok) {
       setServerError(
-        t(publishResult.status === 422 ? 'errors.publishValidation' : 'errors.generic')
+        publishResult.status === 422 ? publishErrorMessage(t, publishResult.detail) : t('errors.generic')
       );
       return;
     }
@@ -502,21 +605,32 @@ export function AgentBuilder({
     return (
       <div className="space-y-6">
         <GeneralFields field={field} disabled={!canEdit} providerManaged={form.management_mode === 'provider_managed'} t={t} />
-        <VoiceFields
+        <AgentModelSection
           pipelineType={form.pipeline_type}
           provider={form.provider}
           model={form.model}
           providers={providers}
           models={models}
-          providerVoices={providerVoices}
-          voiceAgentConfigId={form.voice_agent_config_id}
-          voiceAgents={voiceAgents}
           managementMode={form.management_mode}
           providerAgentId={form.provider_agent_id}
           providerAgentName={form.provider_agent_name}
           observedRevisionId={form.observed_published_revision_id}
           currentRevisionId={providerAgents.find((item) => item.agent_id === form.provider_agent_id)?.published_revision_id ?? null}
           hasBlockingTools={providerAgents.find((item) => item.agent_id === form.provider_agent_id)?.has_unsupported_client_tools ?? false}
+          modelSettings={form.model_settings}
+          disabled={!canEdit}
+          onManagementModeChange={(value) => setForm((current) => ({ ...current, management_mode: value, model: value === 'provider_managed' ? 'ultravox-v0.7' : 'ultravox' }))}
+          onProviderChange={(value) => setForm((current) => ({ ...current, provider: value }))}
+          onModelChange={(value) => setForm((current) => ({ ...current, model: value }))}
+          onModelSettingTextChange={setModelSettingText}
+          onModelSettingBooleanChange={setModelSettingBoolean}
+          t={t}
+        />
+        <VoiceFields
+          managementMode={form.management_mode}
+          providerVoices={providerVoices}
+          voiceAgentConfigId={form.voice_agent_config_id}
+          voiceAgents={voiceAgents}
           voiceMode={form.voice_mode}
           voiceId={form.voice_id}
           voiceModel={form.voice_model}
@@ -527,9 +641,6 @@ export function AgentBuilder({
           previewBusy={previewBusy}
           previewedExternalVoice={previewedExternalVoice}
           disabled={!canEdit}
-          onManagementModeChange={(value) => setForm((current) => ({ ...current, management_mode: value, model: value === 'provider_managed' ? 'ultravox-v0.7' : 'ultravox' }))}
-          onProviderChange={(value) => setForm((current) => ({ ...current, provider: value }))}
-          onModelChange={(value) => setForm((current) => ({ ...current, model: value }))}
           onVoiceAgentConfigChange={(value) => setForm((current) => ({ ...current, voice_agent_config_id: value }))}
           onVoiceModeChange={(value) => setVoiceField('voice_mode', value)}
           onVoiceIdChange={(value) => setVoiceField('voice_id', value)}
@@ -539,6 +650,16 @@ export function AgentBuilder({
           onPreviewExternalVoice={handlePreviewExternalVoice}
           t={t}
         />
+        {form.management_mode === 'serviglobal_managed' ? (
+          <AgentToolsSection
+            locale={locale}
+            catalog={toolCatalog}
+            enabledKeys={form.enabled_tools}
+            disabled={!canEdit}
+            onToggle={setToolEnabled}
+            t={t}
+          />
+        ) : null}
         {serverError ? <ErrorBanner message={serverError} /> : null}
         <div className="flex justify-end">
           <Button onClick={handleCreate} disabled={!canEdit || saving || !form.name.trim()}>
@@ -664,32 +785,21 @@ export function AgentBuilder({
             />
           ) : null}
 
-          {tab === 'voice' ? (
-            <VoiceFields
+          {tab === 'model' ? (
+            <AgentModelSection
               pipelineType={form.pipeline_type}
               provider={form.provider}
               model={form.model}
               providers={providers}
               models={models}
-              providerVoices={providerVoices}
-              voiceAgentConfigId={form.voice_agent_config_id}
-              voiceAgents={voiceAgents}
               managementMode={form.management_mode}
               providerAgentId={form.provider_agent_id}
               providerAgentName={form.provider_agent_name}
               observedRevisionId={form.observed_published_revision_id}
               currentRevisionId={providerAgents.find((item) => item.agent_id === form.provider_agent_id)?.published_revision_id ?? null}
               hasBlockingTools={providerAgents.find((item) => item.agent_id === form.provider_agent_id)?.has_unsupported_client_tools ?? false}
-              voiceMode={form.voice_mode}
-              voiceId={form.voice_id}
-              voiceModel={form.voice_model}
-              voiceSpeed={form.voice_speed}
-              voiceStability={form.voice_stability}
-              voiceSimilarityBoost={form.voice_similarity_boost}
-              voiceUseSpeakerBoost={form.voice_use_speaker_boost}
-              previewBusy={previewBusy}
-              previewedExternalVoice={previewedExternalVoice}
-              disabled={!editable || !hasDraft || form.management_mode === 'provider_managed'}
+              modelSettings={form.model_settings}
+              disabled={!editable || !hasDraft}
               onManagementModeChange={(value) => {
                 setForm((current) => ({ ...current, management_mode: value, model: value === 'provider_managed' ? 'ultravox-v0.7' : 'ultravox' }));
                 setSaved(false);
@@ -702,6 +812,28 @@ export function AgentBuilder({
                 setForm((current) => ({ ...current, model: value }));
                 setSaved(false);
               }}
+              onModelSettingTextChange={setModelSettingText}
+              onModelSettingBooleanChange={setModelSettingBoolean}
+              t={t}
+            />
+          ) : null}
+
+          {tab === 'voice' ? (
+            <VoiceFields
+              managementMode={form.management_mode}
+              providerVoices={providerVoices}
+              voiceAgentConfigId={form.voice_agent_config_id}
+              voiceAgents={voiceAgents}
+              voiceMode={form.voice_mode}
+              voiceId={form.voice_id}
+              voiceModel={form.voice_model}
+              voiceSpeed={form.voice_speed}
+              voiceStability={form.voice_stability}
+              voiceSimilarityBoost={form.voice_similarity_boost}
+              voiceUseSpeakerBoost={form.voice_use_speaker_boost}
+              previewBusy={previewBusy}
+              previewedExternalVoice={previewedExternalVoice}
+              disabled={!editable || !hasDraft || form.management_mode === 'provider_managed'}
               onVoiceAgentConfigChange={(value) => {
                 setForm((current) => ({ ...current, voice_agent_config_id: value }));
                 setSaved(false);
@@ -712,6 +844,17 @@ export function AgentBuilder({
               onVoiceSpeakerBoostChange={(value) => setVoiceField('voice_use_speaker_boost', value)}
               onPreviewProviderVoice={handlePreviewProviderVoice}
               onPreviewExternalVoice={handlePreviewExternalVoice}
+              t={t}
+            />
+          ) : null}
+
+          {tab === 'tools' ? (
+            <AgentToolsSection
+              locale={locale}
+              catalog={toolCatalog}
+              enabledKeys={form.enabled_tools}
+              disabled={!editable || !hasDraft || form.management_mode === 'provider_managed'}
+              onToggle={setToolEnabled}
               t={t}
             />
           ) : null}
@@ -921,20 +1064,10 @@ function BehaviorFields({
 }
 
 function VoiceFields({
-  pipelineType,
-  provider,
-  model,
-  providers,
-  models,
+  managementMode,
   providerVoices,
   voiceAgentConfigId,
   voiceAgents,
-  managementMode,
-  providerAgentId,
-  providerAgentName,
-  observedRevisionId,
-  currentRevisionId,
-  hasBlockingTools,
   voiceMode,
   voiceId,
   voiceModel,
@@ -945,9 +1078,6 @@ function VoiceFields({
   previewBusy,
   previewedExternalVoice,
   disabled,
-  onManagementModeChange,
-  onProviderChange,
-  onModelChange,
   onVoiceAgentConfigChange,
   onVoiceModeChange,
   onVoiceIdChange,
@@ -957,20 +1087,10 @@ function VoiceFields({
   onPreviewExternalVoice,
   t,
 }: {
-  pipelineType: 'realtime';
-  provider: string;
-  model: string;
-  providers: VoiceProviderResponse[];
-  models: VoiceModelResponse[];
   providerVoices: UltravoxVoiceSummary[];
   voiceAgentConfigId: string;
   voiceAgents: VoiceAgentConfigResponse[];
   managementMode: 'serviglobal_managed' | 'provider_managed';
-  providerAgentId: string;
-  providerAgentName: string;
-  observedRevisionId: string;
-  currentRevisionId: string | null;
-  hasBlockingTools: boolean;
   voiceMode: 'provider' | 'provider_external';
   voiceId: string;
   voiceModel: string;
@@ -981,9 +1101,6 @@ function VoiceFields({
   previewBusy: 'provider' | 'provider_external' | null;
   previewedExternalVoice: boolean;
   disabled: boolean;
-  onManagementModeChange: (value: 'serviglobal_managed' | 'provider_managed') => void;
-  onProviderChange: (value: string) => void;
-  onModelChange: (value: string) => void;
   onVoiceAgentConfigChange: (value: string) => void;
   onVoiceModeChange: (value: 'provider' | 'provider_external') => void;
   onVoiceIdChange: (value: string) => void;
@@ -996,118 +1113,8 @@ function VoiceFields({
   onPreviewExternalVoice: () => void;
   t: ReturnType<typeof useTranslations>;
 }) {
-  const realtimeModels = models.filter((m) => m.model_type === 'realtime' && m.provider_key === provider);
-  const selectedModel = models.find((m) => m.provider_key === provider && m.key === model) ?? null;
-  const activeCapabilities = selectedModel
-    ? Object.entries(selectedModel.capabilities).filter(([, enabled]) => enabled)
-    : [];
-
   return (
     <div className="space-y-4">
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">{t('voice.pipelineType')}</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-wrap gap-2">
-          <span
-            className={`rounded-full px-3 py-1 text-xs font-medium ${
-              pipelineType === 'realtime'
-                ? 'bg-primary text-primary-foreground'
-                : 'border border-dashed border-border text-muted-foreground'
-            }`}
-          >
-            {t('voice.speechToSpeech')}
-          </span>
-          <span className="rounded-full border border-dashed border-border px-3 py-1 text-xs text-muted-foreground">
-            {t('voice.modular')} · {t('voice.comingSoon')}
-          </span>
-          <span className="rounded-full border border-dashed border-border px-3 py-1 text-xs text-muted-foreground">
-            {t('voice.hybrid')} · {t('voice.comingSoon')}
-          </span>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">{t('providerManaged.title')}</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <label className="flex flex-col gap-1.5 text-sm">
-            <span className="font-medium text-foreground">{t('providerManaged.source')}</span>
-            <select className={FIELD_CLASS} disabled={disabled || Boolean(providerAgentId)} value={managementMode} onChange={(event) => onManagementModeChange(event.target.value as 'serviglobal_managed' | 'provider_managed')}>
-              <option value="serviglobal_managed">{t('providerManaged.serviglobal')}</option>
-              <option value="provider_managed" disabled={!providerAgentId}>{t('providerManaged.ultravox')}</option>
-            </select>
-          </label>
-          {managementMode === 'provider_managed' ? (
-            <div className="rounded-lg border border-cyan-500/30 bg-cyan-500/5 p-4 text-sm">
-              <p className="font-medium">{providerAgentName || providerAgentId}</p>
-              <p className="mt-1 text-muted-foreground">{t('providerManaged.remoteId', { id: providerAgentId })}</p>
-              <p className="text-muted-foreground">{t('providerManaged.revision', { revision: observedRevisionId || t('providerManaged.unpublished') })}</p>
-              {currentRevisionId && observedRevisionId && currentRevisionId !== observedRevisionId ? <p className="mt-2 font-medium text-amber-700">{t('providerManaged.drift', { revision: currentRevisionId })}</p> : null}
-              {hasBlockingTools ? <p className="mt-2 font-medium text-destructive">{t('providerManaged.blockedTools')}</p> : null}
-              <p className="mt-2 text-xs text-muted-foreground">{t('providerManaged.help')}</p>
-            </div>
-          ) : null}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">{t('voice.providerModel')}</CardTitle>
-        </CardHeader>
-        <CardContent className="grid gap-4 sm:grid-cols-2">
-          <label className="flex flex-col gap-1.5 text-sm">
-            <span className="font-medium text-foreground">{t('voice.provider')}</span>
-            <select
-              className={FIELD_CLASS}
-              disabled={disabled || managementMode === 'provider_managed'}
-              value={provider}
-              onChange={(e) => onProviderChange(e.target.value)}
-            >
-              {providers.map((p) => (
-                <option key={p.key} value={p.key} disabled={p.status !== 'active'}>
-                  {p.name}
-                  {p.status !== 'active' ? ` (${t('voice.comingSoon')})` : ''}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="flex flex-col gap-1.5 text-sm">
-            <span className="font-medium text-foreground">{t('voice.model')}</span>
-            <select
-              className={FIELD_CLASS}
-              disabled={disabled || managementMode === 'provider_managed' || realtimeModels.length === 0}
-              value={model}
-              onChange={(e) => onModelChange(e.target.value)}
-            >
-              {realtimeModels.length === 0 ? (
-                <option value="">{t('voice.noModels')}</option>
-              ) : (
-                realtimeModels.map((m) => (
-                  <option key={m.id} value={m.key} disabled={m.implementation_status !== 'available'}>
-                    {m.name}
-                    {m.implementation_status !== 'available' ? ` (${t('voice.comingSoon')})` : ''}
-                  </option>
-                ))
-              )}
-            </select>
-          </label>
-        </CardContent>
-        {activeCapabilities.length > 0 ? (
-          <CardContent className="flex flex-wrap gap-2 pt-0">
-            {activeCapabilities.map(([key]) => (
-              <span
-                key={key}
-                className="rounded-full bg-cyan-500/10 px-2.5 py-1 text-xs font-medium text-cyan-700 dark:text-cyan-300"
-              >
-                {t(`voice.capabilities.${key}`)}
-              </span>
-            ))}
-          </CardContent>
-        ) : null}
-      </Card>
-
       {managementMode === 'serviglobal_managed' ? (
         <Card>
           <CardHeader>

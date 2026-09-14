@@ -1319,7 +1319,7 @@
       "versionStatus": { "draft": "Borrador", "published": "Publicada", "superseded": "Reemplazada" },
       "featureDisabled": { "title": "Funcionalidad no habilitada", "description": "Agent Builder no está habilitado para este tenant." },
       "accessDenied": { "title": "Acceso restringido", "description": "Tu rol no tiene permiso para administrar agentes." },
-      "errors": { "loadTitle": "No se pudo cargar", "generic": "Ocurrió un error inesperado. Intenta de nuevo.", "conflict": "La acción no es válida en el estado actual del agente.", "deleteConflict": "No se pudo eliminar el agente. Actualiza la página y vuelve a intentarlo.", "deleteRequiresArchived": "El agente aún no figura como archivado en el servidor. Actualiza la página antes de eliminarlo.", "deleteRoomCloseFailed": "No se pudo confirmar el cierre de una llamada activa. El agente sigue archivado; verifica LiveKit e intenta de nuevo.", "deleteDispatching": "Una sesión todavía se está iniciando. Espera unos segundos y vuelve a intentar la eliminación.", "deleteSessionUnverified": "No se pudo verificar la sala de una sesión activa. Revisa su estado antes de eliminar el agente.", "validation": "Revisa los campos del formulario.", "publishValidation": "Revisa la configuración del agente antes de publicar." },
+      "errors": { "loadTitle": "No se pudo cargar", "generic": "Ocurrió un error inesperado. Intenta de nuevo.", "conflict": "La acción no es válida en el estado actual del agente.", "deleteConflict": "No se pudo eliminar el agente. Actualiza la página y vuelve a intentarlo.", "deleteRequiresArchived": "El agente aún no figura como archivado en el servidor. Actualiza la página antes de eliminarlo.", "deleteRoomCloseFailed": "No se pudo confirmar el cierre de una llamada activa. El agente sigue archivado; verifica LiveKit e intenta de nuevo.", "deleteDispatching": "Una sesión todavía se está iniciando. Espera unos segundos y vuelve a intentar la eliminación.", "deleteSessionUnverified": "No se pudo verificar la sala de una sesión activa. Revisa su estado antes de eliminar el agente.", "validation": "Revisa los campos del formulario.", "publishValidation": "Revisa la configuración del agente antes de publicar.", "toolNotFound": "Una herramienta seleccionada ya no existe en el catálogo. Quítala y guarda de nuevo.", "toolNotAvailable": "Una herramienta seleccionada todavía no está disponible para ejecutarse.", "toolIntegrationNotConfigured": "Una herramienta habilitada requiere una integración que aún no está configurada.", "voiceNotAccessible": "La voz configurada ya no está disponible en el proveedor. Elige otra.", "voiceCredentialsUnavailable": "Faltan credenciales del proveedor de voz externo para esta cuenta." },
       "list": {
         "eyebrow": "Agentes ServiGlobal",
         "count": "{count, plural, =0 {Sin agentes} one {# agente} other {# agentes}}",
@@ -1340,7 +1340,7 @@
       },
       "common": { "cancel": "Cancelar" },
       "providerManaged": { "title": "Administración", "source": "Fuente de verdad", "serviglobal": "ServiGlobal", "ultravox": "Ultravox", "remoteId": "ID remoto: {id}", "revision": "Revisión observada: {revision}", "unpublished": "sin publicar", "drift": "Drift detectado. Revisión publicada actual: {revision}", "blockedTools": "La revisión actual contiene tools cliente no soportadas y no puede ejecutarse.", "help": "Prompt, voz y tools permanecen controlados por Ultravox. Se revalidan antes de cada llamada." },
-      "tabs": { "general": "General", "behavior": "Comportamiento", "voice": "Voz y modelos", "versions": "Versiones" },
+      "tabs": { "general": "General", "behavior": "Comportamiento", "model": "Modelo", "voice": "Voz", "tools": "Herramientas", "versions": "Versiones" },
       "fields": {
         "name": "Nombre", "description": "Descripción", "language": "Idioma", "timezone": "Zona horaria",
         "role": "Rol", "objective": "Objetivo", "systemPrompt": "Prompt / instrucciones", "greeting": "Saludo", "closing": "Despedida",
@@ -1352,6 +1352,19 @@
         "interruptions": { "conservative": "Conservadoras", "balanced": "Balanceadas", "responsive": "Responsivas" },
         "turnDetection": { "automatic": "Automática", "conservative": "Conservadora", "balanced": "Balanceada", "responsive": "Responsiva" },
         "confirmationStrategy": { "important_data": "Solo datos importantes", "always": "Siempre", "never": "Nunca" }
+      },
+      "model": {
+        "parametersTitle": "Parámetros soportados",
+        "parameters": {
+          "temperature": "Temperature", "max_duration": "Duración máxima", "useDefault": "Usar valor por defecto"
+        }
+      },
+      "tools": {
+        "title": "Herramientas disponibles",
+        "empty": "No hay herramientas disponibles todavía.",
+        "requiresIntegration": "Requiere configurar {integration}.",
+        "configureIntegration": "Configurar integración",
+        "integration": { "booking": "Agenda", "whatsapp": "WhatsApp", "crm": "CRM", "chatwoot": "Chatwoot" }
       },
       "voice": {
         "pipelineType": "Arquitectura", "speechToSpeech": "Speech-to-Speech", "ultravox": "Ultravox", "comingSoon": "Próximamente",

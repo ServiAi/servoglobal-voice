@@ -73,6 +73,24 @@ class RealtimeModelSpec(_StrictModel):
         return value
 
 
+class CompiledToolSpec(_StrictModel):
+    """A tool the runtime should register with the LLM/provider for this
+    session. Deliberately carries only what the LLM needs to know a tool
+    exists and how to call it (key/name/description/input_schema) -- never
+    the binding's `config` (e.g. which WhatsApp template), which the
+    backend re-resolves itself when the tool is actually invoked, and
+    never a handler reference or credentials. Compiled once by
+    AgentCompilerService from runtime_binding_json["tools"] against
+    app.domain.tool_registry; nothing here is trusted at face value by the
+    tool-invoke endpoint, which re-validates against the published
+    version's own binding."""
+
+    key: str
+    name: str
+    description: str
+    input_schema: dict
+
+
 class RealtimeRuntimeSpec(_StrictModel):
     pipeline_type: Literal["realtime"]
     realtime: RealtimeModelSpec
@@ -115,6 +133,8 @@ class RuntimeSessionSpecV1(_StrictModel):
     timezone: str
 
     runtime: RuntimeSpec
+
+    tools: list[CompiledToolSpec] = Field(default_factory=list)
 
     context: dict = Field(default_factory=dict)
 

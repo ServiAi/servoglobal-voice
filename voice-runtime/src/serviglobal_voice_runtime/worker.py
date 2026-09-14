@@ -47,7 +47,7 @@ async def run_job(ctx: Any, settings: Settings) -> None:
 
         ctx.log_context_fields = {"voice_session_id": spec.session_id, "tenant_id": spec.tenant_id, "agent_id": spec.agent_id, "agent_version_id": spec.agent_version_id, "livekit_room_name": ctx.room.name, "provider": spec.runtime.realtime.provider, "livekit_job_id": ctx.job.id, "runtime_engine": "livekit"}
         logger.info("Voice runtime job starting", extra=ctx.log_context_fields)
-        await RealtimeProviderFactory(settings, credential_resolver).resolve(spec.runtime.realtime.provider).run(ctx, spec, send_event)
+        await RealtimeProviderFactory(settings, credential_resolver, client).resolve(spec.runtime.realtime.provider).run(ctx, spec, send_event)
     except ProviderCredentialError as exc:
         logger.error(
             "Voice runtime credential resolution failed",

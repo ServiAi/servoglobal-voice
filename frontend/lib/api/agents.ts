@@ -6,12 +6,17 @@ import type {
   AgentDraftUpdateRequest,
   AgentPublishRequest,
   AgentResponse,
+  AgentToolCatalogEntry,
   AgentUpdateRequest,
   AgentVersionResponse,
 } from '@/types/agents';
 
 export function fetchAgents(accessToken: string) {
   return requestAgentEndpoint<AgentResponse[]>('GET', '', accessToken);
+}
+
+export function fetchToolCatalog(accessToken: string) {
+  return requestAgentEndpoint<AgentToolCatalogEntry[]>('GET', 'tools/catalog', accessToken);
 }
 
 export function fetchAgent(accessToken: string, agentId: string) {

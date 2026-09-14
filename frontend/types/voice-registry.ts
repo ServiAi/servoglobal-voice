@@ -10,11 +10,17 @@ export type VoiceProviderResponse = {
   supports_byok: boolean;
 };
 
+export type ParameterSpecType = 'number' | 'integer' | 'boolean' | 'string' | 'enum';
+
 export type ParameterSpecResponse = {
   supported: boolean;
+  type?: ParameterSpecType | null;
   min?: number | null;
   max?: number | null;
+  step?: number | null;
   default?: unknown;
+  options?: string[] | null;
+  advanced?: boolean;
 };
 
 export type VoiceModelResponse = {
