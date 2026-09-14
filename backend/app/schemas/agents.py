@@ -78,6 +78,27 @@ class AgentVoiceConfig(_StrictModel):
         return _reject_secret_keys(value)
 
 
+class AgentToolBinding(_StrictModel):
+    """One tool bound to a serviglobal_managed agent version. `key` is
+    validated against the platform Tool Registry (app.domain.tool_registry)
+    by AgentService, not here -- this schema validates shape only: key
+    length, no duplicate enforcement (that needs the whole list), and no
+    secrets in `config`. `config` is binding-time configuration (e.g. which
+    WhatsApp template to use), never the per-call arguments a tool
+    invocation carries -- those come from the LLM at call time and are
+    validated against ToolDefinition.input_schema separately.
+    """
+
+    key: str = Field(min_length=1, max_length=80)
+    enabled: bool = True
+    config: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("config")
+    @classmethod
+    def reject_secret_config(cls, value: dict[str, Any]) -> dict[str, Any]:
+        return _reject_secret_keys(value)
+
+
 class ProviderManagedOverrides(_StrictModel):
     join_timeout: str | None = Field(default=None, max_length=24)
     max_duration: str | None = Field(default=None, max_length=24)
@@ -96,6 +117,10 @@ class _RuntimeSelection(_StrictModel):
     # business logic, validated by AgentService against
     # voice_registry.validate_model_settings(), not by this schema.
     settings: dict[str, Any] = Field(default_factory=dict)
+    # Tools bound to this agent version. Which keys are known/executable
+    # comes from app.domain.tool_registry, validated by AgentService --
+    # this schema only validates shape (see AgentToolBinding).
+    tools: list[AgentToolBinding] = Field(default_factory=list)
 
     @field_validator("settings")
     @classmethod
