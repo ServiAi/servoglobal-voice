@@ -5,6 +5,7 @@ from typing import Any, Callable
 from sqlalchemy.orm import Session
 
 from app.domain.tool_registry import get_tool
+from app.models.voice_sessions import VoiceSession
 from app.schemas.session_context import SessionContextV1
 from app.services.integration_event_service import IntegrationEventService
 from app.services.voice_session_service import VoiceSessionError, VoiceSessionService
@@ -152,9 +153,21 @@ class ToolDispatchService:
             result = handler(self.db, session.tenant_id, arguments, context)
         except ToolExecutionError:
             self._record_event(session.tenant_id, session.agent_id, tool_key, status="error")
+            self._record_context_tool_event(session, tool_key, status="error")
             raise
         self._record_event(session.tenant_id, session.agent_id, tool_key, status="success")
+        self._record_context_tool_event(session, tool_key, status="success")
         return result
+
+    def _record_context_tool_event(self, session: VoiceSession, tool_key: str, *, status: str) -> None:
+        # Per-session narrative event (alongside the tenant-wide
+        # agent_tool_invoked audit event above) -- lets "what happened in
+        # this call" be read from VoiceSession.events alone. Same no-PII
+        # discipline: tool_key + outcome only, never arguments/results.
+        VoiceSessionService(self.db).record_event(
+            session, "session.context.tool_used", source="control-plane",
+            payload={"tool_key": tool_key, "status": status},
+        )
 
     @staticmethod
     def _validate_arguments(input_schema: dict[str, Any], arguments: dict[str, Any]) -> None:

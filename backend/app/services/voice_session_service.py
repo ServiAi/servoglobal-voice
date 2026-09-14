@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.models.agents import TenantAgent, TenantAgentVersion
 from app.models.voice_sessions import VoiceSession, VoiceSessionEvent
+from app.schemas.session_context import SessionContextV1
 from app.services.contact_resolution_service import ContactResolutionService
 
 
@@ -81,6 +82,7 @@ class VoiceSessionService:
         )
         self.db.add(session)
         self.db.flush()
+        self._record_context_events(session, context)
         self.record_event(session, "voice.session.requested", source="control-plane", commit=False)
         try:
             self.db.commit()
@@ -94,6 +96,35 @@ class VoiceSessionService:
             return existing
         self.db.refresh(session)
         return session
+
+    def _record_context_events(self, session: VoiceSession, context: SessionContextV1) -> None:
+        # Structured, PII-free observability for context resolution: only
+        # booleans and the session/tenant ids, never a name/phone/email --
+        # same discipline as ToolDispatchService's own audit events. Always
+        # emits "resolved" (the resolution step ran, whatever the outcome);
+        # additionally emits "contact_matched"/"lead_matched" only when
+        # something was actually found, and "unresolved" when no Contact
+        # could be matched at all (the caller may still be known -- see
+        # `caller_known` on the "resolved" payload for that).
+        contact_resolved = context.contact is not None
+        lead_resolved = context.lead is not None
+        campaign_resolved = context.campaign is not None
+        self.record_event(
+            session, "session.context.resolved", source="control-plane",
+            payload={
+                "contact_resolved": contact_resolved,
+                "lead_resolved": lead_resolved,
+                "campaign_resolved": campaign_resolved,
+                "caller_known": context.caller is not None,
+            },
+            commit=False,
+        )
+        if contact_resolved:
+            self.record_event(session, "session.context.contact_matched", source="control-plane", commit=False)
+        if lead_resolved:
+            self.record_event(session, "session.context.lead_matched", source="control-plane", commit=False)
+        if not contact_resolved:
+            self.record_event(session, "session.context.unresolved", source="control-plane", commit=False)
 
     def get(self, session_id: str, tenant_id: str | None = None) -> VoiceSession:
         query = select(VoiceSession).where(VoiceSession.id == session_id)

@@ -38,7 +38,11 @@ class VoiceSessionTests(Integration2ATestCase):
             second = service.create(self.tenant.id, agent_id, channel="internal_test", direction="internal", idempotency_key="same")
             self.assertEqual(first.id, second.id)
             self.assertEqual(second.agent_version_id, version_id)
-            self.assertEqual(first.events[0].event_type, "voice.session.requested")
+            # Session Context V1 also emits context-resolution events on
+            # creation (see test_context_events_* below); this only checks
+            # that the lifecycle event itself is still recorded.
+            event_types = [event.event_type for event in first.events]
+            self.assertIn("voice.session.requested", event_types)
 
     def test_rejects_non_active_agent_and_cross_tenant_lookup(self) -> None:
         agent_id = self._published_agent(status="draft")
@@ -107,6 +111,43 @@ class VoiceSessionTests(Integration2ATestCase):
                 VoiceSessionService(db).create(
                     self.tenant.id, agent_id, channel="webrtc", direction="internal", lead_id=other_lead_id
                 )
+
+    # -- context resolution observability (Fase G) --
+
+    def test_context_events_for_unresolved_caller(self) -> None:
+        agent_id = self._published_agent()
+        with SessionLocal() as db:
+            session = VoiceSessionService(db).create(self.tenant.id, agent_id, channel="webrtc", direction="internal")
+            event_types = {event.event_type for event in session.events}
+            self.assertIn("session.context.resolved", event_types)
+            self.assertIn("session.context.unresolved", event_types)
+            self.assertNotIn("session.context.contact_matched", event_types)
+            self.assertNotIn("session.context.lead_matched", event_types)
+            resolved_event = next(e for e in session.events if e.event_type == "session.context.resolved")
+            self.assertEqual(
+                resolved_event.payload_json,
+                {"contact_resolved": False, "lead_resolved": False, "campaign_resolved": False, "caller_known": False},
+            )
+
+    def test_context_events_for_resolved_lead_contain_no_pii(self) -> None:
+        agent_id = self._published_agent()
+        _, lead_id = self._seed_contact_and_lead(self.tenant.id)
+        with SessionLocal() as db:
+            session = VoiceSessionService(db).create(
+                self.tenant.id, agent_id, channel="webrtc", direction="internal", lead_id=lead_id
+            )
+            event_types = {event.event_type for event in session.events}
+            self.assertIn("session.context.contact_matched", event_types)
+            self.assertIn("session.context.lead_matched", event_types)
+            self.assertNotIn("session.context.unresolved", event_types)
+            resolved_event = next(e for e in session.events if e.event_type == "session.context.resolved")
+            self.assertTrue(resolved_event.payload_json["contact_resolved"])
+            self.assertTrue(resolved_event.payload_json["lead_resolved"])
+            # No name/phone/email anywhere in any context event's payload.
+            for event in session.events:
+                if event.event_type.startswith("session.context."):
+                    self.assertNotIn("Carlos", str(event.payload_json))
+                    self.assertNotIn("+57", str(event.payload_json))
 
     def test_existing_sessions_without_context_column_stay_compatible(self) -> None:
         # Simulates a pre-Session-Context-V1 row: session_context_json is

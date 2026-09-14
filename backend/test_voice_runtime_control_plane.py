@@ -473,6 +473,23 @@ class AgentToolInvokeEndpointTests(Integration2ATestCase):
         self.assertEqual(response.status_code, 502)
         self.assertIn("tool_execution_failed", response.text)
 
+    def test_tool_invocation_records_a_session_context_event_on_success_and_failure(self) -> None:
+        self._configure_whatsapp(self.tenant.id)
+        session_id = self._session_with_tools([{"key": "whatsapp.send_message", "enabled": True, "config": {}}])
+        with patch(
+            "app.services.whatsapp_message_service.WhatsAppMessageService.send_template_notification"
+        ) as mocked:
+            from app.services.whatsapp_message_service import WhatsAppSendResult
+
+            mocked.return_value = WhatsAppSendResult(status="sent", provider_message_id="wamid.123")
+            self._invoke(session_id, "whatsapp.send_message", {"to_phone": "+573000000001", "template_key": "booking_confirmation"})
+        with SessionLocal() as db:
+            session = VoiceSessionService(db).get(session_id)
+            tool_events = [e for e in session.events if e.event_type == "session.context.tool_used"]
+            self.assertEqual(len(tool_events), 1)
+            self.assertEqual(tool_events[0].payload_json, {"tool_key": "whatsapp.send_message", "status": "success"})
+            self.assertNotIn("+573000000001", str(tool_events[0].payload_json))
+
     def test_rejects_terminal_session(self) -> None:
         session_id = self._session_with_tools([{"key": "calendar.check_availability", "enabled": True, "config": {}}])
         with SessionLocal() as db:
