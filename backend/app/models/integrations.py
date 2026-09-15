@@ -767,12 +767,17 @@ class TenantSipRoute(Base, TimestampMixin):
     __table_args__ = (
         UniqueConstraint("tenant_id", name="uq_tenant_sip_routes_tenant"),
         UniqueConstraint("provider_config_id", name="uq_tenant_sip_routes_provider_config"),
+        UniqueConstraint("livekit_outbound_trunk_id", name="uq_tenant_sip_routes_livekit_trunk"),
         UniqueConstraint("sip_username", name="uq_tenant_sip_routes_sip_username"),
         Index("ix_tenant_sip_routes_tenant_status", "tenant_id", "status"),
         sa.CheckConstraint("status IN ('active','inactive')", name="ck_tenant_sip_routes_status"),
         sa.CheckConstraint(
             "provision_status IN ('pending','active','failed','disabled')",
             name="ck_tenant_sip_routes_provision_status",
+        ),
+        sa.CheckConstraint(
+            "livekit_provision_status IN ('pending','active','failed','disabled')",
+            name="ck_tenant_sip_routes_livekit_provision_status",
         ),
         sa.CheckConstraint("pbx_port BETWEEN 1 AND 65535", name="ck_tenant_sip_routes_port"),
         sa.CheckConstraint(
@@ -785,8 +790,8 @@ class TenantSipRoute(Base, TimestampMixin):
     tenant_id: Mapped[str] = mapped_column(
         ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
     )
-    provider_config_id: Mapped[str] = mapped_column(
-        ForeignKey("tenant_voice_provider_configs.id", ondelete="CASCADE"), nullable=False
+    provider_config_id: Mapped[str | None] = mapped_column(
+        ForeignKey("tenant_voice_provider_configs.id", ondelete="SET NULL"), nullable=True
     )
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="inactive")
     pbx_host: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -807,6 +812,14 @@ class TenantSipRoute(Base, TimestampMixin):
         DateTime(timezone=True), nullable=True
     )
     last_provision_attempt_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    livekit_outbound_trunk_id: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    livekit_provision_status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="disabled"
+    )
+    livekit_provision_error_code: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    livekit_provisioned_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
 

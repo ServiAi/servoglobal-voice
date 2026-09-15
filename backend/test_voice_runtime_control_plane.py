@@ -313,7 +313,9 @@ class VoiceRuntimeControlPlaneTests(Integration2ATestCase):
                 200,
             )
             with SessionLocal() as db:
-                self.assertEqual(VoiceSessionService(db).get(session_id).status, "starting")
+                session = VoiceSessionService(db).get(session_id)
+                self.assertEqual(session.status, "starting")
+                self.assertIsNotNone(session.runtime_ready_at)
 
             self.assertEqual(
                 post("transcript", "voice.transcript.final", {"speaker": "user", "text": "Hola"}).status_code,

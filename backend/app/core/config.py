@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     LIVEKIT_API_SECRET: str = ""
     LIVEKIT_AGENT_NAME: str = "serviglobal-voice-runtime"
     VOICE_WEBRTC_TOKEN_TTL_SECONDS: int = 300
+    LIVEKIT_SIP_RUNTIME_READY_TIMEOUT_SECONDS: float = 30.0
+    LIVEKIT_SIP_DIAL_TIMEOUT_SECONDS: float = 60.0
     PORT: int = 8000
     DEFAULT_AGENT_ID: str | None = None
     DATABASE_URL: str = "postgresql+psycopg://serviai:serviai@localhost:5432/serviai"

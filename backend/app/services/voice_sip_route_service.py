@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from datetime import UTC, datetime
 from uuid import uuid4
 
 from sqlalchemy import select
@@ -39,7 +40,13 @@ class VoiceSipRouteService:
             query = query.with_for_update()
         return self.db.scalar(query)
 
-    def get_active_route(self, tenant_id: str, *, for_update: bool = False) -> TenantSipRoute:
+    def get_active_route(
+        self,
+        tenant_id: str,
+        *,
+        for_update: bool = False,
+        require_livekit: bool = False,
+    ) -> TenantSipRoute:
         route = self.get_route(tenant_id, for_update=for_update)
         if route is None:
             raise ValueError(
@@ -64,6 +71,11 @@ class VoiceSipRouteService:
                 "La ruta SIP todavía no está aplicada en Asterisk. "
                 "Espera la confirmación del aprovisionador antes de iniciar llamadas."
             )
+        if require_livekit and (
+            route.livekit_provision_status != "active"
+            or not route.livekit_outbound_trunk_id
+        ):
+            raise ValueError("La ruta SIP todavía no está aprovisionada en LiveKit.")
         return route
 
     def upsert(
@@ -106,6 +118,8 @@ class VoiceSipRouteService:
                 caller_id="",
             )
             self.db.add(route)
+        elif route.provider_config_id is None:
+            route.provider_config_id = provider_config.id
         elif route.provider_config_id != provider_config.id:
             raise ValueError("SIP route does not belong to the selected voice provider.")
 
@@ -148,6 +162,57 @@ class VoiceSipRouteService:
             raise ValueError("SIP password is not configured.")
         return self.secret_manager.decrypt_secret(route.sip_password_encrypted)
 
+    async def provision_livekit_outbound(self, route: TenantSipRoute, sip_service=None) -> TenantSipRoute:
+        from app.services.livekit_sip_service import LiveKitSipError, LiveKitSipService
+
+        route.livekit_provision_status = "pending"
+        route.livekit_provision_error_code = None
+        self.db.commit()
+        try:
+            trunk = await (sip_service or LiveKitSipService()).provision_outbound_trunk(
+                trunk_id=route.livekit_outbound_trunk_id,
+                name=f"serviglobal-{route.id}",
+                address=f"{route.pbx_host}:{route.pbx_port}",
+                number=route.caller_id,
+                username=route.sip_username,
+                password=self.decrypt_password(route),
+            )
+        except Exception as exc:
+            route.livekit_provision_status = "failed"
+            route.livekit_provision_error_code = (
+                exc.code if isinstance(exc, LiveKitSipError) else "livekit_sip_provision_failed"
+            )
+            self.db.commit()
+            raise ValueError("LiveKit SIP trunk provisioning failed.") from None
+        route.livekit_outbound_trunk_id = trunk.sip_trunk_id
+        route.livekit_provision_status = "active"
+        route.livekit_provision_error_code = None
+        route.livekit_provisioned_at = datetime.now(UTC)
+        self.db.commit()
+        self.db.refresh(route)
+        return route
+
+    async def deprovision_livekit_outbound(self, route: TenantSipRoute, sip_service=None) -> TenantSipRoute:
+        from app.services.livekit_sip_service import LiveKitSipService
+
+        if route.livekit_outbound_trunk_id:
+            try:
+                await (sip_service or LiveKitSipService()).delete_outbound_trunk(
+                    route.livekit_outbound_trunk_id
+                )
+            except Exception:
+                route.livekit_provision_status = "failed"
+                route.livekit_provision_error_code = "livekit_sip_delete_failed"
+                self.db.commit()
+                raise ValueError("LiveKit SIP trunk deletion failed.") from None
+        route.livekit_outbound_trunk_id = None
+        route.livekit_provision_status = "disabled"
+        route.livekit_provision_error_code = None
+        route.livekit_provisioned_at = None
+        self.db.commit()
+        self.db.refresh(route)
+        return route
+
     @staticmethod
     def response(route: TenantSipRoute | None) -> VoiceSipRouteResponse | None:
         if route is None:
@@ -169,4 +234,8 @@ class VoiceSipRouteService:
             provision_error_code=route.provision_error_code,
             provisioned_at=route.provisioned_at,
             last_provision_attempt_at=route.last_provision_attempt_at,
+            livekit_outbound_trunk_id=route.livekit_outbound_trunk_id,
+            livekit_provision_status=route.livekit_provision_status,
+            livekit_provision_error_code=route.livekit_provision_error_code,
+            livekit_provisioned_at=route.livekit_provisioned_at,
         )

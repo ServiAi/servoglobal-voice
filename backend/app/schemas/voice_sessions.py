@@ -38,6 +38,8 @@ class VoiceSessionResponse(BaseModel):
     tenant_id: str
     agent_id: str | None
     agent_version_id: str | None
+    crm_voice_call_id: str | None = None
+    sip_route_id: str | None = None
     deleted_agent_id: str | None = None
     deleted_agent_version_id: str | None = None
     channel: str
@@ -49,10 +51,14 @@ class VoiceSessionResponse(BaseModel):
     livekit_room_name: str | None
     livekit_dispatch_id: str | None
     livekit_job_id: str | None
+    livekit_sip_trunk_id: str | None = None
+    livekit_sip_participant_identity: str | None = None
+    sip_call_id: str | None = None
     provider_session_id: str | None
     requested_at: datetime
     dispatched_at: datetime | None
     started_at: datetime | None
+    runtime_ready_at: datetime | None = None
     connected_at: datetime | None
     ended_at: datetime | None
     end_reason: str | None

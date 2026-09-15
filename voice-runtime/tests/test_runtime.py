@@ -406,7 +406,11 @@ class UltravoxLifecycleTests(unittest.IsolatedAsyncioTestCase):
             )
         )
         livekit.rtc = types.SimpleNamespace(
-            ParticipantKind=types.SimpleNamespace(PARTICIPANT_KIND_AGENT=4),
+            ParticipantKind=types.SimpleNamespace(
+                PARTICIPANT_KIND_STANDARD=0,
+                PARTICIPANT_KIND_SIP=3,
+                PARTICIPANT_KIND_AGENT=4,
+            ),
             TrackSource=types.SimpleNamespace(SOURCE_MICROPHONE=2),
         )
         livekit.agents = agents
@@ -455,6 +459,22 @@ class UltravoxLifecycleTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(
                 handled_ultravox_events,
                 [call_started, call_started, other_ultravox_event],
+            )
+
+            internal = types.SimpleNamespace(identity="ingress-internal", kind=1)
+            ctx.room.emit("participant_connected", internal)
+            await asyncio.sleep(0)
+            self.assertNotIn(
+                "ingress-internal",
+                [event[1].get("payload", {}).get("participant_identity") for event in events],
+            )
+
+            sip_participant = types.SimpleNamespace(identity="sip-session-1", kind=3)
+            ctx.room.emit("participant_connected", sip_participant)
+            await asyncio.sleep(0)
+            self.assertIn(
+                "sip-session-1",
+                [event[1].get("payload", {}).get("participant_identity") for event in events],
             )
 
             participant = types.SimpleNamespace(identity="web-random", kind=0)

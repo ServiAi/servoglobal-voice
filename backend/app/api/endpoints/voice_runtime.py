@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.api.auth.deps import AuthContext, require_roles
 from app.core.config import settings
 from app.db.session import get_db
+from app.models.crm import CrmVoiceCall
 from app.domain.voice_registry import get_provider
 from app.schemas.runtime_session import RuntimeSessionSpecV1
 from app.schemas.voice_credentials import ProviderCredentialResponse
@@ -202,6 +203,8 @@ def post_runtime_event(session_id: str, body: RuntimeEventV1, db: Session = Depe
             session.livekit_job_id = str(allowed_payload["livekit_job_id"])[:160]
         if "provider_session_id" in allowed_payload:
             session.provider_session_id = str(allowed_payload["provider_session_id"])[:255]
+        if body.event_type == "voice.agent.ready" and session.runtime_ready_at is None:
+            session.runtime_ready_at = body.occurred_at or datetime.now(UTC)
         if body.event_type == "voice.session.ended" and session.status == "connected":
             service.transition(session, "ending", commit=False)
         target = {
@@ -216,6 +219,33 @@ def post_runtime_event(session_id: str, body: RuntimeEventV1, db: Session = Depe
             session.end_reason = str(allowed_payload.get("end_reason", "unknown"))[:40]
         elif body.event_type == "voice.session.failed":
             session.error_code = str(allowed_payload.get("error_code", "runtime_failed"))[:80]
+        if session.crm_voice_call_id:
+            call = db.get(CrmVoiceCall, session.crm_voice_call_id)
+            if call is not None and call.tenant_id == session.tenant_id:
+                now = body.occurred_at or datetime.now(UTC)
+                if body.event_type == "voice.session.connected" and call.status == "answered":
+                    call.status = "in_progress"
+                elif body.event_type == "voice.session.ended" and call.status not in {
+                    "busy", "rejected", "no_answer", "failed", "completed"
+                }:
+                    call.status = "completed"
+                    call.ended_at = now
+                    logger.info(
+                        "LiveKit SIP outbound completed | tenant_id=%s | crm_voice_call_id=%s | voice_session_id=%s | livekit_room_name=%s | livekit_dispatch_id=%s | livekit_sip_trunk_id=%s | sip_participant_identity=%s | sip_call_id=%s",
+                        session.tenant_id,
+                        call.id,
+                        session.id,
+                        session.livekit_room_name,
+                        session.livekit_dispatch_id,
+                        session.livekit_sip_trunk_id,
+                        session.livekit_sip_participant_identity,
+                        session.sip_call_id,
+                    )
+                elif body.event_type == "voice.session.failed" and call.status not in {
+                    "busy", "rejected", "no_answer", "failed", "completed"
+                }:
+                    call.status = "failed"
+                    call.ended_at = now
         db.commit()
         return RuntimeEventAck()
     except VoiceSessionNotFoundError as exc:

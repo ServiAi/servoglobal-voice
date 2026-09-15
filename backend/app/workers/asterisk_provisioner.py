@@ -105,7 +105,7 @@ def render_pjsip_include(routes: list[dict[str, Any]]) -> str:
                     f"username={route['sip_username']}",
                     f"password={route['sip_password']}",
                     "",
-                    f"[{key}](ultravox-tenant)",
+                    f"[{key}](serviglobal-tenant)",
                     f"auth={auth_key}",
                     f"aors={key}",
                     f"callerid={route['caller_id']}",
