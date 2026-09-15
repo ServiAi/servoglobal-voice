@@ -221,7 +221,10 @@ class UltravoxLiveKitRuntime:
         participant_identities: set[str] = set()
 
         def is_human(participant: Any) -> bool:
-            return participant.kind != rtc.ParticipantKind.PARTICIPANT_KIND_AGENT
+            return participant.kind in {
+                rtc.ParticipantKind.PARTICIPANT_KIND_STANDARD,
+                rtc.ParticipantKind.PARTICIPANT_KIND_SIP,
+            }
 
         async def emit_participant_connected(participant: Any) -> None:
             identity = str(participant.identity)

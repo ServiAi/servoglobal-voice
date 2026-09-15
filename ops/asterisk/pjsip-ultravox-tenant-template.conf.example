@@ -1,5 +1,6 @@
-; Define this template once in pjsip.conf before the managed include.
-[ultravox-tenant](!)
+; Provider-neutral template used by both LiveKit SIP and the legacy Ultravox canary.
+; Keep the existing dialplan context until its provider-neutral alias is deployed.
+[serviglobal-tenant](!)
 type=endpoint
 transport=transport-udp
 context=from-ultravox-tenant
@@ -10,6 +11,9 @@ force_rport=yes
 rewrite_contact=yes
 rtp_symmetric=yes
 identify_by=auth_username,username
+
+; Backward-compatible alias for endpoints generated before Sprint 7.
+[ultravox-tenant](serviglobal-tenant,!)
 
 ; The provisioner owns the generated endpoint/auth/aor sections below.
 #include pjsip.d/serviglobal-tenants.conf

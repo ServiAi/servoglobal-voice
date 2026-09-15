@@ -94,6 +94,19 @@ Ejecute pruebas focalizadas durante el desarrollo y la suite completa antes de m
 
 ## Despliegue
 
+### LiveKit SIP outbound (Sprint 7)
+
+El flujo nuevo está apagado por defecto y requiere habilitar para el tenant, en este orden, `voice_runtime_v2` y `livekit_sip_outbound_v2`. Si cualquiera se deshabilita, `POST /api/v1/crm/leads/{lead_id}/actions/call` vuelve al runtime legacy. No retire el worker ni la configuración legacy durante el canary.
+
+1. Aplique `202609140002_livekit_sip_outbound.py` sobre una copia PostgreSQL de staging y confirme `alembic current` = `alembic heads`. No use SQLite como prueba de esta migración.
+2. Configure en backend y `voice-runtime` las mismas credenciales de proyecto `LIVEKIT_URL`, `LIVEKIT_API_KEY` y `LIVEKIT_API_SECRET`, además del secreto interno de Voice Runtime. `LIVEKIT_SIP_RUNTIME_READY_TIMEOUT_SECONDS` controla la espera del evento ready (30 s por defecto) y `LIVEKIT_SIP_DIAL_TIMEOUT_SECONDS` el request bloqueante de marcado (60 s). No registre estos valores ni credenciales.
+3. Verifique que el host/puerto PBX sea alcanzable desde LiveKit, que el Caller ID esté autorizado y que el endpoint Asterisk generado herede de `serviglobal-tenant`. El alias `ultravox-tenant` se conserva únicamente para compatibilidad con includes existentes.
+4. Guarde nuevamente la ruta SIP activa con ambos flags habilitados. El backend crea o actualiza un único outbound trunk LiveKit y sólo persiste `livekit_outbound_trunk_id` después de una respuesta exitosa. Confirme `livekit_provision_status=active` desde la API segura; el secreto SIP nunca vuelve en la respuesta.
+5. Ejecute una llamada controlada con un `agent_id` publicado y un `idempotency_key` nuevo. Confirme en orden: `voice.outbound.requested`, `voice.agent.ready`, `voice.sip.dial.started`, `voice.sip.answered`, actividad conversacional y `voice.session.ended`. Repetir exactamente el mismo request debe devolver los mismos IDs sin crear otra llamada ni otro participante.
+6. Pruebe busy, rejected/no-answer, timeout de readiness y caída del PBX. Confirme estado terminal sanitizado, liberación de capacidad y cierre de la Room. Los eventos no deben contener teléfono completo, contraseña, token ni API key.
+
+El smoke sólo cuenta como real si usa PostgreSQL, LiveKit, Asterisk/carrier y Ultravox reales y verifica audio bidireccional. Las pruebas unitarias con SDK falso no prueban red, negociación SIP, Caller ID ni media. `wait_until_answered=true` devuelve el resultado final, por lo que esta versión no persiste un estado intermedio `ringing`; un buzón de voz que responda SIP `200 OK` se considera técnicamente `answered` porque no se implementó AMD. Para rollback, deshabilite `livekit_sip_outbound_v2`; no elimine el trunk ni revierta la migración durante el incidente. Investigue sesiones no terminales y Rooms abiertas antes de cualquier deprovisionamiento manual.
+
 ### Callback de voz saliente mediante IDT Express
 
 1. Aplique `202608210001_asterisk_route_provisioning.py` y confirme una sola head de Alembic.
@@ -101,7 +114,7 @@ Ejecute pruebas focalizadas durante el desarrollo y la suite completa antes de m
 3. Configure en Integraciones la ruta SIP del tenant: host/puerto PBX, contraseña SIP, Caller ID autorizado, país predeterminado, países habilitados y concurrencia. El backend genera un usuario inmutable `route-<uuid>` que coincide con el endpoint PJSIP; la interfaz lo muestra en solo lectura. La contraseña queda cifrada y no vuelve a mostrarse.
 4. Configure `ASTERISK_PROVISIONER_SHARED_SECRET` en el backend con un secreto aleatorio dedicado. Instale en el PBX el agente `python -m app.workers.asterisk_provisioner` usando las plantillas de `ops/asterisk/`. El agente consulta el estado deseado, genera atómicamente `/etc/asterisk/pjsip.d/serviglobal-tenants.conf`, recarga PJSIP, verifica cada endpoint y reporta la revisión. En caso de error restaura el include anterior.
 
-5. La plantilla base `ultravox-tenant` permanece definida manualmente una sola vez en `pjsip.conf`. Añada después de ella este include:
+5. La plantilla base neutral `serviglobal-tenant` permanece definida manualmente una sola vez en `pjsip.conf`; `ultravox-tenant` queda como alias de compatibilidad. Añada después de ella este include:
 
 ```ini
 #include pjsip.d/serviglobal-tenants.conf

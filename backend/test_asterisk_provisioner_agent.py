@@ -27,7 +27,7 @@ ROUTE = {
 class AsteriskProvisionerAgentTests(unittest.TestCase):
     def test_render_uses_template_and_does_not_render_disabled_routes(self) -> None:
         rendered = render_pjsip_include([ROUTE, {**ROUTE, "enabled": False}])
-        self.assertIn("[route-123456781234123412341234567890ab](ultravox-tenant)", rendered)
+        self.assertIn("[route-123456781234123412341234567890ab](serviglobal-tenant)", rendered)
         self.assertIn("set_var=TENANT_CALLER_ID=+573001112233", rendered)
         self.assertEqual(rendered.count("type=auth"), 1)
 

@@ -18,13 +18,19 @@ from app.schemas.integrations import (
 from app.services.voice_config_service import VoiceConfigService
 from app.services.voice_agent_service import VoiceAgentService
 from app.services.voice_call_service import VoiceCallService
+from app.services.outbound_voice_call_service import OutboundVoiceCallService
+from app.services.tenant_feature_service import (
+    LIVEKIT_SIP_OUTBOUND_V2,
+    VOICE_RUNTIME_V2,
+    TenantFeatureService,
+)
 
 router = APIRouter(prefix="/api/v1", tags=["Voice CRM"])
 
 
 # Voice Configs
 @router.post("/integrations/voice/config", response_model=VoiceProviderConfigResponse)
-def upsert_voice_config(
+async def upsert_voice_config(
     body: VoiceProviderConfigRequest,
     context: AuthContext = Depends(require_roles(["platform_admin", "tenant_admin"])),
     db: Session = Depends(get_db),
@@ -32,6 +38,16 @@ def upsert_voice_config(
     service = VoiceConfigService(db)
     try:
         config = service.upsert_provider_config(context.tenant.id, body)
+        features = TenantFeatureService(db)
+        if (
+            features.is_enabled(context.tenant.id, VOICE_RUNTIME_V2)
+            and features.is_enabled(context.tenant.id, LIVEKIT_SIP_OUTBOUND_V2)
+        ):
+            route = service.route_service.get_route(context.tenant.id)
+            if route is not None and route.status == "active":
+                await service.route_service.provision_livekit_outbound(route)
+            elif route is not None and route.livekit_outbound_trunk_id:
+                await service.route_service.deprovision_livekit_outbound(route)
         return service.get_config_response(context.tenant.id, config.provider)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
@@ -140,16 +156,23 @@ def update_voice_agent(
 
 # CRM Outbound Call Trigger
 @router.post("/crm/leads/{lead_id}/actions/call", response_model=VoiceCallActionResponse, status_code=status.HTTP_201_CREATED)
-def start_voice_call(
+async def start_voice_call(
     lead_id: str,
     body: VoiceCallActionRequest | None = None,
     context: AuthContext = Depends(require_roles(["platform_admin", "tenant_admin", "tenant_analyst"])),
     db: Session = Depends(get_db),
 ) -> Any:
-    service = VoiceCallService(db)
     req = body or VoiceCallActionRequest()
     try:
-        return service.start_lead_call(context.tenant.id, lead_id, req)
+        features = TenantFeatureService(db)
+        if (
+            features.is_enabled(context.tenant.id, VOICE_RUNTIME_V2)
+            and features.is_enabled(context.tenant.id, LIVEKIT_SIP_OUTBOUND_V2)
+        ):
+            return await OutboundVoiceCallService(db).start_call(
+                context.tenant.id, lead_id, req
+            )
+        return VoiceCallService(db).start_lead_call(context.tenant.id, lead_id, req)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
 

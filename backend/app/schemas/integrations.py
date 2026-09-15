@@ -368,6 +368,10 @@ class VoiceSipRouteResponse(BaseModel):
     provision_error_code: Optional[str] = None
     provisioned_at: Optional[datetime] = None
     last_provision_attempt_at: Optional[datetime] = None
+    livekit_outbound_trunk_id: Optional[str] = None
+    livekit_provision_status: str = "disabled"
+    livekit_provision_error_code: Optional[str] = None
+    livekit_provisioned_at: Optional[datetime] = None
 
 
 class VoiceProviderConfigRequest(BaseModel):
@@ -507,6 +511,8 @@ class ChatwootAgentUpdateRequest(BaseModel):
 
 class VoiceCallActionRequest(BaseModel):
     agent_config_id: Optional[str] = None
+    agent_id: Optional[str] = Field(None, min_length=1, max_length=36)
+    idempotency_key: Optional[str] = Field(None, min_length=1, max_length=160)
     to_phone: Optional[str] = Field(None, max_length=80)
     context: dict[str, Any] = Field(default_factory=dict)
 
@@ -516,8 +522,8 @@ class VoiceCallActionResponse(BaseModel):
     voice_call_id: str
     provider_call_id: Optional[str] = None
     provider_session_id: Optional[str] = None
-    provider_call_id: Optional[str] = None
-    provider_session_id: Optional[str] = None
+    voice_session_id: Optional[str] = None
+    sip_call_id: Optional[str] = None
     summary: Optional[str] = None
 
 

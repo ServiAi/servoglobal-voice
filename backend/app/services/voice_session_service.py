@@ -93,7 +93,13 @@ class VoiceSessionService:
             contact_id=contact_id,
             lead_id=lead_id,
             trusted_ids=True,
-            source="webrtc" if channel == "webrtc" else "manual",
+            source=(
+                "webrtc"
+                if channel == "webrtc"
+                else "outbound"
+                if channel == "sip" and direction == "outbound"
+                else "manual"
+            ),
         )
         session = VoiceSession(
             tenant_id=tenant_id, agent_id=agent.id, agent_version_id=version.id, channel=channel, direction=direction,

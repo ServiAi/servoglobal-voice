@@ -18,6 +18,8 @@ class VoiceSession(Base, TimestampMixin):
         Index("ix_voice_sessions_tenant_status", "tenant_id", "status"),
         Index("ix_voice_sessions_agent", "agent_id"),
         Index("ix_voice_sessions_agent_version", "agent_version_id"),
+        Index("ix_voice_sessions_crm_voice_call", "crm_voice_call_id"),
+        Index("ix_voice_sessions_sip_call", "sip_call_id"),
         Index("ix_voice_sessions_created_at", "created_at"),
         sa.CheckConstraint(
             "status IN ('requested','dispatching','dispatched','starting','connected','ending','ended','failed','cancelled')",
@@ -34,6 +36,9 @@ class VoiceSession(Base, TimestampMixin):
     deleted_agent_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     deleted_agent_version_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     crm_voice_call_id: Mapped[str | None] = mapped_column(ForeignKey("crm_voice_calls.id", ondelete="SET NULL"), nullable=True)
+    sip_route_id: Mapped[str | None] = mapped_column(
+        ForeignKey("tenant_sip_routes.id", ondelete="SET NULL"), nullable=True
+    )
     channel: Mapped[str] = mapped_column(String(24), nullable=False)
     direction: Mapped[str] = mapped_column(String(24), nullable=False)
     runtime_engine: Mapped[str] = mapped_column(String(32), nullable=False, default="livekit")
@@ -43,11 +48,15 @@ class VoiceSession(Base, TimestampMixin):
     livekit_room_name: Mapped[str | None] = mapped_column(String(160), nullable=True)
     livekit_dispatch_id: Mapped[str | None] = mapped_column(String(160), nullable=True)
     livekit_job_id: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    livekit_sip_trunk_id: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    livekit_sip_participant_identity: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    sip_call_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     status: Mapped[str] = mapped_column(String(24), nullable=False, default="requested")
     idempotency_key: Mapped[str | None] = mapped_column(String(160), nullable=True)
     requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utcnow)
     dispatched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    runtime_ready_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     connected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     end_reason: Mapped[str | None] = mapped_column(String(40), nullable=True)

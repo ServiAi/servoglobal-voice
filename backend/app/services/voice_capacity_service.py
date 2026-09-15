@@ -47,7 +47,7 @@ class VoiceCapacityService:
     ) -> None:
         IntegrationEventService(self.db).record_event(
             tenant_id=tenant_id,
-            provider="ultravox",
+            provider="telephony",
             event_type=VOICE_CAPACITY_REACHED,
             status="blocked",
             resource_type="sip_route",
@@ -70,7 +70,7 @@ class VoiceCapacityService:
     ) -> None:
         IntegrationEventService(self.db).record_event(
             tenant_id=tenant_id,
-            provider="ultravox",
+            provider="telephony",
             event_type=(
                 VOICE_CALLBACK_FORCED_RELEASE if forced else VOICE_CALLBACK_RECONCILED
             ),
@@ -100,7 +100,7 @@ class VoiceCapacityService:
         limit = route.max_concurrent_calls
         event_filters = (
             TenantIntegrationEvent.tenant_id == tenant_id,
-            TenantIntegrationEvent.provider == "ultravox",
+            TenantIntegrationEvent.provider.in_(("telephony", "ultravox")),
             TenantIntegrationEvent.event_type.in_(CAPACITY_EVENT_TYPES),
             TenantIntegrationEvent.created_at >= date_from,
             TenantIntegrationEvent.created_at <= date_to,
