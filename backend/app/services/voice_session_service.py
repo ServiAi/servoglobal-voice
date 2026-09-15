@@ -7,8 +7,9 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.agents import TenantAgent, TenantAgentVersion
+from app.models.crm import CrmContact, CrmLead
 from app.models.voice_sessions import VoiceSession, VoiceSessionEvent
-from app.schemas.session_context import SessionContextV1
+from app.schemas.session_context import CampaignContext, SessionContextV1
 from app.services.contact_resolution_service import ContactResolutionService
 
 
@@ -17,6 +18,25 @@ class VoiceSessionError(ValueError):
 
 
 class VoiceSessionNotFoundError(VoiceSessionError):
+    pass
+
+
+class SessionContextEnrichmentError(VoiceSessionError):
+    """Base class for a failed controlled-enrichment attempt -- see
+    VoiceSessionService.enrich_context(). Always fail-closed: the message
+    is a stable code (session_context_*_conflict), never a generic string,
+    so a caller can diagnose which identity actually conflicted."""
+
+
+class SessionContextContactConflictError(SessionContextEnrichmentError):
+    pass
+
+
+class SessionContextLeadConflictError(SessionContextEnrichmentError):
+    pass
+
+
+class SessionContextTenantConflictError(SessionContextEnrichmentError):
     pass
 
 
@@ -125,6 +145,88 @@ class VoiceSessionService:
             self.record_event(session, "session.context.lead_matched", source="control-plane", commit=False)
         if not contact_resolved:
             self.record_event(session, "session.context.unresolved", source="control-plane", commit=False)
+
+    def enrich_context(
+        self,
+        session: VoiceSession,
+        *,
+        contact: CrmContact | None = None,
+        lead: CrmLead | None = None,
+        event_source: str | None = None,
+        commit: bool = True,
+    ) -> SessionContextV1:
+        """Controlled monotonic enrichment of an already-created session's
+        context: unresolved -> resolved, or unchanged -- never replaces an
+        already-resolved contact/lead with a different one (fails closed
+        instead), and never touches `caller`/`variables`/`source` at all.
+        This is NOT a general-purpose mutation API; it exists specifically
+        so a tool that resolves identity mid-conversation (e.g.
+        crm.create_lead) can make that identity available to a later tool
+        call in the same session (e.g. calendar.create_booking) without
+        the LLM ever supplying contact_id/lead_id itself.
+
+        `contact`/`lead` are real ORM rows (not bare ids) so their own
+        `tenant_id` can be checked directly against `session.tenant_id` --
+        the same "never trust a bare id" discipline as
+        ContactResolutionService. A `lead` must belong to the contact
+        being enriched (either the one just passed, or the one already on
+        the session), otherwise it's a contact/lead conflict, not a lead
+        conflict specifically.
+        """
+        current = SessionContextV1.model_validate(session.session_context_json or {})
+
+        new_contact = current.contact
+        if contact is not None:
+            if contact.tenant_id != session.tenant_id:
+                raise SessionContextTenantConflictError("session_context_tenant_conflict")
+            if current.contact is None:
+                new_contact = ContactResolutionService.to_contact_context(contact)
+            elif current.contact.id != contact.id:
+                raise SessionContextContactConflictError("session_context_contact_conflict")
+            # else: same contact as already resolved -- idempotent, keep
+            # the existing stored representation rather than silently
+            # refreshing name/email/phone from a possibly-newer row.
+
+        new_lead = current.lead
+        new_campaign = current.campaign
+        if lead is not None:
+            if lead.tenant_id != session.tenant_id:
+                raise SessionContextTenantConflictError("session_context_tenant_conflict")
+            expected_contact_id = contact.id if contact is not None else (current.contact.id if current.contact else None)
+            if expected_contact_id is not None and lead.contact_id != expected_contact_id:
+                raise SessionContextContactConflictError("session_context_contact_conflict")
+            if current.lead is None:
+                new_lead = ContactResolutionService.to_lead_context(lead)
+            elif current.lead.id != lead.id:
+                raise SessionContextLeadConflictError("session_context_lead_conflict")
+            if new_campaign is None and lead.campaign:
+                new_campaign = CampaignContext(name=lead.campaign)
+
+        enriched = SessionContextV1(
+            schema_version=current.schema_version,
+            source=current.source,
+            caller=current.caller,
+            contact=new_contact,
+            lead=new_lead,
+            campaign=new_campaign,
+            variables=current.variables,
+        )
+        session.session_context_json = enriched.model_dump(mode="json")
+        # PII-free by construction: only booleans and the triggering
+        # tool/source name, same discipline as _record_context_events.
+        self.record_event(
+            session, "session.context.enriched", source="control-plane",
+            payload={
+                "contact_resolved": enriched.contact is not None,
+                "lead_resolved": enriched.lead is not None,
+                "source": event_source,
+            },
+            commit=False,
+        )
+        if commit:
+            self.db.commit()
+            self.db.refresh(session)
+        return enriched
 
     def get(self, session_id: str, tenant_id: str | None = None) -> VoiceSession:
         query = select(VoiceSession).where(VoiceSession.id == session_id)
