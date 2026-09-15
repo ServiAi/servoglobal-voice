@@ -329,11 +329,28 @@ class VoiceRuntimeControlPlaneTests(Integration2ATestCase):
                 post("ended", "voice.session.ended", {"end_reason": "participant_disconnected"}).status_code,
                 200,
             )
+            self.assertEqual(
+                post("assistant", "voice.transcript.final", {"speaker": "assistant", "text": "Buenos días"}).status_code,
+                200,
+            )
+            self.assertEqual(post("late-started", "voice.session.started").status_code, 200)
+            self.assertEqual(post("late-connected", "voice.session.connected").status_code, 200)
 
         with SessionLocal() as db:
+            from app.models.analytics import Call
+            from app.models.crm import CrmActivity, CrmVoiceCall
+            from sqlalchemy import select
+
             session = VoiceSessionService(db).get(session_id)
             self.assertEqual(session.status, "ended")
             self.assertEqual(session.end_reason, "participant_disconnected")
+            self.assertLessEqual(session.connected_at, session.ended_at)
+            call = db.scalar(select(Call).where(Call.external_call_id == f"voice-session:{session_id}"))
+            self.assertIsNotNone(call)
+            self.assertEqual((call.channel, call.direction, call.external_provider),
+                             ("webrtc", "internal", "ultravox"))
+            self.assertEqual(db.scalar(select(CrmActivity)), None)
+            self.assertEqual(db.scalar(select(CrmVoiceCall)), None)
 
 
 class AgentToolInvokeEndpointTests(Integration2ATestCase):

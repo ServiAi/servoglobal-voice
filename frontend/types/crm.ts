@@ -60,6 +60,16 @@ export type ActivitySchema = {
   normalized_status?: string | null;
   duration_seconds?: number | null;
   billed_minutes?: number | null;
+  provider?: string | null;
+  channel?: string | null;
+  direction?: string | null;
+  transcript?: Array<{
+    event_id: string;
+    sequence?: number | null;
+    occurred_at: string;
+    speaker: 'user' | 'assistant';
+    text: string;
+  }>;
 };
 
 export type TaskResponse = {
@@ -917,6 +927,8 @@ export type ChatwootTeamSummary = {
 
 export type VoiceCallActionRequest = {
   agent_config_id?: string | null;
+  agent_id?: string | null;
+  idempotency_key?: string | null;
   provider_agent_id?: string | null;
   to_phone?: string | null;
   context?: Record<string, unknown>;
@@ -936,6 +948,7 @@ export type VoiceCallResponse = {
   provider_call_id?: string | null;
   provider_session_id?: string | null;
   provider_agent_id?: string | null;
+  agent_name?: string | null;
   direction: string;
   status: string;
   started_at?: string | null;

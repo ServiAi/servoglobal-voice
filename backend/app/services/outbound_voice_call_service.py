@@ -15,6 +15,7 @@ from app.schemas.integrations import VoiceCallActionRequest, VoiceCallActionResp
 from app.services.livekit_runtime_backend import LiveKitRuntimeBackend
 from app.services.livekit_sip_service import LiveKitSipDialError, LiveKitSipService
 from app.services.voice_capacity_service import VoiceCapacityService
+from app.services.voice_call_projection_service import VoiceCallProjectionService
 from app.services.voice_phone_service import normalize_outbound_phone
 from app.services.voice_runtime_dispatcher import VoiceRuntimeDispatcher
 from app.services.voice_session_service import VoiceSessionError, VoiceSessionService
@@ -137,6 +138,7 @@ class OutboundVoiceCallService:
             payload={"sip_route_id": route.id},
             commit=False,
         )
+        VoiceCallProjectionService(self.db).project_session(session.id, tenant_id=tenant_id, commit=False)
         self.db.commit()
         self.db.refresh(call)
         logger.info(
@@ -212,6 +214,7 @@ class OutboundVoiceCallService:
             payload={"sip_call_id": result.sip_call_id},
             commit=False,
         )
+        VoiceCallProjectionService(self.db).project_session(session.id, tenant_id=tenant_id, commit=False)
         self.db.commit()
         logger.info(
             "LiveKit SIP answered | tenant_id=%s | crm_voice_call_id=%s | voice_session_id=%s | livekit_room_name=%s | sip_participant_identity=%s | sip_call_id=%s",
@@ -270,6 +273,7 @@ class OutboundVoiceCallService:
             self.sessions.fail(session, error_code, error_code)
         else:
             self.db.commit()
+        VoiceCallProjectionService(self.db).project_session(session.id, tenant_id=session.tenant_id)
         try:
             await self.runtime_backend.close_session_room(session.id)
         except Exception:

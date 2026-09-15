@@ -1,3 +1,4 @@
+import type { AgentResponse } from '@/types/agents';
 import type {
   CrmMetricsResponse,
   PipelineBoardResponse,
@@ -1006,6 +1007,13 @@ export function submitPublicForm(token: string, answers: Record<string, string |
 
 export function startCrmLeadVoiceCall(accessToken: string, leadId: string, payload: VoiceCallActionRequest) {
   return requestCrmEndpoint<VoiceCallActionResponse>('POST', `leads/${leadId}/actions/call`, accessToken, undefined, payload);
+}
+
+export async function fetchCrmVoiceCallAgents(accessToken: string) {
+  const result = await requestAgentEndpoint<AgentResponse[]>('GET', '', accessToken);
+  return result.ok
+    ? { ok: true as const, data: result.data.filter((agent) => agent.status === 'active' && agent.published_version_id) }
+    : result;
 }
 
 export function fetchCrmLeadVoiceCalls(accessToken: string, leadId: string) {

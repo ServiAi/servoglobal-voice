@@ -299,13 +299,30 @@ class VoiceCallService:
                 sanitized[k] = v
         return sanitized
 
-    def response(self, call: CrmVoiceCall) -> VoiceCallResponse:
+    def responses_for_lead(self, tenant_id: str, lead_id: str) -> list[VoiceCallResponse]:
+        from app.models.agents import TenantAgent
+        from app.models.voice_sessions import VoiceSession
+
+        calls = self.list_lead_calls(tenant_id, lead_id)
+        if not calls:
+            return []
+        names = dict(self.db.execute(
+            select(VoiceSession.crm_voice_call_id, TenantAgent.name)
+            .outerjoin(TenantAgent, (TenantAgent.id == VoiceSession.agent_id)
+                       & (TenantAgent.tenant_id == tenant_id))
+            .where(VoiceSession.tenant_id == tenant_id,
+                   VoiceSession.crm_voice_call_id.in_([call.id for call in calls]))
+        ).all())
+        return [self.response(call, agent_name=names.get(call.id)) for call in calls]
+
+    def response(self, call: CrmVoiceCall, *, agent_name: str | None = None) -> VoiceCallResponse:
         return VoiceCallResponse(
             id=call.id,
             provider=call.provider,
             provider_call_id=call.provider_call_id,
             provider_session_id=call.provider_session_id,
             provider_agent_id=call.provider_agent_id,
+            agent_name=agent_name,
             direction=call.direction,
             status=call.status,
             started_at=call.started_at,

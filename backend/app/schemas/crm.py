@@ -90,6 +90,14 @@ class LeadsListResponse(BaseModel):
     filters_applied: dict
 
 
+class VoiceTranscriptTurnSchema(BaseModel):
+    event_id: str
+    sequence: Optional[int] = None
+    occurred_at: datetime
+    speaker: Literal["user", "assistant"]
+    text: str
+
+
 class ActivitySchema(BaseModel):
     id: str
     activity_type: str
@@ -106,6 +114,10 @@ class ActivitySchema(BaseModel):
     normalized_status: Optional[str] = None
     duration_seconds: Optional[float] = None
     billed_minutes: Optional[float] = None
+    provider: Optional[str] = None
+    channel: Optional[str] = None
+    direction: Optional[str] = None
+    transcript: list[VoiceTranscriptTurnSchema] = Field(default_factory=list)
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -123,12 +135,16 @@ class ActivitySchema(BaseModel):
             call_obj = payload.get("call") or {}
 
             data["provider_event"] = payload.get("event") or payload.get("event_type") or payload.get("eventType")
-            data["recording_url"] = call_obj.get("recordingUrl") or call_obj.get("recording_url") or payload.get("recordingUrl")
+            data["recording_url"] = call_obj.get("recordingUrl") or call_obj.get("recording_url") or payload.get("recordingUrl") or payload.get("recording_url")
             data["summary"] = call_obj.get("summary") or payload.get("summary")
             data["short_summary"] = call_obj.get("shortSummary") or call_obj.get("short_summary") or payload.get("shortSummary")
             data["normalized_status"] = call_obj.get("status") or call_obj.get("normalizedStatus") or call_obj.get("normalized_status") or payload.get("status")
-            data["duration_seconds"] = _to_float(call_obj.get("durationSeconds") or call_obj.get("duration") or call_obj.get("duration_seconds"))
+            data["duration_seconds"] = _to_float(call_obj.get("durationSeconds") or call_obj.get("duration") or call_obj.get("duration_seconds") or payload.get("duration_seconds"))
             data["billed_minutes"] = _to_float(call_obj.get("billedMinutes") or call_obj.get("billedDuration") or call_obj.get("billed_minutes"))
+            data["provider"] = payload.get("provider")
+            data["channel"] = payload.get("channel")
+            data["direction"] = payload.get("direction")
+            data["transcript"] = payload.get("transcript") or []
 
             if "payload_json" in data:
                 del data["payload_json"]
@@ -145,12 +161,16 @@ class ActivitySchema(BaseModel):
                 "occurred_at": getattr(data, "occurred_at", None),
                 "call_id": getattr(data, "call_id", None),
                 "provider_event": payload.get("event") or payload.get("event_type") or payload.get("eventType"),
-                "recording_url": call_obj.get("recordingUrl") or call_obj.get("recording_url") or payload.get("recordingUrl"),
+                "recording_url": call_obj.get("recordingUrl") or call_obj.get("recording_url") or payload.get("recordingUrl") or payload.get("recording_url"),
                 "summary": call_obj.get("summary") or payload.get("summary"),
                 "short_summary": call_obj.get("shortSummary") or call_obj.get("short_summary") or payload.get("shortSummary"),
                 "normalized_status": call_obj.get("status") or call_obj.get("normalizedStatus") or call_obj.get("normalized_status") or payload.get("status"),
-                "duration_seconds": _to_float(call_obj.get("durationSeconds") or call_obj.get("duration") or call_obj.get("duration_seconds")),
+                "duration_seconds": _to_float(call_obj.get("durationSeconds") or call_obj.get("duration") or call_obj.get("duration_seconds") or payload.get("duration_seconds")),
                 "billed_minutes": _to_float(call_obj.get("billedMinutes") or call_obj.get("billedDuration") or call_obj.get("billed_minutes")),
+                "provider": payload.get("provider"),
+                "channel": payload.get("channel"),
+                "direction": payload.get("direction"),
+                "transcript": payload.get("transcript") or [],
             }
         return data
 

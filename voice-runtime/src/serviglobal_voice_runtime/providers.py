@@ -218,6 +218,7 @@ class UltravoxLiveKitRuntime:
         connected = False
         input_started = False
         output_started = False
+        transcript_sequence = 0
         participant_identities: set[str] = set()
 
         def is_human(participant: Any) -> bool:
@@ -266,7 +267,7 @@ class UltravoxLiveKitRuntime:
                 ctx.room.off("participant_connected", on_participant_connected)
                 ctx.room.off("participant_disconnected", on_participant_disconnected)
                 ctx.room.off("track_published", on_track_published)
-                session.off("user_input_transcribed", on_transcript)
+                session.off("conversation_item_added", on_conversation_item)
                 session.off("agent_state_changed", on_agent_state_changed)
                 try:
                     await session.aclose()
@@ -286,21 +287,30 @@ class UltravoxLiveKitRuntime:
 
         ctx.add_shutdown_callback(cleanup)
 
-        async def emit_transcript(event: Any) -> None:
+        async def emit_transcript(item: Any, sequence: int) -> None:
             nonlocal connected
-            await emit_input_started()
+            if item.role == "user":
+                await emit_input_started()
             await send_event(
                 "voice.transcript.final",
                 source="livekit",
-                payload={"speaker": "user", "text": event.transcript},
+                sequence=sequence,
+                payload={"speaker": item.role, "text": item.text_content},
             )
-            if not connected:
+            if item.role == "user" and not connected:
                 connected = True
                 await send_event("voice.session.connected", source="livekit", payload={})
 
-        def on_transcript(event: Any) -> None:
-            if event.is_final:
-                asyncio.create_task(emit_transcript(event))
+        def on_conversation_item(event: Any) -> None:
+            nonlocal transcript_sequence
+            item = event.item
+            if (getattr(item, "role", None) not in {"user", "assistant"}
+                    or getattr(item, "interrupted", False)
+                    or not isinstance(getattr(item, "text_content", None), str)
+                    or not item.text_content.strip()):
+                return
+            transcript_sequence += 1
+            asyncio.create_task(emit_transcript(item, transcript_sequence))
 
         async def emit_agent_state(event: Any) -> None:
             nonlocal output_started
@@ -334,7 +344,7 @@ class UltravoxLiveKitRuntime:
         def on_participant_disconnected(participant: Any) -> None:
             asyncio.create_task(emit_participant_disconnected(participant))
 
-        session.on("user_input_transcribed", on_transcript)
+        session.on("conversation_item_added", on_conversation_item)
         session.on("agent_state_changed", on_agent_state_changed)
         ctx.room.on("participant_connected", on_participant_connected)
         ctx.room.on("participant_disconnected", on_participant_disconnected)

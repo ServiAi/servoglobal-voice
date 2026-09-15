@@ -9,6 +9,8 @@ interface RecentCallsTableProps {
 }
 
 const MONTHS_ES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+const CHANNEL_LABELS: Record<string, string> = { sip: 'SIP', webrtc: 'WebRTC' };
+const DIRECTION_LABELS: Record<string, string> = { outbound: 'Saliente', internal: 'Interna', inbound: 'Entrante' };
 
 function formatCallDateTime(value?: string | null) {
   if (!value) return 'N/A';
@@ -73,6 +75,9 @@ export function RecentCallsTable({ data }: RecentCallsTableProps) {
               <th scope="col" className="px-6 py-4 font-medium">ID</th>
               <th scope="col" className="px-6 py-4 font-medium">Fecha</th>
               <th scope="col" className="px-6 py-4 font-medium">Agente</th>
+              <th scope="col" className="px-6 py-4 font-medium">Proveedor IA</th>
+              <th scope="col" className="px-6 py-4 font-medium">Canal</th>
+              <th scope="col" className="px-6 py-4 font-medium">Dirección</th>
               <th scope="col" className="px-6 py-4 font-medium">Duración (s)</th>
               <th scope="col" className="px-6 py-4 font-medium">Estado</th>
             </tr>
@@ -80,7 +85,7 @@ export function RecentCallsTable({ data }: RecentCallsTableProps) {
           <tbody className="divide-y divide-border">
             {items.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-6 py-12 text-center text-sm text-muted-foreground">
+                <td colSpan={8} className="px-6 py-12 text-center text-sm text-muted-foreground">
                   No hay llamadas recientes.
                 </td>
               </tr>
@@ -96,7 +101,16 @@ export function RecentCallsTable({ data }: RecentCallsTableProps) {
                   {call.agent_name || 'Desconocido'}
                 </td>
                 <td className="whitespace-nowrap px-6 py-4 text-foreground">
-                  {Math.round(call.duration_seconds ?? 0)}s
+                  {call.external_provider || 'Desconocido'}
+                </td>
+                <td className="whitespace-nowrap px-6 py-4 text-foreground">
+                  {call.channel ? CHANNEL_LABELS[call.channel] || call.channel : '—'}
+                </td>
+                <td className="whitespace-nowrap px-6 py-4 text-foreground">
+                  {call.direction ? DIRECTION_LABELS[call.direction] || call.direction : '—'}
+                </td>
+                <td className="whitespace-nowrap px-6 py-4 text-foreground">
+                  {call.duration_seconds == null ? '—' : `${Math.round(call.duration_seconds)}s`}
                 </td>
                 <td className="whitespace-nowrap px-6 py-4">
                   {getStatusBadge(call.status)}
