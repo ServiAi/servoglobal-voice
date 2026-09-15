@@ -110,6 +110,7 @@ class GoogleCalendarBookingTests(Integration2ATestCase):
                     "agent_id": "agent_voice_google",
                     "call_context_id": "ctx_voice_google_1",
                     "date": "2026-09-15",
+                    "reference_datetime": "2026-09-14 12:00:00",
                 },
             )
             self.assertEqual(avail_res.status_code, 200)
