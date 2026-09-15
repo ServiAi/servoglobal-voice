@@ -917,6 +917,8 @@ export type ChatwootTeamSummary = {
 
 export type VoiceCallActionRequest = {
   agent_config_id?: string | null;
+  agent_id?: string | null;
+  idempotency_key?: string | null;
   provider_agent_id?: string | null;
   to_phone?: string | null;
   context?: Record<string, unknown>;

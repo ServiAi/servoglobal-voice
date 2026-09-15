@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Phone, Play, Volume2, AlertTriangle, Clock } from 'lucide-react';
 import { CircularLoader } from '@/components/ui/circular-loader';
-import { fetchVoiceAgents, startCrmLeadVoiceCall, fetchCrmLeadVoiceCalls } from '@/lib/api/crm';
+import { fetchCrmVoiceCallAgents, startCrmLeadVoiceCall, fetchCrmLeadVoiceCalls } from '@/lib/api/crm';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -12,7 +12,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import type { VoiceAgentConfigResponse, VoiceCallResponse } from '@/types/crm';
+import type { VoiceCallResponse } from '@/types/crm';
+import type { AgentResponse } from '@/types/agents';
 
 type Props = {
   open: boolean;
@@ -37,7 +38,7 @@ export function CrmSendVoiceCallModal({
   onError,
   onSuccess,
 }: Props) {
-  const [agents, setAgents] = useState<VoiceAgentConfigResponse[]>([]);
+  const [agents, setAgents] = useState<AgentResponse[]>([]);
   const [calls, setCalls] = useState<VoiceCallResponse[]>([]);
   const [selectedAgentId, setSelectedAgentId] = useState('');
   const [loading, setLoading] = useState(false);
@@ -47,15 +48,13 @@ export function CrmSendVoiceCallModal({
     if (!open) return;
     let cancelled = false;
 
-    // Load active voice agents
-    fetchVoiceAgents(accessToken).then((res) => {
+    setAgents([]);
+    setSelectedAgentId('');
+    fetchCrmVoiceCallAgents(accessToken).then((res) => {
       if (cancelled) return;
       if (res.ok) {
-        const activeAgents = res.data.filter((a) => a.status === 'active');
-        setAgents(activeAgents);
-        if (activeAgents.length > 0) {
-          setSelectedAgentId(activeAgents[0].id);
-        }
+        setAgents(res.data);
+        setSelectedAgentId(res.data[0]?.id ?? '');
       } else {
         onError(res.detail);
       }
@@ -88,7 +87,8 @@ export function CrmSendVoiceCallModal({
 
     setLoading(true);
     const result = await startCrmLeadVoiceCall(accessToken, leadId, {
-      agent_config_id: selectedAgentId,
+      agent_id: selectedAgentId,
+      idempotency_key: crypto.randomUUID(),
       to_phone: contactPhone,
     });
     setLoading(false);
@@ -170,7 +170,7 @@ export function CrmSendVoiceCallModal({
               <div className="flex items-center gap-2 p-3 text-xs border border-amber-500/30 bg-amber-500/10 text-amber-500 rounded-md">
                 <AlertTriangle className="h-4 w-4 shrink-0" />
                 <span>
-                  No hay agentes de voz activos. Por favor configura uno en Integraciones.
+                  No hay agentes publicados activos. Configura uno en Agentes IA.
                 </span>
               </div>
             ) : (
@@ -181,7 +181,7 @@ export function CrmSendVoiceCallModal({
               >
                 {agents.map((agent) => (
                   <option key={agent.id} value={agent.id}>
-                    {agent.display_name} ({agent.purpose})
+                    {agent.name}
                   </option>
                 ))}
               </select>
