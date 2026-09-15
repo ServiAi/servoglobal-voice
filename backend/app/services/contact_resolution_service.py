@@ -64,8 +64,8 @@ class ContactResolutionService:
         return SessionContextV1(
             source=source,
             caller=CallerContext(phone=phone) if phone else None,
-            contact=self._to_contact_context(contact) if contact else None,
-            lead=self._to_lead_context(lead) if lead else None,
+            contact=self.to_contact_context(contact) if contact else None,
+            lead=self.to_lead_context(lead) if lead else None,
             campaign=CampaignContext(name=lead.campaign) if lead and lead.campaign else None,
             variables=variables or {},
         )
@@ -104,9 +104,13 @@ class ContactResolutionService:
         )
 
     @staticmethod
-    def _to_contact_context(contact: CrmContact) -> ContactContext:
+    def to_contact_context(contact: CrmContact) -> ContactContext:
+        """Public because VoiceSessionService.enrich_context() reuses this
+        exact mapping when enriching an already-created session's context
+        (e.g. after crm.create_lead resolves a Contact/Lead) -- the safe
+        representation logic must stay in one place, not be duplicated."""
         return ContactContext(id=contact.id, name=contact.name, phone=contact.phone, email=contact.email)
 
     @staticmethod
-    def _to_lead_context(lead: CrmLead) -> LeadContext:
+    def to_lead_context(lead: CrmLead) -> LeadContext:
         return LeadContext(id=lead.id, status=lead.status, stage=lead.stage.key if lead.stage else None)

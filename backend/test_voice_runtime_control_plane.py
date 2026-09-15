@@ -615,6 +615,86 @@ class AgentToolInvokeEndpointTests(Integration2ATestCase):
             self.assertEqual(contact.phone_normalized, "+573005556677")
             self.assertEqual(contact.name, "Nueva Persona")
 
+    # -- Fase F.1: session context enrichment / tool chaining --
+
+    def test_create_lead_enriches_the_sessions_persisted_context(self) -> None:
+        # Caso 6: unknown caller -> crm.create_lead -> contact/lead end up
+        # populated in session_context_json, not just in the tool's result.
+        session_id = self._session_with_tools(
+            [{"key": "crm.create_lead", "enabled": True, "config": {}}], caller_phone="+573005556688"
+        )
+        with SessionLocal() as db:
+            session = VoiceSessionService(db).get(session_id)
+            self.assertIsNone(session.session_context_json.get("contact"))
+            self.assertIsNone(session.session_context_json.get("lead"))
+        response = self._invoke(session_id, "crm.create_lead", {"name": "Nueva Persona"})
+        self.assertEqual(response.status_code, 200, response.text)
+        result = response.json()["result"]
+        with SessionLocal() as db:
+            session = VoiceSessionService(db).get(session_id)
+            self.assertEqual(session.session_context_json["contact"]["id"], result["contact_id"])
+            self.assertEqual(session.session_context_json["lead"]["id"], result["lead_id"])
+
+    def test_create_lead_then_create_booking_chains_the_enriched_lead_id_never_the_llms(self) -> None:
+        # Caso 7 (CRITICAL): the essential commercial flow -- unknown
+        # caller -> crm.create_lead -> calendar.create_booking in the SAME
+        # session must use the lead_id that enrichment persisted, never one
+        # the LLM could supply (the schema doesn't even expose lead_id, but
+        # this proves the *real* value flowing into BookingService is the
+        # session-persisted one, not a coincidence of the schema shape).
+        session_id = self._session_with_tools(
+            [
+                {"key": "crm.create_lead", "enabled": True, "config": {}},
+                {"key": "calendar.create_booking", "enabled": True, "config": {}},
+            ],
+            caller_phone="+573005556699",
+        )
+        lead_response = self._invoke(session_id, "crm.create_lead", {"name": "Cliente Nuevo", "email": "cliente@example.com"})
+        self.assertEqual(lead_response.status_code, 200, lead_response.text)
+        real_lead_id = lead_response.json()["result"]["lead_id"]
+        real_contact_id = lead_response.json()["result"]["contact_id"]
+
+        with patch("app.services.booking_service.BookingService.create_lead_booking") as mocked:
+            from datetime import datetime, timezone
+
+            from app.models.crm import CrmBooking
+
+            mocked.return_value = CrmBooking(
+                id="booking-chained", tenant_id=self.tenant.id, lead_id=real_lead_id, contact_id=real_contact_id,
+                provider="calcom", title="x", status="confirmed",
+                start_at=datetime(2026, 9, 16, 20, 0, tzinfo=timezone.utc),
+                end_at=datetime(2026, 9, 16, 20, 30, tzinfo=timezone.utc),
+                timezone="America/Bogota", duration_minutes=30,
+                attendee_name="Cliente Nuevo", attendee_email="cliente@example.com",
+            )
+            booking_response = self._invoke(session_id, "calendar.create_booking", {"start": "2026-09-16T15:00:00-05:00"})
+        self.assertEqual(booking_response.status_code, 200, booking_response.text)
+        self.assertEqual(mocked.call_args.kwargs["lead_id"], real_lead_id)
+        self.assertNotEqual(mocked.call_args.kwargs["lead_id"], "attacker-supplied-lead")
+        self.assertEqual(mocked.call_args.kwargs["body"].attendee_email, "cliente@example.com")
+
+    def test_create_lead_schema_still_rejects_contact_id_and_lead_id_arguments(self) -> None:
+        # Caso 8 (schema protection, crm.create_lead side): phone was
+        # already proven rejected above; contact_id/lead_id must stay
+        # equally impossible to smuggle in as tool arguments.
+        session_id = self._session_with_tools(
+            [{"key": "crm.create_lead", "enabled": True, "config": {}}], caller_phone="+573005556600"
+        )
+        for forbidden_arg in ("contact_id", "lead_id"):
+            response = self._invoke(session_id, "crm.create_lead", {"name": "Carlos", forbidden_arg: "attacker-value"})
+            self.assertEqual(response.status_code, 422, response.text)
+            self.assertIn("tool_argument_invalid", response.text)
+
+    def test_create_booking_schema_still_rejects_contact_id_argument(self) -> None:
+        # Caso 8 (schema protection, calendar.create_booking side).
+        _, lead_id = self._seed_contact_and_lead(self.tenant.id)
+        session_id = self._session_with_tools(
+            [{"key": "calendar.create_booking", "enabled": True, "config": {}}], lead_id=lead_id
+        )
+        response = self._invoke(session_id, "calendar.create_booking", {"start": "2026-09-15T15:00:00-05:00", "contact_id": "attacker-value"})
+        self.assertEqual(response.status_code, 422, response.text)
+        self.assertIn("tool_argument_invalid", response.text)
+
 
 if __name__ == "__main__":
     unittest.main()

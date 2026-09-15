@@ -8,7 +8,11 @@ from app.domain.tool_registry import get_tool
 from app.models.voice_sessions import VoiceSession
 from app.schemas.session_context import SessionContextV1
 from app.services.integration_event_service import IntegrationEventService
-from app.services.voice_session_service import VoiceSessionError, VoiceSessionService
+from app.services.voice_session_service import (
+    SessionContextEnrichmentError,
+    VoiceSessionError,
+    VoiceSessionService,
+)
 
 
 class ToolDispatchError(ValueError):
@@ -31,7 +35,7 @@ class ToolExecutionError(ToolDispatchError):
     pass
 
 
-def _handle_check_availability(db: Session, tenant_id: str, arguments: dict[str, Any], context: SessionContextV1) -> dict[str, Any]:
+def _handle_check_availability(db: Session, tenant_id: str, arguments: dict[str, Any], context: SessionContextV1, session: VoiceSession) -> dict[str, Any]:
     from app.services.booking_service import BookingService
 
     try:
@@ -42,7 +46,7 @@ def _handle_check_availability(db: Session, tenant_id: str, arguments: dict[str,
         raise ToolExecutionError(str(exc)) from exc
 
 
-def _handle_send_whatsapp(db: Session, tenant_id: str, arguments: dict[str, Any], context: SessionContextV1) -> dict[str, Any]:
+def _handle_send_whatsapp(db: Session, tenant_id: str, arguments: dict[str, Any], context: SessionContextV1, session: VoiceSession) -> dict[str, Any]:
     from app.services.whatsapp_message_service import WhatsAppMessageService
 
     variables = {str(k): str(v) for k, v in (arguments.get("variables") or {}).items()}
@@ -59,7 +63,7 @@ def _handle_send_whatsapp(db: Session, tenant_id: str, arguments: dict[str, Any]
     return {"status": result.status, "provider_message_id": result.provider_message_id}
 
 
-def _handle_create_booking(db: Session, tenant_id: str, arguments: dict[str, Any], context: SessionContextV1) -> dict[str, Any]:
+def _handle_create_booking(db: Session, tenant_id: str, arguments: dict[str, Any], context: SessionContextV1, session: VoiceSession) -> dict[str, Any]:
     # lead_id, attendee_name and attendee_email come from the session's
     # own resolved context -- never from the LLM. See SessionContextV1 /
     # ContactResolutionService: they are trusted, tenant-scoped identity,
@@ -89,7 +93,7 @@ def _handle_create_booking(db: Session, tenant_id: str, arguments: dict[str, Any
     return {"booking_id": booking.id, "status": booking.status, "start_at": booking.start_at.isoformat()}
 
 
-def _handle_create_lead(db: Session, tenant_id: str, arguments: dict[str, Any], context: SessionContextV1) -> dict[str, Any]:
+def _handle_create_lead(db: Session, tenant_id: str, arguments: dict[str, Any], context: SessionContextV1, session: VoiceSession) -> dict[str, Any]:
     # phone comes from the session's own caller identity, never an
     # LLM-supplied argument -- a hallucinated/mistranscribed phone number
     # must never become the key a lead gets created or matched under.
@@ -103,6 +107,14 @@ def _handle_create_lead(db: Session, tenant_id: str, arguments: dict[str, Any], 
     email = arguments.get("email")
     contact = CrmContactService(db).get_or_create_contact(tenant_id, caller_phone, email, name)
     lead = CrmLeadService(db).get_or_create_open_lead(tenant_id, contact.id)
+    # Fase F.1: make the newly resolved identity available to a later tool
+    # call in the same session (e.g. calendar.create_booking) without the
+    # LLM ever supplying lead_id/contact_id -- see
+    # VoiceSessionService.enrich_context for the monotonic-only guarantee.
+    try:
+        VoiceSessionService(db).enrich_context(session, contact=contact, lead=lead, event_source="crm.create_lead")
+    except SessionContextEnrichmentError as exc:
+        raise ToolExecutionError(str(exc)) from exc
     return {"lead_id": lead.id, "contact_id": contact.id, "status": lead.status}
 
 
@@ -111,7 +123,7 @@ def _handle_create_lead(db: Session, tenant_id: str, arguments: dict[str, Any], 
 # string the model/runtime supplies. A key that isn't a literal key in this
 # dict can never execute, no matter what the Tool Registry or an agent's
 # binding says.
-_HANDLERS: dict[str, Callable[[Session, str, dict[str, Any], SessionContextV1], dict[str, Any]]] = {
+_HANDLERS: dict[str, Callable[[Session, str, dict[str, Any], SessionContextV1, VoiceSession], dict[str, Any]]] = {
     "calendar.check_availability": _handle_check_availability,
     "whatsapp.send_message": _handle_send_whatsapp,
     "calendar.create_booking": _handle_create_booking,
@@ -150,7 +162,7 @@ class ToolDispatchService:
         self._validate_arguments(tool.input_schema, arguments)
         context = SessionContextV1.model_validate(session.session_context_json or {})
         try:
-            result = handler(self.db, session.tenant_id, arguments, context)
+            result = handler(self.db, session.tenant_id, arguments, context, session)
         except ToolExecutionError:
             self._record_event(session.tenant_id, session.agent_id, tool_key, status="error")
             self._record_context_tool_event(session, tool_key, status="error")
