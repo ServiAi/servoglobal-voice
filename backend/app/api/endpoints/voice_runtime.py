@@ -24,6 +24,7 @@ from app.schemas.voice_sessions import (
 )
 from app.security.voice_runtime_auth import require_voice_runtime
 from app.services.agent_compiler_service import AgentCompilerError, AgentCompilerService
+from app.services.contact_resolution_service import ContactResolutionError
 from app.services.tenant_feature_service import TenantFeatureDisabledError, TenantFeatureService, VOICE_RUNTIME_V2
 from app.services.tool_dispatch_service import (
     ToolArgumentError,
@@ -49,12 +50,16 @@ async def create_voice_session(
 ) -> VoiceSessionResponse:
     try:
         TenantFeatureService(db).require_enabled(context.tenant_id, VOICE_RUNTIME_V2)
-        session = VoiceSessionService(db).create(context.tenant_id, body.agent_id, channel=body.channel, direction=body.direction, idempotency_key=body.idempotency_key)
+        session = VoiceSessionService(db).create(
+            context.tenant_id, body.agent_id, channel=body.channel, direction=body.direction,
+            idempotency_key=body.idempotency_key, contact_id=body.contact_id, lead_id=body.lead_id,
+            caller_phone=body.caller_phone,
+        )
         session = await VoiceRuntimeDispatcher(db).dispatch(session)
         return VoiceSessionResponse.model_validate(session)
     except TenantFeatureDisabledError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
-    except VoiceSessionError as exc:
+    except (VoiceSessionError, ContactResolutionError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -131,7 +136,10 @@ def get_runtime_session_spec(session_id: str, db: Session = Depends(get_db)) -> 
         session = VoiceSessionService(db).get(session_id)
         if session.status in {"ended", "failed", "cancelled"} or session.agent_id is None or session.agent.status == "archived":
             raise VoiceSessionError("Voice session is terminal.")
-        return AgentCompilerService().compile(session.agent, session.agent_version, session_id=session.id)
+        return AgentCompilerService().compile(
+            session.agent, session.agent_version, session_id=session.id,
+            context=session.session_context_json,
+        )
     except VoiceSessionNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except (VoiceSessionError, AgentCompilerError) as exc:

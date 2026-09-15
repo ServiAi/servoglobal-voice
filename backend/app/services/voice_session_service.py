@@ -8,6 +8,8 @@ from sqlalchemy.orm import Session
 
 from app.models.agents import TenantAgent, TenantAgentVersion
 from app.models.voice_sessions import VoiceSession, VoiceSessionEvent
+from app.schemas.session_context import SessionContextV1
+from app.services.contact_resolution_service import ContactResolutionService
 
 
 class VoiceSessionError(ValueError):
@@ -35,7 +37,18 @@ class VoiceSessionService:
     def __init__(self, db: Session) -> None:
         self.db = db
 
-    def create(self, tenant_id: str, agent_id: str, *, channel: str, direction: str, idempotency_key: str | None = None) -> VoiceSession:
+    def create(
+        self,
+        tenant_id: str,
+        agent_id: str,
+        *,
+        channel: str,
+        direction: str,
+        idempotency_key: str | None = None,
+        contact_id: str | None = None,
+        lead_id: str | None = None,
+        caller_phone: str | None = None,
+    ) -> VoiceSession:
         if idempotency_key:
             existing = self.db.scalar(select(VoiceSession).where(VoiceSession.tenant_id == tenant_id, VoiceSession.idempotency_key == idempotency_key))
             if existing:
@@ -49,9 +62,27 @@ class VoiceSessionService:
         runtime = version.runtime_binding_json
         if runtime.get("pipeline_type") != "realtime" or not isinstance(runtime.get("realtime"), dict):
             raise VoiceSessionError("Published agent is not configured for realtime voice.")
-        session = VoiceSession(tenant_id=tenant_id, agent_id=agent.id, agent_version_id=version.id, channel=channel, direction=direction, runtime_engine="livekit", pipeline_type="realtime", provider=runtime["realtime"].get("provider", ""), idempotency_key=idempotency_key)
+        # contact_id/lead_id/caller_phone are only ever trusted here: this
+        # is the request-scoped, WRITE_ROLES-authenticated caller of
+        # POST /api/v1/voice/sessions (the WebRTC test-call flow), never a
+        # bare pass-through of unauthenticated/LLM-supplied input. See
+        # ContactResolutionService for the precedence/isolation rules.
+        context = ContactResolutionService(self.db).resolve(
+            tenant_id=tenant_id,
+            phone=caller_phone,
+            contact_id=contact_id,
+            lead_id=lead_id,
+            trusted_ids=True,
+            source="webrtc" if channel == "webrtc" else "manual",
+        )
+        session = VoiceSession(
+            tenant_id=tenant_id, agent_id=agent.id, agent_version_id=version.id, channel=channel, direction=direction,
+            runtime_engine="livekit", pipeline_type="realtime", provider=runtime["realtime"].get("provider", ""),
+            idempotency_key=idempotency_key, session_context_json=context.model_dump(mode="json"),
+        )
         self.db.add(session)
         self.db.flush()
+        self._record_context_events(session, context)
         self.record_event(session, "voice.session.requested", source="control-plane", commit=False)
         try:
             self.db.commit()
@@ -65,6 +96,35 @@ class VoiceSessionService:
             return existing
         self.db.refresh(session)
         return session
+
+    def _record_context_events(self, session: VoiceSession, context: SessionContextV1) -> None:
+        # Structured, PII-free observability for context resolution: only
+        # booleans and the session/tenant ids, never a name/phone/email --
+        # same discipline as ToolDispatchService's own audit events. Always
+        # emits "resolved" (the resolution step ran, whatever the outcome);
+        # additionally emits "contact_matched"/"lead_matched" only when
+        # something was actually found, and "unresolved" when no Contact
+        # could be matched at all (the caller may still be known -- see
+        # `caller_known` on the "resolved" payload for that).
+        contact_resolved = context.contact is not None
+        lead_resolved = context.lead is not None
+        campaign_resolved = context.campaign is not None
+        self.record_event(
+            session, "session.context.resolved", source="control-plane",
+            payload={
+                "contact_resolved": contact_resolved,
+                "lead_resolved": lead_resolved,
+                "campaign_resolved": campaign_resolved,
+                "caller_known": context.caller is not None,
+            },
+            commit=False,
+        )
+        if contact_resolved:
+            self.record_event(session, "session.context.contact_matched", source="control-plane", commit=False)
+        if lead_resolved:
+            self.record_event(session, "session.context.lead_matched", source="control-plane", commit=False)
+        if not contact_resolved:
+            self.record_event(session, "session.context.unresolved", source="control-plane", commit=False)
 
     def get(self, session_id: str, tenant_id: str | None = None) -> VoiceSession:
         query = select(VoiceSession).where(VoiceSession.id == session_id)

@@ -158,7 +158,7 @@ class UltravoxLiveKitRuntime:
                         observed_revision_id=provider_agent.get("observed_published_revision_id"),
                         session_id=spec.session_id,
                         local_agent_id=spec.agent_id,
-                        context=spec.context,
+                        context=spec.context.model_dump(mode="json", exclude_none=True),
                         overrides=spec.runtime.realtime.provider_overrides,
                         input_sample_rate=16000,
                         output_sample_rate=24000,
