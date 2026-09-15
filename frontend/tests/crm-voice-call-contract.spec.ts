@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { fetchCrmVoiceCallAgents, startCrmLeadVoiceCall } from '@/lib/api/crm';
 
-test('CRM lista agentes canónicos y envía el contrato outbound V2', async () => {
+test('CRM consulta agentes canónicos y envía el contrato outbound V2', async () => {
   const previousApiUrl = process.env.NEXT_PUBLIC_API_URL;
   const previousFetch = globalThis.fetch;
   const requests: Array<{ url: string; init: RequestInit }> = [];
@@ -26,7 +26,7 @@ test('CRM lista agentes canónicos y envía el contrato outbound V2', async () =
     await startCrmLeadVoiceCall('test-access-token', 'lead-1', {
       agent_id: 'agent-1',
       idempotency_key: idempotencyKey,
-      to_phone: '+573000000000',
+      to_phone: '+573001112233',
     });
 
     expect(requests[0].url).toBe('https://api.example.test/api/v1/agents');
@@ -35,7 +35,7 @@ test('CRM lista agentes canónicos y envía el contrato outbound V2', async () =
     expect(JSON.parse(String(requests[1].init.body))).toEqual({
       agent_id: 'agent-1',
       idempotency_key: idempotencyKey,
-      to_phone: '+573000000000',
+      to_phone: '+573001112233',
     });
   } finally {
     globalThis.fetch = previousFetch;
