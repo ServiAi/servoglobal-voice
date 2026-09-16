@@ -533,6 +533,7 @@ class VoiceCallResponse(BaseModel):
     provider_call_id: Optional[str] = None
     provider_session_id: Optional[str] = None
     provider_agent_id: Optional[str] = None
+    agent_name: Optional[str] = None
     direction: str
     status: str
     started_at: Optional[datetime] = None

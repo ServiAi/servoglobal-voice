@@ -75,6 +75,8 @@ export type DashboardRecentCallItem = {
   short_summary: string | null;
   status: string;
   external_provider: string;
+  channel: string | null;
+  direction: string | null;
 };
 
 export type DashboardRecentCallsResponse = {

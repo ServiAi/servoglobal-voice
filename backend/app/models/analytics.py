@@ -117,6 +117,7 @@ class Call(Base, TimestampMixin):
     short_summary: Mapped[str | None] = mapped_column(String(500), nullable=True)
     recording_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     direction: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    channel: Mapped[str | None] = mapped_column(String(24), nullable=True)
     customer_phone: Mapped[str | None] = mapped_column(String(80), nullable=True)
     last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 

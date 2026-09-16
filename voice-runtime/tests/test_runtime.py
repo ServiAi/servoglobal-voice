@@ -485,8 +485,22 @@ class UltravoxLifecycleTests(unittest.IsolatedAsyncioTestCase):
                 participant,
             )
             sessions[0].emit(
-                "user_input_transcribed",
-                types.SimpleNamespace(is_final=True, transcript="Hola Sandra"),
+                "conversation_item_added",
+                types.SimpleNamespace(item=types.SimpleNamespace(
+                    role="user", text_content="Hola Sandra", interrupted=False,
+                )),
+            )
+            sessions[0].emit(
+                "conversation_item_added",
+                types.SimpleNamespace(item=types.SimpleNamespace(
+                    role="assistant", text_content="Hola, ¿cómo puedo ayudarte?", interrupted=False,
+                )),
+            )
+            sessions[0].emit(
+                "conversation_item_added",
+                types.SimpleNamespace(item=types.SimpleNamespace(
+                    role="assistant", text_content="Mensaje interrumpido", interrupted=True,
+                )),
             )
             sessions[0].emit(
                 "agent_state_changed",
@@ -502,6 +516,10 @@ class UltravoxLifecycleTests(unittest.IsolatedAsyncioTestCase):
             self.assertIn("voice.participant.connected", event_names)
             self.assertIn("voice.audio.input.started", event_names)
             self.assertIn("voice.transcript.final", event_names)
+            transcripts = [event[1] for event in events if event[0] == "voice.transcript.final"]
+            self.assertEqual(len(transcripts), 2)
+            self.assertEqual([item["payload"]["speaker"] for item in transcripts], ["user", "assistant"])
+            self.assertEqual([item["sequence"] for item in transcripts], [1, 2])
             self.assertIn("voice.session.connected", event_names)
             self.assertIn("voice.audio.output.started", event_names)
             self.assertIn("voice.audio.output.completed", event_names)

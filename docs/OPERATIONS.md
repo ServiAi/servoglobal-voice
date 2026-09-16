@@ -96,6 +96,8 @@ Ejecute pruebas focalizadas durante el desarrollo y la suite completa antes de m
 
 ### LiveKit SIP outbound (Sprint 7)
 
+Para proyectar sesiones reales históricas SIP/WebRTC, aplique primero `202609150001_voice_call_projection_channel.py` en PostgreSQL de pruebas y confirme una sola head de Alembic. Desde `backend`, `python -m scripts.backfill_voice_session_calls --tenant-id <id>` sólo muestra conteos; agregue `--apply` para escribir, opcionalmente con `--batch-size`. Repetirlo reconcilia proyecciones existentes sin duplicarlas. No ejecutarlo automáticamente en producción ni deducir estados terminales de sesiones sin cierre observado.
+
 El flujo nuevo está apagado por defecto y requiere habilitar para el tenant, en este orden, `voice_runtime_v2` y `livekit_sip_outbound_v2`. Si cualquiera se deshabilita, `POST /api/v1/crm/leads/{lead_id}/actions/call` vuelve al runtime legacy. No retire el worker ni la configuración legacy durante el canary.
 
 1. Aplique `202609140002_livekit_sip_outbound.py` sobre una copia PostgreSQL de staging y confirme `alembic current` = `alembic heads`. No use SQLite como prueba de esta migración.

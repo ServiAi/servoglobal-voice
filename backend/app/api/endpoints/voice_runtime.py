@@ -189,15 +189,26 @@ def post_runtime_event(session_id: str, body: RuntimeEventV1, db: Session = Depe
     if body.session_id != session_id:
         raise HTTPException(status_code=422, detail="Event session_id does not match path")
     service = VoiceSessionService(db)
+    from app.services.voice_call_projection_service import VoiceCallProjectionService
+    from app.services.voice_session_service import TRANSITIONS
+
+    projector = VoiceCallProjectionService(db)
     try:
         session = service.get(session_id)
         allowed_payload = {
             key: value for key, value in body.payload.items()
             if key in {"livekit_job_id", "provider_session_id", "end_reason", "error_code", "speaker", "text", "timestamp", "participant_identity", "track_source"}
         }
-        _, duplicate = service.record_event(session, body.event_type, source=body.source, event_id=body.event_id, sequence=body.sequence, payload=allowed_payload, occurred_at=body.occurred_at, commit=False)
+        if body.event_type == "voice.transcript.final":
+            if (allowed_payload.get("speaker") not in {"user", "assistant"}
+                    or not isinstance(allowed_payload.get("text"), str)
+                    or not allowed_payload["text"].strip()
+                    or len(allowed_payload["text"]) > 10000):
+                raise HTTPException(status_code=422, detail="Invalid final transcript")
+        event, duplicate = service.record_event(session, body.event_type, source=body.source, event_id=body.event_id, sequence=body.sequence, payload=allowed_payload, occurred_at=body.occurred_at, commit=False)
         if duplicate:
             db.rollback()
+            projector.reconcile_session(session_id, tenant_id=session.tenant_id)
             return RuntimeEventAck(duplicate=True)
         if "livekit_job_id" in allowed_payload:
             session.livekit_job_id = str(allowed_payload["livekit_job_id"])[:160]
@@ -213,8 +224,15 @@ def post_runtime_event(session_id: str, body: RuntimeEventV1, db: Session = Depe
             "voice.session.ended": "ended",
             "voice.session.failed": "failed",
         }.get(body.event_type)
-        if target and target != session.status:
+        if target and target in TRANSITIONS.get(session.status, set()):
             service.transition(session, target, commit=False)
+        if body.event_type == "voice.session.started" and session.started_at is not None:
+            session.started_at = min(projector._utc(session.started_at), projector._utc(body.occurred_at))
+        elif body.event_type == "voice.session.connected" and (
+                session.ended_at is None or projector._utc(body.occurred_at) <= projector._utc(session.ended_at)):
+            session.connected_at = min(projector._utc(session.connected_at), projector._utc(body.occurred_at)) if session.connected_at else projector._utc(body.occurred_at)
+        elif body.event_type in {"voice.session.ended", "voice.session.failed"} and session.status in {"ended", "failed"}:
+            session.ended_at = min(projector._utc(session.ended_at), projector._utc(body.occurred_at)) if session.ended_at else projector._utc(body.occurred_at)
         if body.event_type == "voice.session.ended":
             session.end_reason = str(allowed_payload.get("end_reason", "unknown"))[:40]
         elif body.event_type == "voice.session.failed":
@@ -228,7 +246,7 @@ def post_runtime_event(session_id: str, body: RuntimeEventV1, db: Session = Depe
                 elif body.event_type == "voice.session.ended" and call.status not in {
                     "busy", "rejected", "no_answer", "failed", "completed"
                 }:
-                    call.status = "completed"
+                    call.status = "completed" if call.answered_at else "no_answer"
                     call.ended_at = now
                     logger.info(
                         "LiveKit SIP outbound completed | tenant_id=%s | crm_voice_call_id=%s | voice_session_id=%s | livekit_room_name=%s | livekit_dispatch_id=%s | livekit_sip_trunk_id=%s | sip_participant_identity=%s | sip_call_id=%s",
@@ -246,6 +264,8 @@ def post_runtime_event(session_id: str, body: RuntimeEventV1, db: Session = Depe
                 }:
                     call.status = "failed"
                     call.ended_at = now
+        db.flush()
+        projector.project_event(session_id, event, commit=False)
         db.commit()
         return RuntimeEventAck()
     except VoiceSessionNotFoundError as exc:

@@ -15,6 +15,8 @@ import {
 import type { VoiceCallResponse } from '@/types/crm';
 import type { AgentResponse } from '@/types/agents';
 
+const ACTIVE_CALL_STATUSES = new Set(['requested', 'queued', 'dialing', 'ringing', 'answered', 'in_progress']);
+
 type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -50,6 +52,7 @@ export function CrmSendVoiceCallModal({
 
     setAgents([]);
     setSelectedAgentId('');
+    setCalls([]);
     fetchCrmVoiceCallAgents(accessToken).then((res) => {
       if (cancelled) return;
       if (res.ok) {
@@ -74,6 +77,24 @@ export function CrmSendVoiceCallModal({
       cancelled = true;
     };
   }, [accessToken, leadId, onError, open]);
+
+  useEffect(() => {
+    if (!open || !calls.some((call) => ACTIVE_CALL_STATUSES.has(call.status))) return;
+    let cancelled = false;
+    const timer = window.setInterval(async () => {
+      const result = await fetchCrmLeadVoiceCalls(accessToken, leadId);
+      if (cancelled || !result.ok) return;
+      const activeIds = new Set(calls.filter((call) => ACTIVE_CALL_STATUSES.has(call.status)).map((call) => call.id));
+      if (result.data.some((call) => activeIds.has(call.id) && !ACTIVE_CALL_STATUSES.has(call.status))) {
+        onSent?.();
+      }
+      setCalls(result.data);
+    }, 3000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [accessToken, calls, leadId, onSent, open]);
 
   const handleStartCall = async () => {
     if (!contactPhone) {
@@ -122,6 +143,11 @@ export function CrmSendVoiceCallModal({
         return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">Finalizada</span>;
       case 'queued':
         return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-500/10 text-amber-500 border border-amber-500/20">En cola</span>;
+      case 'requested':
+      case 'dialing':
+        return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-500/10 text-amber-500 border border-amber-500/20">Marcando</span>;
+      case 'answered':
+        return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-sky-500/10 text-sky-500 border border-sky-500/20">Contestada</span>;
       case 'ringing':
         return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-500/10 text-indigo-500 border border-indigo-500/20">Timbrando</span>;
       case 'in_progress':
@@ -214,6 +240,7 @@ export function CrmSendVoiceCallModal({
                       <div className="flex items-center gap-2 text-xs text-muted-foreground">
                         <Clock className="h-3.5 w-3.5" />
                         <span>{new Date(call.created_at).toLocaleString()}</span>
+                        <span>{call.agent_name || 'Agente no disponible'}</span>
                         <span className="font-mono text-[10px]">({call.provider})</span>
                       </div>
                       {getStatusBadge(call.status)}

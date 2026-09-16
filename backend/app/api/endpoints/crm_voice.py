@@ -184,5 +184,4 @@ def list_lead_voice_calls(
     db: Session = Depends(get_db),
 ) -> Any:
     service = VoiceCallService(db)
-    calls = service.list_lead_calls(context.tenant.id, lead_id)
-    return [service.response(c) for c in calls]
+    return service.responses_for_lead(context.tenant.id, lead_id)

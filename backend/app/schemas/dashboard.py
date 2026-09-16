@@ -71,6 +71,8 @@ class DashboardRecentCallItem(BaseModel):
     short_summary: str | None
     status: str
     external_provider: str
+    channel: str | None = None
+    direction: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
 

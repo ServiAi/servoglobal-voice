@@ -150,7 +150,40 @@ function SummaryTab({ lead, onOpenData }: { lead: LeadDetailResponse; onOpenData
 function ConversationsTab({ lead }: { lead: LeadDetailResponse }) {
   const calls = lead.activities.filter((activity) => activity.call_id || activity.activity_type.toLowerCase().includes('call') || activity.activity_type.toLowerCase().includes('llamada'));
   if (!calls.length) return <WorkspaceCard title="Conversaciones"><EmptyState text="No hay llamadas asociadas a este lead." /></WorkspaceCard>;
-  return <div className="space-y-3">{calls.map((call) => <article key={call.id} className="rounded-xl border border-border bg-card p-4 sm:p-5"><div className="flex items-start justify-between gap-4"><div className="flex min-w-0 items-start gap-3"><span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary"><Phone className="size-4" /></span><div className="min-w-0"><h3 className="break-words text-sm font-semibold">{call.title}</h3><p className="mt-1 text-xs text-muted-foreground">{formatCrmDate(call.occurred_at)}</p></div></div>{call.normalized_status ? <span className="rounded-full border border-border px-2 py-1 text-xs capitalize">{call.normalized_status}</span> : null}</div>{call.description ? <p className="mt-4 whitespace-pre-wrap break-words text-sm text-muted-foreground">{call.description}</p> : null}<div className="mt-4 flex flex-wrap gap-3 text-xs text-muted-foreground">{formatDuration(call.duration_seconds) ? <span>Duración: {formatDuration(call.duration_seconds)}</span> : null}{call.outcome ? <span>Resultado: {call.outcome}</span> : null}</div>{call.summary || call.short_summary ? <LongText label="Resumen" value={call.summary || call.short_summary} /> : null}{call.recording_url ? <audio controls preload="none" src={call.recording_url} className="mt-4 h-10 w-full" /> : null}</article>)}</div>;
+  return <div className="space-y-3">{calls.map((call) => (
+    <article key={call.id} className="rounded-xl border border-border bg-card p-4 sm:p-5">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex min-w-0 items-start gap-3">
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary"><Phone className="size-4" /></span>
+          <div className="min-w-0">
+            <h3 className="break-words text-sm font-semibold">{call.title}</h3>
+            <p className="mt-1 text-xs text-muted-foreground">{formatCrmDate(call.occurred_at)}</p>
+          </div>
+        </div>
+        {call.normalized_status ? <span className="rounded-full border border-border px-2 py-1 text-xs capitalize">{call.normalized_status}</span> : null}
+      </div>
+      {call.description ? <p className="mt-4 whitespace-pre-wrap break-words text-sm text-muted-foreground">{call.description}</p> : null}
+      <div className="mt-4 flex flex-wrap gap-3 text-xs text-muted-foreground">
+        {call.provider ? <span>Proveedor IA: {call.provider}</span> : null}
+        {call.channel ? <span>Canal: {call.channel === 'webrtc' ? 'WebRTC' : call.channel.toUpperCase()}</span> : null}
+        {formatDuration(call.duration_seconds) ? <span>Duración: {formatDuration(call.duration_seconds)}</span> : null}
+        {call.outcome ? <span>Resultado: {call.outcome}</span> : null}
+      </div>
+      {call.summary || call.short_summary ? <LongText label="Resumen" value={call.summary || call.short_summary} /> : null}
+      {call.transcript?.length ? (
+        <div className="mt-4 space-y-2 border-t border-border pt-4" aria-label="Transcripción de la llamada">
+          <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Transcripción</h4>
+          {call.transcript.map((turn) => (
+            <div key={turn.event_id} className={`max-w-[90%] rounded-lg border px-3 py-2 text-sm ${turn.speaker === 'assistant' ? 'ml-auto border-primary/20 bg-primary/5' : 'border-border bg-muted/40'}`}>
+              <p className="text-xs font-semibold text-foreground">{turn.speaker === 'assistant' ? 'Agente IA' : 'Cliente'}</p>
+              <p className="mt-1 whitespace-pre-wrap break-words text-foreground">{turn.text}</p>
+            </div>
+          ))}
+        </div>
+      ) : null}
+      {call.recording_url ? <audio controls preload="none" src={call.recording_url} className="mt-4 h-10 w-full" /> : null}
+    </article>
+  ))}</div>;
 }
 
 function WorkspaceCard({ title, icon, children }: { title: string; icon?: React.ReactNode; children: React.ReactNode }) { return <section className="rounded-xl border border-border bg-card p-4 shadow-xs sm:p-6"><div className="mb-4 flex items-center gap-2 border-b border-border pb-3">{icon}<h2 className="text-sm font-semibold">{title}</h2></div>{children}</section>; }

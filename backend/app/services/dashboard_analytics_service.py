@@ -236,6 +236,8 @@ class DashboardAnalyticsService:
                     short_summary=call.short_summary,
                     status=call.normalized_status,
                     external_provider=call.external_provider,
+                    channel=call.channel,
+                    direction=call.direction,
                 )
                 for call, agent_name in rows
             ],
