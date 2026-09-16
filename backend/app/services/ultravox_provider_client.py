@@ -42,7 +42,8 @@ class UltravoxProviderClient:
         return {"X-API-Key": api_key, "Content-Type": "application/json"}
 
     def _get(
-        self, path: str, api_key: str, *, params: dict[str, Any] | None = None
+        self, path: str, api_key: str, *, params: dict[str, Any] | None = None,
+        preview_kind: str | None = None,
     ) -> httpx.Response:
         for attempt in range(2):
             try:
@@ -53,7 +54,7 @@ class UltravoxProviderClient:
                         params=params,
                     )
                 if response.status_code not in {429, 500, 502, 503, 504} or attempt:
-                    return self._checked(response)
+                    return self._checked(response, preview_kind=preview_kind)
             except (httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout):
                 if attempt:
                     raise UltravoxProviderError("provider_unavailable") from None
@@ -61,8 +62,10 @@ class UltravoxProviderClient:
         raise UltravoxProviderError("provider_unavailable")
 
     @staticmethod
-    def _checked(response: httpx.Response) -> httpx.Response:
+    def _checked(response: httpx.Response, *, preview_kind: str | None = None) -> httpx.Response:
         status = response.status_code
+        if status == 400 and preview_kind:
+            UltravoxProviderClient._log_preview_rejection(response, preview_kind)
         if status in {401, 403}:
             raise UltravoxProviderError("provider_auth_failed", status)
         if status == 404:
@@ -74,6 +77,29 @@ class UltravoxProviderClient:
         if status >= 400:
             raise UltravoxProviderError("provider_rejected", status)
         return response
+
+    @staticmethod
+    def _log_preview_rejection(response: httpx.Response, preview_kind: str) -> None:
+        # Only fixed labels leave this boundary; provider text may contain secrets or PII.
+        detail = response.content[:4096].decode("utf-8", errors="replace").lower()
+        if "pcm_44100" in detail or "sample rate" in detail or "sample_rate" in detail:
+            hint = "sample_rate"
+        elif "quota" in detail or "credits" in detail or "credit balance" in detail:
+            hint = "quota"
+        elif "permission" in detail or "text_to_speech" in detail:
+            hint = "permission"
+        elif "model" in detail and any(word in detail for word in ("invalid", "unknown", "not found", "not available", "unsupported")):
+            hint = "model"
+        elif ("voice" in detail or "voiceid" in detail) and any(
+            word in detail for word in ("invalid", "unknown", "not found", "not available", "does not exist", "unavailable")
+        ):
+            hint = "voice"
+        else:
+            hint = "other"
+        logging.getLogger(__name__).warning(
+            "Ultravox voice preview rejected | kind=%s | upstream_status=400 | hint=%s",
+            preview_kind, hint,
+        )
 
     @staticmethod
     def _cursor(url: Any) -> str | None:
@@ -103,7 +129,7 @@ class UltravoxProviderClient:
 
     def get_voice_preview(self, api_key: str, voice_id: str) -> bytes:
         logger = logging.getLogger(__name__)
-        response = self._get(f"/api/voices/{voice_id}/preview", api_key)
+        response = self._get(f"/api/voices/{voice_id}/preview", api_key, preview_kind="catalog")
         for _ in range(2):
             if not response.is_redirect:
                 break
@@ -127,7 +153,7 @@ class UltravoxProviderClient:
                     )
             except httpx.RequestError as exc:
                 raise UltravoxProviderError("provider_unavailable") from exc
-            response = self._checked(response)
+            response = self._checked(response, preview_kind="catalog")
         if response.is_redirect:
             logger.warning(
                 "Ultravox voice preview redirect limit reached | upstream_status=%s", response.status_code,
@@ -182,6 +208,8 @@ class UltravoxProviderClient:
             # Ultravox rejected this specific voiceId/model/settings
             # combination (e.g. unknown ElevenLabs voice). Never surface the
             # provider's raw response body to the caller.
+            if status == 400:
+                self._log_preview_rejection(response, "external")
             raise UltravoxProviderError("external_voice_preview_failed", status)
         if "audio/wav" not in response.headers.get("content-type", ""):
             raise UltravoxProviderError("provider_invalid_preview")

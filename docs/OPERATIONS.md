@@ -230,6 +230,7 @@ Provider Voice:
 - [ ] Abrir Agent Builder y seleccionar Origen de voz → Catálogo del proveedor.
 - [ ] Seleccionar una voz Ultravox, pulsar Escuchar y comprobar el audio.
 - [ ] Si falla, revisar sólo `upstream_status`, `mime_class` y `bytes` del aviso sanitizado (o el aviso de redirección bloqueada); no registrar claves, URLs de muestra ni cuerpo del proveedor. Confirmar el audio real tras desplegar el parche antes de cerrar el incidente.
+- [ ] Para un `400` de Ultravox en cualquiera de los dos previews, revisar `kind=catalog|external`, `upstream_status=400` y `hint=sample_rate|quota|permission|model|voice|other` en el log sanitizado. `hint` es orientativo, no confirma la causa; si es `other`, investigar en la consola segura del proveedor sin copiar el cuerpo del error, credenciales, IDs o URLs a tickets/logs.
 - [ ] Guardar, publicar e iniciar una llamada real.
 - [ ] Comprobar que el agente habla con la voz seleccionada.
 
