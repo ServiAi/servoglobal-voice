@@ -111,9 +111,10 @@ def get_voice(provider: str, voice_id: str, context: AuthContext = Depends(requi
 def preview_voice(provider: str, voice_id: str, context: AuthContext = Depends(require_enabled_integration("voice", READ_ROLES)), db: Session = Depends(get_db)):
     try:
         service = get_provider_admin_service(db, provider)
+        preview = service.preview(context.tenant.id, voice_id)
         return Response(
-            content=service.preview(context.tenant.id, voice_id),
-            media_type="audio/wav",
+            content=preview.content,
+            media_type=preview.media_type,
             headers={"Cache-Control": "private, no-store"},
         )
     except (ValueError, UltravoxProviderError) as exc:

@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock
 
 from app.services.ultravox_admin_service import UltravoxAdminService
+from app.services.ultravox_provider_client import VoicePreviewAudio
 
 
 class FakeConfigService:
@@ -39,7 +40,7 @@ class FakeClient:
 
     def get_voice_preview(self, api_key: str, voice_id: str):
         self.calls.append(("preview", api_key))
-        return b"RIFF-test"
+        return VoicePreviewAudio(b"RIFF-test", "audio/wav")
 
     def preview_external_voice(self, api_key: str, *, payload):
         self.calls.append(("external_voice_preview", api_key))
@@ -74,7 +75,7 @@ class UltravoxAdminServiceTests(unittest.TestCase):
         self.assertTrue(result["capabilities"]["external_voice"])
 
     def test_preview_validates_detail_then_uses_preview_endpoint(self):
-        self.assertEqual(self.service.preview("tenant-a", "voice-1"), b"RIFF-test")
+        self.assertEqual(self.service.preview("tenant-a", "voice-1"), VoicePreviewAudio(b"RIFF-test", "audio/wav"))
         self.assertEqual(self.client.calls, [("voice", "key:tenant-a"), ("preview", "key:tenant-a")])
 
     # -- Phase D: external voice preview + BYOK preflight --

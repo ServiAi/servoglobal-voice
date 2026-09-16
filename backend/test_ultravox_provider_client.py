@@ -7,7 +7,9 @@ import wave
 
 import httpx
 
-from app.services.ultravox_provider_client import UltravoxProviderClient, UltravoxProviderError
+from app.services.ultravox_provider_client import (
+    UltravoxProviderClient, UltravoxProviderError, VoicePreviewAudio, detect_preview_audio_type,
+)
 
 _POST_REQUEST = httpx.Request("POST", "https://api.ultravox.ai/api/voice_preview")
 _GET_REQUEST = httpx.Request("GET", "https://api.ultravox.ai/api/accounts/me/tts_api_keys")
@@ -22,6 +24,15 @@ def _wav() -> bytes:
         audio.setframerate(16000)
         audio.writeframes(b"\x00\x00")
     return buffer.getvalue()
+
+
+def _mp3_frame() -> bytes:
+    # MPEG-1 Layer III, 128 kbps, 44.1 kHz; synthetic payload for signature tests.
+    return b"\xff\xfb\x90\x64" + b"\x00" * 64
+
+
+def _mp3_id3() -> bytes:
+    return b"ID3\x04\x00\x00\x00\x00\x00\x04" + b"\x00" * 4 + _mp3_frame()
 
 
 def _response(status_code: int, *, content: bytes = b"", headers: dict | None = None, request=_POST_REQUEST) -> httpx.Response:
@@ -174,7 +185,39 @@ class UltravoxProviderClientCatalogPreviewTests(unittest.TestCase):
         response = _response(200, content=self.wav, headers={"content-type": "application/octet-stream"},
                              request=_GET_PREVIEW_REQUEST)
         with patch("httpx.Client.get", return_value=response):
-            self.assertEqual(self.client.get_voice_preview("key", "voice-1"), self.wav)
+            self.assertEqual(self.client.get_voice_preview("key", "voice-1"), VoicePreviewAudio(self.wav, "audio/wav"))
+
+    def test_detects_only_wav_and_mp3_signatures(self) -> None:
+        self.assertEqual(detect_preview_audio_type(self.wav), "audio/wav")
+        self.assertEqual(detect_preview_audio_type(_mp3_id3()), "audio/mpeg")
+        self.assertEqual(detect_preview_audio_type(_mp3_frame()), "audio/mpeg")
+        for invalid in (b"hello world", b"random bytes" * 8, b"ID3" + b"0" * 64,
+                        *(header + b"0" * 64 for header in (
+                            b"\xff\x00\x90\x64",  # no sync
+                            b"\xff\xeb\x90\x64",  # reserved MPEG version
+                            b"\xff\xf9\x90\x64",  # no MPEG layer
+                            b"\xff\xfb\x00\x64",  # free/undefined bitrate
+                            b"\xff\xfb\xf0\x64",  # reserved bitrate
+                            b"\xff\xfb\x9c\x64",  # reserved sample rate
+                        ))):
+            with self.subTest(invalid=invalid[:4]):
+                self.assertIsNone(detect_preview_audio_type(invalid))
+
+    def test_accepts_mp3_bytes_despite_text_plain_mime(self) -> None:
+        mp3 = _mp3_frame()
+        response = _response(200, content=mp3, headers={"content-type": "text/plain"},
+                             request=_GET_PREVIEW_REQUEST)
+        with patch("httpx.Client.get", return_value=response):
+            self.assertEqual(self.client.get_voice_preview("key", "voice-1"), VoicePreviewAudio(mp3, "audio/mpeg"))
+
+    def test_rejects_spoofed_mp3_mime_and_extension(self) -> None:
+        response = _response(200, content=b"not an mp3 file", headers={"content-type": "audio/mpeg"},
+                             request=httpx.Request("GET", "https://api.ultravox.ai/sample.mp3"))
+        with patch("httpx.Client.get", return_value=response), self.assertLogs(
+                "app.services.ultravox_provider_client", level="WARNING"):
+            with self.assertRaises(UltravoxProviderError) as ctx:
+                self.client.get_voice_preview("key", "voice-1")
+        self.assertEqual(ctx.exception.code, "provider_invalid_preview")
 
     def test_400_logs_only_safe_hint_and_preserves_error_contract(self) -> None:
         response = _response(400, content=b"Voice not found; token=secret_note", request=_GET_PREVIEW_REQUEST)
@@ -217,7 +260,7 @@ class UltravoxProviderClientCatalogPreviewTests(unittest.TestCase):
         final = _response(200, content=self.wav, headers={"content-type": "audio/wav"},
                           request=httpx.Request("GET", "https://api.ultravox.ai/api/media/sample"))
         with patch("httpx.Client.get", side_effect=[redirect, final]) as get:
-            self.assertEqual(self.client.get_voice_preview("key", "voice-1"), self.wav)
+            self.assertEqual(self.client.get_voice_preview("key", "voice-1"), VoicePreviewAudio(self.wav, "audio/wav"))
         self.assertEqual(get.call_count, 2)
         self.assertEqual(get.call_args_list[1].kwargs["headers"]["X-API-Key"], "key")
 
@@ -227,7 +270,7 @@ class UltravoxProviderClientCatalogPreviewTests(unittest.TestCase):
         final = _response(200, content=self.wav, headers={"content-type": "audio/x-wav"},
                           request=httpx.Request("GET", "https://media.ultravox.ai/sample.wav"))
         with patch("httpx.Client.get", side_effect=[redirect, final]) as get:
-            self.assertEqual(self.client.get_voice_preview("key", "voice-1"), self.wav)
+            self.assertEqual(self.client.get_voice_preview("key", "voice-1"), VoicePreviewAudio(self.wav, "audio/wav"))
         self.assertEqual(get.call_args_list[1].kwargs["headers"], {})
 
     def test_follows_google_storage_audio_redirect_without_forwarding_key(self) -> None:
@@ -236,7 +279,31 @@ class UltravoxProviderClientCatalogPreviewTests(unittest.TestCase):
         final = _response(200, content=self.wav, headers={"content-type": "application/octet-stream"},
                           request=httpx.Request("GET", "https://storage.googleapis.com/sample-bucket/sample.wav"))
         with patch("httpx.Client.get", side_effect=[redirect, final]) as get:
-            self.assertEqual(self.client.get_voice_preview("key", "voice-1"), self.wav)
+            self.assertEqual(self.client.get_voice_preview("key", "voice-1"), VoicePreviewAudio(self.wav, "audio/wav"))
+        self.assertEqual(get.call_args_list[1].kwargs["headers"], {})
+
+    def test_google_storage_mp3_with_text_plain_mime_is_accepted_without_key(self) -> None:
+        # Regression: catalog preview redirects to a valid MP3 served as text/plain.
+        mp3 = _mp3_id3()
+        redirect = _response(302, headers={"location": "https://storage.googleapis.com/sample-bucket/sample.mp3"},
+                             request=_GET_PREVIEW_REQUEST)
+        final = _response(200, content=mp3, headers={"content-type": "text/plain"},
+                          request=httpx.Request("GET", "https://storage.googleapis.com/sample-bucket/sample.mp3"))
+        with patch("httpx.Client.get", side_effect=[redirect, final]) as get:
+            self.assertEqual(self.client.get_voice_preview("key", "voice-1"), VoicePreviewAudio(mp3, "audio/mpeg"))
+        self.assertEqual(get.call_count, 2)
+        self.assertEqual(get.call_args_list[1].kwargs["headers"], {})
+
+    def test_google_storage_mp3_url_with_html_body_is_rejected(self) -> None:
+        redirect = _response(302, headers={"location": "https://storage.googleapis.com/sample-bucket/sample.mp3"},
+                             request=_GET_PREVIEW_REQUEST)
+        final = _response(200, content=b"<html>not audio</html>", headers={"content-type": "audio/mpeg"},
+                          request=httpx.Request("GET", "https://storage.googleapis.com/sample-bucket/sample.mp3"))
+        with patch("httpx.Client.get", side_effect=[redirect, final]) as get, self.assertLogs(
+                "app.services.ultravox_provider_client", level="WARNING"):
+            with self.assertRaises(UltravoxProviderError) as ctx:
+                self.client.get_voice_preview("key", "voice-1")
+        self.assertEqual(ctx.exception.code, "provider_invalid_preview")
         self.assertEqual(get.call_args_list[1].kwargs["headers"], {})
 
     def test_blocks_other_domain_redirect_without_key_or_url_in_logs(self) -> None:
@@ -273,6 +340,14 @@ class UltravoxProviderClientCatalogPreviewTests(unittest.TestCase):
     def test_large_wav_is_rejected(self) -> None:
         response = _response(200, content=self.wav + b"0" * (5 * 1024 * 1024),
                              headers={"content-type": "audio/wav"}, request=_GET_PREVIEW_REQUEST)
+        with patch("httpx.Client.get", return_value=response):
+            with self.assertRaises(UltravoxProviderError) as ctx:
+                self.client.get_voice_preview("key", "voice-1")
+        self.assertEqual(ctx.exception.code, "provider_preview_too_large")
+
+    def test_large_mp3_is_rejected(self) -> None:
+        response = _response(200, content=_mp3_frame() + b"0" * (5 * 1024 * 1024),
+                             headers={"content-type": "audio/mpeg"}, request=_GET_PREVIEW_REQUEST)
         with patch("httpx.Client.get", return_value=response):
             with self.assertRaises(UltravoxProviderError) as ctx:
                 self.client.get_voice_preview("key", "voice-1")

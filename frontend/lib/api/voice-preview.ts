@@ -2,13 +2,14 @@ import 'server-only';
 
 import { providerVoicePreviewUrl } from './voice-provider-admin';
 import { parseVoicePreviewError, type VoicePreviewErrorReason } from '../voice-preview-error';
+import { parseVoicePreviewMediaType, type VoicePreviewMediaType } from '../voice-preview-media-type';
 import type { AgentVoiceConfig } from '@/types/agents';
 
 export type VoicePreviewResult =
-  | { ok: true; audioBase64: string }
+  | { ok: true; audioBase64: string; mediaType: VoicePreviewMediaType }
   | { ok: false; status: number; code: string; reason?: VoicePreviewErrorReason };
 
-// Server-only: fetches an audio/wav preview and hands the caller back
+// Server-only: fetches an audio preview and hands the caller back
 // base64, never a raw bearer-token-bearing URL for the browser to hit
 // directly. The Agent Builder client calls these through Server Actions
 // (see voice-ai/agents/actions.ts), so the access token never reaches the
@@ -34,8 +35,10 @@ async function fetchAudioPreview(url: string, accessToken: string, init?: Reques
       return { ok: false, status: response.status, code: 'preview_failed' };
     }
   }
+  const mediaType = parseVoicePreviewMediaType(response.headers.get('content-type'));
+  if (!mediaType) return { ok: false, status: 502, code: 'provider_invalid_preview' };
   const buffer = Buffer.from(await response.arrayBuffer());
-  return { ok: true, audioBase64: buffer.toString('base64') };
+  return { ok: true, audioBase64: buffer.toString('base64'), mediaType };
 }
 
 export function previewProviderVoiceAudio(
