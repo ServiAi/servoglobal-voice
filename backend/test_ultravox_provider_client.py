@@ -178,6 +178,15 @@ class UltravoxProviderClientCatalogPreviewTests(unittest.TestCase):
             self.assertEqual(self.client.get_voice_preview("key", "voice-1"), self.wav)
         self.assertEqual(get.call_args_list[1].kwargs["headers"], {})
 
+    def test_follows_google_storage_audio_redirect_without_forwarding_key(self) -> None:
+        redirect = _response(302, headers={"location": "https://storage.googleapis.com/sample-bucket/sample.wav"},
+                             request=_GET_PREVIEW_REQUEST)
+        final = _response(200, content=self.wav, headers={"content-type": "application/octet-stream"},
+                          request=httpx.Request("GET", "https://storage.googleapis.com/sample-bucket/sample.wav"))
+        with patch("httpx.Client.get", side_effect=[redirect, final]) as get:
+            self.assertEqual(self.client.get_voice_preview("key", "voice-1"), self.wav)
+        self.assertEqual(get.call_args_list[1].kwargs["headers"], {})
+
     def test_blocks_other_domain_redirect_without_key_or_url_in_logs(self) -> None:
         redirect = _response(302, headers={"location": "https://example.invalid/private?token=secret"},
                              request=_GET_PREVIEW_REQUEST)
