@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import time
 from dataclasses import dataclass
 from typing import Any
@@ -101,11 +102,50 @@ class UltravoxProviderClient:
         return self._get(f"/api/voices/{voice_id}", api_key).json()
 
     def get_voice_preview(self, api_key: str, voice_id: str) -> bytes:
+        logger = logging.getLogger(__name__)
         response = self._get(f"/api/voices/{voice_id}/preview", api_key)
-        if "audio/wav" not in response.headers.get("content-type", ""):
-            raise UltravoxProviderError("provider_invalid_preview")
+        for _ in range(2):
+            if not response.is_redirect:
+                break
+            location = response.headers.get("location")
+            try:
+                target = response.request.url.join(location) if location else None
+            except httpx.InvalidURL:
+                target = None
+            if (target is None or target.scheme != "https" or target.port not in {None, 443}
+                    or target.username or target.password or not target.host
+                    or not target.host.endswith(".ultravox.ai")):
+                logger.warning(
+                    "Ultravox voice preview redirect blocked | upstream_status=%s", response.status_code,
+                )
+                raise UltravoxProviderError("provider_preview_redirect_blocked")
+            try:
+                with httpx.Client(timeout=self.timeout_seconds) as client:
+                    response = client.get(
+                        str(target),
+                        headers=self._headers(api_key) if target.host == "api.ultravox.ai" else {},
+                    )
+            except httpx.RequestError as exc:
+                raise UltravoxProviderError("provider_unavailable") from exc
+            response = self._checked(response)
+        if response.is_redirect:
+            logger.warning(
+                "Ultravox voice preview redirect limit reached | upstream_status=%s", response.status_code,
+            )
+            raise UltravoxProviderError("provider_preview_redirect_blocked")
         if len(response.content) > 5 * 1024 * 1024:
             raise UltravoxProviderError("provider_preview_too_large")
+        if not (response.content[:4] == b"RIFF" and response.content[8:12] == b"WAVE"):
+            mime = response.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+            mime_class = mime if mime in {
+                "audio/wav", "audio/x-wav", "application/octet-stream", "audio/mpeg",
+                "application/json", "text/html", "text/plain",
+            } else "other" if mime else "missing"
+            logger.warning(
+                "Ultravox voice preview invalid audio | upstream_status=%s | mime_class=%s | bytes=%s",
+                response.status_code, mime_class, len(response.content),
+            )
+            raise UltravoxProviderError("provider_invalid_preview")
         return response.content
 
     def get_tts_api_keys(self, api_key: str) -> dict[str, Any]:

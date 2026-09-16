@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import unittest
+from io import BytesIO
 from unittest.mock import patch
+import wave
 
 import httpx
 
@@ -9,6 +11,17 @@ from app.services.ultravox_provider_client import UltravoxProviderClient, Ultrav
 
 _POST_REQUEST = httpx.Request("POST", "https://api.ultravox.ai/api/voice_preview")
 _GET_REQUEST = httpx.Request("GET", "https://api.ultravox.ai/api/accounts/me/tts_api_keys")
+_GET_PREVIEW_REQUEST = httpx.Request("GET", "https://api.ultravox.ai/api/voices/voice-1/preview")
+
+
+def _wav() -> bytes:
+    buffer = BytesIO()
+    with wave.open(buffer, "wb") as audio:
+        audio.setnchannels(1)
+        audio.setsampwidth(2)
+        audio.setframerate(16000)
+        audio.writeframes(b"\x00\x00")
+    return buffer.getvalue()
 
 
 def _response(status_code: int, *, content: bytes = b"", headers: dict | None = None, request=_POST_REQUEST) -> httpx.Response:
@@ -123,6 +136,86 @@ class UltravoxProviderClientTtsApiKeysTests(unittest.TestCase):
             result = UltravoxProviderClient().get_tts_api_keys("key")
         self.assertEqual(result, {"elevenLabs": {"prefix": "abc"}})
         self.assertEqual(mock_get.call_count, 2)
+
+
+class UltravoxProviderClientCatalogPreviewTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.client = UltravoxProviderClient()
+        self.wav = _wav()
+
+    def test_accepts_real_wav_even_when_mime_is_octet_stream(self) -> None:
+        response = _response(200, content=self.wav, headers={"content-type": "application/octet-stream"},
+                             request=_GET_PREVIEW_REQUEST)
+        with patch("httpx.Client.get", return_value=response):
+            self.assertEqual(self.client.get_voice_preview("key", "voice-1"), self.wav)
+
+    def test_rejects_json_even_when_mime_claims_wav_without_leaking_body(self) -> None:
+        response = _response(200, content=b'{"secret": "do-not-log"}', headers={"content-type": "audio/wav"},
+                             request=_GET_PREVIEW_REQUEST)
+        with patch("httpx.Client.get", return_value=response), self.assertLogs(
+                "app.services.ultravox_provider_client", level="WARNING") as logs:
+            with self.assertRaises(UltravoxProviderError) as ctx:
+                self.client.get_voice_preview("key", "voice-1")
+        self.assertEqual(ctx.exception.code, "provider_invalid_preview")
+        self.assertNotIn("secret", " ".join(logs.output))
+        self.assertNotIn("key", " ".join(logs.output))
+
+    def test_follows_same_api_origin_redirect_with_key(self) -> None:
+        redirect = _response(302, headers={"location": "/api/media/sample"}, request=_GET_PREVIEW_REQUEST)
+        final = _response(200, content=self.wav, headers={"content-type": "audio/wav"},
+                          request=httpx.Request("GET", "https://api.ultravox.ai/api/media/sample"))
+        with patch("httpx.Client.get", side_effect=[redirect, final]) as get:
+            self.assertEqual(self.client.get_voice_preview("key", "voice-1"), self.wav)
+        self.assertEqual(get.call_count, 2)
+        self.assertEqual(get.call_args_list[1].kwargs["headers"]["X-API-Key"], "key")
+
+    def test_follows_ultravox_cdn_redirect_without_forwarding_key(self) -> None:
+        redirect = _response(302, headers={"location": "https://media.ultravox.ai/sample.wav"},
+                             request=_GET_PREVIEW_REQUEST)
+        final = _response(200, content=self.wav, headers={"content-type": "audio/x-wav"},
+                          request=httpx.Request("GET", "https://media.ultravox.ai/sample.wav"))
+        with patch("httpx.Client.get", side_effect=[redirect, final]) as get:
+            self.assertEqual(self.client.get_voice_preview("key", "voice-1"), self.wav)
+        self.assertEqual(get.call_args_list[1].kwargs["headers"], {})
+
+    def test_blocks_other_domain_redirect_without_key_or_url_in_logs(self) -> None:
+        redirect = _response(302, headers={"location": "https://example.invalid/private?token=secret"},
+                             request=_GET_PREVIEW_REQUEST)
+        with patch("httpx.Client.get", return_value=redirect) as get, self.assertLogs(
+                "app.services.ultravox_provider_client", level="WARNING") as logs:
+            with self.assertRaises(UltravoxProviderError) as ctx:
+                self.client.get_voice_preview("key", "voice-1")
+        self.assertEqual(ctx.exception.code, "provider_preview_redirect_blocked")
+        self.assertEqual(get.call_count, 1)
+        self.assertNotIn("token=secret", " ".join(logs.output))
+        self.assertNotIn("example.invalid", " ".join(logs.output))
+
+    def test_redirect_hops_are_bounded(self) -> None:
+        redirects = [_response(302, headers={"location": "/next"}, request=_GET_PREVIEW_REQUEST)]
+        redirects.extend(_response(302, headers={"location": "/next"},
+                                   request=httpx.Request("GET", "https://api.ultravox.ai/next")) for _ in range(2))
+        with patch("httpx.Client.get", side_effect=redirects) as get, self.assertLogs(
+                "app.services.ultravox_provider_client", level="WARNING"):
+            with self.assertRaises(UltravoxProviderError) as ctx:
+                self.client.get_voice_preview("key", "voice-1")
+        self.assertEqual(ctx.exception.code, "provider_preview_redirect_blocked")
+        self.assertEqual(get.call_count, 3)
+
+    def test_redirect_network_failure_is_sanitized(self) -> None:
+        redirect = _response(302, headers={"location": "https://media.ultravox.ai/sample.wav"},
+                             request=_GET_PREVIEW_REQUEST)
+        with patch("httpx.Client.get", side_effect=[redirect, httpx.ConnectError("network failed")]):
+            with self.assertRaises(UltravoxProviderError) as ctx:
+                self.client.get_voice_preview("key", "voice-1")
+        self.assertEqual(ctx.exception.code, "provider_unavailable")
+
+    def test_large_wav_is_rejected(self) -> None:
+        response = _response(200, content=self.wav + b"0" * (5 * 1024 * 1024),
+                             headers={"content-type": "audio/wav"}, request=_GET_PREVIEW_REQUEST)
+        with patch("httpx.Client.get", return_value=response):
+            with self.assertRaises(UltravoxProviderError) as ctx:
+                self.client.get_voice_preview("key", "voice-1")
+        self.assertEqual(ctx.exception.code, "provider_preview_too_large")
 
 
 if __name__ == "__main__":
