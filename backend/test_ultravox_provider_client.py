@@ -61,10 +61,30 @@ class UltravoxProviderClientPreviewExternalVoiceTests(unittest.TestCase):
 
     def test_400_maps_to_external_voice_preview_failed_without_leaking_the_provider_body(self) -> None:
         with patch("httpx.Client.post", return_value=_response(400, content=b'{"detail": "unknown voiceId, internal secret_note"}')):
-            with self.assertRaises(UltravoxProviderError) as ctx:
-                self.client.preview_external_voice("key", payload=self.payload)
+            with self.assertLogs("app.services.ultravox_provider_client", level="WARNING") as logs:
+                with self.assertRaises(UltravoxProviderError) as ctx:
+                    self.client.preview_external_voice("key", payload=self.payload)
         self.assertEqual(ctx.exception.code, "external_voice_preview_failed")
         self.assertNotIn("secret_note", str(ctx.exception))
+        self.assertIn("kind=external | upstream_status=400 | hint=voice", logs.output[0])
+        self.assertNotIn("secret_note", logs.output[0])
+
+    def test_400_diagnostic_hints_are_fixed_and_do_not_log_provider_details(self) -> None:
+        cases = {
+            b"pcm_44100 unavailable secret_note": "sample_rate",
+            b"insufficient credits secret_note": "quota",
+            b"missing text_to_speech permission secret_note": "permission",
+            b"unknown model secret_note": "model",
+            b"opaque error secret_note": "other",
+        }
+        for body, hint in cases.items():
+            with self.subTest(hint=hint), patch("httpx.Client.post", return_value=_response(400, content=body)):
+                with self.assertLogs("app.services.ultravox_provider_client", level="WARNING") as logs:
+                    with self.assertRaises(UltravoxProviderError) as ctx:
+                        self.client.preview_external_voice("key", payload=self.payload)
+                self.assertEqual(ctx.exception.code, "external_voice_preview_failed")
+                self.assertIn(f"hint={hint}", logs.output[0])
+                self.assertNotIn("secret_note", logs.output[0])
 
     def test_401_maps_to_provider_auth_failed(self) -> None:
         with patch("httpx.Client.post", return_value=_response(401)):
@@ -148,6 +168,29 @@ class UltravoxProviderClientCatalogPreviewTests(unittest.TestCase):
                              request=_GET_PREVIEW_REQUEST)
         with patch("httpx.Client.get", return_value=response):
             self.assertEqual(self.client.get_voice_preview("key", "voice-1"), self.wav)
+
+    def test_400_logs_only_safe_hint_and_preserves_error_contract(self) -> None:
+        response = _response(400, content=b"Voice not found; token=secret_note", request=_GET_PREVIEW_REQUEST)
+        with patch("httpx.Client.get", return_value=response), self.assertLogs(
+                "app.services.ultravox_provider_client", level="WARNING") as logs:
+            with self.assertRaises(UltravoxProviderError) as ctx:
+                self.client.get_voice_preview("key", "voice-1")
+        self.assertEqual(ctx.exception.code, "provider_rejected")
+        self.assertIn("kind=catalog | upstream_status=400 | hint=voice", logs.output[0])
+        self.assertNotIn("secret_note", logs.output[0])
+        self.assertNotIn("voice-1", logs.output[0])
+
+    def test_redirected_400_uses_same_sanitized_diagnostic(self) -> None:
+        redirect = _response(302, headers={"location": "/api/media/sample"}, request=_GET_PREVIEW_REQUEST)
+        rejected = _response(400, content=b"quota exceeded; token=secret_note",
+                             request=httpx.Request("GET", "https://api.ultravox.ai/api/media/sample"))
+        with patch("httpx.Client.get", side_effect=[redirect, rejected]), self.assertLogs(
+                "app.services.ultravox_provider_client", level="WARNING") as logs:
+            with self.assertRaises(UltravoxProviderError) as ctx:
+                self.client.get_voice_preview("key", "voice-1")
+        self.assertEqual(ctx.exception.code, "provider_rejected")
+        self.assertIn("kind=catalog | upstream_status=400 | hint=quota", logs.output[0])
+        self.assertNotIn("secret_note", logs.output[0])
 
     def test_rejects_json_even_when_mime_claims_wav_without_leaking_body(self) -> None:
         response = _response(200, content=b'{"secret": "do-not-log"}', headers={"content-type": "audio/wav"},
