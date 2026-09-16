@@ -11,7 +11,7 @@ from app.schemas.ultravox_admin import (
     UltravoxAgentDetail, UltravoxAgentPage, UltravoxImportResponse,
     UltravoxVoicePage, UltravoxVoiceSummary,
 )
-from app.services.ultravox_provider_client import UltravoxProviderError
+from app.services.ultravox_provider_client import PREVIEW_REJECTION_REASONS, UltravoxProviderError
 from app.services.voice_provider_admin import (
     VoiceProviderNotAvailableError, get_provider_admin_service,
 )
@@ -29,6 +29,12 @@ def _error(exc: Exception) -> None:
     if isinstance(exc, VoiceProviderNotAvailableError):
         raise HTTPException(status_code=404, detail="provider_not_available") from None
     if isinstance(exc, UltravoxProviderError):
+        if exc.code == "voice_preview_rejected":
+            reason = exc.reason if exc.reason in PREVIEW_REJECTION_REASONS else "other"
+            raise HTTPException(
+                status_code=409,
+                detail={"code": "voice_preview_rejected", "reason": reason, "provider": "ultravox"},
+            ) from None
         status = 404 if exc.code == "provider_resource_not_found" else 409
         raise HTTPException(status_code=status, detail=exc.code) from None
     raise HTTPException(status_code=422, detail=str(exc)) from None

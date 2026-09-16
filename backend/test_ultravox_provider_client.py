@@ -64,17 +64,23 @@ class UltravoxProviderClientPreviewExternalVoiceTests(unittest.TestCase):
             with self.assertLogs("app.services.ultravox_provider_client", level="WARNING") as logs:
                 with self.assertRaises(UltravoxProviderError) as ctx:
                     self.client.preview_external_voice("key", payload=self.payload)
-        self.assertEqual(ctx.exception.code, "external_voice_preview_failed")
+        self.assertEqual(ctx.exception.code, "voice_preview_rejected")
+        self.assertEqual(ctx.exception.reason, "voice")
         self.assertNotIn("secret_note", str(ctx.exception))
-        self.assertIn("kind=external | upstream_status=400 | hint=voice", logs.output[0])
+        self.assertIn("kind=external | upstream_status=400 | reason=voice", logs.output[0])
         self.assertNotIn("secret_note", logs.output[0])
 
     def test_400_diagnostic_hints_are_fixed_and_do_not_log_provider_details(self) -> None:
         cases = {
             b"pcm_44100 unavailable secret_note": "sample_rate",
+            b"sample rate unsupported secret_note": "sample_rate",
             b"insufficient credits secret_note": "quota",
+            b"quota exceeded secret_note": "quota",
             b"missing text_to_speech permission secret_note": "permission",
+            b"permission denied secret_note": "permission",
             b"unknown model secret_note": "model",
+            b"unsupported model secret_note": "model",
+            b"voice not found secret_note": "voice",
             b"opaque error secret_note": "other",
         }
         for body, hint in cases.items():
@@ -82,8 +88,9 @@ class UltravoxProviderClientPreviewExternalVoiceTests(unittest.TestCase):
                 with self.assertLogs("app.services.ultravox_provider_client", level="WARNING") as logs:
                     with self.assertRaises(UltravoxProviderError) as ctx:
                         self.client.preview_external_voice("key", payload=self.payload)
-                self.assertEqual(ctx.exception.code, "external_voice_preview_failed")
-                self.assertIn(f"hint={hint}", logs.output[0])
+                self.assertEqual(ctx.exception.code, "voice_preview_rejected")
+                self.assertEqual(ctx.exception.reason, hint)
+                self.assertIn(f"reason={hint}", logs.output[0])
                 self.assertNotIn("secret_note", logs.output[0])
 
     def test_401_maps_to_provider_auth_failed(self) -> None:
@@ -175,8 +182,9 @@ class UltravoxProviderClientCatalogPreviewTests(unittest.TestCase):
                 "app.services.ultravox_provider_client", level="WARNING") as logs:
             with self.assertRaises(UltravoxProviderError) as ctx:
                 self.client.get_voice_preview("key", "voice-1")
-        self.assertEqual(ctx.exception.code, "provider_rejected")
-        self.assertIn("kind=catalog | upstream_status=400 | hint=voice", logs.output[0])
+        self.assertEqual(ctx.exception.code, "voice_preview_rejected")
+        self.assertEqual(ctx.exception.reason, "voice")
+        self.assertIn("kind=catalog | upstream_status=400 | reason=voice", logs.output[0])
         self.assertNotIn("secret_note", logs.output[0])
         self.assertNotIn("voice-1", logs.output[0])
 
@@ -188,8 +196,9 @@ class UltravoxProviderClientCatalogPreviewTests(unittest.TestCase):
                 "app.services.ultravox_provider_client", level="WARNING") as logs:
             with self.assertRaises(UltravoxProviderError) as ctx:
                 self.client.get_voice_preview("key", "voice-1")
-        self.assertEqual(ctx.exception.code, "provider_rejected")
-        self.assertIn("kind=catalog | upstream_status=400 | hint=quota", logs.output[0])
+        self.assertEqual(ctx.exception.code, "voice_preview_rejected")
+        self.assertEqual(ctx.exception.reason, "quota")
+        self.assertIn("kind=catalog | upstream_status=400 | reason=quota", logs.output[0])
         self.assertNotIn("secret_note", logs.output[0])
 
     def test_rejects_json_even_when_mime_claims_wav_without_leaking_body(self) -> None:

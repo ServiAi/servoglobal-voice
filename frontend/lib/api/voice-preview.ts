@@ -1,11 +1,12 @@
 import 'server-only';
 
 import { providerVoicePreviewUrl } from './voice-provider-admin';
+import { parseVoicePreviewError, type VoicePreviewErrorReason } from '../voice-preview-error';
 import type { AgentVoiceConfig } from '@/types/agents';
 
 export type VoicePreviewResult =
   | { ok: true; audioBase64: string }
-  | { ok: false; status: number; detail: string };
+  | { ok: false; status: number; code: string; reason?: VoicePreviewErrorReason };
 
 // Server-only: fetches an audio/wav preview and hands the caller back
 // base64, never a raw bearer-token-bearing URL for the browser to hit
@@ -24,17 +25,14 @@ async function fetchAudioPreview(url: string, accessToken: string, init?: Reques
       cache: 'no-store',
     });
   } catch {
-    return { ok: false, status: 502, detail: 'Voice provider API is temporarily unavailable' };
+    return { ok: false, status: 502, code: 'provider_unavailable' };
   }
   if (!response.ok) {
-    let detail = 'Voice preview failed';
     try {
-      const payload = await response.json();
-      detail = payload.detail ?? detail;
+      return { ok: false, status: response.status, ...parseVoicePreviewError(await response.json()) };
     } catch {
-      // ignore: not every error response is JSON
+      return { ok: false, status: response.status, code: 'preview_failed' };
     }
-    return { ok: false, status: response.status, detail };
   }
   const buffer = Buffer.from(await response.arrayBuffer());
   return { ok: true, audioBase64: buffer.toString('base64') };
@@ -46,7 +44,7 @@ export function previewProviderVoiceAudio(
   voiceId: string
 ): Promise<VoicePreviewResult> {
   const url = providerVoicePreviewUrl(provider, voiceId);
-  if (!url) return Promise.resolve({ ok: false, status: 500, detail: 'Backend API URL is not configured' });
+  if (!url) return Promise.resolve({ ok: false, status: 500, code: 'preview_failed' });
   return fetchAudioPreview(url, accessToken);
 }
 
@@ -56,7 +54,7 @@ export function previewExternalVoiceAudio(
   voice: AgentVoiceConfig
 ): Promise<VoicePreviewResult> {
   const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-  if (!apiUrl) return Promise.resolve({ ok: false, status: 500, detail: 'Backend API URL is not configured' });
+  if (!apiUrl) return Promise.resolve({ ok: false, status: 500, code: 'preview_failed' });
   const url = `${apiUrl.replace(/\/$/, '')}/api/v1/integrations/voice/providers/${provider}/external-voice/preview`;
   return fetchAudioPreview(url, accessToken, {
     method: 'POST',

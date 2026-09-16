@@ -1,5 +1,7 @@
 'use client';
 
+import { voicePreviewErrorKey } from '@/lib/voice-preview-error';
+
 import { useMemo, useState, type ChangeEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { Archive, Bot, CheckCircle2, Loader2, Play, Save, Sparkles } from 'lucide-react';
@@ -384,7 +386,7 @@ export function AgentBuilder({
     const result = await previewProviderVoiceAction(form.provider, voiceId);
     setPreviewBusy(null);
     if (!result.ok) {
-      setServerError(t('voice.origin.previewFailed'));
+      setServerError(t(voicePreviewErrorKey(result)));
       return;
     }
     await playAudioBase64(result.audioBase64);
@@ -398,7 +400,7 @@ export function AgentBuilder({
     const result = await previewExternalVoiceAction('ultravox', voice);
     setPreviewBusy(null);
     if (!result.ok) {
-      setServerError(t('voice.origin.previewFailed'));
+      setServerError(t(voicePreviewErrorKey(result)));
       return;
     }
     setPreviewedExternalVoice(true);
@@ -1193,6 +1195,7 @@ function VoiceFields({
                     placeholder={t('voice.origin.externalVoiceIdPlaceholder')}
                     onChange={(e) => onVoiceIdChange(e.target.value)}
                   />
+                  <span className="text-xs text-muted-foreground">{t('voice.origin.externalVoiceIdHelp')}</span>
                 </label>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <label className="flex flex-col gap-1.5 text-sm">

@@ -153,7 +153,7 @@ export async function previewProviderVoiceAction(
   voiceId: string
 ): Promise<VoicePreviewResult> {
   const accessToken = await getAccessToken();
-  if (!accessToken) return { ok: false, status: 401, detail: 'unauthorized' };
+  if (!accessToken) return { ok: false, status: 401, code: 'provider_auth_failed' };
   return previewProviderVoiceAudio(accessToken, provider, voiceId);
 }
 
@@ -162,7 +162,7 @@ export async function previewExternalVoiceAction(
   voice: AgentVoiceConfig
 ): Promise<VoicePreviewResult> {
   const accessToken = await getAccessToken();
-  if (!accessToken) return { ok: false, status: 401, detail: 'unauthorized' };
+  if (!accessToken) return { ok: false, status: 401, code: 'provider_auth_failed' };
   return previewExternalVoiceAudio(accessToken, provider, voice);
 }
 
