@@ -114,7 +114,7 @@ class UltravoxProviderClient:
                 target = None
             if (target is None or target.scheme != "https" or target.port not in {None, 443}
                     or target.username or target.password or not target.host
-                    or not target.host.endswith(".ultravox.ai")):
+                    or not (target.host.endswith(".ultravox.ai") or target.host == "storage.googleapis.com")):
                 logger.warning(
                     "Ultravox voice preview redirect blocked | upstream_status=%s", response.status_code,
                 )
