@@ -139,11 +139,59 @@ class ExternalVoicePreviewEndpointTests(Integration2ATestCase):
 
         with patch(
             "app.services.ultravox_provider_client.UltravoxProviderClient.preview_external_voice",
-            side_effect=UltravoxProviderError("external_voice_preview_failed", 400),
+            side_effect=UltravoxProviderError("voice_preview_rejected", 400, reason="model"),
         ):
             response = self.client.post(_PATH, json=_VALID_BODY)
         self.assertEqual(response.status_code, 409, response.text)
-        self.assertEqual(response.json()["detail"], "external_voice_preview_failed")
+        self.assertEqual(response.json()["detail"], {
+            "code": "voice_preview_rejected", "reason": "model", "provider": "ultravox",
+        })
+
+    def test_preview_rejection_never_exposes_untrusted_reason(self) -> None:
+        self._configure_ultravox()
+        from app.services.ultravox_provider_client import UltravoxProviderError
+
+        with patch(
+            "app.services.ultravox_provider_client.UltravoxProviderClient.preview_external_voice",
+            side_effect=UltravoxProviderError("voice_preview_rejected", 400, reason="secret_note"),
+        ):
+            response = self.client.post(_PATH, json=_VALID_BODY)
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.json()["detail"]["reason"], "other")
+        self.assertNotIn("secret_note", response.text)
+
+    def test_non_preview_provider_errors_keep_legacy_string_detail(self) -> None:
+        self._configure_ultravox()
+        from app.services.ultravox_provider_client import UltravoxProviderError
+
+        for code in ("provider_auth_failed", "provider_rate_limited", "provider_unavailable", "provider_invalid_preview"):
+            with self.subTest(code=code), patch(
+                "app.services.ultravox_provider_client.UltravoxProviderClient.preview_external_voice",
+                side_effect=UltravoxProviderError(code),
+            ):
+                response = self.client.post(_PATH, json=_VALID_BODY)
+            self.assertEqual(response.status_code, 409)
+            self.assertEqual(response.json()["detail"], code)
+
+    def test_catalog_preview_rejection_uses_same_contract(self) -> None:
+        self._configure_ultravox()
+        from app.services.ultravox_provider_client import UltravoxProviderError
+
+        with patch(
+            "app.services.ultravox_provider_client.UltravoxProviderClient.get_voice_preview",
+            side_effect=UltravoxProviderError("voice_preview_rejected", 400, reason="voice"),
+        ), patch(
+            "app.services.ultravox_provider_client.UltravoxProviderClient.get_voice",
+            return_value={"voiceId": "voice-1"},
+        ):
+            response = self.client.get(
+                "/api/v1/integrations/voice/providers/ultravox/voices/voice-1/preview"
+            )
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.json()["detail"], {
+            "code": "voice_preview_rejected", "reason": "voice", "provider": "ultravox",
+        })
+        self.assertNotIn("voice-1", response.text)
 
 
 if __name__ == "__main__":

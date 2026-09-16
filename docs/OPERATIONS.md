@@ -230,7 +230,7 @@ Provider Voice:
 - [ ] Abrir Agent Builder y seleccionar Origen de voz → Catálogo del proveedor.
 - [ ] Seleccionar una voz Ultravox, pulsar Escuchar y comprobar el audio.
 - [ ] Si falla, revisar sólo `upstream_status`, `mime_class` y `bytes` del aviso sanitizado (o el aviso de redirección bloqueada); no registrar claves, URLs de muestra ni cuerpo del proveedor. Confirmar el audio real tras desplegar el parche antes de cerrar el incidente.
-- [ ] Para un `400` de Ultravox en cualquiera de los dos previews, revisar `kind=catalog|external`, `upstream_status=400` y `hint=sample_rate|quota|permission|model|voice|other` en el log sanitizado. `hint` es orientativo, no confirma la causa; si es `other`, investigar en la consola segura del proveedor sin copiar el cuerpo del error, credenciales, IDs o URLs a tickets/logs.
+- [ ] Para un `400` de Ultravox en cualquiera de los dos previews, buscar `Ultravox voice preview rejected` y revisar `kind=catalog|external`, `upstream_status=400` y `reason` en el log sanitizado. El API entrega `detail.code=voice_preview_rejected` y la misma `reason`; Agent Builder muestra una traducción propia, nunca el texto del proveedor.
 - [ ] Guardar, publicar e iniciar una llamada real.
 - [ ] Comprobar que el agente habla con la voz seleccionada.
 
@@ -248,6 +248,8 @@ Casos negativos y compatibilidad:
 - [ ] Publicar y ejecutar un agente antiguo con `default_voice`; comprobar el fallback legacy.
 - [ ] Confirmar que `tenant_viewer` no puede generar ExternalVoice preview y `tenant_admin` sí puede.
 - [ ] Revisar visualmente UI/UX en navegador con Auth0 real y completar el smoke de audio/lifecycle; no usar bypass de Auth0 ni mocks de producción.
+
+Voice preview diagnostics: `voice` indica voz/ID posiblemente inaccesible; `model`, modelo TTS posiblemente no disponible; `permission`, falta de permisos TTS; `quota`, cuota o créditos insuficientes; `sample_rate`, configuración de audio no admitida; `other`, rechazo no clasificable. Son pistas, no confirmaciones de causa. Si aparece `other`, investigar en la consola segura del proveedor sin copiar cuerpo del error, credenciales, IDs ni URLs a tickets o logs. Tras desplegar, probar una voz funcional, Berto y un Voice ID original de ElevenLabs en TTS externo; el operador debe verificar audio y mensajes reales. Estas pruebas manuales siguen pendientes.
 
 ## Diagnóstico rápido
 
