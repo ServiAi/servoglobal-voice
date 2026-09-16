@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal
 from urllib.parse import parse_qs, urlparse
 
 import httpx
@@ -29,6 +29,44 @@ class UltravoxCallOutcomeUnknown(UltravoxProviderError):
 class UltravoxCallResult:
     call_id: str
     join_url: str
+
+
+PreviewMediaType = Literal["audio/wav", "audio/mpeg"]
+
+
+@dataclass(frozen=True)
+class VoicePreviewAudio:
+    content: bytes
+    media_type: PreviewMediaType
+
+
+def _has_mp3_frame_header(data: bytes) -> bool:
+    return (
+        len(data) >= 4
+        and data[0] == 0xFF
+        and (data[1] & 0xE0) == 0xE0  # 11-bit sync
+        and ((data[1] >> 3) & 0x03) != 0x01  # reserved MPEG version
+        and ((data[1] >> 1) & 0x03) == 0x01  # Layer III only
+        and 0 < ((data[2] >> 4) & 0x0F) < 0x0F  # defined bitrate
+        and ((data[2] >> 2) & 0x03) != 0x03  # defined sample rate
+    )
+
+
+def detect_preview_audio_type(data: bytes) -> PreviewMediaType | None:
+    if len(data) >= 12 and data[:4] == b"RIFF" and data[8:12] == b"WAVE":
+        return "audio/wav"
+    if len(data) < 32:
+        return None
+    if data.startswith(b"ID3"):
+        if len(data) < 10 or data[3] not in {2, 3, 4} or data[4] == 0xFF:
+            return None
+        size_bytes = data[6:10]
+        if any(byte & 0x80 for byte in size_bytes):
+            return None
+        tag_size = sum(byte << shift for byte, shift in zip(size_bytes, (21, 14, 7, 0)))
+        frame_offset = 10 + tag_size + (10 if data[3] == 4 and data[5] & 0x10 else 0)
+        return "audio/mpeg" if _has_mp3_frame_header(data[frame_offset:frame_offset + 4]) else None
+    return "audio/mpeg" if _has_mp3_frame_header(data[:4]) else None
 
 
 class UltravoxProviderClient:
@@ -133,7 +171,7 @@ class UltravoxProviderClient:
     def get_voice(self, api_key: str, voice_id: str) -> dict[str, Any]:
         return self._get(f"/api/voices/{voice_id}", api_key).json()
 
-    def get_voice_preview(self, api_key: str, voice_id: str) -> bytes:
+    def get_voice_preview(self, api_key: str, voice_id: str) -> VoicePreviewAudio:
         logger = logging.getLogger(__name__)
         response = self._get(f"/api/voices/{voice_id}/preview", api_key, preview_kind="catalog")
         for _ in range(2):
@@ -167,7 +205,8 @@ class UltravoxProviderClient:
             raise UltravoxProviderError("provider_preview_redirect_blocked")
         if len(response.content) > 5 * 1024 * 1024:
             raise UltravoxProviderError("provider_preview_too_large")
-        if not (response.content[:4] == b"RIFF" and response.content[8:12] == b"WAVE"):
+        media_type = detect_preview_audio_type(response.content)
+        if media_type is None:
             mime = response.headers.get("content-type", "").split(";", 1)[0].strip().lower()
             mime_class = mime if mime in {
                 "audio/wav", "audio/x-wav", "application/octet-stream", "audio/mpeg",
@@ -178,7 +217,7 @@ class UltravoxProviderClient:
                 response.status_code, mime_class, len(response.content),
             )
             raise UltravoxProviderError("provider_invalid_preview")
-        return response.content
+        return VoicePreviewAudio(content=response.content, media_type=media_type)
 
     def get_tts_api_keys(self, api_key: str) -> dict[str, Any]:
         """GET is idempotent, so this reuses the retrying _get helper unlike

@@ -1,6 +1,7 @@
 'use client';
 
 import { voicePreviewErrorKey } from '@/lib/voice-preview-error';
+import type { VoicePreviewMediaType } from '@/lib/voice-preview-media-type';
 
 import { useMemo, useState, type ChangeEvent } from 'react';
 import { useRouter } from 'next/navigation';
@@ -236,8 +237,8 @@ function publishErrorMessage(t: ReturnType<typeof useTranslations>, detail: stri
   return code ? t(PUBLISH_ERROR_CODE_KEYS[code]) : t('errors.publishValidation');
 }
 
-async function playAudioBase64(base64: string) {
-  const audio = new Audio(`data:audio/wav;base64,${base64}`);
+async function playAudioBase64(base64: string, mediaType: VoicePreviewMediaType) {
+  const audio = new Audio(`data:${mediaType};base64,${base64}`);
   try {
     await audio.play();
   } catch {
@@ -389,7 +390,7 @@ export function AgentBuilder({
       setServerError(t(voicePreviewErrorKey(result)));
       return;
     }
-    await playAudioBase64(result.audioBase64);
+    await playAudioBase64(result.audioBase64, result.mediaType);
   }
 
   async function handlePreviewExternalVoice() {
@@ -404,7 +405,7 @@ export function AgentBuilder({
       return;
     }
     setPreviewedExternalVoice(true);
-    await playAudioBase64(result.audioBase64);
+    await playAudioBase64(result.audioBase64, result.mediaType);
   }
 
   async function handleCreate() {

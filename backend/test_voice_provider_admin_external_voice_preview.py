@@ -10,6 +10,7 @@ from app.main import app
 from app.models.identity import TenantMembership, User
 from app.schemas.integrations import VoiceProviderConfigRequest
 from app.services.voice_config_service import VoiceConfigService
+from app.services.ultravox_provider_client import VoicePreviewAudio
 
 _PATH = "/api/v1/integrations/voice/providers/ultravox/external-voice/preview"
 _VALID_BODY = {
@@ -192,6 +193,23 @@ class ExternalVoicePreviewEndpointTests(Integration2ATestCase):
             "code": "voice_preview_rejected", "reason": "voice", "provider": "ultravox",
         })
         self.assertNotIn("voice-1", response.text)
+
+    def test_catalog_preview_returns_detected_media_type_and_no_store(self) -> None:
+        self._configure_ultravox()
+        path = "/api/v1/integrations/voice/providers/ultravox/voices/voice-1/preview"
+        for media_type, content in (("audio/wav", b"RIFF-preview"), ("audio/mpeg", b"\xff\xfb\x90\x64-preview")):
+            with self.subTest(media_type=media_type), patch(
+                "app.services.ultravox_provider_client.UltravoxProviderClient.get_voice",
+                return_value={"voiceId": "voice-1"},
+            ), patch(
+                "app.services.ultravox_provider_client.UltravoxProviderClient.get_voice_preview",
+                return_value=VoicePreviewAudio(content, media_type),
+            ):
+                response = self.client.get(path)
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.content, content)
+            self.assertEqual(response.headers["content-type"], media_type)
+            self.assertEqual(response.headers["cache-control"], "private, no-store")
 
 
 if __name__ == "__main__":

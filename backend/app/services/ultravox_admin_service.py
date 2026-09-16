@@ -17,7 +17,7 @@ from app.schemas.ultravox_admin import (
 from app.services.agent_service import AgentService
 from app.services.voice_config_service import VoiceConfigService
 from app.services.voice_selection_service import VoiceSelectionError, VoiceSelectionService
-from app.services.ultravox_provider_client import UltravoxProviderClient
+from app.services.ultravox_provider_client import UltravoxProviderClient, VoicePreviewAudio
 
 
 # Explicit ServiGlobal -> Ultravox field mapping for an ElevenLabs external
@@ -207,7 +207,7 @@ class UltravoxAdminService:
     def get_voice(self, tenant_id: str, voice_id: str) -> UltravoxVoiceSummary:
         return self._voice(self.client.get_voice(self._api_key(tenant_id), voice_id))
 
-    def preview(self, tenant_id: str, voice_id: str) -> bytes:
+    def preview(self, tenant_id: str, voice_id: str) -> VoicePreviewAudio:
         key = self._api_key(tenant_id)
         voice = self.client.get_voice(key, voice_id)
         if str(voice.get("voiceId") or "") != voice_id:

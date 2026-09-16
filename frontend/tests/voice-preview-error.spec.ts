@@ -1,5 +1,14 @@
 import { expect, test } from '@playwright/test';
 import { parseVoicePreviewError, voicePreviewErrorKey } from '@/lib/voice-preview-error';
+import { parseVoicePreviewMediaType } from '@/lib/voice-preview-media-type';
+
+test('accepts only supported audio media types from the backend', () => {
+  expect(parseVoicePreviewMediaType('audio/wav')).toBe('audio/wav');
+  expect(parseVoicePreviewMediaType('Audio/MPEG; charset=binary')).toBe('audio/mpeg');
+  expect(parseVoicePreviewMediaType('application/octet-stream')).toBeNull();
+  expect(parseVoicePreviewMediaType('text/plain')).toBeNull();
+  expect(parseVoicePreviewMediaType(null)).toBeNull();
+});
 
 test('preview 400 reasons map to fixed UI messages', () => {
   for (const [reason, key] of Object.entries({
