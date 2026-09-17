@@ -119,6 +119,8 @@ class UltravoxProviderClientPreviewExternalVoiceTests(unittest.TestCase):
             b"unknown model secret_note": "model",
             b"unsupported model secret_note": "model",
             b"voice not found secret_note": "voice",
+            b'["Free users cannot use library voices via the API. Please upgrade your subscription to use this voice. secret_note"]': "plan_restriction",
+            b"Your subscription has a problem secret_note": "other",
             b"opaque error secret_note": "other",
         }
         for body, hint in cases.items():
@@ -128,6 +130,7 @@ class UltravoxProviderClientPreviewExternalVoiceTests(unittest.TestCase):
                         self.client.preview_external_voice("key", payload=self.payload)
                 self.assertEqual(ctx.exception.code, "voice_preview_rejected")
                 self.assertEqual(ctx.exception.reason, hint)
+                self.assertNotIn("secret_note", str(ctx.exception))
                 self.assertIn(f"reason={hint}", logs.output[0])
                 self.assertNotIn("secret_note", logs.output[0])
 

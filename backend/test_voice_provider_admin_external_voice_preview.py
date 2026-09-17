@@ -174,6 +174,20 @@ class ExternalVoicePreviewEndpointTests(Integration2ATestCase):
         self.assertEqual(response.json()["detail"]["reason"], "other")
         self.assertNotIn("secret_note", response.text)
 
+    def test_plan_restriction_uses_safe_preview_contract(self) -> None:
+        self._configure_ultravox()
+        from app.services.ultravox_provider_client import UltravoxProviderError
+
+        with patch(
+            "app.services.ultravox_provider_client.UltravoxProviderClient.preview_external_voice",
+            side_effect=UltravoxProviderError("voice_preview_rejected", 400, reason="plan_restriction"),
+        ):
+            response = self.client.post(_PATH, json=_VALID_BODY)
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.json()["detail"], {
+            "code": "voice_preview_rejected", "reason": "plan_restriction", "provider": "ultravox",
+        })
+
     def test_non_preview_provider_errors_keep_legacy_string_detail(self) -> None:
         self._configure_ultravox()
         from app.services.ultravox_provider_client import UltravoxProviderError

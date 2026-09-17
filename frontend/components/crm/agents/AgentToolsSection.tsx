@@ -4,6 +4,7 @@ import Link from 'next/link';
 import type { useTranslations } from 'next-intl';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import type { AgentToolCatalogEntry } from '@/types/agents';
+import { AgentFieldLabel } from './AgentFieldLabel';
 
 const INTEGRATION_SETTINGS_PATH: Record<string, string> = {
   booking: 'integrations',
@@ -45,8 +46,9 @@ export function AgentToolsSection({
         ) : (
           selectable.map((tool) => (
             <div key={tool.key} className="rounded-lg border border-border p-3">
-              <label className="flex items-start gap-2.5 text-sm">
+              <div className="flex items-start gap-2.5 text-sm">
                 <input
+                  id={`agent-tool-${tool.key}`}
                   type="checkbox"
                   className="mt-0.5 size-4 rounded border-input"
                   checked={enabled.has(tool.key)}
@@ -54,10 +56,13 @@ export function AgentToolsSection({
                   onChange={(e) => onToggle(tool.key, e.target.checked)}
                 />
                 <span>
-                  <span className="block font-medium text-foreground">{tool.name}</span>
+                  <span className="flex items-center gap-1.5">
+                    <label htmlFor={`agent-tool-${tool.key}`} className="font-medium text-foreground">{tool.name}</label>
+                    <AgentFieldLabel label={tool.name} help={tool.description} showLabel={false} />
+                  </span>
                   <span className="block text-muted-foreground">{tool.description}</span>
                 </span>
-              </label>
+              </div>
               {!tool.available && tool.required_integration ? (
                 <div className="mt-2 flex flex-wrap items-center gap-2 rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-950">
                   <span>

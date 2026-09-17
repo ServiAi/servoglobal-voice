@@ -1,6 +1,6 @@
-export type VoicePreviewErrorReason = 'voice' | 'model' | 'permission' | 'quota' | 'sample_rate' | 'other';
+export type VoicePreviewErrorReason = 'voice' | 'model' | 'permission' | 'quota' | 'sample_rate' | 'plan_restriction' | 'other';
 
-const reasons = new Set<VoicePreviewErrorReason>(['voice', 'model', 'permission', 'quota', 'sample_rate', 'other']);
+const reasons = new Set<VoicePreviewErrorReason>(['voice', 'model', 'permission', 'quota', 'sample_rate', 'plan_restriction', 'other']);
 const codes = new Set([
   'voice_preview_rejected', 'provider_auth_failed', 'provider_rate_limited', 'provider_unavailable',
   'provider_invalid_preview', 'provider_preview_too_large', 'provider_preview_redirect_blocked',
@@ -26,6 +26,7 @@ const reasonKeys = {
   permission: 'voice.origin.previewErrors.permission',
   quota: 'voice.origin.previewErrors.quota',
   sample_rate: 'voice.origin.previewErrors.sampleRate',
+  plan_restriction: 'voice.origin.previewErrors.planRestriction',
   other: 'voice.origin.previewErrors.other',
 } as const;
 
