@@ -61,7 +61,7 @@ class ExternalVoicePreviewEndpointTests(Integration2ATestCase):
         self._configure_ultravox()
         with patch(
             "app.services.ultravox_provider_client.UltravoxProviderClient.preview_external_voice",
-            return_value=b"RIFF-preview-bytes",
+            return_value=VoicePreviewAudio(b"RIFF-preview-bytes", "audio/wav"),
         ) as mock_preview:
             response = self.client.post(_PATH, json=_VALID_BODY)
         self.assertEqual(response.status_code, 200, response.text)
@@ -75,11 +75,24 @@ class ExternalVoicePreviewEndpointTests(Integration2ATestCase):
             "elevenLabs": {"voiceId": "ABC123", "model": "eleven_turbo_v2_5", "speed": 1.0}
         })
 
+    def test_tenant_admin_can_preview_mp3_with_correct_content_type(self) -> None:
+        self._configure_ultravox()
+        mp3 = b"\xff\xfb\x90\x64-preview"
+        with patch(
+            "app.services.ultravox_provider_client.UltravoxProviderClient.preview_external_voice",
+            return_value=VoicePreviewAudio(mp3, "audio/mpeg"),
+        ):
+            response = self.client.post(_PATH, json=_VALID_BODY)
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.content, mp3)
+        self.assertEqual(response.headers["content-type"], "audio/mpeg")
+        self.assertEqual(response.headers["cache-control"], "private, no-store")
+
     def test_never_exposes_the_ultravox_api_key(self) -> None:
         self._configure_ultravox()
         with patch(
             "app.services.ultravox_provider_client.UltravoxProviderClient.preview_external_voice",
-            return_value=b"RIFF-preview-bytes",
+            return_value=VoicePreviewAudio(b"RIFF-preview-bytes", "audio/wav"),
         ):
             response = self.client.post(_PATH, json=_VALID_BODY)
         self.assertEqual(response.status_code, 200, response.text)

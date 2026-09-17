@@ -45,7 +45,7 @@ class FakeClient:
     def preview_external_voice(self, api_key: str, *, payload):
         self.calls.append(("external_voice_preview", api_key))
         self.last_external_voice_payload = payload
-        return b"RIFF-external-preview"
+        return VoicePreviewAudio(b"RIFF-external-preview", "audio/wav")
 
     def get_tts_api_keys(self, api_key: str):
         self.calls.append(("tts_api_keys", api_key))
@@ -88,7 +88,7 @@ class UltravoxAdminServiceTests(unittest.TestCase):
             settings={"model": "eleven_turbo_v2_5", "speed": 1.0},
         )
         result = self.service.preview_external_voice("tenant-a", voice)
-        self.assertEqual(result, b"RIFF-external-preview")
+        self.assertEqual(result, VoicePreviewAudio(b"RIFF-external-preview", "audio/wav"))
         self.assertEqual(self.client.calls, [("external_voice_preview", "key:tenant-a")])
         self.assertEqual(self.client.last_external_voice_payload, {
             "name": "ServiGlobal External Voice Preview",

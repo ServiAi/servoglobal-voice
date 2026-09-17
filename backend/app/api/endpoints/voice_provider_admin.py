@@ -133,12 +133,12 @@ def preview_external_voice(
 ):
     try:
         service = get_provider_admin_service(db, provider)
-        audio = service.preview_external_voice(context.tenant.id, body)
+        preview = service.preview_external_voice(context.tenant.id, body)
     except (ValueError, UltravoxProviderError) as exc:
         _error(exc)
     else:
         return Response(
-            content=audio,
-            media_type="audio/wav",
+            content=preview.content,
+            media_type=preview.media_type,
             headers={"Cache-Control": "private, no-store"},
         )
