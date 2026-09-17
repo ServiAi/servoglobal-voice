@@ -51,13 +51,40 @@ class UltravoxProviderClientPreviewExternalVoiceTests(unittest.TestCase):
             "definition": {"elevenLabs": {"voiceId": "ABC123"}},
         }
 
-    def test_successful_preview_returns_wav_bytes(self) -> None:
-        wav = b"RIFF-fake-wav-body"
+    def test_successful_preview_returns_wav_audio(self) -> None:
+        wav = _wav()
         with patch("httpx.Client.post", return_value=_response(200, content=wav, headers={"content-type": "audio/wav"})):
             result = self.client.preview_external_voice("key", payload=self.payload)
-        self.assertEqual(result, wav)
+        self.assertEqual(result, VoicePreviewAudio(wav, "audio/wav"))
 
-    def test_invalid_content_type_raises_provider_invalid_preview(self) -> None:
+    def test_accepts_mp3_id3_and_mpeg_frame(self) -> None:
+        for mp3 in (_mp3_id3(), _mp3_frame()):
+            with self.subTest(prefix=mp3[:4]), patch(
+                "httpx.Client.post", return_value=_response(200, content=mp3, headers={"content-type": "audio/mpeg"})
+            ):
+                self.assertEqual(
+                    self.client.preview_external_voice("key", payload=self.payload),
+                    VoicePreviewAudio(mp3, "audio/mpeg"),
+                )
+
+    def test_accepts_mp3_despite_text_plain_mime(self) -> None:
+        mp3 = _mp3_id3()
+        with patch("httpx.Client.post", return_value=_response(200, content=mp3, headers={"content-type": "text/plain"})):
+            self.assertEqual(
+                self.client.preview_external_voice("key", payload=self.payload),
+                VoicePreviewAudio(mp3, "audio/mpeg"),
+            )
+
+    def test_rejects_spoofed_audio_mime(self) -> None:
+        for mime, body in (("audio/mpeg", b"not an mp3"), ("audio/wav", b"<html>not audio</html>")):
+            with self.subTest(mime=mime), patch(
+                "httpx.Client.post", return_value=_response(200, content=body, headers={"content-type": mime})
+            ):
+                with self.assertRaises(UltravoxProviderError) as ctx:
+                    self.client.preview_external_voice("key", payload=self.payload)
+                self.assertEqual(ctx.exception.code, "provider_invalid_preview")
+
+    def test_invalid_bytes_raise_provider_invalid_preview(self) -> None:
         with patch("httpx.Client.post", return_value=_response(200, content=b"{}", headers={"content-type": "application/json"})):
             with self.assertRaises(UltravoxProviderError) as ctx:
                 self.client.preview_external_voice("key", payload=self.payload)

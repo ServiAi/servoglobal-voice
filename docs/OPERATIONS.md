@@ -239,7 +239,7 @@ Provider External / ElevenLabs:
 
 - [ ] Seleccionar TTS externo e introducir Voice ID.
 - [ ] Verificar el modelo por defecto y probar speed, stability y similarity.
-- [ ] Pulsar Probar voz y escuchar el WAV.
+- [ ] Pulsar Probar voz y escuchar la muestra WAV o MP3; confirmar `audio/wav` o `audio/mpeg` en Network.
 - [ ] Guardar, publicar e iniciar una llamada real.
 - [ ] Confirmar que Ultravox usa ElevenLabs.
 
@@ -252,7 +252,7 @@ Casos negativos y compatibilidad:
 
 Voice preview diagnostics: `voice` indica voz/ID posiblemente inaccesible; `model`, modelo TTS posiblemente no disponible; `permission`, falta de permisos TTS; `quota`, cuota o créditos insuficientes; `sample_rate`, configuración de audio no admitida; `other`, rechazo no clasificable. Son pistas, no confirmaciones de causa. Si aparece `other`, investigar en la consola segura del proveedor sin copiar cuerpo del error, credenciales, IDs ni URLs a tickets o logs. Tras desplegar, probar una voz funcional, Berto y un Voice ID original de ElevenLabs en TTS externo; el operador debe verificar audio y mensajes reales. Estas pruebas manuales siguen pendientes.
 
-Los previews de catálogo Ultravox pueden resolver a WAV o MP3. ServiGlobal acepta sólo firmas de archivo compatibles con `audio/wav` o `audio/mpeg`; ni el MIME upstream ni la extensión de la URL autorizan el contenido. El límite de 5 MB y la allowlist de redirects HTTPS permanecen vigentes. El preview TTS externo conserva su contrato WAV.
+Los previews de catálogo Ultravox y TTS externo ElevenLabs pueden resolver a WAV o MP3. ServiGlobal acepta sólo firmas de archivo compatibles con `audio/wav` o `audio/mpeg`; el MIME upstream no autoriza el contenido, ni la extensión de la URL en catálogo. El límite de 5 MB permanece vigente para ambos; la allowlist de redirects HTTPS sigue aplicando al catálogo.
 
 ## Diagnóstico rápido
 

@@ -214,7 +214,7 @@ class UltravoxAdminService:
             raise ValueError("provider_voice_not_accessible")
         return self.client.get_voice_preview(key, voice_id)
 
-    def preview_external_voice(self, tenant_id: str, voice: AgentVoiceConfig) -> bytes:
+    def preview_external_voice(self, tenant_id: str, voice: AgentVoiceConfig) -> VoicePreviewAudio:
         """Explicit "Probar voz" action for provider_external + elevenlabs.
         Local-only validation, then a single (no-retry) call to Ultravox's
         own ad-hoc voice_preview endpoint -- ServiGlobal never resolves or

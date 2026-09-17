@@ -224,7 +224,7 @@ class UltravoxProviderClient:
         preview_external_voice below."""
         return self._get("/api/accounts/me/tts_api_keys", api_key).json()
 
-    def preview_external_voice(self, api_key: str, *, payload: dict[str, Any]) -> bytes:
+    def preview_external_voice(self, api_key: str, *, payload: dict[str, Any]) -> VoicePreviewAudio:
         """POST /api/voice_preview generates real audio and can consume the
         tenant's provider quota, so -- unlike every GET above -- this makes
         exactly one attempt. No retry on timeout/connection reset/5xx: the
@@ -258,11 +258,12 @@ class UltravoxProviderClient:
                 self._log_preview_rejection("external", reason)
                 raise UltravoxProviderError("voice_preview_rejected", status, reason=reason)
             raise UltravoxProviderError("external_voice_preview_failed", status)
-        if "audio/wav" not in response.headers.get("content-type", ""):
-            raise UltravoxProviderError("provider_invalid_preview")
         if len(response.content) > 5 * 1024 * 1024:
             raise UltravoxProviderError("provider_preview_too_large")
-        return response.content
+        media_type = detect_preview_audio_type(response.content)
+        if media_type is None:
+            raise UltravoxProviderError("provider_invalid_preview")
+        return VoicePreviewAudio(content=response.content, media_type=media_type)
 
     def create_agent_call(
         self, api_key: str, agent_id: str, *, payload: dict[str, Any]
