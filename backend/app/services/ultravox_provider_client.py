@@ -10,7 +10,7 @@ import httpx
 
 
 ULTRAVOX_API_BASE_URL = "https://api.ultravox.ai"
-PREVIEW_REJECTION_REASONS = frozenset({"voice", "model", "permission", "quota", "sample_rate", "other"})
+PREVIEW_REJECTION_REASONS = frozenset({"voice", "model", "permission", "quota", "sample_rate", "plan_restriction", "other"})
 
 
 class UltravoxProviderError(Exception):
@@ -124,6 +124,10 @@ class UltravoxProviderClient:
     def _classify_preview_rejection(response: httpx.Response) -> str:
         # The provider body stays here; only a fixed category may leave this boundary.
         detail = response.content[:4096].decode("utf-8", errors="replace").lower()
+        if "library voices via the api" in detail and (
+            "free users cannot use" in detail or "upgrade your subscription" in detail
+        ):
+            return "plan_restriction"
         if "pcm_44100" in detail or "sample rate" in detail or "sample_rate" in detail:
             return "sample_rate"
         elif "quota" in detail or "credits" in detail or "credit balance" in detail:

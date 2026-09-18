@@ -3,6 +3,7 @@
 import type { useTranslations } from 'next-intl';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import type { ParameterSpecResponse, VoiceModelResponse, VoiceProviderResponse } from '@/types/voice-registry';
+import { AgentFieldLabel } from './AgentFieldLabel';
 
 export const FIELD_CLASS =
   'min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/60 focus:ring-2 focus:ring-primary/15 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground';
@@ -30,26 +31,31 @@ function ParameterControl({
   t: ReturnType<typeof useTranslations>;
 }) {
   const label = t(`model.parameters.${paramKey}`);
+  const help = t.has(`help.model.parameterHelp.${paramKey}`)
+    ? t(`help.model.parameterHelp.${paramKey}`)
+    : t('help.model.parameterFallback');
 
   if (spec.type === 'boolean') {
     return (
-      <label className="flex items-center gap-2 text-sm">
+      <div className="flex items-center gap-2 text-sm">
         <input
+          id={`model-parameter-${paramKey}`}
           type="checkbox"
           disabled={disabled}
           checked={rawValue === 'true'}
           onChange={(e) => onBooleanChange(paramKey, e.target.checked)}
           className="size-4 rounded border-input"
         />
-        <span className="font-medium text-foreground">{label}</span>
-      </label>
+        <label htmlFor={`model-parameter-${paramKey}`} className="font-medium text-foreground">{label}</label>
+        <AgentFieldLabel label={label} help={help} showLabel={false} />
+      </div>
     );
   }
 
   if (spec.type === 'enum') {
     return (
       <label className="flex flex-col gap-1.5 text-sm">
-        <span className="font-medium text-foreground">{label}</span>
+        <AgentFieldLabel label={label} help={help} />
         <select className={FIELD_CLASS} disabled={disabled} value={rawValue} onChange={(e) => onTextChange(paramKey, e.target.value)}>
           <option value="">{t('model.parameters.useDefault')}</option>
           {(spec.options ?? []).map((option) => (
@@ -65,10 +71,7 @@ function ParameterControl({
   if (spec.type === 'number' || spec.type === 'integer') {
     return (
       <label className="flex flex-col gap-1.5 text-sm">
-        <span className="font-medium text-foreground">
-          {label}
-          {spec.min != null && spec.max != null ? ` (${spec.min}–${spec.max})` : ''}
-        </span>
+        <AgentFieldLabel label={`${label}${spec.min != null && spec.max != null ? ` (${spec.min}–${spec.max})` : ''}`} help={help} />
         <input
           type="number"
           className={FIELD_CLASS}
@@ -86,7 +89,7 @@ function ParameterControl({
 
   return (
     <label className="flex flex-col gap-1.5 text-sm">
-      <span className="font-medium text-foreground">{label}</span>
+      <AgentFieldLabel label={label} help={help} />
       <input className={FIELD_CLASS} disabled={disabled} value={rawValue} onChange={(e) => onTextChange(paramKey, e.target.value)} />
     </label>
   );
@@ -149,7 +152,7 @@ export function AgentModelSection({
     <div className="space-y-4">
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">{t('voice.pipelineType')}</CardTitle>
+          <CardTitle className="text-base"><AgentFieldLabel label={t('voice.pipelineType')} help={t('help.model.pipeline')} /></CardTitle>
         </CardHeader>
         <CardContent className="flex flex-wrap gap-2">
           <span
@@ -176,7 +179,7 @@ export function AgentModelSection({
         </CardHeader>
         <CardContent className="space-y-4">
           <label className="flex flex-col gap-1.5 text-sm">
-            <span className="font-medium text-foreground">{t('providerManaged.source')}</span>
+            <AgentFieldLabel label={t('providerManaged.source')} help={t('help.model.managementMode')} />
             <select
               className={FIELD_CLASS}
               disabled={disabled || Boolean(providerAgentId)}
@@ -206,7 +209,7 @@ export function AgentModelSection({
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
           <label className="flex flex-col gap-1.5 text-sm">
-            <span className="font-medium text-foreground">{t('voice.provider')}</span>
+            <AgentFieldLabel label={t('voice.provider')} help={t('help.model.provider')} />
             <select
               className={FIELD_CLASS}
               disabled={disabled || managementMode === 'provider_managed'}
@@ -222,7 +225,7 @@ export function AgentModelSection({
             </select>
           </label>
           <label className="flex flex-col gap-1.5 text-sm">
-            <span className="font-medium text-foreground">{t('voice.model')}</span>
+            <AgentFieldLabel label={t('voice.model')} help={t('help.model.model')} />
             <select
               className={FIELD_CLASS}
               disabled={disabled || managementMode === 'provider_managed' || realtimeModels.length === 0}

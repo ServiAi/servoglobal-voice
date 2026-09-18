@@ -23,6 +23,7 @@ import { ActionDialog } from '@/components/crm/voice-experiences/ActionDialog';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { AgentModelSection } from './AgentModelSection';
+import { AgentFieldLabel } from './AgentFieldLabel';
 import { AgentStatusBadge } from './AgentStatusBadge';
 import { AgentToolsSection } from './AgentToolsSection';
 import { AgentVoiceTest } from './AgentVoiceTest';
@@ -927,39 +928,39 @@ function GeneralFields({
       </CardHeader>
       <CardContent className="grid gap-4 sm:grid-cols-2">
         <label className="flex flex-col gap-1.5 text-sm sm:col-span-2">
-          <span className="font-medium text-foreground">{t('fields.name')}</span>
+          <AgentFieldLabel label={t('fields.name')} help={t('help.fields.name')} required />
           <input className={FIELD_CLASS} disabled={disabled} {...field('name')} />
         </label>
         <label className="flex flex-col gap-1.5 text-sm sm:col-span-2">
-          <span className="font-medium text-foreground">{t('fields.description')}</span>
+          <AgentFieldLabel label={t('fields.description')} help={t('help.fields.description')} />
           <input className={FIELD_CLASS} disabled={disabled} {...field('description')} />
         </label>
         <label className="flex flex-col gap-1.5 text-sm">
-          <span className="font-medium text-foreground">{t('fields.language')}</span>
+          <AgentFieldLabel label={t('fields.language')} help={t('help.fields.language')} required />
           <input className={FIELD_CLASS} disabled={disabled} {...field('language')} />
         </label>
         <label className="flex flex-col gap-1.5 text-sm">
-          <span className="font-medium text-foreground">{t('fields.timezone')}</span>
+          <AgentFieldLabel label={t('fields.timezone')} help={t('help.fields.timezone')} required />
           <input className={FIELD_CLASS} disabled={disabled} {...field('timezone')} />
         </label>
         <label className="flex flex-col gap-1.5 text-sm">
-          <span className="font-medium text-foreground">{t('fields.role')}</span>
+          <AgentFieldLabel label={t('fields.role')} help={t('help.fields.role')} />
           <input className={FIELD_CLASS} disabled={disabled || providerManaged} {...field('role')} />
         </label>
         <label className="flex flex-col gap-1.5 text-sm">
-          <span className="font-medium text-foreground">{t('fields.objective')}</span>
+          <AgentFieldLabel label={t('fields.objective')} help={t('help.fields.objective')} />
           <input className={FIELD_CLASS} disabled={disabled || providerManaged} {...field('objective')} />
         </label>
         <label className="flex flex-col gap-1.5 text-sm sm:col-span-2">
-          <span className="font-medium text-foreground">{t('fields.systemPrompt')}</span>
+          <AgentFieldLabel label={t('fields.systemPrompt')} help={t('help.fields.systemPrompt')} required />
           <textarea className={`${FIELD_CLASS} min-h-32`} disabled={disabled || providerManaged} {...field('system_prompt')} />
         </label>
         <label className="flex flex-col gap-1.5 text-sm">
-          <span className="font-medium text-foreground">{t('fields.greeting')}</span>
+          <AgentFieldLabel label={t('fields.greeting')} help={t('help.fields.greeting')} />
           <input className={FIELD_CLASS} disabled={disabled || providerManaged} {...field('greeting')} />
         </label>
         <label className="flex flex-col gap-1.5 text-sm">
-          <span className="font-medium text-foreground">{t('fields.closing')}</span>
+          <AgentFieldLabel label={t('fields.closing')} help={t('help.fields.closing')} />
           <input className={FIELD_CLASS} disabled={disabled || providerManaged} {...field('closing')} />
         </label>
       </CardContent>
@@ -990,7 +991,7 @@ function BehaviorFields({
       </CardHeader>
       <CardContent className="grid gap-4 sm:grid-cols-2">
         <label className="flex flex-col gap-1.5 text-sm">
-          <span className="font-medium text-foreground">{t('fields.responseStyle')}</span>
+          <AgentFieldLabel label={t('fields.responseStyle')} help={t('help.fields.responseStyle')} />
           <select
             className={FIELD_CLASS}
             disabled={disabled}
@@ -1005,7 +1006,7 @@ function BehaviorFields({
           </select>
         </label>
         <label className="flex flex-col gap-1.5 text-sm">
-          <span className="font-medium text-foreground">{t('fields.interruptions')}</span>
+          <AgentFieldLabel label={t('fields.interruptions')} help={t('help.fields.interruptions')} />
           <select
             className={FIELD_CLASS}
             disabled={disabled}
@@ -1020,7 +1021,7 @@ function BehaviorFields({
           </select>
         </label>
         <label className="flex flex-col gap-1.5 text-sm">
-          <span className="font-medium text-foreground">{t('fields.turnDetection')}</span>
+          <AgentFieldLabel label={t('fields.turnDetection')} help={t('help.fields.turnDetection')} />
           <select
             className={FIELD_CLASS}
             disabled={disabled}
@@ -1035,7 +1036,7 @@ function BehaviorFields({
           </select>
         </label>
         <label className="flex flex-col gap-1.5 text-sm">
-          <span className="font-medium text-foreground">{t('fields.confirmationStrategy')}</span>
+          <AgentFieldLabel label={t('fields.confirmationStrategy')} help={t('help.fields.confirmationStrategy')} />
           <select
             className={FIELD_CLASS}
             disabled={disabled}
@@ -1051,16 +1052,18 @@ function BehaviorFields({
             ))}
           </select>
         </label>
-        <label className="flex items-center gap-2 text-sm sm:col-span-2">
+        <div className="flex items-center gap-2 text-sm sm:col-span-2">
           <input
+            id="agent-first"
             type="checkbox"
             disabled={disabled}
             checked={behavior.agent_first}
             onChange={(e) => onChange('agent_first', e.target.checked)}
             className="size-4 rounded border-input"
           />
-          <span className="font-medium text-foreground">{t('fields.agentFirst')}</span>
-        </label>
+          <label htmlFor="agent-first" className="font-medium text-foreground">{t('fields.agentFirst')}</label>
+          <AgentFieldLabel label={t('fields.agentFirst')} help={t('help.fields.agentFirst')} showLabel={false} />
+        </div>
       </CardContent>
     </Card>
   );
@@ -1125,8 +1128,9 @@ function VoiceFields({
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex flex-wrap gap-4">
-              <label className="flex items-center gap-2 text-sm">
+              <div className="flex items-center gap-2 text-sm">
                 <input
+                  id="voice-origin-provider"
                   type="radio"
                   name="voice-origin"
                   disabled={disabled}
@@ -1134,10 +1138,12 @@ function VoiceFields({
                   onChange={() => onVoiceModeChange('provider')}
                   className="size-4"
                 />
-                <span className="font-medium text-foreground">{t('voice.origin.provider')}</span>
-              </label>
-              <label className="flex items-center gap-2 text-sm">
+                <label htmlFor="voice-origin-provider" className="font-medium text-foreground">{t('voice.origin.provider')}</label>
+                <AgentFieldLabel label={t('voice.origin.provider')} help={t('help.voice.provider')} showLabel={false} />
+              </div>
+              <div className="flex items-center gap-2 text-sm">
                 <input
+                  id="voice-origin-external"
                   type="radio"
                   name="voice-origin"
                   disabled={disabled}
@@ -1145,14 +1151,15 @@ function VoiceFields({
                   onChange={() => onVoiceModeChange('provider_external')}
                   className="size-4"
                 />
-                <span className="font-medium text-foreground">{t('voice.origin.providerExternal')}</span>
-              </label>
+                <label htmlFor="voice-origin-external" className="font-medium text-foreground">{t('voice.origin.providerExternal')}</label>
+                <AgentFieldLabel label={t('voice.origin.providerExternal')} help={t('help.voice.providerExternal')} showLabel={false} />
+              </div>
             </div>
 
             {voiceMode === 'provider' ? (
               <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
                 <label className="flex flex-col gap-1.5 text-sm">
-                  <span className="font-medium text-foreground">{t('voice.origin.catalogVoice')}</span>
+                  <AgentFieldLabel label={t('voice.origin.catalogVoice')} help={t('help.voice.catalogVoice')} />
                   <select
                     className={FIELD_CLASS}
                     disabled={disabled || providerVoices.length === 0}
@@ -1184,11 +1191,11 @@ function VoiceFields({
             ) : (
               <div className="space-y-3">
                 <label className="flex flex-col gap-1.5 text-sm">
-                  <span className="font-medium text-foreground">{t('voice.origin.externalProviderLabel')}</span>
+                  <AgentFieldLabel label={t('voice.origin.externalProviderLabel')} help={t('help.voice.externalProviderLabel')} />
                   <input className={FIELD_CLASS} disabled value="ElevenLabs" />
                 </label>
                 <label className="flex flex-col gap-1.5 text-sm">
-                  <span className="font-medium text-foreground">{t('voice.origin.externalVoiceId')}</span>
+                  <AgentFieldLabel label={t('voice.origin.externalVoiceId')} help={t('help.voice.externalVoiceId')} />
                   <input
                     className={FIELD_CLASS}
                     disabled={disabled}
@@ -1200,7 +1207,7 @@ function VoiceFields({
                 </label>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <label className="flex flex-col gap-1.5 text-sm">
-                    <span className="font-medium text-foreground">{t('voice.origin.externalModel')}</span>
+                  <AgentFieldLabel label={t('voice.origin.externalModel')} help={t('help.voice.externalModel')} />
                     <input
                       className={FIELD_CLASS}
                       disabled={disabled}
@@ -1209,7 +1216,7 @@ function VoiceFields({
                     />
                   </label>
                   <label className="flex flex-col gap-1.5 text-sm">
-                    <span className="font-medium text-foreground">{t('voice.origin.speed')}</span>
+                  <AgentFieldLabel label={t('voice.origin.speed')} help={t('help.voice.speed')} />
                     <input
                       type="number"
                       step="0.1"
@@ -1222,7 +1229,7 @@ function VoiceFields({
                     />
                   </label>
                   <label className="flex flex-col gap-1.5 text-sm">
-                    <span className="font-medium text-foreground">{t('voice.origin.stability')}</span>
+                  <AgentFieldLabel label={t('voice.origin.stability')} help={t('help.voice.stability')} />
                     <input
                       type="number"
                       step="0.05"
@@ -1235,7 +1242,7 @@ function VoiceFields({
                     />
                   </label>
                   <label className="flex flex-col gap-1.5 text-sm">
-                    <span className="font-medium text-foreground">{t('voice.origin.similarityBoost')}</span>
+                  <AgentFieldLabel label={t('voice.origin.similarityBoost')} help={t('help.voice.similarityBoost')} />
                     <input
                       type="number"
                       step="0.05"
@@ -1248,16 +1255,18 @@ function VoiceFields({
                     />
                   </label>
                 </div>
-                <label className="flex items-center gap-2 text-sm">
+                <div className="flex items-center gap-2 text-sm">
                   <input
+                    id="voice-speaker-boost"
                     type="checkbox"
                     disabled={disabled}
                     checked={voiceUseSpeakerBoost}
                     onChange={(e) => onVoiceSpeakerBoostChange(e.target.checked)}
                     className="size-4 rounded border-input"
                   />
-                  <span className="font-medium text-foreground">{t('voice.origin.speakerBoost')}</span>
-                </label>
+                  <label htmlFor="voice-speaker-boost" className="font-medium text-foreground">{t('voice.origin.speakerBoost')}</label>
+                  <AgentFieldLabel label={t('voice.origin.speakerBoost')} help={t('help.voice.speakerBoost')} showLabel={false} />
+                </div>
                 <Button
                   type="button"
                   variant="outline"
@@ -1289,7 +1298,7 @@ function VoiceFields({
         </CardHeader>
         <CardContent>
           <label className="flex flex-col gap-1.5 text-sm">
-            <span className="font-medium text-foreground">{t('voice.linkLabel')}</span>
+            <AgentFieldLabel label={t('voice.linkLabel')} help={t('help.voice.link')} />
             <select
               className={FIELD_CLASS}
               disabled={disabled}

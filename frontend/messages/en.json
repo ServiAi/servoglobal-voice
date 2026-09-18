@@ -1280,6 +1280,7 @@
         "defaultValue": "Default value"
       }
     },
+    "fieldHelp": { "ariaLabel": "Help for {label}", "required": "Required: Yes", "optional": "Required: No" },
     "agentBuilder": {
       "newAgent": "New agent",
       "createAgent": "Create agent",
@@ -1347,6 +1348,45 @@
         "responseStyle": "Response style", "interruptions": "Interruptions", "turnDetection": "Turn detection",
         "confirmationStrategy": "Confirmation strategy", "agentFirst": "Agent speaks first"
       },
+      "help": {
+        "fields": {
+          "name": "Internal agent name. Use it to identify the agent in ServiGlobal. It does not directly change how the agent speaks.",
+          "description": "Internal summary of the agent's purpose so your team can identify the process it handles.",
+          "language": "Main conversation language. Use a compatible code, such as es for Spanish or en for English.",
+          "timezone": "Time zone used to interpret dates, times and appointments. Example: America/Bogota.",
+          "role": "Defines who the agent is and what role it represents in the conversation.",
+          "objective": "Defines the main outcome the agent should try to achieve during the conversation.",
+          "systemPrompt": "Main instructions: rules, context, constraints, conversation style and steps the agent should follow.",
+          "greeting": "Opening message the agent uses when it starts the conversation.",
+          "closing": "Closing message or guidance for ending the conversation consistently.",
+          "responseStyle": "Controls how much the agent favors direct answers over detailed ones. Balanced suits most cases.",
+          "interruptions": "Defines how readily the agent yields when the person starts speaking.",
+          "turnDetection": "Controls how the agent decides that the user has finished speaking and when to respond.",
+          "confirmationStrategy": "Defines when the agent confirms information before continuing, especially names, phone numbers, dates or appointments.",
+          "agentFirst": "When enabled, the agent may greet first at session start; otherwise it waits for the user to speak."
+        },
+        "model": {
+          "pipeline": "Defines the voice processing architecture. Speech-to-Speech handles input and output audio with a realtime voice model.",
+          "managementMode": "Defines where the main agent configuration lives. ServiGlobal configures and versions it here; Provider-managed keeps it with the external provider.",
+          "provider": "Realtime AI provider that runs this agent. Options depend on the tenant's enabled integrations.",
+          "model": "Realtime voice model used by the selected provider. Models may have different capabilities and settings.",
+          "parameterHelp": { "temperature": "Controls response variability. Lower values are more consistent; higher values allow more variation." },
+          "parameterFallback": "Configure this model parameter. Allowed values depend on the selected provider and model."
+        },
+        "voice": {
+          "provider": "Uses a voice directly from the selected model provider's catalog.",
+          "providerExternal": "Uses an external TTS voice through the realtime model. This version supports ElevenLabs through Ultravox BYOK integration.",
+          "catalogVoice": "Select a voice from the current provider. You can listen to a sample before publishing.",
+          "externalProviderLabel": "External provider that synthesizes the voice. This version uses ElevenLabs through the credential configured in Ultravox.",
+          "externalVoiceId": "Use the original Voice ID from the same ElevenLabs account whose API key is configured in Ultravox. Do not use the Ultravox catalog ID. Voice Library voices may require a plan that permits API use.",
+          "externalModel": "ElevenLabs TTS model used to synthesize speech. It must support the selected voice. Example: eleven_turbo_v2_5.",
+          "speed": "Controls speaking speed. The range is 0.7 to 1.2; 1.0 is approximately normal speed.",
+          "stability": "Controls vocal consistency. Higher values are steadier; lower values allow more expression.",
+          "similarityBoost": "Controls how closely the output keeps the original ElevenLabs voice identity. The range is 0 to 1.",
+          "speakerBoost": "Asks ElevenLabs to reinforce voice similarity and presence when the model supports it.",
+          "link": "Link an existing voice configuration. Leave it empty when using this agent's modern voice settings."
+        }
+      },
       "behaviorOptions": {
         "responseStyle": { "precise": "Precise", "balanced": "Balanced", "creative": "Creative" },
         "interruptions": { "conservative": "Conservative", "balanced": "Balanced", "responsive": "Responsive" },
@@ -1392,6 +1432,7 @@
             "permission": "The TTS credential cannot generate speech. Check the provider permissions.",
             "quota": "The TTS provider has insufficient quota or credits to generate the sample.",
             "sampleRate": "The TTS plan or provider does not support the required audio configuration.",
+            "planRestriction": "Your ElevenLabs plan does not allow this voice to be used through the API. Use a voice supported by your plan or upgrade your ElevenLabs subscription.",
             "other": "Ultravox rejected the voice sample. Check the voice configuration.",
             "auth": "The Ultravox connection is not authorized. Check the integration settings.",
             "rateLimited": "Ultravox received too many requests. Wait a moment before trying again.",
