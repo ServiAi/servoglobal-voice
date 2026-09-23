@@ -325,6 +325,7 @@ class AgentBuilderTests(Integration2ATestCase):
         by_key = {item["key"]: item for item in before.json()}
         self.assertFalse(by_key["whatsapp.send_message"]["available"])
         self.assertEqual(by_key["whatsapp.send_message"]["status"], "available")
+        self.assertEqual(by_key["whatsapp.send_message"]["source"], "platform")
         self.assertFalse(by_key["handoff.chatwoot"]["available"])
         self.assertEqual(by_key["handoff.chatwoot"]["status"], "planned")
 
@@ -335,6 +336,25 @@ class AgentBuilderTests(Integration2ATestCase):
 
     def test_tool_catalog_requires_feature_enabled(self) -> None:
         self.assertEqual(self.client.get("/api/v1/agents/tools/catalog").status_code, 403)
+
+    def test_crm_create_lead_is_always_available_with_no_integration_configured(self) -> None:
+        """Regression test for a real bug: _tool_integration_configured had
+        no branch for required_integration="crm", so crm.create_lead was
+        unconditionally reported unavailable and always failed publish
+        preflight if bound -- crm has no external integration to configure,
+        unlike booking/whatsapp."""
+        self._enable_feature()
+        response = self.client.get("/api/v1/agents/tools/catalog")
+        by_key = {item["key"]: item for item in response.json()}
+        self.assertTrue(by_key["crm.create_lead"]["available"])
+        self.assertEqual(by_key["crm.create_lead"]["status"], "available")
+
+    def test_publish_succeeds_with_crm_create_lead_bound(self) -> None:
+        self._enable_feature()
+        agent_id = self._create(tools=[{"key": "crm.create_lead", "enabled": True, "config": {}}]).json()["id"]
+        with patch("app.services.ultravox_admin_service.UltravoxAdminService.get_voice"):
+            response = self.client.post(f"/api/v1/agents/{agent_id}/publish", json={})
+        self.assertEqual(response.status_code, 200, response.text)
 
     def test_tool_catalog_is_tenant_isolated(self) -> None:
         tenant_b, user_b = self._seed_tenant_user(slug="tenant-tools-b", email="tools-b@example.com")

@@ -56,6 +56,7 @@ from app.api.endpoints import voice_public
 from app.api.endpoints import asterisk_provisioning
 from app.api.endpoints import scheduling
 from app.api.endpoints import agents
+from app.api.endpoints import tools_custom
 from app.api.endpoints import voice_registry
 from app.api.endpoints import voice_runtime
 from app.api.endpoints import voice_provider_admin
@@ -87,6 +88,7 @@ app.include_router(voice_public.router)
 app.include_router(asterisk_provisioning.router)
 app.include_router(scheduling.router)
 app.include_router(agents.router)
+app.include_router(tools_custom.router)
 app.include_router(voice_registry.router)
 app.include_router(voice_runtime.router)
 app.include_router(voice_provider_admin.router)

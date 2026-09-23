@@ -39,14 +39,18 @@ export type AgentModelSettings = Record<string, number | boolean | string>;
 export type AgentToolBinding = {
   key: string;
   enabled: boolean;
-  config?: Record<string, never>;
+  config?: Record<string, unknown>;
 };
 
-/** One app.domain.tool_registry entry annotated for the current tenant --
- * see GET /api/v1/agents/tools/catalog. `available` is only ever true for
- * status="available" tools whose required_integration is configured;
- * "planned" tools always report available=false and must never be
- * offered as selectable in the UI. */
+/** One catalog entry (platform Registry or tenant custom.* tool) annotated
+ * for the current tenant -- see GET /api/v1/agents/tools/catalog.
+ * `available` is only ever true for status="available" tools whose
+ * required_integration (platform) or credential (custom) is configured;
+ * "planned" tools always report available=false and must never be offered
+ * as selectable in the UI. `source` distinguishes the two: `custom` tools
+ * always report `required_integration: null` -- their "is this tenant
+ * ready" concept is credential-based, checked via /voice-ai/tools instead
+ * of an integration settings page. */
 export type AgentToolCatalogEntry = {
   key: string;
   name: string;
@@ -55,6 +59,7 @@ export type AgentToolCatalogEntry = {
   required_integration: 'booking' | 'whatsapp' | 'crm' | 'chatwoot' | null;
   available: boolean;
   input_schema: Record<string, unknown>;
+  source: 'platform' | 'custom';
 };
 
 export type AgentCreateRequest = {

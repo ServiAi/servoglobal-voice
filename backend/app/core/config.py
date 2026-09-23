@@ -105,6 +105,7 @@ class Settings(BaseSettings):
 
     # Tenant integrations
     INTEGRATIONS_ENCRYPTION_KEY: str = ""
+    CUSTOM_TOOLS_ALLOW_HTTP: bool = False
     ASTERISK_PROVISIONER_SHARED_SECRET: str = ""
     EMAIL_ASSETS_STORAGE_DRIVER: str = "local"
     EMAIL_ASSETS_STORAGE_PATH: str = "storage/email-assets"
