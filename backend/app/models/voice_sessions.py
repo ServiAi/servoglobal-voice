@@ -27,6 +27,7 @@ class VoiceSession(Base, TimestampMixin):
         ),
         sa.CheckConstraint("channel IN ('web','webrtc','sip','internal_test')", name="ck_voice_sessions_channel"),
         sa.CheckConstraint("direction IN ('inbound','outbound','internal')", name="ck_voice_sessions_direction"),
+        sa.CheckConstraint("purpose IN ('production','qa')", name="ck_voice_sessions_purpose"),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
@@ -41,6 +42,7 @@ class VoiceSession(Base, TimestampMixin):
     )
     channel: Mapped[str] = mapped_column(String(24), nullable=False)
     direction: Mapped[str] = mapped_column(String(24), nullable=False)
+    purpose: Mapped[str] = mapped_column(String(24), nullable=False, default="production")
     runtime_engine: Mapped[str] = mapped_column(String(32), nullable=False, default="livekit")
     pipeline_type: Mapped[str] = mapped_column(String(32), nullable=False, default="realtime")
     provider: Mapped[str] = mapped_column(String(40), nullable=False)

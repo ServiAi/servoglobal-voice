@@ -1,24 +1,21 @@
 from __future__ import annotations
 
-import asyncio
 import logging
 from datetime import UTC, datetime
-from time import monotonic
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.config import settings
 from app.models.crm import CrmLead, CrmVoiceCall
 from app.models.voice_sessions import VoiceSession
 from app.schemas.integrations import VoiceCallActionRequest, VoiceCallActionResponse
 from app.services.livekit_runtime_backend import LiveKitRuntimeBackend
-from app.services.livekit_sip_service import LiveKitSipDialError, LiveKitSipService
+from app.services.livekit_sip_service import LiveKitSipService
 from app.services.voice_capacity_service import VoiceCapacityService
 from app.services.voice_call_projection_service import VoiceCallProjectionService
 from app.services.voice_phone_service import normalize_outbound_phone
-from app.services.voice_runtime_dispatcher import VoiceRuntimeDispatcher
 from app.services.voice_session_service import VoiceSessionError, VoiceSessionService
+from app.services.voice_session_sip_service import VoiceSessionSipDialError, VoiceSessionSipService
 from app.services.voice_sip_route_service import VoiceSipRouteService
 
 logger = logging.getLogger(__name__)
@@ -129,15 +126,6 @@ class OutboundVoiceCallService:
         self.db.add(call)
         self.db.flush()
         session.crm_voice_call_id = call.id
-        session.sip_route_id = route.id
-        session.livekit_sip_trunk_id = route.livekit_outbound_trunk_id
-        self.sessions.record_event(
-            session,
-            "voice.outbound.requested",
-            source="control-plane",
-            payload={"sip_route_id": route.id},
-            commit=False,
-        )
         VoiceCallProjectionService(self.db).project_session(session.id, tenant_id=tenant_id, commit=False)
         self.db.commit()
         self.db.refresh(call)
@@ -149,71 +137,28 @@ class OutboundVoiceCallService:
             session.livekit_sip_trunk_id,
         )
 
-        session = await VoiceRuntimeDispatcher(
-            self.db, backend=self.runtime_backend
-        ).dispatch(session)
-        if session.status == "failed":
-            await self._fail(call, session, "failed", "runtime_dispatch_failed")
-            raise ValueError("Voice runtime dispatch failed.")
-        try:
-            session = await self.wait_until_runtime_ready(session.id, tenant_id)
-        except TimeoutError:
-            await self._fail(call, session, "failed", "runtime_not_ready")
-            raise ValueError("Voice runtime did not become ready before timeout.") from None
-        logger.info(
-            "Voice runtime ready for SIP | tenant_id=%s | crm_voice_call_id=%s | voice_session_id=%s | livekit_room_name=%s | livekit_dispatch_id=%s",
-            tenant_id,
-            call.id,
-            session.id,
-            session.livekit_room_name,
-            session.livekit_dispatch_id,
-        )
-
-        participant_identity = f"sip-{session.id}"
         call.status = "dialing"
         call.started_at = datetime.now(UTC)
-        session.livekit_sip_participant_identity = participant_identity
-        self.sessions.record_event(
-            session,
-            "voice.sip.dial.started",
-            source="control-plane",
-            payload={"sip_route_id": route.id},
-            commit=False,
-        )
         self.db.commit()
-        logger.info(
-            "LiveKit SIP dial started | tenant_id=%s | crm_voice_call_id=%s | voice_session_id=%s | livekit_room_name=%s | livekit_sip_trunk_id=%s | sip_participant_identity=%s",
-            tenant_id,
-            call.id,
-            session.id,
-            session.livekit_room_name,
-            session.livekit_sip_trunk_id,
-            participant_identity,
-        )
         try:
-            result = await self.sip.dial(
-                trunk_id=route.livekit_outbound_trunk_id,
-                to_phone=number.e164,
-                from_number=route.caller_id,
-                room_name=session.livekit_room_name,
-                participant_identity=participant_identity,
+            session = await VoiceSessionSipService(
+                self.db,
+                sip_service=self.sip,
+                runtime_backend=self.runtime_backend,
+            ).dial(
+                session,
+                number.e164,
+                manage_failure=False,
             )
-        except LiveKitSipDialError as exc:
+        except VoiceSessionSipDialError as exc:
             await self._fail(call, session, exc.call_status, exc.code)
+            if exc.code == "runtime_not_ready":
+                raise ValueError("Voice runtime did not become ready before timeout.") from None
             raise ValueError(exc.code) from None
 
-        session.sip_call_id = result.sip_call_id
-        session.livekit_sip_participant_identity = result.participant_identity
-        call.provider_call_id = result.sip_call_id
+        call.provider_call_id = session.sip_call_id
         call.status = "answered"
         call.answered_at = datetime.now(UTC)
-        self.sessions.record_event(
-            session,
-            "voice.sip.answered",
-            source="control-plane",
-            payload={"sip_call_id": result.sip_call_id},
-            commit=False,
-        )
         VoiceCallProjectionService(self.db).project_session(session.id, tenant_id=tenant_id, commit=False)
         self.db.commit()
         logger.info(
@@ -226,18 +171,6 @@ class OutboundVoiceCallService:
             session.sip_call_id,
         )
         return self._response(call, session)
-
-    async def wait_until_runtime_ready(self, session_id: str, tenant_id: str) -> VoiceSession:
-        deadline = monotonic() + settings.LIVEKIT_SIP_RUNTIME_READY_TIMEOUT_SECONDS
-        while monotonic() < deadline:
-            self.db.expire_all()
-            session = self.sessions.get(session_id, tenant_id)
-            if session.runtime_ready_at is not None:
-                return session
-            if session.status in {"failed", "ended", "cancelled"}:
-                raise TimeoutError
-            await asyncio.sleep(0.2)
-        raise TimeoutError
 
     async def _fail(
         self,

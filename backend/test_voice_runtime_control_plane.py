@@ -506,7 +506,10 @@ class AgentToolInvokeEndpointTests(Integration2ATestCase):
             session = VoiceSessionService(db).get(session_id)
             tool_events = [e for e in session.events if e.event_type == "session.context.tool_used"]
             self.assertEqual(len(tool_events), 1)
-            self.assertEqual(tool_events[0].payload_json, {"tool_key": "whatsapp.send_message", "status": "success"})
+            self.assertEqual(tool_events[0].payload_json["tool_key"], "whatsapp.send_message")
+            self.assertEqual(tool_events[0].payload_json["status"], "success")
+            self.assertEqual(tool_events[0].payload_json["summary"], "sent")
+            self.assertGreaterEqual(tool_events[0].payload_json["duration_ms"], 0)
             self.assertNotIn("+573000000001", str(tool_events[0].payload_json))
 
     def test_rejects_terminal_session(self) -> None:

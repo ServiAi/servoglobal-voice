@@ -9,8 +9,9 @@ from pydantic import BaseModel, ConfigDict, Field
 class VoiceSessionCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     agent_id: str
-    channel: Literal["webrtc", "internal_test"] = "internal_test"
-    direction: Literal["internal"] = "internal"
+    channel: Literal["webrtc", "sip", "internal_test"] = "internal_test"
+    direction: Literal["internal", "outbound"] = "internal"
+    purpose: Literal["production", "qa"] = "production"
     idempotency_key: str | None = Field(default=None, min_length=1, max_length=160)
     # Optional, trusted only because this endpoint requires WRITE_ROLES
     # authentication -- never a bare pass-through of unauthenticated or
@@ -22,6 +23,8 @@ class VoiceSessionCreateRequest(BaseModel):
     # test a caller-scoped tool (e.g. crm.create_lead) against a real
     # phone number without a real inbound/outbound call existing yet.
     caller_phone: str | None = Field(default=None, min_length=1, max_length=32)
+    variables: dict = Field(default_factory=dict)
+    to_phone: str | None = Field(default=None, min_length=1, max_length=32)
 
 
 class WebRTCParticipantTokenResponse(BaseModel):
@@ -44,6 +47,7 @@ class VoiceSessionResponse(BaseModel):
     deleted_agent_version_id: str | None = None
     channel: str
     direction: str
+    purpose: str
     runtime_engine: str
     pipeline_type: str
     provider: str
@@ -64,6 +68,28 @@ class VoiceSessionResponse(BaseModel):
     end_reason: str | None
     error_code: str | None
     error_message_sanitized: str | None
+
+
+class VoiceSessionContextResponse(BaseModel):
+    caller_phone: str | None = None
+    contact_id: str | None = None
+    lead_id: str | None = None
+    variables: dict = Field(default_factory=dict)
+
+
+class VoiceSessionEventResponse(BaseModel):
+    event_id: str
+    event_type: str
+    source: str
+    sequence: int | None = None
+    payload: dict[str, str | int | bool | None] = Field(default_factory=dict)
+    occurred_at: datetime
+
+
+class VoiceSessionEventsResponse(BaseModel):
+    session: VoiceSessionResponse
+    context: VoiceSessionContextResponse
+    events: list[VoiceSessionEventResponse]
 
 
 class RuntimeEventV1(BaseModel):

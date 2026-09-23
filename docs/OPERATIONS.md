@@ -254,6 +254,17 @@ Voice preview diagnostics: `voice` indica voz/ID posiblemente inaccesible; `mode
 
 Los previews de catálogo Ultravox y TTS externo ElevenLabs pueden resolver a WAV o MP3. ServiGlobal acepta sólo firmas de archivo compatibles con `audio/wav` o `audio/mpeg`; el MIME upstream no autoriza el contenido, ni la extensión de la URL en catálogo. El límite de 5 MB permanece vigente para ambos; la allowlist de redirects HTTPS sigue aplicando al catálogo.
 
+## Smoke manual: Agent Builder QA Harness
+
+Estas pruebas pueden generar efectos reales. Use un tenant y destinos autorizados; compruebe antes ruta SIP, provider y tools publicados.
+
+- [ ] WebRTC con lead existente: ejecutar `calendar.check_availability` → `calendar.create_booking` → `whatsapp.send_message`; confirmar transcript, duración y resumen seguro de cada tool.
+- [ ] WebRTC con caller sin lead: ejecutar `crm.create_lead` y luego booking; confirmar `session.context.enriched` y que booking usa el lead resuelto, no un ID del LLM.
+- [ ] WebRTC sin contexto: intentar booking y confirmar `lead_context_required` como error de tool, sin fallo genérico de la consola.
+- [ ] SIP QA con lead existente: llamar a un número autorizado y repetir availability → booking → WhatsApp; confirmar misma versión/provider/runtime y ausencia de `CrmVoiceCall` para la sesión QA.
+
+La cobertura local/mocked no demuestra audio bidireccional, LiveKit real, carrier SIP, Ultravox real ni efectos externos. Registre esas evidencias por separado después del despliegue controlado.
+
 ## Diagnóstico rápido
 
 - CORS: comprobar origen exacto, regex/configuración backend y reconstrucción del frontend si cambió su API pública.

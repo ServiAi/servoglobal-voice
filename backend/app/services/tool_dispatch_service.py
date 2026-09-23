@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from time import perf_counter
 from typing import Any, Callable
 
 from sqlalchemy.orm import Session
@@ -170,14 +171,29 @@ class ToolDispatchService:
             raise ToolNotAvailableError(tool_key)
         self._validate_arguments(tool.input_schema, arguments)
         context = SessionContextV1.model_validate(session.session_context_json or {})
+        started = perf_counter()
         try:
             result = handler(self.db, session.tenant_id, arguments, context, session)
-        except ToolExecutionError:
+        except ToolExecutionError as exc:
+            duration_ms = max(0, round((perf_counter() - started) * 1000))
             self._record_event(session.tenant_id, session.agent_id, tool_key, status="error")
-            self._record_context_tool_event(session, tool_key, status="error")
+            self._record_context_tool_event(
+                session,
+                tool_key,
+                status="error",
+                duration_ms=duration_ms,
+                error_code=self._safe_error_code(str(exc)),
+            )
             raise
+        duration_ms = max(0, round((perf_counter() - started) * 1000))
         self._record_event(session.tenant_id, session.agent_id, tool_key, status="success")
-        self._record_context_tool_event(session, tool_key, status="success")
+        self._record_context_tool_event(
+            session,
+            tool_key,
+            status="success",
+            duration_ms=duration_ms,
+            summary=self._result_summary(tool_key, result),
+        )
         return result
 
     def _invoke_custom(
@@ -190,6 +206,7 @@ class ToolDispatchService:
             raise ToolNotAvailableError(tool_key)
         tenant_tool, config = row
         context = SessionContextV1.model_validate(session.session_context_json or {})
+        started = perf_counter()
         try:
             result = CustomHttpToolExecutor(self.db).execute(
                 tenant_id=session.tenant_id,
@@ -199,23 +216,68 @@ class ToolDispatchService:
                 context=context,
                 binding_config=binding.get("config") or {},
             )
-        except ToolExecutionError:
+        except ToolExecutionError as exc:
+            duration_ms = max(0, round((perf_counter() - started) * 1000))
             self._record_event(session.tenant_id, session.agent_id, tool_key, status="error")
-            self._record_context_tool_event(session, tool_key, status="error")
+            self._record_context_tool_event(
+                session,
+                tool_key,
+                status="error",
+                duration_ms=duration_ms,
+                error_code=self._safe_error_code(str(exc)),
+            )
             raise
+        duration_ms = max(0, round((perf_counter() - started) * 1000))
         self._record_event(session.tenant_id, session.agent_id, tool_key, status="success")
-        self._record_context_tool_event(session, tool_key, status="success")
+        self._record_context_tool_event(
+            session,
+            tool_key,
+            status="success",
+            duration_ms=duration_ms,
+            summary="completed",
+        )
         return result
 
-    def _record_context_tool_event(self, session: VoiceSession, tool_key: str, *, status: str) -> None:
+    def _record_context_tool_event(
+        self,
+        session: VoiceSession,
+        tool_key: str,
+        *,
+        status: str,
+        duration_ms: int,
+        summary: str | None = None,
+        error_code: str | None = None,
+    ) -> None:
         # Per-session narrative event (alongside the tenant-wide
         # agent_tool_invoked audit event above) -- lets "what happened in
         # this call" be read from VoiceSession.events alone. Same no-PII
         # discipline: tool_key + outcome only, never arguments/results.
         VoiceSessionService(self.db).record_event(
             session, "session.context.tool_used", source="control-plane",
-            payload={"tool_key": tool_key, "status": status},
+            payload={
+                "tool_key": tool_key,
+                "status": status,
+                "duration_ms": duration_ms,
+                **({"summary": summary} if summary else {}),
+                **({"error_code": error_code} if error_code else {}),
+            },
         )
+
+    @staticmethod
+    def _safe_error_code(value: str) -> str:
+        return value if 0 < len(value) <= 80 and value.replace("_", "").isalnum() else "tool_execution_failed"
+
+    @staticmethod
+    def _result_summary(tool_key: str, result: dict[str, Any]) -> str:
+        if tool_key == "calendar.check_availability":
+            slots = result.get("slots")
+            return f"{len(slots) if isinstance(slots, list) else 0} horarios"
+        if tool_key == "calendar.create_booking":
+            return "booking_created"
+        if tool_key in {"whatsapp.send_message", "crm.create_lead"}:
+            status = result.get("status")
+            return str(status)[:40] if isinstance(status, str) else "completed"
+        return "completed"
 
     @staticmethod
     def _validate_arguments(input_schema: dict[str, Any], arguments: dict[str, Any]) -> None:

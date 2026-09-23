@@ -1,7 +1,8 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { requestVoiceEndpoint, type FetchResult } from '@/lib/api/crm';
+import { fetchCrmLeads, requestVoiceEndpoint, type FetchResult } from '@/lib/api/crm';
+import type { LeadListItem } from '@/types/crm';
 import {
   archiveAgent,
   createAgent,
@@ -123,7 +124,45 @@ export async function fetchAgentVersionsAction(
 export type VoiceSessionResponse = {
   id: string;
   status: string;
+  purpose: 'production' | 'qa';
+  channel: 'webrtc' | 'sip' | 'internal_test';
+  direction: 'internal' | 'outbound';
+  agent_version_id: string | null;
+  provider: string;
+  runtime_engine: string;
+  pipeline_type: string;
+  error_code: string | null;
+  end_reason: string | null;
   livekit_room_name: string | null;
+};
+
+export type VoiceQaSessionInput = {
+  transport: 'webrtc' | 'sip';
+  caller_phone?: string;
+  contact_id?: string;
+  lead_id?: string;
+  to_phone?: string;
+  variables?: Record<string, unknown>;
+};
+
+export type VoiceQaEvent = {
+  event_id: string;
+  event_type: string;
+  source: string;
+  sequence: number | null;
+  payload: Record<string, string | number | boolean | null>;
+  occurred_at: string;
+};
+
+export type VoiceQaEventsResponse = {
+  session: VoiceSessionResponse;
+  context: {
+    caller_phone: string | null;
+    contact_id: string | null;
+    lead_id: string | null;
+    variables: Record<string, unknown>;
+  };
+  events: VoiceQaEvent[];
 };
 
 export type WebRTCParticipantTokenResponse = {
@@ -136,15 +175,37 @@ export type WebRTCParticipantTokenResponse = {
 
 export async function createVoiceTestSessionAction(
   agentId: string,
-  idempotencyKey: string
+  idempotencyKey: string,
+  input: VoiceQaSessionInput = { transport: 'webrtc' }
 ): Promise<FetchResult<VoiceSessionResponse>> {
   return withAccessToken((token) =>
     requestVoiceEndpoint<VoiceSessionResponse>('POST', 'sessions', token, undefined, {
       agent_id: agentId,
-      channel: 'webrtc',
-      direction: 'internal',
+      channel: input.transport,
+      direction: input.transport === 'sip' ? 'outbound' : 'internal',
+      purpose: 'qa',
       idempotency_key: idempotencyKey,
+      caller_phone: input.caller_phone || undefined,
+      contact_id: input.contact_id || undefined,
+      lead_id: input.lead_id || undefined,
+      to_phone: input.transport === 'sip' ? input.to_phone : undefined,
+      variables: input.variables ?? {},
     })
+  );
+}
+
+export async function fetchVoiceQaLeadsAction(search: string): Promise<FetchResult<LeadListItem[]>> {
+  return withAccessToken(async (token) => {
+    const result = await fetchCrmLeads(token, { page: 1, page_size: 20, search: search || undefined });
+    return result.ok ? { ...result, data: result.data.items } : result;
+  });
+}
+
+export async function fetchVoiceTestEventsAction(
+  sessionId: string
+): Promise<FetchResult<VoiceQaEventsResponse>> {
+  return withAccessToken((token) =>
+    requestVoiceEndpoint<VoiceQaEventsResponse>('GET', `sessions/${sessionId}/events`, token)
   );
 }
 

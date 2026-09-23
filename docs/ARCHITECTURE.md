@@ -134,6 +134,10 @@ El evaluador admite composición `all`/`any` y rutas seguras sobre diccionarios;
 - Cada campo del formulario de reglas conserva una ayuda contextual traducida. El contenido se abre desde el ícono y se oculta con cualquier clic externo.
 - Destinos y destinatarios se muestran enmascarados. Los cambios no deben introducir `tenant_id` en payloads del frontend.
 
+### QA de Agent Builder
+
+`VoiceSession.purpose` separa `production` de `qa` sin sobrecargar `channel`. WebRTC QA reutiliza `VoiceRuntimeDispatcher`, token LiveKit y el adaptador web. SIP QA y `OutboundVoiceCallService` reutilizan `VoiceSessionSipService` para ruta tenant, dispatch, espera de `voice.agent.ready` y participante SIP; sólo el flujo productivo crea `CrmVoiceCall`. La consola lee `VoiceSessionEvent` mediante un DTO allowlisted y nunca recibe argumentos o resultados completos de tools.
+
 ## Principios de cambio
 
 - CRM es la fuente de verdad comercial.
