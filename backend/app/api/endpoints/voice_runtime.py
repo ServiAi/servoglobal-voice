@@ -63,10 +63,16 @@ async def create_voice_session(
         elif body.to_phone is not None or body.direction != "internal":
             raise VoiceSessionError("to_phone/outbound are only valid for SIP QA sessions.")
         TenantFeatureService(db).require_enabled(context.tenant_id, VOICE_RUNTIME_V2)
+        caller_phone = (
+            body.to_phone
+            if body.purpose == "qa" and body.channel == "sip" and body.qa_context_mode == "conversation"
+            else body.caller_phone
+        )
         session = VoiceSessionService(db).create(
             context.tenant_id, body.agent_id, channel=body.channel, direction=body.direction,
             idempotency_key=body.idempotency_key, contact_id=body.contact_id, lead_id=body.lead_id,
-            caller_phone=body.caller_phone, variables=body.variables, purpose=body.purpose,
+            caller_phone=caller_phone, variables=body.variables, purpose=body.purpose,
+            qa_context_mode=body.qa_context_mode,
         )
         session = (
             await VoiceSessionSipService(db).dial(session, body.to_phone)

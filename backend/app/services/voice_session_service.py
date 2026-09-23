@@ -70,7 +70,12 @@ class VoiceSessionService:
         caller_phone: str | None = None,
         variables: dict | None = None,
         purpose: str = "production",
+        qa_context_mode: str = "preloaded",
     ) -> VoiceSession:
+        if purpose == "qa" and qa_context_mode == "conversation" and (
+            contact_id or lead_id or variables or (caller_phone and channel != "sip")
+        ):
+            raise VoiceSessionError("qa_conversation_context_must_be_empty")
         if idempotency_key:
             existing = self.db.scalar(select(VoiceSession).where(VoiceSession.tenant_id == tenant_id, VoiceSession.idempotency_key == idempotency_key))
             if existing:

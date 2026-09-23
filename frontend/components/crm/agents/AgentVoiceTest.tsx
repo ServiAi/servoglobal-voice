@@ -7,6 +7,7 @@ import {
   createVoiceTestTokenAction,
   fetchVoiceQaLeadsAction,
   fetchVoiceTestEventsAction,
+  type QaContextMode,
   type VoiceQaEvent,
   type VoiceQaEventsResponse,
 } from '@/app/[locale]/(tenant)/voice-ai/agents/actions';
@@ -27,6 +28,7 @@ export function AgentVoiceTest({ agentId, agentName, published }: { agentId: str
   const [open, setOpen] = useState(false);
   const [stage, setStage] = useState<Stage>('config');
   const [transport, setTransport] = useState<Transport>('webrtc');
+  const [contextMode, setContextMode] = useState<QaContextMode>('preloaded');
   const [callerPhone, setCallerPhone] = useState('');
   const [toPhone, setToPhone] = useState('');
   const [contactId, setContactId] = useState('');
@@ -57,13 +59,13 @@ export function AgentVoiceTest({ agentId, agentName, published }: { agentId: str
   useEffect(() => () => void adapter.current?.disconnect(), []);
 
   useEffect(() => {
-    if (!open || stage !== 'config') return;
+    if (!open || stage !== 'config' || contextMode === 'conversation') return;
     const timer = window.setTimeout(async () => {
       const result = await fetchVoiceQaLeadsAction(leadSearch.trim());
       if (result.ok) setLeads(result.data);
     }, 250);
     return () => window.clearTimeout(timer);
-  }, [leadSearch, open, stage]);
+  }, [contextMode, leadSearch, open, stage]);
 
   useEffect(() => {
     const sessionId = session?.session.id;
@@ -100,13 +102,16 @@ export function AgentVoiceTest({ agentId, agentName, published }: { agentId: str
 
   const start = useCallback(async () => {
     setError(null);
-    let variables: Record<string, unknown>;
-    try {
-      variables = JSON.parse(variablesText) as Record<string, unknown>;
-      if (!variables || Array.isArray(variables) || typeof variables !== 'object') throw new Error();
-    } catch {
-      setError('Las variables deben ser un objeto JSON válido.');
-      return;
+    const hasPreloadedContext = contextMode === 'preloaded';
+    let variables: Record<string, unknown> = {};
+    if (hasPreloadedContext) {
+      try {
+        variables = JSON.parse(variablesText) as Record<string, unknown>;
+        if (!variables || Array.isArray(variables) || typeof variables !== 'object') throw new Error();
+      } catch {
+        setError('Las variables deben ser un objeto JSON válido.');
+        return;
+      }
     }
     if (transport === 'sip' && !toPhone.trim()) {
       setError('El número de destino es obligatorio para SIP.');
@@ -115,11 +120,12 @@ export function AgentVoiceTest({ agentId, agentName, published }: { agentId: str
     setStage('preparing');
     const result = await createVoiceTestSessionAction(agentId, crypto.randomUUID(), {
       transport,
-      caller_phone: callerPhone.trim() || undefined,
-      contact_id: contactId.trim() || undefined,
-      lead_id: leadId || undefined,
+      context_mode: contextMode,
+      caller_phone: hasPreloadedContext ? callerPhone.trim() || undefined : undefined,
+      contact_id: hasPreloadedContext ? contactId.trim() || undefined : undefined,
+      lead_id: hasPreloadedContext ? leadId || undefined : undefined,
       to_phone: toPhone.trim() || undefined,
-      variables,
+      variables: hasPreloadedContext ? variables : {},
     });
     if (!result.ok || result.data.status === 'failed') {
       setError(result.ok ? result.data.error_code ?? 'No fue posible iniciar la sesión.' : result.detail);
@@ -160,7 +166,7 @@ export function AgentVoiceTest({ agentId, agentName, published }: { agentId: str
       setError('No fue posible conectar con LiveKit.');
       setStage('error');
     }
-  }, [agentId, callerPhone, contactId, leadId, toPhone, transport, variablesText]);
+  }, [agentId, callerPhone, contactId, contextMode, leadId, toPhone, transport, variablesText]);
 
   const transcripts = useMemo(() => events.filter((event) => event.event_type === 'voice.transcript.final'), [events]);
   const tools = useMemo(() => events.filter((event) => event.event_type === 'session.context.tool_used'), [events]);
@@ -189,27 +195,46 @@ export function AgentVoiceTest({ agentId, agentName, published }: { agentId: str
                 <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-900 dark:text-amber-200">
                   <div className="flex gap-3"><AlertTriangle className="mt-0.5 size-5 shrink-0" aria-hidden="true" /><p><strong>Prueba con efectos reales.</strong> El agente puede crear citas, enviar mensajes de WhatsApp y, en SIP, realizar una llamada telefónica real.</p></div>
                 </div>
-                <div className="grid gap-4 md:grid-cols-2">
-                  <label className="space-y-1.5 text-sm font-medium"><span>Teléfono del caller (contexto)</span><input className={INPUT} value={callerPhone} onChange={(event) => setCallerPhone(event.target.value)} placeholder="+57…" /></label>
-                  {transport === 'sip' ? <label className="space-y-1.5 text-sm font-medium"><span>Número a llamar</span><input className={INPUT} value={toPhone} onChange={(event) => setToPhone(event.target.value)} placeholder="+57…" required /></label> : null}
+                <div className="grid gap-3 sm:grid-cols-2" role="radiogroup" aria-label="Modo de contexto QA">
+                  {([
+                    ['preloaded', 'Con contexto precargado', 'Simula una llamada donde la plataforma ya conoce información del usuario, como caller, contacto, lead o variables.'],
+                    ['conversation', 'Sin contexto precargado', 'El agente inicia sin Contact, Lead ni variables de negocio y deberá recopilar la información durante la conversación.'],
+                  ] as const).map(([value, title, description]) => (
+                    <button key={value} type="button" role="radio" aria-checked={contextMode === value} onClick={() => setContextMode(value)} className={`rounded-xl border p-4 text-left transition ${contextMode === value ? 'border-cyan-500 bg-cyan-500/10 ring-2 ring-cyan-500/15' : 'border-border bg-background hover:bg-muted/40'}`}>
+                      <span className="block text-sm font-semibold">{title}</span>
+                      <span className="mt-1 block text-xs leading-5 text-muted-foreground">{description}</span>
+                    </button>
+                  ))}
                 </div>
-                <div className="space-y-2">
-                  <label className="relative block"><Search className="absolute left-3 top-2.5 size-4 text-muted-foreground" aria-hidden="true" /><input className={`${INPUT} pl-9`} value={leadSearch} onChange={(event) => setLeadSearch(event.target.value)} placeholder="Buscar lead por nombre, teléfono o correo" /></label>
-                  <select className={INPUT} value={leadId} onChange={(event) => { setLeadId(event.target.value); if (event.target.value) setContactId(''); }} aria-label="Lead para contexto QA">
-                    <option value="">Sin lead seleccionado</option>
-                    {leads.map((lead) => <option key={lead.lead_id} value={lead.lead_id}>{lead.contact_name} · {lead.contact_phone ?? 'sin teléfono'}</option>)}
-                  </select>
-                  <p className="text-xs text-muted-foreground">Al seleccionar un lead, el backend deriva su contacto tenant-scoped y rechaza combinaciones incompatibles.</p>
-                </div>
-                <button type="button" className="text-sm font-semibold text-cyan-700 dark:text-cyan-300" onClick={() => setAdvanced((value) => !value)}>{advanced ? 'Ocultar configuración avanzada' : 'Mostrar configuración avanzada'}</button>
-                {advanced ? (
-                  <div className="grid gap-4 rounded-xl border border-border bg-muted/20 p-4 md:grid-cols-2">
-                    <label className="space-y-1.5 text-sm font-medium"><span>Contact ID manual</span><input className={INPUT} value={contactId} disabled={Boolean(leadId)} onChange={(event) => setContactId(event.target.value)} /></label>
-                    <label className="space-y-1.5 text-sm font-medium md:col-span-2"><span className="flex items-center gap-2"><Braces className="size-4" /> Variables JSON controladas</span><textarea className={`${INPUT} min-h-28 py-2 font-mono`} value={variablesText} onChange={(event) => setVariablesText(event.target.value)} spellCheck={false} /></label>
+                {transport === 'sip' ? <label className="block space-y-1.5 text-sm font-medium"><span>Número a llamar</span><input className={INPUT} value={toPhone} onChange={(event) => setToPhone(event.target.value)} placeholder="+57…" required /></label> : null}
+                {contextMode === 'conversation' ? (
+                  <div className="space-y-3 rounded-xl border border-cyan-500/30 bg-cyan-500/10 p-4 text-sm">
+                    <p><strong>El agente iniciará sin contexto de negocio precargado.</strong> Deberá solicitar durante la conversación los datos necesarios para completar su tarea.</p>
+                    <p className="text-muted-foreground">Esta prueba no modifica el prompt ni agrega instrucciones ocultas al agente. Verifica que las instrucciones publicadas indiquen cómo recopilar los datos necesarios.</p>
+                    {transport === 'webrtc' ? <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-amber-900 dark:text-amber-200">En WebRTC no existe una identidad telefónica confiable de transporte. El agente puede recopilar información durante la conversación, pero las herramientas que requieran caller_phone seguirán necesitando una identidad de sesión confiable. Para probar el flujo completo de creación de lead desde una llamada sin contexto, utiliza SIP.</p> : null}
                   </div>
-                ) : null}
+                ) : (
+                  <>
+                    <label className="block space-y-1.5 text-sm font-medium"><span>Teléfono del caller (contexto)</span><input className={INPUT} value={callerPhone} onChange={(event) => setCallerPhone(event.target.value)} placeholder="+57…" /></label>
+                    <div className="space-y-2">
+                      <label className="relative block"><Search className="absolute left-3 top-2.5 size-4 text-muted-foreground" aria-hidden="true" /><input className={`${INPUT} pl-9`} value={leadSearch} onChange={(event) => setLeadSearch(event.target.value)} placeholder="Buscar lead por nombre, teléfono o correo" /></label>
+                      <select className={INPUT} value={leadId} onChange={(event) => { setLeadId(event.target.value); if (event.target.value) setContactId(''); }} aria-label="Lead para contexto QA">
+                        <option value="">Sin lead seleccionado</option>
+                        {leads.map((lead) => <option key={lead.lead_id} value={lead.lead_id}>{lead.contact_name} · {lead.contact_phone ?? 'sin teléfono'}</option>)}
+                      </select>
+                      <p className="text-xs text-muted-foreground">Al seleccionar un lead, el backend deriva su contacto tenant-scoped y rechaza combinaciones incompatibles.</p>
+                    </div>
+                    <button type="button" className="text-sm font-semibold text-cyan-700 dark:text-cyan-300" onClick={() => setAdvanced((value) => !value)}>{advanced ? 'Ocultar configuración avanzada' : 'Mostrar configuración avanzada'}</button>
+                    {advanced ? (
+                      <div className="grid gap-4 rounded-xl border border-border bg-muted/20 p-4 md:grid-cols-2">
+                        <label className="space-y-1.5 text-sm font-medium"><span>Contact ID manual</span><input className={INPUT} value={contactId} disabled={Boolean(leadId)} onChange={(event) => setContactId(event.target.value)} /></label>
+                        <label className="space-y-1.5 text-sm font-medium md:col-span-2"><span className="flex items-center gap-2"><Braces className="size-4" /> Variables JSON controladas</span><textarea className={`${INPUT} min-h-28 py-2 font-mono`} value={variablesText} onChange={(event) => setVariablesText(event.target.value)} spellCheck={false} /></label>
+                      </div>
+                    ) : null}
+                  </>
+                )}
               </div>
-            ) : <QaConsole agentName={agentName} transport={transport} session={session} transcripts={transcripts} tools={tools} connected={connected} microphoneActive={microphoneActive} stage={stage} />}
+            ) : <QaConsole agentName={agentName} transport={transport} contextMode={contextMode} session={session} transcripts={transcripts} tools={tools} connected={connected} microphoneActive={microphoneActive} stage={stage} />}
             {audioBlocked ? <Button type="button" variant="outline" className="mt-4 w-full" onClick={async () => { await adapter.current?.enableAudio(); setAudioBlocked(false); }}>Activar audio</Button> : null}
             {error ? <p role="alert" className="mt-4 rounded-lg border border-destructive/25 bg-destructive/5 p-3 text-sm text-destructive">{error}</p> : null}
           </div>
@@ -223,7 +248,7 @@ export function AgentVoiceTest({ agentId, agentName, published }: { agentId: str
   );
 }
 
-function QaConsole({ agentName, transport, session, transcripts, tools, connected, microphoneActive, stage }: { agentName: string; transport: Transport; session: VoiceQaEventsResponse | null; transcripts: VoiceQaEvent[]; tools: VoiceQaEvent[]; connected: boolean; microphoneActive: boolean; stage: Stage }) {
+function QaConsole({ agentName, transport, contextMode, session, transcripts, tools, connected, microphoneActive, stage }: { agentName: string; transport: Transport; contextMode: QaContextMode; session: VoiceQaEventsResponse | null; transcripts: VoiceQaEvent[]; tools: VoiceQaEvent[]; connected: boolean; microphoneActive: boolean; stage: Stage }) {
   const context = session?.context;
   return (
     <div className="space-y-5">
@@ -241,7 +266,7 @@ function QaConsole({ agentName, transport, session, transcripts, tools, connecte
         </section>
         <div className="space-y-5">
           <section className="rounded-xl border border-border p-4"><h3 className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.16em] text-muted-foreground"><Wrench className="size-4" /> Tools</h3><div className="mt-3 space-y-2">{tools.length ? tools.map((event) => <ToolRow key={event.event_id} event={event} />) : <p className="text-sm text-muted-foreground">Sin ejecuciones todavía.</p>}</div></section>
-          <section className="rounded-xl border border-border p-4 text-sm"><h3 className="text-xs font-bold uppercase tracking-[0.16em] text-muted-foreground">Contexto resuelto</h3><dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 break-all"><dt className="text-muted-foreground">Caller</dt><dd>{context?.caller_phone ?? '—'}</dd><dt className="text-muted-foreground">Contact</dt><dd>{context?.contact_id ?? '—'}</dd><dt className="text-muted-foreground">Lead</dt><dd>{context?.lead_id ?? '—'}</dd><dt className="text-muted-foreground">Session</dt><dd>{session?.session.id ?? '—'}</dd><dt className="text-muted-foreground">Version</dt><dd>{session?.session.agent_version_id ?? '—'}</dd><dt className="text-muted-foreground">Runtime</dt><dd>{session ? `${session.session.provider} · ${session.session.runtime_engine} · ${session.session.pipeline_type}` : '—'}</dd></dl></section>
+          <section className="rounded-xl border border-border p-4 text-sm"><h3 className="text-xs font-bold uppercase tracking-[0.16em] text-muted-foreground">Contexto resuelto</h3><dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 break-all"><dt className="text-muted-foreground">Context mode</dt><dd>{contextMode === 'conversation' ? 'Conversacional' : 'Precargado'}</dd><dt className="text-muted-foreground">Caller</dt><dd>{context?.caller_phone ?? '—'}</dd><dt className="text-muted-foreground">Contact</dt><dd>{context?.contact_id ?? '—'}</dd><dt className="text-muted-foreground">Lead</dt><dd>{context?.lead_id ?? '—'}</dd><dt className="text-muted-foreground">Session</dt><dd>{session?.session.id ?? '—'}</dd><dt className="text-muted-foreground">Version</dt><dd>{session?.session.agent_version_id ?? '—'}</dd><dt className="text-muted-foreground">Runtime</dt><dd>{session ? `${session.session.provider} · ${session.session.runtime_engine} · ${session.session.pipeline_type}` : '—'}</dd></dl></section>
         </div>
       </div>
     </div>

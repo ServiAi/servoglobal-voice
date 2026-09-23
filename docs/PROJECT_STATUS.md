@@ -41,7 +41,7 @@ Limitaciones aceptadas de V1: Agent Builder carga sólo la primera página de ha
 
 ## Persistencia
 
-Las migraciones cubren identidad, analítica, CRM, integraciones, Agent Builder (`tenant_agents`, `tenant_agent_versions`) y Voice Runtime (`voice_sessions`, `voice_session_events`). La migración más reciente es `202609220001_custom_http_tools_foundation.py`, sobre `202609150001`: crea `tenant_tools`, `tenant_http_tool_configs` y `tenant_tool_credentials` (ver fila "Custom HTTP Tools"). La cadena debe conservar una única head. La migración anterior de LiveKit SIP aún requiere validación contra PostgreSQL real antes de desplegar; SQLite no demuestra su `ALTER` de constraint.
+Las migraciones cubren identidad, analítica, CRM, integraciones, Agent Builder (`tenant_agents`, `tenant_agent_versions`) y Voice Runtime (`voice_sessions`, `voice_session_events`). La head actual es `202609230001_voice_session_purpose.py`, sobre `202609220001`: añade `VoiceSession.purpose` con default legacy `production`; la migración anterior crea `tenant_tools`, `tenant_http_tool_configs` y `tenant_tool_credentials` (ver fila "Custom HTTP Tools"). La cadena debe conservar una única head. La migración anterior de LiveKit SIP aún requiere validación contra PostgreSQL real antes de desplegar; SQLite no demuestra su `ALTER` de constraint.
 
 ## Arquitectura de navegación del tenant
 
@@ -121,7 +121,7 @@ Redirects permanentes desde las rutas legacy (preservan query params):
 
 ## Agent Builder QA Harness
 
-`Probar agente` crea ahora `VoiceSession purpose=qa` con WebRTC o SIP, contexto tenant-scoped y variables validadas por `SessionContextV1`. La consola consulta eventos sanitizados por polling, muestra transcript y resultados de tools, y no expone payloads arbitrarios. SIP QA reutiliza el dialer inferior de `VoiceSession` sin crear `CrmVoiceCall`; la validación LiveKit/SIP real continúa siendo una prueba manual de entorno.
+`Probar agente` crea `VoiceSession purpose=qa` con WebRTC o SIP y permite elegir, de forma independiente, contexto `preloaded` o `conversation`. El modo precargado conserva caller/Contact/Lead/variables tenant-scoped; el conversacional no los envía ni acepta desde el navegador. WebRTC conversacional inicia completamente vacío y mantiene las protecciones de tools que requieren caller confiable; SIP conversacional conserva sólo el caller derivado de `to_phone`, habilitando `crm.create_lead` y el enriquecimiento monotónico posterior sin aceptar teléfono o IDs del LLM. La consola muestra el modo y sigue observando el contexto resuelto por polling sanitizado. SIP QA reutiliza el dialer inferior de `VoiceSession` sin crear `CrmVoiceCall`; la validación LiveKit/SIP real continúa siendo una prueba manual de entorno.
 
 ## Evidencia de pruebas
 
