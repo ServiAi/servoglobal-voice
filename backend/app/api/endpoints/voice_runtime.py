@@ -5,14 +5,17 @@ from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.auth.deps import AuthContext, require_roles
 from app.core.config import settings
 from app.db.session import get_db
 from app.models.crm import CrmVoiceCall
+from app.models.voice_sessions import VoiceSessionEvent
 from app.domain.voice_registry import get_provider
 from app.schemas.runtime_session import RuntimeSessionSpecV1
+from app.schemas.session_context import SessionContextV1
 from app.schemas.voice_credentials import ProviderCredentialResponse
 from app.schemas.voice_sessions import (
     RuntimeEventAck,
@@ -20,6 +23,9 @@ from app.schemas.voice_sessions import (
     ToolInvokeRequest,
     ToolInvokeResponse,
     VoiceSessionCreateRequest,
+    VoiceSessionContextResponse,
+    VoiceSessionEventResponse,
+    VoiceSessionEventsResponse,
     VoiceSessionResponse,
     WebRTCParticipantTokenResponse,
 )
@@ -37,6 +43,7 @@ from app.services.tool_dispatch_service import (
 from app.services.voice_config_service import VoiceConfigService
 from app.services.voice_runtime_dispatcher import VoiceRuntimeDispatcher
 from app.services.voice_session_service import VoiceSessionError, VoiceSessionNotFoundError, VoiceSessionService
+from app.services.voice_session_sip_service import VoiceSessionSipDialError, VoiceSessionSipService
 
 router = APIRouter(tags=["Voice Runtime"])
 WRITE_ROLES = ["platform_admin", "tenant_admin"]
@@ -50,18 +57,101 @@ async def create_voice_session(
     db: Session = Depends(get_db),
 ) -> VoiceSessionResponse:
     try:
+        if body.channel == "sip":
+            if body.purpose != "qa" or body.direction != "outbound" or not body.to_phone:
+                raise VoiceSessionError("SIP sessions require purpose=qa, direction=outbound and to_phone.")
+        elif body.to_phone is not None or body.direction != "internal":
+            raise VoiceSessionError("to_phone/outbound are only valid for SIP QA sessions.")
         TenantFeatureService(db).require_enabled(context.tenant_id, VOICE_RUNTIME_V2)
         session = VoiceSessionService(db).create(
             context.tenant_id, body.agent_id, channel=body.channel, direction=body.direction,
             idempotency_key=body.idempotency_key, contact_id=body.contact_id, lead_id=body.lead_id,
-            caller_phone=body.caller_phone,
+            caller_phone=body.caller_phone, variables=body.variables, purpose=body.purpose,
         )
-        session = await VoiceRuntimeDispatcher(db).dispatch(session)
+        session = (
+            await VoiceSessionSipService(db).dial(session, body.to_phone)
+            if body.channel == "sip"
+            else await VoiceRuntimeDispatcher(db).dispatch(session)
+        )
         return VoiceSessionResponse.model_validate(session)
     except TenantFeatureDisabledError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
-    except (VoiceSessionError, ContactResolutionError) as exc:
+    except (VoiceSessionError, ContactResolutionError, VoiceSessionSipDialError, ValueError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+_QA_EVENT_FIELDS = {
+    "voice.transcript.final": {"speaker", "text", "timestamp"},
+    "session.context.resolved": {"contact_resolved", "lead_resolved", "campaign_resolved", "caller_known"},
+    "session.context.enriched": {"contact_resolved", "lead_resolved", "source"},
+    "session.context.tool_used": {"tool_key", "status", "duration_ms", "summary", "error_code"},
+    "voice.session.dispatched": {"runtime_engine"},
+    "voice.session.ended": {"end_reason"},
+    "voice.session.failed": {"error_code"},
+    "voice.session.cancelled": {"end_reason"},
+    "voice.sip.dial.started": {"sip_route_id"},
+    "voice.sip.answered": {"sip_call_id"},
+    "voice.sip.busy": {"error_code"},
+    "voice.sip.rejected": {"error_code"},
+    "voice.sip.no_answer": {"error_code"},
+    "voice.sip.failed": {"error_code"},
+}
+
+
+def _safe_qa_event_payload(event: VoiceSessionEvent) -> dict[str, str | int | bool | None]:
+    allowed = _QA_EVENT_FIELDS.get(event.event_type, set())
+    return {
+        key: value
+        for key, value in (event.payload_json or {}).items()
+        if key in allowed and (value is None or isinstance(value, (str, int, bool)))
+    }
+
+
+def _mask_phone(value: str | None) -> str | None:
+    if not value:
+        return None
+    return f"***{value[-4:]}"
+
+
+@router.get("/api/v1/voice/sessions/{session_id}/events", response_model=VoiceSessionEventsResponse)
+def list_voice_session_events(
+    session_id: str,
+    context: AuthContext = Depends(require_roles(WRITE_ROLES)),
+    db: Session = Depends(get_db),
+) -> VoiceSessionEventsResponse:
+    try:
+        session = VoiceSessionService(db).get(session_id, tenant_id=context.tenant_id)
+    except VoiceSessionNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    resolved = SessionContextV1.model_validate(session.session_context_json or {})
+    rows = db.scalars(
+        select(VoiceSessionEvent)
+        .where(
+            VoiceSessionEvent.tenant_id == context.tenant_id,
+            VoiceSessionEvent.voice_session_id == session.id,
+        )
+        .order_by(VoiceSessionEvent.occurred_at, VoiceSessionEvent.event_id)
+    ).all()
+    return VoiceSessionEventsResponse(
+        session=VoiceSessionResponse.model_validate(session),
+        context=VoiceSessionContextResponse(
+            caller_phone=_mask_phone(resolved.caller.phone if resolved.caller else None),
+            contact_id=resolved.contact.id if resolved.contact else None,
+            lead_id=resolved.lead.id if resolved.lead else None,
+            variables=resolved.variables,
+        ),
+        events=[
+            VoiceSessionEventResponse(
+                event_id=row.event_id,
+                event_type=row.event_type,
+                source=row.source,
+                sequence=row.sequence,
+                payload=_safe_qa_event_payload(row),
+                occurred_at=row.occurred_at,
+            )
+            for row in rows
+        ],
+    )
 
 
 @router.post("/api/v1/voice/sessions/{session_id}/webrtc-token", response_model=WebRTCParticipantTokenResponse)

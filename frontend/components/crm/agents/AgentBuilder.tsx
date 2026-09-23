@@ -325,6 +325,7 @@ export function AgentBuilder({
   const editable = canEdit && !archived;
   const hasDraft = draft !== null;
   const selectedModel = models.find((m) => m.provider_key === form.provider && m.key === form.model) ?? null;
+  const publishedVersion = versions.find((version) => version.id === agent?.published_version_id) ?? null;
 
   const tabs = useMemo(
     () =>
@@ -690,8 +691,18 @@ export function AgentBuilder({
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {agent.status === 'active' && agent.published_version_id && providers.some((provider) => provider.status === 'active') ? (
-            <AgentVoiceTest agentId={agent.id} agentName={agent.name} />
+          {agent.status === 'active' && agent.published_version_id && publishedVersion && providers.some((provider) => provider.status === 'active') ? (
+            <AgentVoiceTest
+              agentId={agent.id}
+              agentName={agent.name}
+              published={{
+                id: publishedVersion.id,
+                version: publishedVersion.version,
+                provider: publishedVersion.runtime_binding.realtime.provider,
+                runtimeEngine: 'livekit',
+                pipelineType: publishedVersion.runtime_binding.pipeline_type,
+              }}
+            />
           ) : null}
           {canEdit && agent.status === 'active' && agent.published_version_id ? (
             <ActionDialog

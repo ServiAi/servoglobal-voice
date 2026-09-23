@@ -68,6 +68,8 @@ class VoiceSessionService:
         contact_id: str | None = None,
         lead_id: str | None = None,
         caller_phone: str | None = None,
+        variables: dict | None = None,
+        purpose: str = "production",
     ) -> VoiceSession:
         if idempotency_key:
             existing = self.db.scalar(select(VoiceSession).where(VoiceSession.tenant_id == tenant_id, VoiceSession.idempotency_key == idempotency_key))
@@ -100,9 +102,11 @@ class VoiceSessionService:
                 if channel == "sip" and direction == "outbound"
                 else "manual"
             ),
+            variables=variables,
         )
         session = VoiceSession(
             tenant_id=tenant_id, agent_id=agent.id, agent_version_id=version.id, channel=channel, direction=direction,
+            purpose=purpose,
             runtime_engine="livekit", pipeline_type="realtime", provider=runtime["realtime"].get("provider", ""),
             idempotency_key=idempotency_key, session_context_json=context.model_dump(mode="json"),
         )

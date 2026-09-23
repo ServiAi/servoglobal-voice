@@ -190,6 +190,15 @@ Reglas de dominio: `PUT` rechaza con `409` cambiar `agent_config_id` cuando ya e
 
 Los endpoints administrativos bajo `/api/v1/voice` siguen autenticados. La superficie pública permite lectura, context submission y, según la versión publicada, inicio one-shot de WebRTC o solicitud de callback saliente; la demo heredada `/api/v1/calls` continúa separada. El DTO no expone tenant, proveedor, prompt, tools o credenciales. Las llamadas usan errores cerrados `404/409/410/422/429/503/500`, siempre `no-store`. Ver `docs-local/fase-4/VOICE_EXPERIENCE_WEBRTC_RUNTIME.md`.
 
+### Voice QA Harness
+
+| Método y ruta | Contrato |
+|---|---|
+| `POST /api/v1/voice/sessions` | Autenticado. Crea WebRTC QA con `purpose=qa`, `channel=webrtc`, `direction=internal`, o SIP QA con `channel=sip`, `direction=outbound` y `to_phone`. Admite `caller_phone`, `contact_id`, `lead_id` y `variables`; nunca `tenant_id`. |
+| `GET /api/v1/voice/sessions/{session_id}/events` | Autenticado y tenant-scoped. Devuelve metadata de sesión, contexto seguro y eventos con payload allowlisted; una sesión de otro tenant responde `404`. |
+
+`calendar.create_booking` continúa obteniendo el lead únicamente de `VoiceSession.session_context_json`; ningún contrato de tool acepta `lead_id` del LLM.
+
 ## Convenciones
 
 - IDs son strings opacos; no deben inferirse ni reutilizarse entre tenants.
