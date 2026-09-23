@@ -35,6 +35,7 @@ from app.models.notifications import (
     TenantNotificationRule,
 )
 from app.models.tenant_features import TenantFeatureGrant
+from app.models.tools import TenantHttpToolConfig, TenantTool, TenantToolCredential
 from app.models.voice_context import TenantVoiceContextField, TenantVoiceContextSchema
 from app.models.voice_experiences import TenantVoiceExperience, TenantVoiceExperienceVersion
 from app.models.voice_submissions import (
@@ -64,6 +65,9 @@ __all__ = [
     "TenantIntegration",
     "TenantIntegrationEvent",
     "TenantFeatureGrant",
+    "TenantTool",
+    "TenantHttpToolConfig",
+    "TenantToolCredential",
     "TenantVoiceProviderConfig",
     "TenantVoiceAgentConfig",
     "TenantVoiceContextField",

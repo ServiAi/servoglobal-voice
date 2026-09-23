@@ -699,6 +699,7 @@
       "performance": "Rendimiento",
       "voiceGroup": "Voz IA",
       "agents": "Agentes",
+      "tools": "Herramientas",
       "voiceExperiences": "Experiencias de voz",
       "voiceCalls": "Llamadas",
       "voiceAnalytics": "Analítica",
@@ -1280,6 +1281,89 @@
         "defaultValue": "Valor por defecto"
       }
     },
+    "tools": {
+      "title": "Herramientas personalizadas",
+      "description": "Crea herramientas HTTP que tus agentes de voz pueden invocar para consultar o actualizar sistemas externos.",
+      "new": "Nueva herramienta",
+      "empty": "Todavía no hay herramientas personalizadas.",
+      "columns": { "method": "Método", "endpoint": "Endpoint", "auth": "Autenticación" },
+      "status": { "active": "Activa", "disabled": "Deshabilitada" },
+      "auth": { "none": "Sin autenticación", "bearer": "Bearer", "api_key": "API Key", "basic": "Basic" },
+      "actions": { "test": "Probar", "edit": "Editar", "activate": "Activar", "disable": "Deshabilitar", "delete": "Eliminar" },
+      "featureDisabled": {
+        "title": "Herramientas personalizadas no habilitadas",
+        "description": "Esta funcionalidad todavía no está habilitada para tu organización. Contacta a un administrador de la plataforma."
+      },
+      "accessDenied": {
+        "title": "Sin acceso",
+        "description": "No tienes permisos para ver las herramientas personalizadas."
+      },
+      "errors": {
+        "loadTitle": "No fue posible cargar las herramientas",
+        "generic": "Ocurrió un error inesperado. Intenta de nuevo.",
+        "toolInUse": "No se puede eliminar: esta herramienta está vinculada a un agente publicado. Deshabilítala en su lugar.",
+        "credentialNotConfigured": "No se puede activar: falta configurar la credencial de esta herramienta."
+      },
+      "form": {
+        "createTitle": "Nueva herramienta",
+        "editTitle": "Editar herramienta",
+        "subtitle": "Configura el endpoint, los parámetros y la autenticación de esta herramienta HTTP.",
+        "sections": {
+          "identity": "Información",
+          "endpoint": "Endpoint",
+          "schema": "Parámetros",
+          "mapping": "Mapeo",
+          "auth": "Autenticación"
+        },
+        "name": "Nombre",
+        "key": "Clave",
+        "keyHelp": "Debe comenzar con \"custom.\" y usar solo minúsculas, números y guiones bajos.",
+        "description": "Descripción",
+        "method": "Método",
+        "baseUrl": "URL base",
+        "pathTemplate": "Ruta (con parámetros entre llaves, ej. /customers/{document}/balance)",
+        "timeoutMs": "Timeout (ms)",
+        "headers": "Encabezados estáticos (JSON)",
+        "inputSchema": "Esquema de entrada (JSON Schema)",
+        "inputSchemaHelp": "Define los parámetros que el agente puede enviar al invocar esta herramienta.",
+        "mappingHelp": "Cada mapeo asocia un nombre con una ruta de origen: args.<parametro>, context.<campo> o binding.config.<clave>.",
+        "pathMapping": "Mapeo de ruta (JSON)",
+        "queryMapping": "Mapeo de query params (JSON)",
+        "bodyMapping": "Mapeo de body (JSON)",
+        "responseMapping": "Mapeo de respuesta (JSON, ej. { \"saldo\": \"response.billing.balance\" })",
+        "authType": "Tipo de autenticación",
+        "authOptions": { "none": "Sin autenticación", "bearer": "Bearer token", "api_key": "API Key", "basic": "Usuario y contraseña" },
+        "currentCredential": "Credencial actual:",
+        "configured": "configurada",
+        "notConfigured": "sin configurar",
+        "token": "Token",
+        "apiKeyHeaderName": "Nombre del encabezado",
+        "apiKey": "API Key",
+        "username": "Usuario",
+        "password": "Contraseña",
+        "leaveBlankToKeep": "Dejar en blanco para mantener el valor actual",
+        "cancel": "Cancelar",
+        "save": "Guardar",
+        "errors": {
+          "invalidJson": "Uno de los campos JSON no es válido. Revísalo antes de guardar.",
+          "generic": "Ocurrió un error inesperado. Intenta de nuevo.",
+          "tool_not_found": "No se encontró la herramienta.",
+          "tool_credential_not_configured": "Falta configurar la credencial de esta herramienta."
+        }
+      },
+      "test": {
+        "title": "Probar {name}",
+        "subtitle": "Ejecuta la herramienta con argumentos de prueba y revisa el resultado mapeado.",
+        "arguments": "Argumentos (JSON)",
+        "invalidJson": "Los argumentos no son un JSON válido.",
+        "success": "Éxito",
+        "failure": "Error",
+        "statusCode": "HTTP {code}",
+        "latency": "{ms} ms",
+        "close": "Cerrar",
+        "run": "Ejecutar prueba"
+      }
+    },
     "fieldHelp": { "ariaLabel": "Ayuda para {label}", "required": "Obligatorio: Sí", "optional": "Obligatorio: No" },
     "agentBuilder": {
       "newAgent": "Nuevo agente",
@@ -1400,11 +1484,15 @@
         }
       },
       "tools": {
-        "title": "Herramientas disponibles",
+        "title": "Herramientas de plataforma",
         "empty": "No hay herramientas disponibles todavía.",
         "requiresIntegration": "Requiere configurar {integration}.",
         "configureIntegration": "Configurar integración",
-        "integration": { "booking": "Agenda", "whatsapp": "WhatsApp", "crm": "CRM", "chatwoot": "Chatwoot" }
+        "integration": { "booking": "Agenda", "whatsapp": "WhatsApp", "crm": "CRM", "chatwoot": "Chatwoot" },
+        "customTitle": "Herramientas personalizadas",
+        "customEmpty": "No hay herramientas personalizadas activas todavía.",
+        "requiresCredential": "Falta configurar la credencial de esta herramienta.",
+        "configureCredential": "Configurar en Herramientas"
       },
       "voice": {
         "pipelineType": "Arquitectura", "speechToSpeech": "Speech-to-Speech", "ultravox": "Ultravox", "comingSoon": "Próximamente",

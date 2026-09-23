@@ -1,0 +1,6 @@
+MAX_RESPONSE_BYTES = 1_048_576  # 1 MiB
+MAX_TIMEOUT_MS = 15_000
+MIN_TIMEOUT_MS = 1_000
+DEFAULT_TIMEOUT_MS = 8_000
+ALLOWED_CONTENT_TYPES = frozenset({"application/json", "text/plain"})
+ALLOWED_PORTS = frozenset({80, 443})

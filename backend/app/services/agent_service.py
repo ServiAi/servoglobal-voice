@@ -8,17 +8,13 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.domain.tool_registry import (
-    ToolRegistryValidationError,
-    get_tool,
-    list_tools,
-    validate_tool_bindings,
-)
+from app.domain.tool_registry import ToolRegistryValidationError
 from app.domain.voice_registry import (
     VoiceRegistryValidationError,
     validate_model_settings,
     validate_runtime_selection,
 )
+from app.domain.resolved_tool import ResolvedToolDefinition
 from app.models.agents import TenantAgent, TenantAgentVersion
 from app.models.integrations import TenantVoiceAgentConfig
 from app.schemas.agents import (
@@ -33,6 +29,9 @@ from app.schemas.agents import (
 )
 from app.services.integration_event_service import IntegrationEventService
 from app.services.tenant_feature_service import AGENT_BUILDER, TenantFeatureService
+from app.services.tenant_tool_credential_service import TenantToolCredentialService
+from app.services.tool_catalog_service import ToolCatalogService
+from app.services.tool_resolver_service import ToolResolverService
 from app.services.voice_selection_service import VoiceSelectionError, VoiceSelectionService
 
 VERSION_CONSTRAINT = "uq_tenant_agent_versions_agent_version"
@@ -385,28 +384,24 @@ class AgentService:
         )
 
     def tool_catalog(self, tenant_id: str) -> list[dict[str, Any]]:
-        """The platform Tool Registry, annotated per-tenant with whether
-        each available tool's required_integration is actually configured
-        -- drives the Agent Builder's "Herramientas" tab (checkbox +
-        "Requiere configurar X" banner) and lets a tenant see the full
-        catalog, including status="planned" entries, without exposing them
-        as bindable."""
+        """The unified platform + tenant Custom Tools catalog, annotated
+        per-tenant with whether each tool is actually usable -- drives the
+        Agent Builder's "Herramientas" tab (checkbox + "Requiere configurar
+        X" banner) and lets a tenant see the full catalog, including
+        status="planned" platform entries, without exposing them as
+        bindable."""
         self.feature_service.require_enabled(tenant_id, AGENT_BUILDER)
-        entries = []
-        for tool in list_tools():
-            available = tool.status == "available" and self._tool_integration_configured(
-                tenant_id, tool.required_integration
-            )
-            entries.append({
-                "key": tool.key,
-                "name": tool.name,
-                "description": tool.description,
-                "status": tool.status,
-                "required_integration": tool.required_integration,
-                "available": available,
-                "input_schema": tool.input_schema,
-            })
-        return entries
+        return ToolCatalogService(self.db).build_catalog(
+            tenant_id, is_available=lambda resolved: self._resolved_tool_available(tenant_id, resolved)
+        )
+
+    def _resolved_tool_available(self, tenant_id: str, resolved: ResolvedToolDefinition) -> bool:
+        if resolved.source == "platform":
+            return self._tool_integration_configured(tenant_id, resolved.required_integration)
+        assert resolved.custom_tool_id is not None
+        return TenantToolCredentialService(self.db).is_configured_or_not_required(
+            tenant_id, resolved.custom_tool_id
+        )
 
     def list_versions(self, tenant_id: str, agent_id: str) -> list[TenantAgentVersion]:
         agent = self.get_agent(tenant_id, agent_id)
@@ -497,7 +492,7 @@ class AgentService:
             if body.management_mode == "provider_managed":
                 raise AgentValidationError("tools is not configurable for provider_managed agents.")
             try:
-                validate_tool_bindings(body.tools)
+                self._validate_tool_bindings_for_tenant(tenant_id, body.tools)
             except ToolRegistryValidationError as exc:
                 raise AgentValidationError(str(exc)) from exc
             binding["tools"] = [tool.model_dump() for tool in body.tools]
@@ -566,29 +561,56 @@ class AgentService:
         except ValueError as exc:
             raise AgentValidationError(str(exc)) from exc
 
+    def _validate_tool_bindings_for_tenant(self, tenant_id: str, bindings: list[Any]) -> None:
+        """Draft-save-time shape/existence check for tool bindings, tenant-
+        and resolver-aware (unlike app.domain.tool_registry.validate_tool_
+        bindings, which only ever knows the static platform Registry).
+        custom.* keys can only be validated with a DB lookup -- this is why
+        a resolver-based check replaces the pure-registry one here, not just
+        at publish time. Duplicate-key / not-found / not-available all
+        raise the exact same ToolRegistryValidationError codes the platform
+        registry's own validator used, so existing error-code handling
+        (frontend + tests) is unaffected for platform tools.
+        """
+        resolver = ToolResolverService(self.db)
+        seen: set[str] = set()
+        for binding in bindings:
+            key = binding.key
+            if key in seen:
+                raise ToolRegistryValidationError(f"Duplicate tool binding '{key}'.")
+            seen.add(key)
+            resolved = resolver.resolve(tenant_id, key)
+            if resolved is None:
+                raise ToolRegistryValidationError(f"tool_not_found:{key}")
+            if resolved.status != "available":
+                raise ToolRegistryValidationError(f"tool_not_available:{key}")
+
     def _publish_tools_preflight(self, tenant_id: str, draft: TenantAgentVersion) -> None:
         """Cheap, blocking publish-time checks for a serviglobal_managed
         agent's bound tools -- never executes a tool.
 
         For each `enabled` binding: re-confirms it is still a known,
-        available Registry entry (defense in depth -- the Registry could
-        have changed since the draft was last saved) and that the tenant
-        actually has the tool's required_integration configured. Reuses
-        each service's own tenant-scoped config resolution (the same one
-        the real tool execution path in Phase E will use), so this can
-        never approve a tool the runtime would later fail to run.
+        available tool (platform or tenant custom -- resolved through
+        ToolResolverService, the same seam AgentCompilerService and
+        ToolDispatchService use) and that the tenant actually has it
+        configured (required_integration for platform tools, an active
+        credential for custom ones when auth_type != none). Reuses each
+        service's own tenant-scoped config resolution -- the same one the
+        real tool execution path uses -- so this can never approve a tool
+        the runtime would later fail to run.
         """
         bindings = draft.runtime_binding_json.get("tools", [])
+        resolver = ToolResolverService(self.db)
         for binding in bindings:
             if not binding.get("enabled", True):
                 continue
             key = str(binding.get("key") or "")
-            tool = get_tool(key)
-            if tool is None:
+            resolved = resolver.resolve(tenant_id, key)
+            if resolved is None:
                 raise AgentValidationError(f"tool_not_found:{key}")
-            if tool.status != "available":
+            if resolved.status != "available":
                 raise AgentValidationError(f"tool_not_available:{key}")
-            if not self._tool_integration_configured(tenant_id, tool.required_integration):
+            if not self._resolved_tool_available(tenant_id, resolved):
                 raise AgentValidationError("tool_integration_not_configured")
 
     def _tool_integration_configured(self, tenant_id: str, required_integration: str | None) -> bool:
@@ -612,6 +634,14 @@ class AgentService:
                 return True
             except ValueError:
                 return False
+        if required_integration == "crm":
+            # CRM is a first-party, always-on capability -- CrmContactService
+            # / CrmLeadService operate on the tenant's own DB-native CRM
+            # tables and require no external per-tenant integration to
+            # configure, unlike booking/whatsapp. crm.create_lead must never
+            # be reported unavailable for lack of something that doesn't
+            # exist to configure.
+            return True
         return required_integration is None
 
     @staticmethod

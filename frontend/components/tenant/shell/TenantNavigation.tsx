@@ -15,6 +15,7 @@ import {
   RadioTower,
   Settings,
   Users,
+  Wrench,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTranslations } from 'next-intl';
@@ -40,6 +41,7 @@ const GROUPS = [
     label: 'voiceGroup',
     links: [
       { label: 'agents', path: '/voice-ai/agents', icon: Bot },
+      { label: 'tools', path: '/voice-ai/tools', icon: Wrench },
       { label: 'voiceExperiences', path: '/voice-ai/experiences', icon: AudioLines },
       { label: 'voiceCalls', path: '/voice-ai/calls', icon: PhoneCall },
       { label: 'voiceAnalytics', path: '/voice-ai/analytics', icon: BarChart3 },

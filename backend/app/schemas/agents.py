@@ -198,6 +198,7 @@ class AgentToolCatalogEntryResponse(_StrictModel):
     required_integration: Literal["booking", "whatsapp", "crm", "chatwoot"] | None
     available: bool
     input_schema: dict[str, Any]
+    source: Literal["platform", "custom"] = "platform"
 
 
 class AgentResponse(_StrictModel):

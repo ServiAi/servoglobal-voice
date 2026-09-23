@@ -8,6 +8,7 @@ from app.domain.tool_registry import get_tool
 from app.models.voice_sessions import VoiceSession
 from app.schemas.session_context import SessionContextV1
 from app.services.integration_event_service import IntegrationEventService
+from app.services.tool_resolver_service import ToolResolverService
 from app.services.voice_session_service import (
     SessionContextEnrichmentError,
     VoiceSessionError,
@@ -153,6 +154,14 @@ class ToolDispatchService:
         )
         if binding is None or not binding.get("enabled", True):
             raise ToolNotFoundError(tool_key)
+
+        # custom.* tools are dispatched through a dedicated executor
+        # resolved from the DB-backed tenant catalog, never through
+        # _HANDLERS -- everything below this guard is the original,
+        # untouched Platform Tool path.
+        if tool_key.startswith("custom."):
+            return self._invoke_custom(session, tool_key, binding, arguments)
+
         tool = get_tool(tool_key)
         if tool is None or tool.status != "available":
             raise ToolNotAvailableError(tool_key)
@@ -163,6 +172,33 @@ class ToolDispatchService:
         context = SessionContextV1.model_validate(session.session_context_json or {})
         try:
             result = handler(self.db, session.tenant_id, arguments, context, session)
+        except ToolExecutionError:
+            self._record_event(session.tenant_id, session.agent_id, tool_key, status="error")
+            self._record_context_tool_event(session, tool_key, status="error")
+            raise
+        self._record_event(session.tenant_id, session.agent_id, tool_key, status="success")
+        self._record_context_tool_event(session, tool_key, status="success")
+        return result
+
+    def _invoke_custom(
+        self, session: VoiceSession, tool_key: str, binding: dict[str, Any], arguments: dict[str, Any]
+    ) -> dict[str, Any]:
+        from app.services.custom_http_tool_executor import CustomHttpToolExecutor
+
+        row = ToolResolverService(self.db).get_active_custom_tool(session.tenant_id, tool_key)
+        if row is None:
+            raise ToolNotAvailableError(tool_key)
+        tenant_tool, config = row
+        context = SessionContextV1.model_validate(session.session_context_json or {})
+        try:
+            result = CustomHttpToolExecutor(self.db).execute(
+                tenant_id=session.tenant_id,
+                tenant_tool=tenant_tool,
+                config=config,
+                arguments=arguments,
+                context=context,
+                binding_config=binding.get("config") or {},
+            )
         except ToolExecutionError:
             self._record_event(session.tenant_id, session.agent_id, tool_key, status="error")
             self._record_context_tool_event(session, tool_key, status="error")
@@ -190,7 +226,10 @@ class ToolDispatchService:
         if not isinstance(arguments, dict):
             raise ToolArgumentError("Arguments must be an object.")
         properties = input_schema.get("properties", {})
-        for required_key in input_schema.get("required", []):
+        required = input_schema.get("required", [])
+        if not isinstance(properties, dict) or not isinstance(required, list):
+            raise ToolArgumentError("Tool input schema is invalid.")
+        for required_key in required:
             if required_key not in arguments:
                 raise ToolArgumentError(f"Missing required argument '{required_key}'.")
         for key, value in arguments.items():
@@ -198,10 +237,19 @@ class ToolDispatchService:
             if spec is None:
                 raise ToolArgumentError(f"Unknown argument '{key}'.")
             expected = spec.get("type")
-            if expected == "string" and not isinstance(value, str):
-                raise ToolArgumentError(f"Argument '{key}' must be a string.")
-            if expected == "object" and not isinstance(value, dict):
-                raise ToolArgumentError(f"Argument '{key}' must be an object.")
+            matches = {
+                "string": isinstance(value, str),
+                "object": isinstance(value, dict),
+                "array": isinstance(value, list),
+                "integer": isinstance(value, int) and not isinstance(value, bool),
+                "number": isinstance(value, (int, float)) and not isinstance(value, bool),
+                "boolean": isinstance(value, bool),
+                "null": value is None,
+            }.get(expected, False)
+            if not matches:
+                raise ToolArgumentError(f"Argument '{key}' must be of type '{expected}'.")
+            if "enum" in spec and value not in spec["enum"]:
+                raise ToolArgumentError(f"Argument '{key}' is not an allowed value.")
 
     def _record_event(self, tenant_id: str, agent_id: str | None, tool_key: str, *, status: str) -> None:
         # Deliberately logs only the tool key and outcome, never the call

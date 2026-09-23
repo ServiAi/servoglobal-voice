@@ -137,7 +137,7 @@ def get_runtime_session_spec(session_id: str, db: Session = Depends(get_db)) -> 
         session = VoiceSessionService(db).get(session_id)
         if session.status in {"ended", "failed", "cancelled"} or session.agent_id is None or session.agent.status == "archived":
             raise VoiceSessionError("Voice session is terminal.")
-        return AgentCompilerService().compile(
+        return AgentCompilerService(db).compile(
             session.agent, session.agent_version, session_id=session.id,
             context=session.session_context_json,
         )

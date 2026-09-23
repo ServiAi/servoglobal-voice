@@ -279,5 +279,118 @@ class AgentCompilerServiceTests(unittest.TestCase):
             self.assertNotIn(forbidden, dumped)
 
 
+class AgentCompilerCustomToolTests(unittest.TestCase):
+    """compile() resolving a custom.* binding through ToolResolverService --
+    requires a real DB session, unlike the platform-tools-only tests above
+    which construct AgentCompilerService() with no db."""
+
+    def setUp(self) -> None:
+        from app.db.base import Base
+        from app.db.session import SessionLocal, engine
+        from app.models.identity import Tenant
+        from app.models.tools import TenantHttpToolConfig, TenantTool
+        from app.services.tenant_feature_service import CUSTOM_HTTP_TOOLS, TenantFeatureService
+
+        self.engine = engine
+        self.SessionLocal = SessionLocal
+        Base.metadata.drop_all(bind=engine)
+        Base.metadata.create_all(bind=engine)
+        with SessionLocal() as db:
+            tenant = Tenant(name="Tenant A", slug="tenant-a")
+            db.add(tenant)
+            db.commit()
+            db.refresh(tenant)
+            self.tenant_id = tenant.id
+            TenantFeatureService(db).set_feature(
+                self.tenant_id, CUSTOM_HTTP_TOOLS, True, {}, None
+            )
+
+            tool = TenantTool(
+                tenant_id=self.tenant_id,
+                key="custom.customer_balance",
+                name="Consultar saldo",
+                description="Consulta el saldo pendiente del cliente.",
+                status="active",
+            )
+            db.add(tool)
+            db.commit()
+            db.refresh(tool)
+            db.add(
+                TenantHttpToolConfig(
+                    tenant_id=self.tenant_id,
+                    tenant_tool_id=tool.id,
+                    method="GET",
+                    base_url="https://example-api.test",
+                    path_template="/customers/{document}/balance",
+                    headers_json={},
+                    path_mapping_json={"document": "args.document"},
+                    query_mapping_json={},
+                    body_mapping_json={},
+                    input_schema_json={
+                        "type": "object",
+                        "properties": {"document": {"type": "string"}},
+                        "required": ["document"],
+                    },
+                    response_mapping_json={},
+                )
+            )
+            db.commit()
+
+    def tearDown(self) -> None:
+        from app.db.base import Base
+
+        Base.metadata.drop_all(bind=self.engine)
+
+    def test_compiles_custom_tool_binding_without_leaking_http_config(self) -> None:
+        agent = _agent(tenant_id=self.tenant_id)
+        version = _published_version(
+            tenant_id=self.tenant_id,
+            runtime_binding_json={
+                "pipeline_type": "realtime",
+                "realtime": {"provider": "ultravox", "model": "ultravox"},
+                "tools": [{"key": "custom.customer_balance", "enabled": True, "config": {}}],
+            },
+        )
+        with self.SessionLocal() as db:
+            spec = AgentCompilerService(db).compile(agent, version)
+
+        self.assertEqual(len(spec.tools), 1)
+        compiled = spec.tools[0]
+        self.assertEqual(compiled.key, "custom.customer_balance")
+        self.assertEqual(compiled.name, "Consultar saldo")
+        dumped = spec.model_dump_json()
+        self.assertNotIn("example-api.test", dumped)
+        self.assertNotIn("base_url", dumped)
+        self.assertNotIn("path_template", dumped)
+        self.assertNotIn("credential", dumped)
+
+    def test_disabled_custom_tool_is_skipped_not_raised(self) -> None:
+        agent = _agent(tenant_id=self.tenant_id)
+        version = _published_version(
+            tenant_id=self.tenant_id,
+            runtime_binding_json={
+                "pipeline_type": "realtime",
+                "realtime": {"provider": "ultravox", "model": "ultravox"},
+                "tools": [{"key": "custom.does_not_exist", "enabled": True, "config": {}}],
+            },
+        )
+        with self.SessionLocal() as db:
+            spec = AgentCompilerService(db).compile(agent, version)
+        self.assertEqual(spec.tools, [])
+
+    def test_no_db_falls_back_to_platform_only_and_skips_custom_key(self) -> None:
+        agent = _agent(tenant_id=self.tenant_id)
+        version = _published_version(
+            tenant_id=self.tenant_id,
+            runtime_binding_json={
+                "pipeline_type": "realtime",
+                "realtime": {"provider": "ultravox", "model": "ultravox"},
+                "tools": [{"key": "custom.customer_balance", "enabled": True, "config": {}}],
+            },
+        )
+        spec = AgentCompilerService().compile(agent, version)
+        self.assertEqual(spec.tools, [])
+
+
 if __name__ == "__main__":
     unittest.main()

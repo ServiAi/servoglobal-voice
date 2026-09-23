@@ -699,6 +699,7 @@
       "performance": "Performance",
       "voiceGroup": "Voice AI",
       "agents": "Agents",
+      "tools": "Tools",
       "voiceExperiences": "Voice experiences",
       "voiceCalls": "Calls",
       "voiceAnalytics": "Analytics",
@@ -1280,6 +1281,89 @@
         "defaultValue": "Default value"
       }
     },
+    "tools": {
+      "title": "Custom tools",
+      "description": "Create HTTP tools your voice agents can call to look up or update external systems.",
+      "new": "New tool",
+      "empty": "No custom tools yet.",
+      "columns": { "method": "Method", "endpoint": "Endpoint", "auth": "Authentication" },
+      "status": { "active": "Active", "disabled": "Disabled" },
+      "auth": { "none": "No authentication", "bearer": "Bearer", "api_key": "API Key", "basic": "Basic" },
+      "actions": { "test": "Test", "edit": "Edit", "activate": "Activate", "disable": "Disable", "delete": "Delete" },
+      "featureDisabled": {
+        "title": "Custom tools not enabled",
+        "description": "This feature isn't enabled for your organization yet. Contact a platform administrator."
+      },
+      "accessDenied": {
+        "title": "No access",
+        "description": "You don't have permission to view custom tools."
+      },
+      "errors": {
+        "loadTitle": "Couldn't load tools",
+        "generic": "Something went wrong. Please try again.",
+        "toolInUse": "Can't delete: this tool is bound to a published agent. Disable it instead.",
+        "credentialNotConfigured": "Can't activate: this tool's credential isn't configured yet."
+      },
+      "form": {
+        "createTitle": "New tool",
+        "editTitle": "Edit tool",
+        "subtitle": "Configure the endpoint, parameters and authentication for this HTTP tool.",
+        "sections": {
+          "identity": "Information",
+          "endpoint": "Endpoint",
+          "schema": "Parameters",
+          "mapping": "Mapping",
+          "auth": "Authentication"
+        },
+        "name": "Name",
+        "key": "Key",
+        "keyHelp": "Must start with \"custom.\" and use only lowercase letters, numbers and underscores.",
+        "description": "Description",
+        "method": "Method",
+        "baseUrl": "Base URL",
+        "pathTemplate": "Path (with placeholders in braces, e.g. /customers/{document}/balance)",
+        "timeoutMs": "Timeout (ms)",
+        "headers": "Static headers (JSON)",
+        "inputSchema": "Input schema (JSON Schema)",
+        "inputSchemaHelp": "Defines the parameters the agent can send when calling this tool.",
+        "mappingHelp": "Each mapping pairs a name with a source path: args.<param>, context.<field>, or binding.config.<key>.",
+        "pathMapping": "Path mapping (JSON)",
+        "queryMapping": "Query params mapping (JSON)",
+        "bodyMapping": "Body mapping (JSON)",
+        "responseMapping": "Response mapping (JSON, e.g. { \"balance\": \"response.billing.balance\" })",
+        "authType": "Authentication type",
+        "authOptions": { "none": "No authentication", "bearer": "Bearer token", "api_key": "API Key", "basic": "Username and password" },
+        "currentCredential": "Current credential:",
+        "configured": "configured",
+        "notConfigured": "not configured",
+        "token": "Token",
+        "apiKeyHeaderName": "Header name",
+        "apiKey": "API Key",
+        "username": "Username",
+        "password": "Password",
+        "leaveBlankToKeep": "Leave blank to keep the current value",
+        "cancel": "Cancel",
+        "save": "Save",
+        "errors": {
+          "invalidJson": "One of the JSON fields is invalid. Please check it before saving.",
+          "generic": "Something went wrong. Please try again.",
+          "tool_not_found": "Tool not found.",
+          "tool_credential_not_configured": "This tool's credential isn't configured yet."
+        }
+      },
+      "test": {
+        "title": "Test {name}",
+        "subtitle": "Run the tool with test arguments and review the mapped result.",
+        "arguments": "Arguments (JSON)",
+        "invalidJson": "Arguments must be valid JSON.",
+        "success": "Success",
+        "failure": "Error",
+        "statusCode": "HTTP {code}",
+        "latency": "{ms} ms",
+        "close": "Close",
+        "run": "Run test"
+      }
+    },
     "fieldHelp": { "ariaLabel": "Help for {label}", "required": "Required: Yes", "optional": "Required: No" },
     "agentBuilder": {
       "newAgent": "New agent",
@@ -1400,11 +1484,15 @@
         }
       },
       "tools": {
-        "title": "Available tools",
+        "title": "Platform tools",
         "empty": "No tools are available yet.",
         "requiresIntegration": "Requires configuring {integration}.",
         "configureIntegration": "Configure integration",
-        "integration": { "booking": "Scheduling", "whatsapp": "WhatsApp", "crm": "CRM", "chatwoot": "Chatwoot" }
+        "integration": { "booking": "Scheduling", "whatsapp": "WhatsApp", "crm": "CRM", "chatwoot": "Chatwoot" },
+        "customTitle": "Custom tools",
+        "customEmpty": "No active custom tools yet.",
+        "requiresCredential": "This tool's credential isn't configured yet.",
+        "configureCredential": "Configure in Tools"
       },
       "voice": {
         "pipelineType": "Architecture", "speechToSpeech": "Speech-to-Speech", "ultravox": "Ultravox", "comingSoon": "Coming soon",

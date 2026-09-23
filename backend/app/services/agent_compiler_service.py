@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from pydantic import ValidationError
+from sqlalchemy.orm import Session
 
+from app.domain.resolved_tool import ResolvedToolDefinition, from_platform
 from app.domain.tool_registry import get_tool
 from app.domain.voice_registry import VoiceRegistryValidationError, resolve_execution_model_id
 from app.models.agents import TenantAgent, TenantAgentVersion
@@ -21,7 +23,15 @@ class AgentCompilerService:
     voice-runtime/src/serviglobal_voice_runtime/providers.py for the
     per-provider execution adapters, and .../credentials.py for the
     per-VoiceSession credential resolver).
+
+    `db` is optional and only needed to resolve custom.* tool bindings
+    (via ToolResolverService) -- platform tool bindings resolve from the
+    static Registry either way, so callers that never bind custom tools
+    (and existing tests) can keep constructing this with no arguments.
     """
+
+    def __init__(self, db: Session | None = None) -> None:
+        self.db = db
 
     def compile(
         self,
@@ -87,12 +97,12 @@ class AgentCompilerService:
         for binding in runtime_binding.pop("tools", []) or []:
             if not isinstance(binding, dict) or not binding.get("enabled", True):
                 continue
-            tool = get_tool(str(binding.get("key") or ""))
-            if tool is None or tool.status != "available":
+            resolved = self._resolve_tool(agent.tenant_id, str(binding.get("key") or ""))
+            if resolved is None or resolved.status != "available":
                 continue
             compiled_tools.append({
-                "key": tool.key, "name": tool.name,
-                "description": tool.description, "input_schema": tool.input_schema,
+                "key": resolved.key, "name": resolved.name,
+                "description": resolved.description, "input_schema": resolved.input_schema,
             })
 
         try:
@@ -129,6 +139,16 @@ class AgentCompilerService:
             agent, agent.published_version, context=context, session_id=session_id
         )
 
+    def _resolve_tool(self, tenant_id: str, key: str) -> ResolvedToolDefinition | None:
+        if self.db is not None:
+            from app.services.tool_resolver_service import ToolResolverService
+
+            return ToolResolverService(self.db).resolve(tenant_id, key)
+        if key.startswith("custom."):
+            return None
+        tool = get_tool(key)
+        return from_platform(tool) if tool is not None else None
+
     @staticmethod
     def _validate_relationship(agent: TenantAgent, version: TenantAgentVersion) -> None:
         if version.agent_id != agent.id:
@@ -141,13 +161,16 @@ def compile_runtime_session_spec(
     agent: TenantAgent,
     version: TenantAgentVersion,
     *,
+    db: Session | None = None,
     context: dict | None = None,
     session_id: str | None = None,
     allow_draft: bool = False,
 ) -> RuntimeSessionSpecV1:
     """Module-level convenience wrapper around AgentCompilerService.compile,
-    kept for callers that don't need to hold a service instance."""
-    return AgentCompilerService().compile(
+    kept for callers that don't need to hold a service instance. Pass `db`
+    to resolve custom.* tool bindings; omit it for platform-tools-only use
+    (existing callers/tests are unaffected)."""
+    return AgentCompilerService(db).compile(
         agent,
         version,
         context=context,
