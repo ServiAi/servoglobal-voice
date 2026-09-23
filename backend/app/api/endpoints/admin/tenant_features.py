@@ -15,6 +15,7 @@ from app.schemas.tenant_features import (
 )
 from app.services.tenant_feature_service import (
     AGENT_BUILDER,
+    CUSTOM_HTTP_TOOLS,
     TenantFeatureService,
     TenantFeatureTenantNotFoundError,
     VOICE_EXPERIENCES,
@@ -85,6 +86,29 @@ def set_agent_builder_feature(
         grant = TenantFeatureService(db).set_feature(
             tenant_id=tenant_id,
             feature_key=AGENT_BUILDER,
+            enabled=body.enabled,
+            limits={},
+            enabled_by_user_id=user.id,
+        )
+    except TenantFeatureTenantNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return _response(grant)
+
+
+@router.put(
+    "/{tenant_id}/features/custom-http-tools-v1",
+    response_model=TenantFeatureResponse,
+)
+def set_custom_http_tools_feature(
+    tenant_id: str,
+    body: AgentBuilderFeatureUpdate,
+    user: User = Depends(get_current_internal_user),
+    db: Session = Depends(get_db),
+) -> TenantFeatureResponse:
+    try:
+        grant = TenantFeatureService(db).set_feature(
+            tenant_id=tenant_id,
+            feature_key=CUSTOM_HTTP_TOOLS,
             enabled=body.enabled,
             limits={},
             enabled_by_user_id=user.id,

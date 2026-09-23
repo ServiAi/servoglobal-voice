@@ -184,6 +184,19 @@ export function fetchTenantFeatures(
   );
 }
 
+export function setCustomHttpToolsFeature(
+  tenantId: string,
+  enabled: boolean
+): Promise<FetchResult<TenantFeatureGrant>> {
+  return localAdminFetch<TenantFeatureGrant>(
+    `/api/admin/tenants/${encodeURIComponent(tenantId)}/features/custom-http-tools-v1`,
+    {
+      method: 'PUT',
+      body: JSON.stringify({ enabled }),
+    }
+  );
+}
+
 export function setAgentBuilderFeature(
   tenantId: string,
   enabled: boolean

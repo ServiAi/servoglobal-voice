@@ -21,6 +21,7 @@ import {
   ArrowLeft,
   Settings,
   KeyRound,
+  Wrench,
 } from 'lucide-react';
 import { CircularLoader, CircularLoadingState } from '@/components/ui/circular-loader';
 
@@ -37,6 +38,7 @@ import {
   fetchTenantDetail,
   sendMembershipPasswordReset,
   setAgentBuilderFeature,
+  setCustomHttpToolsFeature,
   updateTenant,
   updateTenantPlan,
 } from '@/lib/api/admin-tenants-client';
@@ -138,6 +140,9 @@ export function TenantDetailClient({
   const [agentBuilderSaving, setAgentBuilderSaving] = useState(false);
   const agentBuilderEnabled =
     features.find((f) => f.feature_key === 'agent_builder_v2')?.enabled ?? false;
+  const [customToolsSaving, setCustomToolsSaving] = useState(false);
+  const customToolsEnabled =
+    features.find((f) => f.feature_key === 'custom_http_tools_v1')?.enabled ?? false;
 
   // Edit state
   const [editing, setEditing] = useState(false);
@@ -243,6 +248,21 @@ export function TenantDetailClient({
     if (result.ok) {
       setFeatures((prev) => {
         const next = prev.filter((f) => f.feature_key !== 'agent_builder_v2');
+        return [...next, result.data];
+      });
+    } else if (!redirectOnAccessFailure(result.status)) {
+      setError(result.detail);
+    }
+  };
+
+  const handleToggleCustomTools = async (enabled: boolean) => {
+    setCustomToolsSaving(true);
+    setError(null);
+    const result = await setCustomHttpToolsFeature(tenantId, enabled);
+    setCustomToolsSaving(false);
+    if (result.ok) {
+      setFeatures((prev) => {
+        const next = prev.filter((f) => f.feature_key !== 'custom_http_tools_v1');
         return [...next, result.data];
       });
     } else if (!redirectOnAccessFailure(result.status)) {
@@ -627,6 +647,23 @@ export function TenantDetailClient({
           enabled={agentBuilderEnabled}
           saving={agentBuilderSaving}
           onToggle={handleToggleAgentBuilder}
+        />
+      </div>
+      <div className="mt-6">
+        <AgentBuilderFeatureToggle
+          enabled={customToolsEnabled}
+          saving={customToolsSaving}
+          onToggle={handleToggleCustomTools}
+          title="Herramientas personalizadas"
+          icon={<Wrench className="h-5 w-5" />}
+          description={
+            <>
+              Habilita la sección &quot;Herramientas&quot; en{' '}
+              <code className="rounded bg-zinc-100 px-1 py-0.5 dark:bg-zinc-800">/voice-ai/tools</code>{' '}
+              para este tenant: crear herramientas HTTP que sus agentes pueden invocar. Requiere Agent Builder
+              habilitado para asignarlas a un agente.
+            </>
+          }
         />
       </div>
 

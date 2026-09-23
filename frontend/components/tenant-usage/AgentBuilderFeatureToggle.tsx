@@ -1,5 +1,6 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import { Bot } from 'lucide-react';
 import { CircularLoader } from '@/components/ui/circular-loader';
 
@@ -7,27 +8,38 @@ type AgentBuilderFeatureToggleProps = {
   enabled: boolean;
   saving: boolean;
   onToggle: (enabled: boolean) => void;
+  title?: string;
+  description?: ReactNode;
+  icon?: ReactNode;
 };
 
 export function AgentBuilderFeatureToggle({
   enabled,
   saving,
   onToggle,
+  title = 'Agent Builder',
+  description = (
+    <>
+      Habilita la sección &quot;Agentes&quot; en{' '}
+      <code className="rounded bg-zinc-100 px-1 py-0.5 dark:bg-zinc-800">/voice-ai/agents</code> para
+      este tenant: crear, editar, publicar y versionar agentes propios.
+    </>
+  ),
+  icon = <Bot className="h-5 w-5" />,
 }: AgentBuilderFeatureToggleProps) {
   return (
     <section className="rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-700 dark:bg-zinc-900">
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-start gap-3">
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-cyan-500/10 text-cyan-600 dark:text-cyan-400">
-            <Bot className="h-5 w-5" />
+            {icon}
           </span>
           <div>
             <h2 className="text-lg font-medium text-zinc-900 dark:text-zinc-100">
-              Agent Builder
+              {title}
             </h2>
             <p className="mt-1 max-w-md text-sm text-zinc-500 dark:text-zinc-400">
-              Habilita la sección &quot;Agentes&quot; en <code className="rounded bg-zinc-100 px-1 py-0.5 dark:bg-zinc-800">/voice-ai/agents</code> para
-              este tenant: crear, editar, publicar y versionar agentes propios.
+              {description}
             </p>
           </div>
         </div>
@@ -35,7 +47,7 @@ export function AgentBuilderFeatureToggle({
           type="button"
           role="switch"
           aria-checked={enabled}
-          aria-label="Agent Builder"
+          aria-label={title}
           disabled={saving}
           onClick={() => onToggle(!enabled)}
           className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition disabled:cursor-not-allowed disabled:opacity-60 ${
