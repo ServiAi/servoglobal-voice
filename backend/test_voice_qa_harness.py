@@ -8,6 +8,7 @@ from app.models.agents import TenantAgent, TenantAgentVersion
 from app.models.crm import CrmVoiceCall
 from app.models.integrations import TenantSipRoute
 from app.models.voice_sessions import VoiceSession
+from app.services.tool_dispatch_service import ToolDispatchService, ToolExecutionError
 from app.services.voice_session_service import VoiceSessionService
 from app.services.voice_session_sip_service import VoiceSessionSipService
 from app.services.tenant_feature_service import TenantFeatureService, VOICE_RUNTIME_V2
@@ -15,7 +16,7 @@ from test_outbound_voice_call_service import FakeSip, ReadyBackend
 
 
 class VoiceQaHarnessTests(Integration2ATestCase):
-    def _agent(self, tenant_id: str | None = None) -> str:
+    def _agent(self, tenant_id: str | None = None, tools: list[dict] | None = None) -> str:
         tenant_id = tenant_id or self.tenant.id
         with SessionLocal() as db:
             agent = TenantAgent(tenant_id=tenant_id, name="QA agent", status="draft")
@@ -34,6 +35,7 @@ class VoiceQaHarnessTests(Integration2ATestCase):
                 runtime_binding_json={
                     "pipeline_type": "realtime",
                     "realtime": {"provider": "ultravox", "model": "fixie-ai/ultravox"},
+                    "tools": tools or [],
                 },
             )
             db.add(version)
@@ -157,6 +159,142 @@ class VoiceQaHarnessTests(Integration2ATestCase):
             self.assertEqual(session.session_context_json["lead"]["id"], lead_id)
             self.assertEqual(session.session_context_json["contact"]["id"], contact_id)
             self.assertEqual(session.session_context_json["variables"], {"scenario": "existing_lead"})
+
+    def test_webrtc_conversation_starts_without_preloaded_context(self) -> None:
+        agent_id = self._agent()
+        with SessionLocal() as db:
+            TenantFeatureService(db).set_feature(
+                self.tenant.id, VOICE_RUNTIME_V2, True, {}, self.user.id
+            )
+        with patch(
+            "app.api.endpoints.voice_runtime.VoiceRuntimeDispatcher.dispatch",
+            new_callable=AsyncMock,
+            side_effect=lambda session: session,
+        ):
+            response = self.client.post(
+                "/api/v1/voice/sessions",
+                json={
+                    "agent_id": agent_id,
+                    "channel": "webrtc",
+                    "direction": "internal",
+                    "purpose": "qa",
+                    "qa_context_mode": "conversation",
+                },
+            )
+        self.assertEqual(response.status_code, 201, response.text)
+        with SessionLocal() as db:
+            context = db.get(VoiceSession, response.json()["id"]).session_context_json
+            self.assertIsNone(context["caller"])
+            self.assertIsNone(context["contact"])
+            self.assertIsNone(context["lead"])
+            self.assertEqual(context["variables"], {})
+
+    def test_sip_conversation_uses_destination_as_transport_identity_only(self) -> None:
+        agent_id = self._agent()
+        with SessionLocal() as db:
+            TenantFeatureService(db).set_feature(
+                self.tenant.id, VOICE_RUNTIME_V2, True, {}, self.user.id
+            )
+        with patch(
+            "app.api.endpoints.voice_runtime.VoiceSessionSipService.dial",
+            new_callable=AsyncMock,
+            side_effect=lambda session, _to_phone: session,
+        ):
+            response = self.client.post(
+                "/api/v1/voice/sessions",
+                json={
+                    "agent_id": agent_id,
+                    "channel": "sip",
+                    "direction": "outbound",
+                    "purpose": "qa",
+                    "qa_context_mode": "conversation",
+                    "to_phone": "+573001234567",
+                },
+            )
+        self.assertEqual(response.status_code, 201, response.text)
+        with SessionLocal() as db:
+            context = db.get(VoiceSession, response.json()["id"]).session_context_json
+            self.assertEqual(context["caller"]["phone"], "+573001234567")
+            self.assertIsNone(context["contact"])
+            self.assertIsNone(context["lead"])
+            self.assertEqual(context["variables"], {})
+
+    def test_conversation_rejects_preloaded_business_context(self) -> None:
+        agent_id = self._agent()
+        invalid_fields = (
+            {"lead_id": "lead-id"},
+            {"contact_id": "contact-id"},
+            {"variables": {"campaign": "qa"}},
+            {"caller_phone": "+573001112233"},
+        )
+        for extra in invalid_fields:
+            with self.subTest(extra=extra):
+                response = self.client.post(
+                    "/api/v1/voice/sessions",
+                    json={
+                        "agent_id": agent_id,
+                        "channel": "webrtc",
+                        "direction": "internal",
+                        "purpose": "qa",
+                        "qa_context_mode": "conversation",
+                        **extra,
+                    },
+                )
+                self.assertEqual(response.status_code, 422, response.text)
+                self.assertIn("qa_conversation_context_must_be_empty", response.text)
+
+    def test_sip_conversation_create_lead_enriches_context_from_transport_caller(self) -> None:
+        agent_id = self._agent(tools=[{"key": "crm.create_lead", "enabled": True}])
+        with SessionLocal() as db:
+            session = VoiceSessionService(db).create(
+                self.tenant.id,
+                agent_id,
+                channel="sip",
+                direction="outbound",
+                purpose="qa",
+                qa_context_mode="conversation",
+                caller_phone="+573001234567",
+            )
+            result = ToolDispatchService(db).invoke(
+                session.id, "crm.create_lead", {"name": "QA Conversacional", "email": "qa@example.com"}
+            )
+            db.refresh(session)
+            self.assertEqual(session.session_context_json["caller"]["phone"], "+573001234567")
+            self.assertEqual(session.session_context_json["contact"]["id"], result["contact_id"])
+            self.assertEqual(session.session_context_json["lead"]["id"], result["lead_id"])
+
+    def test_webrtc_conversation_create_lead_still_requires_trusted_caller(self) -> None:
+        agent_id = self._agent(tools=[{"key": "crm.create_lead", "enabled": True}])
+        with SessionLocal() as db:
+            session = VoiceSessionService(db).create(
+                self.tenant.id,
+                agent_id,
+                channel="webrtc",
+                direction="internal",
+                purpose="qa",
+                qa_context_mode="conversation",
+            )
+            with self.assertRaisesRegex(ToolExecutionError, "caller_phone_required"):
+                ToolDispatchService(db).invoke(session.id, "crm.create_lead", {"name": "QA"})
+
+    def test_conversation_booking_still_requires_resolved_lead(self) -> None:
+        agent_id = self._agent(tools=[{"key": "calendar.create_booking", "enabled": True}])
+        with SessionLocal() as db:
+            session = VoiceSessionService(db).create(
+                self.tenant.id,
+                agent_id,
+                channel="sip",
+                direction="outbound",
+                purpose="qa",
+                qa_context_mode="conversation",
+                caller_phone="+573001234567",
+            )
+            with self.assertRaisesRegex(ToolExecutionError, "lead_context_required"):
+                ToolDispatchService(db).invoke(
+                    session.id,
+                    "calendar.create_booking",
+                    {"start": "2026-09-24T10:00:00-05:00"},
+                )
 
     def test_sip_qa_dials_without_creating_crm_voice_call(self) -> None:
         self._route()

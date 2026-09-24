@@ -194,10 +194,10 @@ Los endpoints administrativos bajo `/api/v1/voice` siguen autenticados. La super
 
 | Método y ruta | Contrato |
 |---|---|
-| `POST /api/v1/voice/sessions` | Autenticado. Crea WebRTC QA con `purpose=qa`, `channel=webrtc`, `direction=internal`, o SIP QA con `channel=sip`, `direction=outbound` y `to_phone`. Admite `caller_phone`, `contact_id`, `lead_id` y `variables`; nunca `tenant_id`. |
+| `POST /api/v1/voice/sessions` | Autenticado. Crea WebRTC QA con `purpose=qa`, `channel=webrtc`, `direction=internal`, o SIP QA con `channel=sip`, `direction=outbound` y `to_phone`. `qa_context_mode=preloaded` (default compatible) admite `caller_phone`, `contact_id`, `lead_id` y `variables`; `qa_context_mode=conversation` los rechaza con `422 qa_conversation_context_must_be_empty`. Nunca acepta `tenant_id`. |
 | `GET /api/v1/voice/sessions/{session_id}/events` | Autenticado y tenant-scoped. Devuelve metadata de sesión, contexto seguro y eventos con payload allowlisted; una sesión de otro tenant responde `404`. |
 
-`calendar.create_booking` continúa obteniendo el lead únicamente de `VoiceSession.session_context_json`; ningún contrato de tool acepta `lead_id` del LLM.
+En SIP QA conversacional, `to_phone` sigue siendo identidad de transporte y el backend lo deriva como `SessionContextV1.caller.phone`; Contact, Lead y variables comienzan vacíos. En WebRTC conversacional, caller también comienza vacío. `calendar.create_booking` continúa obteniendo el lead únicamente de `VoiceSession.session_context_json`; ningún contrato de tool acepta `lead_id` del LLM.
 
 ## Convenciones
 

@@ -136,8 +136,11 @@ export type VoiceSessionResponse = {
   livekit_room_name: string | null;
 };
 
+export type QaContextMode = 'preloaded' | 'conversation';
+
 export type VoiceQaSessionInput = {
   transport: 'webrtc' | 'sip';
+  context_mode: QaContextMode;
   caller_phone?: string;
   contact_id?: string;
   lead_id?: string;
@@ -176,20 +179,22 @@ export type WebRTCParticipantTokenResponse = {
 export async function createVoiceTestSessionAction(
   agentId: string,
   idempotencyKey: string,
-  input: VoiceQaSessionInput = { transport: 'webrtc' }
+  input: VoiceQaSessionInput = { transport: 'webrtc', context_mode: 'preloaded' }
 ): Promise<FetchResult<VoiceSessionResponse>> {
+  const hasPreloadedContext = input.context_mode === 'preloaded';
   return withAccessToken((token) =>
     requestVoiceEndpoint<VoiceSessionResponse>('POST', 'sessions', token, undefined, {
       agent_id: agentId,
       channel: input.transport,
       direction: input.transport === 'sip' ? 'outbound' : 'internal',
       purpose: 'qa',
+      qa_context_mode: input.context_mode,
       idempotency_key: idempotencyKey,
-      caller_phone: input.caller_phone || undefined,
-      contact_id: input.contact_id || undefined,
-      lead_id: input.lead_id || undefined,
+      caller_phone: hasPreloadedContext ? input.caller_phone || undefined : undefined,
+      contact_id: hasPreloadedContext ? input.contact_id || undefined : undefined,
+      lead_id: hasPreloadedContext ? input.lead_id || undefined : undefined,
       to_phone: input.transport === 'sip' ? input.to_phone : undefined,
-      variables: input.variables ?? {},
+      variables: hasPreloadedContext ? input.variables ?? {} : undefined,
     })
   );
 }

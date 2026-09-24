@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class VoiceSessionCreateRequest(BaseModel):
@@ -12,6 +12,7 @@ class VoiceSessionCreateRequest(BaseModel):
     channel: Literal["webrtc", "sip", "internal_test"] = "internal_test"
     direction: Literal["internal", "outbound"] = "internal"
     purpose: Literal["production", "qa"] = "production"
+    qa_context_mode: Literal["preloaded", "conversation"] = "preloaded"
     idempotency_key: str | None = Field(default=None, min_length=1, max_length=160)
     # Optional, trusted only because this endpoint requires WRITE_ROLES
     # authentication -- never a bare pass-through of unauthenticated or
@@ -25,6 +26,14 @@ class VoiceSessionCreateRequest(BaseModel):
     caller_phone: str | None = Field(default=None, min_length=1, max_length=32)
     variables: dict = Field(default_factory=dict)
     to_phone: str | None = Field(default=None, min_length=1, max_length=32)
+
+    @model_validator(mode="after")
+    def validate_qa_context(self) -> "VoiceSessionCreateRequest":
+        if self.purpose == "qa" and self.qa_context_mode == "conversation" and (
+            self.caller_phone or self.contact_id or self.lead_id or self.variables
+        ):
+            raise ValueError("qa_conversation_context_must_be_empty")
+        return self
 
 
 class WebRTCParticipantTokenResponse(BaseModel):

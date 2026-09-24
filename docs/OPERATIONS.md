@@ -258,10 +258,11 @@ Los previews de catálogo Ultravox y TTS externo ElevenLabs pueden resolver a WA
 
 Estas pruebas pueden generar efectos reales. Use un tenant y destinos autorizados; compruebe antes ruta SIP, provider y tools publicados.
 
-- [ ] WebRTC con lead existente: ejecutar `calendar.check_availability` → `calendar.create_booking` → `whatsapp.send_message`; confirmar transcript, duración y resumen seguro de cada tool.
-- [ ] WebRTC con caller sin lead: ejecutar `crm.create_lead` y luego booking; confirmar `session.context.enriched` y que booking usa el lead resuelto, no un ID del LLM.
-- [ ] WebRTC sin contexto: intentar booking y confirmar `lead_context_required` como error de tool, sin fallo genérico de la consola.
-- [ ] SIP QA con lead existente: llamar a un número autorizado y repetir availability → booking → WhatsApp; confirmar misma versión/provider/runtime y ausencia de `CrmVoiceCall` para la sesión QA.
+- [ ] WebRTC + contexto precargado: seleccionar un lead existente y ejecutar `calendar.check_availability` → `calendar.create_booking` → `whatsapp.send_message`; confirmar transcript, duración y resumen seguro de cada tool.
+- [ ] SIP + contexto precargado: llamar a un número autorizado y repetir availability → booking → WhatsApp; confirmar misma versión/provider/runtime y ausencia de `CrmVoiceCall` para la sesión QA.
+- [ ] WebRTC + sin contexto: confirmar caller/Contact/Lead/variables vacíos; intentar `crm.create_lead` y verificar `caller_phone_required`, e intentar booking para verificar `lead_context_required`, ambos como errores de tool visibles en consola.
+- [ ] SIP + sin contexto: confirmar caller enmascarado derivado del número marcado y Contact/Lead vacíos; recopilar nombre/email, ejecutar `crm.create_lead` y confirmar `session.context.enriched`; después ejecutar availability → booking → WhatsApp sin que el LLM suministre IDs CRM.
+- [ ] Alternar de nuevo a contexto precargado y confirmar que los valores anteriores del formulario siguen disponibles.
 
 La cobertura local/mocked no demuestra audio bidireccional, LiveKit real, carrier SIP, Ultravox real ni efectos externos. Registre esas evidencias por separado después del despliegue controlado.
 

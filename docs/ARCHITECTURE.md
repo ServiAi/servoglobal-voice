@@ -136,7 +136,7 @@ El evaluador admite composición `all`/`any` y rutas seguras sobre diccionarios;
 
 ### QA de Agent Builder
 
-`VoiceSession.purpose` separa `production` de `qa` sin sobrecargar `channel`. WebRTC QA reutiliza `VoiceRuntimeDispatcher`, token LiveKit y el adaptador web. SIP QA y `OutboundVoiceCallService` reutilizan `VoiceSessionSipService` para ruta tenant, dispatch, espera de `voice.agent.ready` y participante SIP; sólo el flujo productivo crea `CrmVoiceCall`. La consola lee `VoiceSessionEvent` mediante un DTO allowlisted y nunca recibe argumentos o resultados completos de tools.
+`VoiceSession.purpose` separa `production` de `qa` sin sobrecargar `channel`; `qa_context_mode` es una dimensión de request independiente del transporte y conserva `preloaded` como default compatible. El modo `conversation` rechaza contexto CRM suministrado por el cliente. WebRTC inicia sin caller; SIP deriva el caller exclusivamente de `to_phone`, que es identidad confiable del transporte, y mantiene Contact/Lead/variables vacíos hasta un enriquecimiento monotónico real. WebRTC QA reutiliza `VoiceRuntimeDispatcher`, token LiveKit y el adaptador web. SIP QA y `OutboundVoiceCallService` reutilizan `VoiceSessionSipService` para ruta tenant, dispatch, espera de `voice.agent.ready` y participante SIP; sólo el flujo productivo crea `CrmVoiceCall`. La consola lee `VoiceSessionEvent` mediante un DTO allowlisted y nunca recibe argumentos o resultados completos de tools.
 
 ## Principios de cambio
 
