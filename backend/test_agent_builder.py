@@ -237,6 +237,28 @@ class AgentBuilderTests(Integration2ATestCase):
             ))
             db.commit()
 
+    @staticmethod
+    def _create_approved_whatsapp_template(tenant_id: str, *, template_key: str = "booking_confirmation") -> None:
+        from app.models.integrations import TenantWhatsAppTemplate
+
+        with SessionLocal() as db:
+            db.add(TenantWhatsAppTemplate(
+                tenant_id=tenant_id, template_key=template_key, provider_template_name=template_key,
+                name=template_key, category="utility", language="es", body="Hola, tu cita es {{appointment_date}}.",
+                status="approved", source="tenant_authored", parameter_format="NAMED",
+                components_json={"variable_keys": ["appointment_date"]},
+            ))
+            db.commit()
+
+    @staticmethod
+    def _whatsapp_v2_config(*, template_key: str = "booking_confirmation") -> dict:
+        return {
+            "contract_version": 2,
+            "template_key": template_key,
+            "recipient": {"strategy": "contact_then_caller"},
+            "variables": {"appointment_date": {"source": "llm", "type": "string", "description": "Fecha"}},
+        }
+
     def test_create_persists_enabled_tool_binding(self) -> None:
         self._enable_feature()
         response = self._create(tools=[{"key": "calendar.check_availability", "enabled": True, "config": {}}])
@@ -284,7 +306,10 @@ class AgentBuilderTests(Integration2ATestCase):
 
     def test_publish_blocks_when_tool_integration_not_configured(self) -> None:
         self._enable_feature()
-        agent_id = self._create(tools=[{"key": "whatsapp.send_message", "enabled": True, "config": {}}]).json()["id"]
+        self._create_approved_whatsapp_template(self.tenant.id)
+        agent_id = self._create(
+            tools=[{"key": "whatsapp.send_message", "enabled": True, "config": self._whatsapp_v2_config()}]
+        ).json()["id"]
         with patch("app.services.ultravox_admin_service.UltravoxAdminService.get_voice"):
             response = self.client.post(f"/api/v1/agents/{agent_id}/publish", json={})
         self.assertEqual(response.status_code, 422, response.text)
@@ -293,10 +318,27 @@ class AgentBuilderTests(Integration2ATestCase):
     def test_publish_succeeds_when_tool_integration_configured(self) -> None:
         self._enable_feature()
         self._configure_whatsapp(self.tenant.id)
-        agent_id = self._create(tools=[{"key": "whatsapp.send_message", "enabled": True, "config": {}}]).json()["id"]
+        self._create_approved_whatsapp_template(self.tenant.id)
+        agent_id = self._create(
+            tools=[{"key": "whatsapp.send_message", "enabled": True, "config": self._whatsapp_v2_config()}]
+        ).json()["id"]
         with patch("app.services.ultravox_admin_service.UltravoxAdminService.get_voice"):
             response = self.client.post(f"/api/v1/agents/{agent_id}/publish", json={})
         self.assertEqual(response.status_code, 200, response.text)
+
+    def test_create_rejects_a_whatsapp_binding_without_contract_version_2(self) -> None:
+        self._enable_feature()
+        response = self._create(tools=[{"key": "whatsapp.send_message", "enabled": True, "config": {}}])
+        self.assertEqual(response.status_code, 422, response.text)
+        self.assertIn("tool_binding_config_invalid", response.text)
+
+    def test_create_allows_a_disabled_whatsapp_binding_with_incomplete_config(self) -> None:
+        # A disabled binding's config is never exercised, so an admin can
+        # still save a draft mid-edit (WhatsApp unchecked, not configured
+        # yet) without being forced to fully configure it first.
+        self._enable_feature()
+        response = self._create(tools=[{"key": "whatsapp.send_message", "enabled": False, "config": {}}])
+        self.assertEqual(response.status_code, 201, response.text)
 
     def test_publish_ignores_disabled_tool_with_missing_integration(self) -> None:
         self._enable_feature()
@@ -308,14 +350,16 @@ class AgentBuilderTests(Integration2ATestCase):
     def test_next_draft_clones_tool_bindings(self) -> None:
         self._enable_feature()
         self._configure_whatsapp(self.tenant.id)
-        agent_id = self._create(tools=[{"key": "whatsapp.send_message", "enabled": True, "config": {}}]).json()["id"]
+        self._create_approved_whatsapp_template(self.tenant.id)
+        config = self._whatsapp_v2_config()
+        agent_id = self._create(tools=[{"key": "whatsapp.send_message", "enabled": True, "config": config}]).json()["id"]
         with patch("app.services.ultravox_admin_service.UltravoxAdminService.get_voice"):
             self.client.post(f"/api/v1/agents/{agent_id}/publish", json={})
         next_draft = self.client.post(f"/api/v1/agents/{agent_id}/draft")
         self.assertEqual(next_draft.status_code, 201, next_draft.text)
         self.assertEqual(
             next_draft.json()["runtime_binding"]["tools"],
-            [{"key": "whatsapp.send_message", "enabled": True, "config": {}}],
+            [{"key": "whatsapp.send_message", "enabled": True, "config": config}],
         )
 
     def test_tool_catalog_reflects_tenant_integration_status(self) -> None:

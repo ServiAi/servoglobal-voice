@@ -5,6 +5,18 @@ from typing import Any, Literal
 
 
 @dataclass(frozen=True)
+class ToolContextRequirement:
+    """One SessionContextV1 path a platform tool's handler reads server-side
+    instead of asking the LLM for it. Declarative only -- PlatformToolContractService
+    is what actually enforces it against a live SessionContextV1 at dispatch
+    time; this is metadata for the catalog API and the Agent Builder UI."""
+
+    path: str
+    required: bool = True
+    description: str = ""
+
+
+@dataclass(frozen=True)
 class ToolDefinition:
     """A platform-level tool a serviglobal_managed agent can be bound to.
 
@@ -16,6 +28,16 @@ class ToolDefinition:
     never selectable from the Agent Builder UI or bindable on an agent; it
     exists so the catalog stays forward-compatible without a redesign when
     the missing piece (e.g. call-scoped lead/contact resolution) lands.
+
+    `input_schema` is the LLM-facing (Function Calling) schema -- the only
+    surface the model gets to decide. For a tool whose real LLM schema
+    depends on how the tenant configured it (e.g. whatsapp.send_message's
+    per-template variable mapping), this is the static/base shape only;
+    PlatformToolContractService.compile_llm_schema computes the effective,
+    binding-aware schema actually sent to the compiler and the dispatcher.
+    `context_requirements` and `binding_config_schema` are empty for tools
+    with no session-context or admin-configuration surface -- declared
+    explicitly rather than left implicit, even when empty.
     """
 
     key: str
@@ -25,10 +47,55 @@ class ToolDefinition:
     input_schema: dict[str, Any]
     required_integration: Literal["booking", "whatsapp", "crm", "chatwoot"] | None
     capabilities: dict[str, bool] = field(default_factory=dict)
+    context_requirements: tuple[ToolContextRequirement, ...] = ()
+    binding_config_schema: dict[str, Any] = field(default_factory=dict)
 
 
 class ToolRegistryValidationError(ValueError):
     pass
+
+
+# Admin-facing (Agent Builder) contract for whatsapp.send_message's binding
+# config -- descriptive metadata surfaced through the tool catalog API for
+# the configurator UI. Structural validation of an actual binding is done
+# by hand in PlatformToolContractService (this codebase never adds a
+# jsonschema dependency; every other schema check here -- e.g.
+# ToolDispatchService._validate_arguments -- is hand-rolled too), not by
+# validating against this dict directly.
+_WHATSAPP_BINDING_CONFIG_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "contract_version": {"type": "integer", "const": 2},
+        "template_key": {"type": "string", "description": "TenantWhatsAppTemplate.template_key, must be status=approved for this tenant."},
+        "recipient": {
+            "type": "object",
+            "properties": {
+                "strategy": {
+                    "type": "string",
+                    "enum": ["contact_then_caller", "contact", "caller"],
+                    "description": "contact_then_caller falls back to context.caller.phone when context.contact.phone is absent.",
+                },
+            },
+            "required": ["strategy"],
+        },
+        "variables": {
+            "type": "object",
+            "description": "One entry per template variable key. Each entry has source=llm|context|fixed.",
+            "additionalProperties": {
+                "type": "object",
+                "properties": {
+                    "source": {"type": "string", "enum": ["llm", "context", "fixed"]},
+                    "path": {"type": "string", "description": "Required when source=context; a path from the SessionContextV1 allowlist."},
+                    "value": {"description": "Required when source=fixed."},
+                    "type": {"type": "string", "description": "Used when source=llm; JSON Schema type for the Function Calling property."},
+                    "description": {"type": "string", "description": "Used when source=llm; shown to the model."},
+                },
+                "required": ["source"],
+            },
+        },
+    },
+    "required": ["contract_version", "template_key", "recipient", "variables"],
+}
 
 
 # Real, evaluated tool catalog. A row here is not a promise of execution --
@@ -54,30 +121,24 @@ _TOOLS: tuple[ToolDefinition, ...] = (
         },
         required_integration="booking",
     ),
+    # V2 contract (contract_version=2 in the binding config): the LLM never
+    # decides the destination or the template anymore -- see
+    # PlatformToolContractService for how `input_schema` here (empty) is
+    # replaced by the effective, binding-aware schema at compile/dispatch
+    # time, and _WHATSAPP_BINDING_CONFIG_SCHEMA below for the admin-facing
+    # contract. A published version whose binding predates V2 (`config={}`
+    # or missing contract_version) is rejected at dispatch time with
+    # `whatsapp_legacy_binding_unsupported` -- ToolDispatchService never
+    # falls back to reading to_phone/template_key from the LLM again.
     ToolDefinition(
         key="whatsapp.send_message",
         name="Enviar WhatsApp",
-        description="Envía una plantilla de WhatsApp ya aprobada al número que indique la persona en la llamada.",
+        description="Envía una plantilla de WhatsApp aprobada, usando la plantilla, el destinatario y las variables configuradas por el administrador del agente.",
         status="available",
-        input_schema={
-            "type": "object",
-            "properties": {
-                "to_phone": {
-                    "type": "string",
-                    "description": "Número de teléfono en formato E.164, por ejemplo +573001234567.",
-                },
-                "template_key": {
-                    "type": "string",
-                    "description": "Clave de la plantilla de WhatsApp aprobada que se debe enviar.",
-                },
-                "variables": {
-                    "type": "object",
-                    "description": "Variables a interpolar en la plantilla.",
-                },
-            },
-            "required": ["to_phone", "template_key"],
-        },
+        input_schema={"type": "object", "properties": {}, "required": []},
         required_integration="whatsapp",
+        context_requirements=(),
+        binding_config_schema=_WHATSAPP_BINDING_CONFIG_SCHEMA,
     ),
     # Reactivated by Session Context V1: BookingService.create_lead_booking
     # needs lead_id + the lead's contact (name/email) -- both now come from
@@ -101,6 +162,12 @@ _TOOLS: tuple[ToolDefinition, ...] = (
             "required": ["start"],
         },
         required_integration="booking",
+        context_requirements=(
+            ToolContextRequirement(path="lead.id", required=True, description="Lead resuelto en esta sesión."),
+            ToolContextRequirement(path="contact.name", required=False, description="Nombre del asistente a la cita."),
+            ToolContextRequirement(path="contact.email", required=False, description="Correo del asistente a la cita."),
+            ToolContextRequirement(path="contact.phone", required=False, description="Teléfono del asistente a la cita."),
+        ),
     ),
     # Reactivated by Session Context V1: CrmContactService.get_or_create_contact
     # + CrmLeadService.get_or_create_open_lead already implement exactly
@@ -124,6 +191,9 @@ _TOOLS: tuple[ToolDefinition, ...] = (
             "required": ["name"],
         },
         required_integration="crm",
+        context_requirements=(
+            ToolContextRequirement(path="caller.phone", required=True, description="Teléfono del participante de la llamada."),
+        ),
     ),
     # Stays planned: unrelated to Session Context V1.
     # VoiceHandoffService.trigger_handoff hard-requires a full legacy

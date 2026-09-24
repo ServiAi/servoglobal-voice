@@ -15,6 +15,7 @@ import {
   updateAgentDraft,
 } from '@/lib/api/agents';
 import { previewExternalVoiceAudio, previewProviderVoiceAudio, type VoicePreviewResult } from '@/lib/api/voice-preview';
+import { listWhatsAppTemplates } from '@/lib/api/whatsapp-templates';
 import { getAccessToken } from '@/lib/auth/server';
 import type {
   AgentCreateRequest,
@@ -24,6 +25,7 @@ import type {
   AgentVersionResponse,
   AgentVoiceConfig,
 } from '@/types/agents';
+import type { WhatsAppTemplateResponse } from '@/types/crm';
 
 async function withAccessToken<T>(
   run: (accessToken: string) => Promise<FetchResult<T>>
@@ -230,6 +232,13 @@ export async function previewExternalVoiceAction(
   const accessToken = await getAccessToken();
   if (!accessToken) return { ok: false, status: 401, code: 'provider_auth_failed' };
   return previewExternalVoiceAudio(accessToken, provider, voice);
+}
+
+export async function fetchApprovedWhatsAppTemplatesAction(): Promise<FetchResult<WhatsAppTemplateResponse[]>> {
+  return withAccessToken(async (token) => {
+    const result = await listWhatsAppTemplates(token);
+    return result.ok ? { ...result, data: result.data.filter((template) => template.status === 'approved') } : result;
+  });
 }
 
 export async function createVoiceTestTokenAction(

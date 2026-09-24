@@ -33,13 +33,19 @@ export type AgentBehavior = {
 export type AgentModelSettings = Record<string, number | boolean | string>;
 
 /** A tool bound to a serviglobal_managed agent version. `config` is
- * binding-time configuration (currently unused by both V1 tools -- kept
- * for forward compatibility), never the per-call arguments the LLM
- * supplies at invocation time. */
+ * binding-time configuration (e.g. whatsapp.send_message's V2 template/
+ * recipient/variables contract -- see WhatsAppToolBindingConfig), never
+ * the per-call arguments the LLM supplies at invocation time. */
 export type AgentToolBinding = {
   key: string;
   enabled: boolean;
   config?: Record<string, unknown>;
+};
+
+export type AgentToolContextRequirement = {
+  path: string;
+  required: boolean;
+  description: string;
 };
 
 /** One catalog entry (platform Registry or tenant custom.* tool) annotated
@@ -50,7 +56,13 @@ export type AgentToolBinding = {
  * as selectable in the UI. `source` distinguishes the two: `custom` tools
  * always report `required_integration: null` -- their "is this tenant
  * ready" concept is credential-based, checked via /voice-ai/tools instead
- * of an integration settings page. */
+ * of an integration settings page. `input_schema` is the tool's static/base
+ * LLM schema -- for a `configuration_required` tool, the real schema shown
+ * to the model depends on `config` and is computed server-side (see
+ * PlatformToolContractService.compile_llm_schema on the backend); this
+ * type only carries what the catalog can say ahead of any binding.
+ * `context_requirements` documents what the tool reads from SessionContextV1
+ * server-side -- informational only, never rendered as an editable field. */
 export type AgentToolCatalogEntry = {
   key: string;
   name: string;
@@ -60,6 +72,42 @@ export type AgentToolCatalogEntry = {
   available: boolean;
   input_schema: Record<string, unknown>;
   source: 'platform' | 'custom';
+  context_requirements: AgentToolContextRequirement[];
+  binding_config_schema: Record<string, unknown>;
+  configuration_required: boolean;
+};
+
+/** whatsapp.send_message's contract_version=2 AgentToolBinding.config shape
+ * -- kept here (not enforced client-side beyond the configurator's own
+ * form) because the backend (PlatformToolContractService) is the actual
+ * source of truth for validity; this type exists so the configurator UI
+ * and buildToolsPayload can build/read it without `as any`. */
+export type WhatsAppVariableSource = 'llm' | 'context' | 'fixed';
+
+export type WhatsAppVariableMapping =
+  | { source: 'llm'; type: string; description?: string }
+  | { source: 'context'; path: string }
+  | { source: 'fixed'; value: string };
+
+export const WHATSAPP_ALLOWED_CONTEXT_PATHS = [
+  'caller.phone',
+  'contact.id',
+  'contact.name',
+  'contact.phone',
+  'contact.email',
+  'lead.id',
+  'lead.status',
+  'lead.stage',
+  'campaign.name',
+] as const;
+
+export type WhatsAppRecipientStrategy = 'contact_then_caller' | 'contact' | 'caller';
+
+export type WhatsAppToolBindingConfig = {
+  contract_version: 2;
+  template_key: string;
+  recipient: { strategy: WhatsAppRecipientStrategy };
+  variables: Record<string, WhatsAppVariableMapping>;
 };
 
 export type AgentCreateRequest = {

@@ -184,12 +184,22 @@ class AgentPublishRequest(_StrictModel):
     expected_draft_version_id: str | None = None
 
 
+class AgentToolContextRequirementResponse(_StrictModel):
+    path: str
+    required: bool
+    description: str
+
+
 class AgentToolCatalogEntryResponse(_StrictModel):
     """One Tool Registry entry, annotated for the current tenant.
     `available` is only ever true for `status="available"` tools whose
     `required_integration` is actually configured for this tenant --
     `planned` tools always report `available=False` so the Agent Builder
-    UI never lets them be enabled."""
+    UI never lets them be enabled. `input_schema` is the tool's static/base
+    LLM schema (see ToolDefinition's docstring) -- for a configurable tool
+    (`configuration_required=True`) the real, binding-aware schema the
+    model will see is computed at compile/dispatch time by
+    PlatformToolContractService, not shown here."""
 
     key: str
     name: str
@@ -199,6 +209,9 @@ class AgentToolCatalogEntryResponse(_StrictModel):
     available: bool
     input_schema: dict[str, Any]
     source: Literal["platform", "custom"] = "platform"
+    context_requirements: list[AgentToolContextRequirementResponse] = Field(default_factory=list)
+    binding_config_schema: dict[str, Any] = Field(default_factory=dict)
+    configuration_required: bool = False
 
 
 class AgentResponse(_StrictModel):

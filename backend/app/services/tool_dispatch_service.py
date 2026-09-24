@@ -5,10 +5,14 @@ from typing import Any, Callable
 
 from sqlalchemy.orm import Session
 
+from app.domain.platform_tool_invocation import PlatformToolInvocation
+from app.domain.resolved_tool import from_platform
 from app.domain.tool_registry import get_tool
+from app.domain.tool_schema import ToolSchemaError, validate_arguments_against_schema
 from app.models.voice_sessions import VoiceSession
 from app.schemas.session_context import SessionContextV1
 from app.services.integration_event_service import IntegrationEventService
+from app.services.platform_tool_contract_service import PlatformToolContractError, PlatformToolContractService
 from app.services.tool_resolver_service import ToolResolverService
 from app.services.voice_session_service import (
     SessionContextEnrichmentError,
@@ -37,35 +41,43 @@ class ToolExecutionError(ToolDispatchError):
     pass
 
 
-def _handle_check_availability(db: Session, tenant_id: str, arguments: dict[str, Any], context: SessionContextV1, session: VoiceSession) -> dict[str, Any]:
+def _handle_check_availability(db: Session, tenant_id: str, invocation: PlatformToolInvocation, session: VoiceSession) -> dict[str, Any]:
     from app.services.booking_service import BookingService
 
     try:
         return BookingService(db).get_available_slots_for_tenant(
-            tenant_id=tenant_id, date_input=str(arguments.get("date") or "")
+            tenant_id=tenant_id, date_input=str(invocation.llm_args.get("date") or "")
         )
     except ValueError as exc:
         raise ToolExecutionError(str(exc)) from exc
 
 
-def _handle_send_whatsapp(db: Session, tenant_id: str, arguments: dict[str, Any], context: SessionContextV1, session: VoiceSession) -> dict[str, Any]:
+def _handle_send_whatsapp(db: Session, tenant_id: str, invocation: PlatformToolInvocation, session: VoiceSession) -> dict[str, Any]:
+    # V2 contract: to_phone/template_key/variables are never LLM arguments
+    # anymore -- PlatformToolContractService.resolve_whatsapp_send resolves
+    # all three from invocation.config (admin-set template + recipient
+    # strategy + variable mapping) and invocation.context (trusted session
+    # identity), only ever pulling from invocation.llm_args for variables
+    # explicitly mapped source=llm. See platform_tool_contract_service.py.
     from app.services.whatsapp_message_service import WhatsAppMessageService
 
-    variables = {str(k): str(v) for k, v in (arguments.get("variables") or {}).items()}
+    plan = PlatformToolContractService(db).resolve_whatsapp_send(tenant_id, invocation)
     try:
         result = WhatsAppMessageService(db).send_template_notification(
             tenant_id=tenant_id,
-            to_phone=str(arguments.get("to_phone") or ""),
-            template_key=str(arguments.get("template_key") or ""),
-            variables=variables,
+            to_phone=plan.to_phone,
+            template_key=plan.template_key,
+            variables=plan.variables,
             metadata={"source": "agent_tool"},
+            lead_id=plan.lead_id,
+            contact_id=plan.contact_id,
         )
     except ValueError as exc:
         raise ToolExecutionError(str(exc)) from exc
     return {"status": result.status, "provider_message_id": result.provider_message_id}
 
 
-def _handle_create_booking(db: Session, tenant_id: str, arguments: dict[str, Any], context: SessionContextV1, session: VoiceSession) -> dict[str, Any]:
+def _handle_create_booking(db: Session, tenant_id: str, invocation: PlatformToolInvocation, session: VoiceSession) -> dict[str, Any]:
     # lead_id, attendee_name and attendee_email come from the session's
     # own resolved context -- never from the LLM. See SessionContextV1 /
     # ContactResolutionService: they are trusted, tenant-scoped identity,
@@ -75,16 +87,17 @@ def _handle_create_booking(db: Session, tenant_id: str, arguments: dict[str, Any
     from app.schemas.crm import BookingCreateRequest
     from app.services.booking_service import BookingService
 
+    context = invocation.context
     if context.lead is None:
         raise ToolExecutionError("lead_context_required")
     contact = context.contact
     try:
         body = BookingCreateRequest(
-            start=str(arguments.get("start") or ""),
+            start=str(invocation.llm_args.get("start") or ""),
             attendee_name=(contact.name if contact and contact.name else "Cliente"),
             attendee_email=(contact.email if contact and contact.email else ""),
             attendee_phone=contact.phone if contact else None,
-            notes=arguments.get("notes"),
+            notes=invocation.llm_args.get("notes"),
         )
     except ValidationError as exc:
         raise ToolArgumentError(str(exc)) from exc
@@ -95,18 +108,19 @@ def _handle_create_booking(db: Session, tenant_id: str, arguments: dict[str, Any
     return {"booking_id": booking.id, "status": booking.status, "start_at": booking.start_at.isoformat()}
 
 
-def _handle_create_lead(db: Session, tenant_id: str, arguments: dict[str, Any], context: SessionContextV1, session: VoiceSession) -> dict[str, Any]:
+def _handle_create_lead(db: Session, tenant_id: str, invocation: PlatformToolInvocation, session: VoiceSession) -> dict[str, Any]:
     # phone comes from the session's own caller identity, never an
     # LLM-supplied argument -- a hallucinated/mistranscribed phone number
     # must never become the key a lead gets created or matched under.
     from app.services.crm_contact_service import CrmContactService
     from app.services.crm_lead_service import CrmLeadService
 
+    context = invocation.context
     caller_phone = context.caller.phone if context.caller else None
     if not caller_phone:
         raise ToolExecutionError("caller_phone_required")
-    name = str(arguments.get("name") or "")
-    email = arguments.get("email")
+    name = str(invocation.llm_args.get("name") or "")
+    email = invocation.llm_args.get("email")
     contact = CrmContactService(db).get_or_create_contact(tenant_id, caller_phone, email, name)
     lead = CrmLeadService(db).get_or_create_open_lead(tenant_id, contact.id)
     # Fase F.1: make the newly resolved identity available to a later tool
@@ -125,7 +139,7 @@ def _handle_create_lead(db: Session, tenant_id: str, arguments: dict[str, Any], 
 # string the model/runtime supplies. A key that isn't a literal key in this
 # dict can never execute, no matter what the Tool Registry or an agent's
 # binding says.
-_HANDLERS: dict[str, Callable[[Session, str, dict[str, Any], SessionContextV1, VoiceSession], dict[str, Any]]] = {
+_HANDLERS: dict[str, Callable[[Session, str, PlatformToolInvocation, VoiceSession], dict[str, Any]]] = {
     "calendar.check_availability": _handle_check_availability,
     "whatsapp.send_message": _handle_send_whatsapp,
     "calendar.create_booking": _handle_create_booking,
@@ -169,11 +183,44 @@ class ToolDispatchService:
         handler = _HANDLERS.get(tool_key)
         if handler is None:
             raise ToolNotAvailableError(tool_key)
-        self._validate_arguments(tool.input_schema, arguments)
+
+        resolved = from_platform(tool)
+        binding_config = binding.get("config") if isinstance(binding.get("config"), dict) else {}
+        contract = PlatformToolContractService(self.db)
+        # Argument-shape validation stays outside the timed/recorded block,
+        # same as before this refactor: a malformed LLM call is never
+        # counted as a tool execution failure.
+        try:
+            contract.validate_llm_arguments(resolved, binding_config, arguments)
+        except PlatformToolContractError as exc:
+            raise ToolArgumentError(exc.message) from exc
+
         context = SessionContextV1.model_validate(session.session_context_json or {})
         started = perf_counter()
         try:
-            result = handler(self.db, session.tenant_id, arguments, context, session)
+            # Each handler still validates its own context requirements
+            # itself (lead_context_required, caller_phone_required,
+            # whatsapp_recipient_context_required/whatsapp_legacy_binding_
+            # unsupported via PlatformToolContractService.resolve_whatsapp_send)
+            # and raises its own stable code -- PlatformToolContractService.
+            # validate_context is not called generically here so it can
+            # never pre-empt a handler's own, already-tested error code with
+            # a more generic one. context_requirements stays declarative
+            # metadata for the catalog API / Agent Builder UI (see
+            # ToolCatalogService), not a second enforcement layer.
+            invocation = contract.build_invocation(llm_args=arguments, context=context, config=binding_config)
+            result = handler(self.db, session.tenant_id, invocation, session)
+        except PlatformToolContractError as exc:
+            duration_ms = max(0, round((perf_counter() - started) * 1000))
+            self._record_event(session.tenant_id, session.agent_id, tool_key, status="error")
+            self._record_context_tool_event(
+                session,
+                tool_key,
+                status="error",
+                duration_ms=duration_ms,
+                error_code=self._safe_error_code(exc.code),
+            )
+            raise ToolExecutionError(str(exc)) from exc
         except ToolExecutionError as exc:
             duration_ms = max(0, round((perf_counter() - started) * 1000))
             self._record_event(session.tenant_id, session.agent_id, tool_key, status="error")
@@ -281,37 +328,14 @@ class ToolDispatchService:
 
     @staticmethod
     def _validate_arguments(input_schema: dict[str, Any], arguments: dict[str, Any]) -> None:
-        """Minimal, purpose-built shape check against the tool's declared
-        input_schema (string/object properties, required list) -- not a
-        general JSON Schema validator; today's two tools only need this
-        much, and this stays small enough to read at a glance."""
-        if not isinstance(arguments, dict):
-            raise ToolArgumentError("Arguments must be an object.")
-        properties = input_schema.get("properties", {})
-        required = input_schema.get("required", [])
-        if not isinstance(properties, dict) or not isinstance(required, list):
-            raise ToolArgumentError("Tool input schema is invalid.")
-        for required_key in required:
-            if required_key not in arguments:
-                raise ToolArgumentError(f"Missing required argument '{required_key}'.")
-        for key, value in arguments.items():
-            spec = properties.get(key)
-            if spec is None:
-                raise ToolArgumentError(f"Unknown argument '{key}'.")
-            expected = spec.get("type")
-            matches = {
-                "string": isinstance(value, str),
-                "object": isinstance(value, dict),
-                "array": isinstance(value, list),
-                "integer": isinstance(value, int) and not isinstance(value, bool),
-                "number": isinstance(value, (int, float)) and not isinstance(value, bool),
-                "boolean": isinstance(value, bool),
-                "null": value is None,
-            }.get(expected, False)
-            if not matches:
-                raise ToolArgumentError(f"Argument '{key}' must be of type '{expected}'.")
-            if "enum" in spec and value not in spec["enum"]:
-                raise ToolArgumentError(f"Argument '{key}' is not an allowed value.")
+        """Thin wrapper kept for CustomHttpToolExecutor, which calls this
+        directly by name -- the actual shape check lives in
+        app.domain.tool_schema (shared with PlatformToolContractService) so
+        there is exactly one implementation of it."""
+        try:
+            validate_arguments_against_schema(input_schema, arguments)
+        except ToolSchemaError as exc:
+            raise ToolArgumentError(str(exc)) from exc
 
     def _record_event(self, tenant_id: str, agent_id: str | None, tool_key: str, *, status: str) -> None:
         # Deliberately logs only the tool key and outcome, never the call

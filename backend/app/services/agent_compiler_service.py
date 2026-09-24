@@ -9,6 +9,7 @@ from app.domain.voice_registry import VoiceRegistryValidationError, resolve_exec
 from app.models.agents import TenantAgent, TenantAgentVersion
 from app.schemas.agents import AgentBehavior, AgentIdentity, AgentInstructions
 from app.schemas.runtime_session import RuntimeSessionSpecV1
+from app.services.platform_tool_contract_service import PlatformToolContractService
 
 
 class AgentCompilerError(ValueError):
@@ -100,9 +101,19 @@ class AgentCompilerService:
             resolved = self._resolve_tool(agent.tenant_id, str(binding.get("key") or ""))
             if resolved is None or resolved.status != "available":
                 continue
+            # Only tools with a real binding_config_schema (today: just
+            # whatsapp.send_message) need a per-binding effective schema;
+            # every other platform/custom tool keeps its static
+            # input_schema, unchanged from before this refactor.
+            config = binding.get("config") if isinstance(binding.get("config"), dict) else {}
+            input_schema = (
+                PlatformToolContractService(self.db).compile_llm_schema(resolved, config)
+                if resolved.binding_config_schema
+                else resolved.input_schema
+            )
             compiled_tools.append({
                 "key": resolved.key, "name": resolved.name,
-                "description": resolved.description, "input_schema": resolved.input_schema,
+                "description": resolved.description, "input_schema": input_schema,
             })
 
         try:

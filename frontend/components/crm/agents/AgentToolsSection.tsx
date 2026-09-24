@@ -3,8 +3,9 @@
 import Link from 'next/link';
 import type { useTranslations } from 'next-intl';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import type { AgentToolCatalogEntry } from '@/types/agents';
+import type { AgentToolCatalogEntry, WhatsAppToolBindingConfig } from '@/types/agents';
 import { AgentFieldLabel } from './AgentFieldLabel';
+import { WhatsAppToolConfigurator } from './WhatsAppToolConfigurator';
 
 const INTEGRATION_SETTINGS_PATH: Record<string, string> = {
   booking: 'integrations',
@@ -16,16 +17,18 @@ const INTEGRATION_SETTINGS_PATH: Record<string, string> = {
 export function AgentToolsSection({
   locale,
   catalog,
-  enabledKeys,
+  bindings,
   disabled,
   onToggle,
+  onConfigChange,
   t,
 }: {
   locale: string;
   catalog: AgentToolCatalogEntry[];
-  enabledKeys: string[];
+  bindings: Record<string, { enabled: boolean; config: Record<string, unknown> }>;
   disabled: boolean;
   onToggle: (key: string, enabled: boolean) => void;
+  onConfigChange: (key: string, config: Record<string, unknown>) => void;
   t: ReturnType<typeof useTranslations>;
 }) {
   // Only tools the platform can actually execute are ever offered here --
@@ -33,7 +36,6 @@ export function AgentToolsSection({
   // selectable or otherwise. See app.domain.tool_registry's docstring for
   // why: no fictional tools.
   const selectable = catalog.filter((tool) => tool.status === 'available');
-  const enabled = new Set(enabledKeys);
   const platformTools = selectable.filter((tool) => tool.source === 'platform');
   const customTools = selectable.filter((tool) => tool.source === 'custom');
 
@@ -50,10 +52,14 @@ export function AgentToolsSection({
             platformTools.map((tool) => (
               <ToolRow
                 key={tool.key}
+                locale={locale}
                 tool={tool}
-                checked={enabled.has(tool.key)}
+                checked={bindings[tool.key]?.enabled ?? false}
+                config={bindings[tool.key]?.config ?? {}}
                 disabled={disabled}
                 onToggle={onToggle}
+                onConfigChange={onConfigChange}
+                t={t}
               >
                 {!tool.available && tool.required_integration ? (
                   <div className="mt-2 flex flex-wrap items-center gap-2 rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-950">
@@ -87,10 +93,14 @@ export function AgentToolsSection({
             customTools.map((tool) => (
               <ToolRow
                 key={tool.key}
+                locale={locale}
                 tool={tool}
-                checked={enabled.has(tool.key)}
+                checked={bindings[tool.key]?.enabled ?? false}
+                config={bindings[tool.key]?.config ?? {}}
                 disabled={disabled}
                 onToggle={onToggle}
+                onConfigChange={onConfigChange}
+                t={t}
               >
                 {!tool.available ? (
                   <div className="mt-2 flex flex-wrap items-center gap-2 rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-950">
@@ -109,17 +119,65 @@ export function AgentToolsSection({
   );
 }
 
+/** Platform Tool contract, rendered read-only: what the model decides
+ * (llm_input_schema properties), what ServiGlobal resolves automatically
+ * from SessionContextV1 (context_requirements), and -- only when the tool
+ * actually has one -- an editable configuration section. Custom tools
+ * never have context_requirements/binding_config_schema (see
+ * ResolvedToolDefinition's docstring), so this section is a no-op for them. */
+function ToolContract({ tool, t }: { tool: AgentToolCatalogEntry; t: ReturnType<typeof useTranslations> }) {
+  const llmProperties = Object.keys((tool.input_schema.properties as Record<string, unknown> | undefined) ?? {});
+  return (
+    <div className="mt-2 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
+      <div>
+        <p className="font-medium text-foreground">{t('tools.llmInputsTitle')}</p>
+        {tool.configuration_required ? (
+          <p>{t('tools.llmInputsDependOnConfig')}</p>
+        ) : llmProperties.length === 0 ? (
+          <p>{t('tools.noLlmInputs')}</p>
+        ) : (
+          <ul className="list-inside list-disc">
+            {llmProperties.map((key) => (
+              <li key={key}>{key}</li>
+            ))}
+          </ul>
+        )}
+      </div>
+      <div>
+        <p className="font-medium text-foreground">{t('tools.contextAutoTitle')}</p>
+        {tool.context_requirements.length === 0 ? (
+          <p>{t('tools.noContext')}</p>
+        ) : (
+          <ul className="list-inside list-disc">
+            {tool.context_requirements.map((req) => (
+              <li key={req.path}>{req.path}</li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function ToolRow({
+  locale,
   tool,
   checked,
+  config,
   disabled,
   onToggle,
+  onConfigChange,
+  t,
   children,
 }: {
+  locale: string;
   tool: AgentToolCatalogEntry;
   checked: boolean;
+  config: Record<string, unknown>;
   disabled: boolean;
   onToggle: (key: string, enabled: boolean) => void;
+  onConfigChange: (key: string, config: Record<string, unknown>) => void;
+  t: ReturnType<typeof useTranslations>;
   children?: React.ReactNode;
 }) {
   return (
@@ -133,7 +191,7 @@ function ToolRow({
           disabled={disabled || !tool.available}
           onChange={(e) => onToggle(tool.key, e.target.checked)}
         />
-        <span>
+        <span className="flex-1">
           <span className="flex items-center gap-1.5">
             <label htmlFor={`agent-tool-${tool.key}`} className="font-medium text-foreground">
               {tool.name}
@@ -144,6 +202,16 @@ function ToolRow({
         </span>
       </div>
       {children}
+      {tool.source === 'platform' ? <ToolContract tool={tool} t={t} /> : null}
+      {checked && tool.key === 'whatsapp.send_message' ? (
+        <WhatsAppToolConfigurator
+          locale={locale}
+          config={config}
+          disabled={disabled}
+          onChange={(next) => onConfigChange(tool.key, next as unknown as WhatsAppToolBindingConfig & Record<string, unknown>)}
+          t={t}
+        />
+      ) : null}
     </div>
   );
 }

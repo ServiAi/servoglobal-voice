@@ -1492,7 +1492,41 @@
         "customTitle": "Custom tools",
         "customEmpty": "No active custom tools yet.",
         "requiresCredential": "This tool's credential isn't configured yet.",
-        "configureCredential": "Configure in Tools"
+        "configureCredential": "Configure in Tools",
+        "llmInputsTitle": "Data gathered during the conversation",
+        "noLlmInputs": "The model doesn't decide any data for this tool.",
+        "llmInputsDependOnConfig": "Depends on the configuration (see below).",
+        "contextAutoTitle": "Automatic context",
+        "noContext": "Doesn't need any session context.",
+        "configTitle": "Configuration",
+        "noConfigNeeded": "No configuration needed.",
+        "configureButton": "Configure",
+        "configureRequired": "This tool needs to be configured before it can be enabled.",
+        "configured": "Configured",
+        "whatsapp": {
+          "title": "Send WhatsApp",
+          "template": "Template",
+          "templatePlaceholder": "Select an approved template",
+          "noTemplates": "No approved WhatsApp templates for this tenant.",
+          "templatesLoadError": "Couldn't load WhatsApp templates.",
+          "manageTemplates": "Manage templates",
+          "recipient": "Recipient",
+          "recipientStrategy": {
+            "contact_then_caller": "Contact, falling back to the call's phone number",
+            "contact": "Contact only",
+            "caller": "Call's phone number only"
+          },
+          "variablesTitle": "Template variables",
+          "variableSourceLabel": "Source",
+          "variableSource": {
+            "llm": "During the conversation (the agent)",
+            "context": "Session context",
+            "fixed": "Fixed value"
+          },
+          "variableDescriptionPlaceholder": "Description for the agent",
+          "variableFixedValuePlaceholder": "Fixed value",
+          "selectTemplateFirst": "Select a template to configure its variables."
+        }
       },
       "voice": {
         "pipelineType": "Architecture", "speechToSpeech": "Speech-to-Speech", "ultravox": "Ultravox", "comingSoon": "Coming soon",

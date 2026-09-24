@@ -35,6 +35,12 @@ class ToolCatalogService:
                     "available": resolved.status == "available" and is_available(resolved),
                     "input_schema": resolved.input_schema,
                     "source": resolved.source,
+                    "context_requirements": [
+                        {"path": req.path, "required": req.required, "description": req.description}
+                        for req in resolved.context_requirements
+                    ],
+                    "binding_config_schema": resolved.binding_config_schema,
+                    "configuration_required": bool(resolved.binding_config_schema),
                 }
             )
         return entries
