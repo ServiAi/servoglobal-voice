@@ -3,6 +3,7 @@ import type {
   WhatsAppTemplateCreateRequest,
   WhatsAppTemplateDetailResponse,
   WhatsAppTemplatePreviewResponse,
+  WhatsAppTemplateResponse,
   WhatsAppTemplateSubmitResponse,
   WhatsAppTemplateUpdateRequest,
 } from '@/types/crm';
@@ -31,6 +32,10 @@ function adminWhatsappTemplates<T>(
     undefined,
     body
   );
+}
+
+export function listWhatsAppTemplates(accessToken: string) {
+  return whatsappTemplates<WhatsAppTemplateResponse[]>('GET', '', accessToken);
 }
 
 export function createWhatsAppTemplate(accessToken: string, payload: WhatsAppTemplateCreateRequest) {

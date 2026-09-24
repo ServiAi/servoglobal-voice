@@ -421,6 +421,34 @@ class AgentToolInvokeEndpointTests(Integration2ATestCase):
             ))
             db.commit()
 
+    def _create_approved_whatsapp_template(self, tenant_id: str, *, template_key: str = "booking_confirmation") -> None:
+        from app.models.integrations import TenantWhatsAppTemplate
+
+        with SessionLocal() as db:
+            db.add(TenantWhatsAppTemplate(
+                tenant_id=tenant_id, template_key=template_key, provider_template_name=template_key,
+                name=template_key, category="utility", language="es",
+                body="Hola {{contact_name}}, tu cita es el {{appointment_date}}.",
+                status="approved", source="tenant_authored", parameter_format="NAMED",
+                components_json={"variable_keys": ["contact_name", "appointment_date"]},
+            ))
+            db.commit()
+
+    @staticmethod
+    def _whatsapp_v2_config(*, template_key: str = "booking_confirmation", extra: dict | None = None) -> dict:
+        config = {
+            "contract_version": 2,
+            "template_key": template_key,
+            "recipient": {"strategy": "contact_then_caller"},
+            "variables": {
+                "contact_name": {"source": "fixed", "value": "Cliente"},
+                "appointment_date": {"source": "llm", "type": "string", "description": "Fecha confirmada"},
+            },
+        }
+        if extra:
+            config.update(extra)
+        return config
+
     def test_requires_valid_runtime_authentication(self) -> None:
         session_id = self._session_with_tools([{"key": "calendar.check_availability", "enabled": True, "config": {}}])
         response = self.client.post(
@@ -475,33 +503,94 @@ class AgentToolInvokeEndpointTests(Integration2ATestCase):
 
     def test_whatsapp_tool_succeeds_when_integration_is_configured(self) -> None:
         self._configure_whatsapp(self.tenant.id)
-        session_id = self._session_with_tools([{"key": "whatsapp.send_message", "enabled": True, "config": {}}])
+        self._create_approved_whatsapp_template(self.tenant.id)
+        session_id = self._session_with_tools(
+            [{"key": "whatsapp.send_message", "enabled": True, "config": self._whatsapp_v2_config()}],
+            caller_phone="+573000000001",
+        )
         with patch(
             "app.services.whatsapp_message_service.WhatsAppMessageService.send_template_notification"
         ) as mocked:
             from app.services.whatsapp_message_service import WhatsAppSendResult
 
             mocked.return_value = WhatsAppSendResult(status="sent", provider_message_id="wamid.123")
-            response = self._invoke(session_id, "whatsapp.send_message", {"to_phone": "+573000000001", "template_key": "booking_confirmation"})
+            # The LLM only ever supplies the one variable mapped source=llm --
+            # never to_phone/template_key, and never contact_name (source=fixed).
+            response = self._invoke(session_id, "whatsapp.send_message", {"appointment_date": "2026-09-25"})
         self.assertEqual(response.status_code, 200, response.text)
         self.assertEqual(response.json()["result"], {"status": "sent", "provider_message_id": "wamid.123"})
+        mocked.assert_called_once()
+        self.assertEqual(mocked.call_args.kwargs["to_phone"], "+573000000001")
+        self.assertEqual(mocked.call_args.kwargs["template_key"], "booking_confirmation")
+        self.assertEqual(
+            mocked.call_args.kwargs["variables"], {"contact_name": "Cliente", "appointment_date": "2026-09-25"}
+        )
+
+    def test_whatsapp_tool_rejects_to_phone_and_template_key_from_the_llm(self) -> None:
+        # V2 contract: the LLM's effective schema only contains variables
+        # mapped source=llm (here, only appointment_date) -- to_phone and
+        # template_key are unknown arguments and must be rejected exactly
+        # like any other argument not in the compiled schema.
+        self._configure_whatsapp(self.tenant.id)
+        self._create_approved_whatsapp_template(self.tenant.id)
+        session_id = self._session_with_tools(
+            [{"key": "whatsapp.send_message", "enabled": True, "config": self._whatsapp_v2_config()}],
+            caller_phone="+573000000001",
+        )
+        response = self._invoke(
+            session_id,
+            "whatsapp.send_message",
+            {"appointment_date": "2026-09-25", "to_phone": "+573001112233", "template_key": "other_template"},
+        )
+        self.assertEqual(response.status_code, 422, response.text)
+        self.assertIn("tool_argument_invalid", response.text)
 
     def test_whatsapp_tool_fails_when_integration_is_not_configured(self) -> None:
-        session_id = self._session_with_tools([{"key": "whatsapp.send_message", "enabled": True, "config": {}}])
-        response = self._invoke(session_id, "whatsapp.send_message", {"to_phone": "+573000000001", "template_key": "booking_confirmation"})
+        self._create_approved_whatsapp_template(self.tenant.id)
+        session_id = self._session_with_tools(
+            [{"key": "whatsapp.send_message", "enabled": True, "config": self._whatsapp_v2_config()}],
+            caller_phone="+573000000001",
+        )
+        response = self._invoke(session_id, "whatsapp.send_message", {"appointment_date": "2026-09-25"})
         self.assertEqual(response.status_code, 502)
         self.assertIn("tool_execution_failed", response.text)
 
+    def test_whatsapp_tool_rejects_a_legacy_binding_without_contract_version_2(self) -> None:
+        # A binding published before this refactor (config={} or no
+        # contract_version) must never fall back to reading to_phone/
+        # template_key from the LLM again -- it fails cleanly instead.
+        self._configure_whatsapp(self.tenant.id)
+        session_id = self._session_with_tools(
+            [{"key": "whatsapp.send_message", "enabled": True, "config": {}}], caller_phone="+573000000001"
+        )
+        response = self._invoke(session_id, "whatsapp.send_message", {})
+        self.assertEqual(response.status_code, 502, response.text)
+        self.assertIn("whatsapp_legacy_binding_unsupported", response.text)
+
+    def test_whatsapp_tool_fails_without_a_trusted_recipient_phone(self) -> None:
+        self._configure_whatsapp(self.tenant.id)
+        self._create_approved_whatsapp_template(self.tenant.id)
+        session_id = self._session_with_tools(
+            [{"key": "whatsapp.send_message", "enabled": True, "config": self._whatsapp_v2_config()}]
+        )
+        response = self._invoke(session_id, "whatsapp.send_message", {"appointment_date": "2026-09-25"})
+        self.assertEqual(response.status_code, 502, response.text)
+        self.assertIn("whatsapp_recipient_context_required", response.text)
+
     def test_tool_invocation_records_a_session_context_event_on_success_and_failure(self) -> None:
         self._configure_whatsapp(self.tenant.id)
-        session_id = self._session_with_tools([{"key": "whatsapp.send_message", "enabled": True, "config": {}}])
+        self._create_approved_whatsapp_template(self.tenant.id)
+        session_id = self._session_with_tools(
+            [{"key": "whatsapp.send_message", "enabled": True, "config": self._whatsapp_v2_config()}],
+            caller_phone="+573000000001",
+        )
         with patch(
             "app.services.whatsapp_message_service.WhatsAppMessageService.send_template_notification"
         ) as mocked:
             from app.services.whatsapp_message_service import WhatsAppSendResult
 
             mocked.return_value = WhatsAppSendResult(status="sent", provider_message_id="wamid.123")
-            self._invoke(session_id, "whatsapp.send_message", {"to_phone": "+573000000001", "template_key": "booking_confirmation"})
+            self._invoke(session_id, "whatsapp.send_message", {"appointment_date": "2026-09-25"})
         with SessionLocal() as db:
             session = VoiceSessionService(db).get(session_id)
             tool_events = [e for e in session.events if e.event_type == "session.context.tool_used"]
@@ -522,34 +611,43 @@ class AgentToolInvokeEndpointTests(Integration2ATestCase):
 
     def test_result_never_contains_the_tools_binding_config(self) -> None:
         self._configure_whatsapp(self.tenant.id)
-        session_id = self._session_with_tools([
-            {"key": "whatsapp.send_message", "enabled": True, "config": {"internal_note": "should-not-leak"}}
-        ])
+        self._create_approved_whatsapp_template(self.tenant.id)
+        session_id = self._session_with_tools(
+            [{
+                "key": "whatsapp.send_message",
+                "enabled": True,
+                "config": self._whatsapp_v2_config(extra={"internal_note": "should-not-leak"}),
+            }],
+            caller_phone="+573000000001",
+        )
         with patch(
             "app.services.whatsapp_message_service.WhatsAppMessageService.send_template_notification"
         ) as mocked:
             from app.services.whatsapp_message_service import WhatsAppSendResult
 
             mocked.return_value = WhatsAppSendResult(status="sent", provider_message_id="wamid.123")
-            response = self._invoke(session_id, "whatsapp.send_message", {"to_phone": "+573000000001", "template_key": "booking_confirmation"})
+            response = self._invoke(session_id, "whatsapp.send_message", {"appointment_date": "2026-09-25"})
         self.assertNotIn("should-not-leak", response.text)
 
     def test_tool_execution_uses_the_sessions_own_tenant_not_any_other(self) -> None:
         # The internal runtime channel authenticates as "voice-runtime", not
         # as a tenant user -- tenant isolation here means session_id alone
         # determines which tenant's integration config is resolved. Proven
-        # by configuring WhatsApp only for tenant A and invoking through a
-        # session that belongs to tenant B: it must fail exactly as it
-        # would for any tenant with no WhatsApp integration, never succeed
-        # by picking up tenant A's config.
+        # by configuring WhatsApp and the approved template only for tenant
+        # A and invoking through a session that belongs to tenant B: it
+        # must fail (the template lookup is tenant-scoped), never succeed
+        # by picking up tenant A's template or config.
         self._configure_whatsapp(self.tenant.id)
+        self._create_approved_whatsapp_template(self.tenant.id)
         other_tenant, _ = self._seed_tenant_user(slug="tenant-tools-c", email="tools-c@example.com")
         session_id = self._session_with_tools(
-            [{"key": "whatsapp.send_message", "enabled": True, "config": {}}], tenant_id=other_tenant.id
+            [{"key": "whatsapp.send_message", "enabled": True, "config": self._whatsapp_v2_config()}],
+            tenant_id=other_tenant.id,
+            caller_phone="+573000000001",
         )
-        response = self._invoke(session_id, "whatsapp.send_message", {"to_phone": "+573000000001", "template_key": "booking_confirmation"})
+        response = self._invoke(session_id, "whatsapp.send_message", {"appointment_date": "2026-09-25"})
         self.assertEqual(response.status_code, 502, response.text)
-        self.assertIn("tool_execution_failed", response.text)
+        self.assertIn("whatsapp_template_not_found", response.text)
 
     # -- calendar.create_booking / crm.create_lead (Session Context V1) --
 

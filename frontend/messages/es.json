@@ -1492,7 +1492,41 @@
         "customTitle": "Herramientas personalizadas",
         "customEmpty": "No hay herramientas personalizadas activas todavía.",
         "requiresCredential": "Falta configurar la credencial de esta herramienta.",
-        "configureCredential": "Configurar en Herramientas"
+        "configureCredential": "Configurar en Herramientas",
+        "llmInputsTitle": "Datos obtenidos durante la conversación",
+        "noLlmInputs": "El modelo no decide ningún dato para esta herramienta.",
+        "llmInputsDependOnConfig": "Depende de la configuración (ver abajo).",
+        "contextAutoTitle": "Contexto automático",
+        "noContext": "No requiere contexto de la sesión.",
+        "configTitle": "Configuración",
+        "noConfigNeeded": "No requiere configuración.",
+        "configureButton": "Configurar",
+        "configureRequired": "Falta configurar esta herramienta antes de poder activarla.",
+        "configured": "Configurada",
+        "whatsapp": {
+          "title": "Enviar WhatsApp",
+          "template": "Plantilla",
+          "templatePlaceholder": "Selecciona una plantilla aprobada",
+          "noTemplates": "No hay plantillas de WhatsApp aprobadas para este tenant.",
+          "templatesLoadError": "No se pudieron cargar las plantillas de WhatsApp.",
+          "manageTemplates": "Gestionar plantillas",
+          "recipient": "Destinatario",
+          "recipientStrategy": {
+            "contact_then_caller": "Contacto, con respaldo del número de la llamada",
+            "contact": "Solo el contacto",
+            "caller": "Solo el número de la llamada"
+          },
+          "variablesTitle": "Variables de la plantilla",
+          "variableSourceLabel": "Origen",
+          "variableSource": {
+            "llm": "Durante la conversación (el agente)",
+            "context": "Contexto de la sesión",
+            "fixed": "Valor fijo"
+          },
+          "variableDescriptionPlaceholder": "Descripción para el agente",
+          "variableFixedValuePlaceholder": "Valor fijo",
+          "selectTemplateFirst": "Selecciona una plantilla para configurar sus variables."
+        }
       },
       "voice": {
         "pipelineType": "Arquitectura", "speechToSpeech": "Speech-to-Speech", "ultravox": "Ultravox", "comingSoon": "Próximamente",

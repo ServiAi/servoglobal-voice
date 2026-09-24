@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Literal
 
-from app.domain.tool_registry import ToolDefinition
+from app.domain.tool_registry import ToolContextRequirement, ToolDefinition
 from app.models.tools import TenantHttpToolConfig, TenantTool
 
 
@@ -17,6 +17,10 @@ class ResolvedToolDefinition:
     their own response explicitly field-by-field. `required_integration`
     is always None for source="custom" -- a custom tool's "is this tenant
     ready to run it" concept is credential-based, not this closed enum.
+    `context_requirements` and `binding_config_schema` are always empty for
+    source="custom" -- Custom HTTP Tools have their own request-mapping
+    contract (app.domain.tool_mapping) and never adopt this Platform Tool
+    contract (see PlatformToolContractService's docstring).
     """
 
     key: str
@@ -27,6 +31,8 @@ class ResolvedToolDefinition:
     source: Literal["platform", "custom"]
     required_integration: Literal["booking", "whatsapp", "crm", "chatwoot"] | None
     custom_tool_id: str | None = None
+    context_requirements: tuple[ToolContextRequirement, ...] = ()
+    binding_config_schema: dict[str, Any] = field(default_factory=dict)
 
 
 def from_platform(tool: ToolDefinition) -> ResolvedToolDefinition:
@@ -38,6 +44,8 @@ def from_platform(tool: ToolDefinition) -> ResolvedToolDefinition:
         input_schema=tool.input_schema,
         source="platform",
         required_integration=tool.required_integration,
+        context_requirements=tool.context_requirements,
+        binding_config_schema=tool.binding_config_schema,
     )
 
 

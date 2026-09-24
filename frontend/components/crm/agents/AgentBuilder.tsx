@@ -84,9 +84,11 @@ type FormState = {
   // keyed by the VoiceModelResponse.parameters key. Converted to typed
   // values only at submit time -- see buildModelSettingsPayload.
   model_settings: Record<string, string>;
-  // Keys of AgentToolCatalogEntry the agent has enabled. `config` is
-  // always {} for both V1 tools (see types/agents.ts::AgentToolBinding).
-  enabled_tools: string[];
+  // One entry per AgentToolCatalogEntry the agent has ever toggled in this
+  // editing session, keyed by tool key -- see types/agents.ts::AgentToolBinding.
+  // `config` is real, tool-specific binding config (e.g. WhatsApp's V2
+  // template/recipient/variables contract), never forced back to {}.
+  tool_bindings: Record<string, { enabled: boolean; config: Record<string, unknown> }>;
 };
 
 const DEFAULT_EXTERNAL_VOICE_MODEL = 'eleven_turbo_v2_5';
@@ -119,7 +121,7 @@ function defaultForm(): FormState {
     voice_similarity_boost: '',
     voice_use_speaker_boost: true,
     model_settings: {},
-    enabled_tools: [],
+    tool_bindings: {},
   };
 }
 
@@ -158,7 +160,9 @@ function toForm(agent: AgentResponse, draft: AgentVersionResponse): FormState {
     voice_similarity_boost: typeof settings.similarity_boost === 'number' ? String(settings.similarity_boost) : '',
     voice_use_speaker_boost: typeof settings.use_speaker_boost === 'boolean' ? settings.use_speaker_boost : true,
     model_settings,
-    enabled_tools: (draft.runtime_binding.tools ?? []).filter((tool) => tool.enabled).map((tool) => tool.key),
+    tool_bindings: Object.fromEntries(
+      (draft.runtime_binding.tools ?? []).map((tool) => [tool.key, { enabled: tool.enabled, config: tool.config ?? {} }])
+    ),
   };
 }
 
@@ -210,12 +214,15 @@ function buildModelSettingsPayload(form: FormState, selectedModel: VoiceModelRes
 /** Only ever binds tools the catalog still reports as `available` -- an
  * enabled key that became unavailable (or was removed from the Registry)
  * between load and save is silently dropped rather than resent, mirroring
- * buildModelSettingsPayload's "never resend what's no longer valid" rule. */
+ * buildModelSettingsPayload's "never resend what's no longer valid" rule.
+ * Each binding's real `config` is preserved as-is (see WhatsAppToolConfigurator) --
+ * never forced back to `{}`, which used to silently discard WhatsApp V2
+ * configuration on every save. */
 function buildToolsPayload(form: FormState, catalog: AgentToolCatalogEntry[]) {
   const availableKeys = new Set(catalog.filter((tool) => tool.available).map((tool) => tool.key));
-  return form.enabled_tools
-    .filter((key) => availableKeys.has(key))
-    .map((key) => ({ key, enabled: true, config: {} }));
+  return Object.entries(form.tool_bindings)
+    .filter(([key, binding]) => binding.enabled && availableKeys.has(key))
+    .map(([key, binding]) => ({ key, enabled: true, config: binding.config ?? {} }));
 }
 
 /** Publish-time errors carry a stable code as (a prefix of) the response
@@ -348,9 +355,18 @@ export function AgentBuilder({
   function setToolEnabled(key: string, toolEnabled: boolean) {
     setForm((current) => ({
       ...current,
-      enabled_tools: toolEnabled
-        ? [...current.enabled_tools, key]
-        : current.enabled_tools.filter((existing) => existing !== key),
+      tool_bindings: {
+        ...current.tool_bindings,
+        [key]: { config: current.tool_bindings[key]?.config ?? {}, enabled: toolEnabled },
+      },
+    }));
+    setSaved(false);
+  }
+
+  function setToolConfig(key: string, config: Record<string, unknown>) {
+    setForm((current) => ({
+      ...current,
+      tool_bindings: { ...current.tool_bindings, [key]: { enabled: current.tool_bindings[key]?.enabled ?? false, config } },
     }));
     setSaved(false);
   }
@@ -659,9 +675,10 @@ export function AgentBuilder({
           <AgentToolsSection
             locale={locale}
             catalog={toolCatalog}
-            enabledKeys={form.enabled_tools}
+            bindings={form.tool_bindings}
             disabled={!canEdit}
             onToggle={setToolEnabled}
+            onConfigChange={setToolConfig}
             t={t}
           />
         ) : null}
@@ -867,9 +884,10 @@ export function AgentBuilder({
             <AgentToolsSection
               locale={locale}
               catalog={toolCatalog}
-              enabledKeys={form.enabled_tools}
+              bindings={form.tool_bindings}
               disabled={!editable || !hasDraft || form.management_mode === 'provider_managed'}
               onToggle={setToolEnabled}
+              onConfigChange={setToolConfig}
               t={t}
             />
           ) : null}

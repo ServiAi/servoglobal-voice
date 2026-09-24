@@ -28,6 +28,7 @@ from app.schemas.agents import (
     AgentVersionResponse,
 )
 from app.services.integration_event_service import IntegrationEventService
+from app.services.platform_tool_contract_service import PlatformToolContractError, PlatformToolContractService
 from app.services.tenant_feature_service import AGENT_BUILDER, TenantFeatureService
 from app.services.tenant_tool_credential_service import TenantToolCredentialService
 from app.services.tool_catalog_service import ToolCatalogService
@@ -573,6 +574,7 @@ class AgentService:
         (frontend + tests) is unaffected for platform tools.
         """
         resolver = ToolResolverService(self.db)
+        contract = PlatformToolContractService(self.db)
         seen: set[str] = set()
         for binding in bindings:
             key = binding.key
@@ -584,6 +586,17 @@ class AgentService:
                 raise ToolRegistryValidationError(f"tool_not_found:{key}")
             if resolved.status != "available":
                 raise ToolRegistryValidationError(f"tool_not_available:{key}")
+            if not binding.enabled:
+                # A disabled binding's config is never exercised -- same
+                # "skip disabled" rule _publish_tools_preflight already
+                # applies, so a draft can be saved mid-edit (e.g. WhatsApp
+                # unchecked while its config is incomplete) without forcing
+                # it to be fully configured first.
+                continue
+            try:
+                contract.validate_binding_config(tenant_id, resolved, binding.config)
+            except PlatformToolContractError as exc:
+                raise ToolRegistryValidationError(str(exc)) from exc
 
     def _publish_tools_preflight(self, tenant_id: str, draft: TenantAgentVersion) -> None:
         """Cheap, blocking publish-time checks for a serviglobal_managed
@@ -601,6 +614,7 @@ class AgentService:
         """
         bindings = draft.runtime_binding_json.get("tools", [])
         resolver = ToolResolverService(self.db)
+        contract = PlatformToolContractService(self.db)
         for binding in bindings:
             if not binding.get("enabled", True):
                 continue
@@ -612,6 +626,11 @@ class AgentService:
                 raise AgentValidationError(f"tool_not_available:{key}")
             if not self._resolved_tool_available(tenant_id, resolved):
                 raise AgentValidationError("tool_integration_not_configured")
+            config = binding.get("config") if isinstance(binding.get("config"), dict) else {}
+            try:
+                contract.validate_binding_config(tenant_id, resolved, config)
+            except PlatformToolContractError as exc:
+                raise AgentValidationError(str(exc)) from exc
 
     def _tool_integration_configured(self, tenant_id: str, required_integration: str | None) -> bool:
         """Cheap, tenant-scoped check reusing each integration's own real
