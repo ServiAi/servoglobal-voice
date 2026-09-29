@@ -160,6 +160,38 @@ class VoiceQaHarnessTests(Integration2ATestCase):
             self.assertEqual(session.session_context_json["contact"]["id"], contact_id)
             self.assertEqual(session.session_context_json["variables"], {"scenario": "existing_lead"})
 
+    def test_context_preview_uses_tenant_scoped_session_context_resolution(self) -> None:
+        lead_id, contact_id = self.seed_lead()
+        with SessionLocal() as db:
+            TenantFeatureService(db).set_feature(
+                self.tenant.id, VOICE_RUNTIME_V2, True, {}, self.user.id
+            )
+            before = db.scalar(select(func.count()).select_from(VoiceSession))
+        response = self.client.post(
+            "/api/v1/voice/sessions/context-preview",
+            json={"lead_id": lead_id, "variables": {"service": "consulta"}},
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["lead"]["id"], lead_id)
+        self.assertEqual(response.json()["contact"]["id"], contact_id)
+        self.assertEqual(response.json()["variables"], {"service": "consulta"})
+        with SessionLocal() as db:
+            self.assertEqual(db.scalar(select(func.count()).select_from(VoiceSession)), before)
+
+    def test_context_preview_rejects_incompatible_lead_and_contact(self) -> None:
+        lead_id, _ = self.seed_lead()
+        other_tenant, _ = self._seed_tenant_user(slug="qa-preview-b", email="qa-preview-b@example.com")
+        _, other_contact_id = self.seed_lead(tenant_id=other_tenant.id)
+        with SessionLocal() as db:
+            TenantFeatureService(db).set_feature(
+                self.tenant.id, VOICE_RUNTIME_V2, True, {}, self.user.id
+            )
+        response = self.client.post(
+            "/api/v1/voice/sessions/context-preview",
+            json={"lead_id": lead_id, "contact_id": other_contact_id},
+        )
+        self.assertEqual(response.status_code, 422, response.text)
+
     def test_webrtc_conversation_starts_without_preloaded_context(self) -> None:
         agent_id = self._agent()
         with SessionLocal() as db:

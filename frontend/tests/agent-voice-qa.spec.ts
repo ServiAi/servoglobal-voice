@@ -20,6 +20,7 @@ test('QA action sends tenant-safe context and distinct WebRTC/SIP contracts', as
   expect(source).toContain('variables: hasPreloadedContext ? input.variables ?? {} : undefined');
   expect(source).toContain("to_phone: input.transport === 'sip' ? input.to_phone : undefined");
   expect(source).not.toContain('tenant_id:');
+  expect(source).toContain("'POST', 'sessions/context-preview'");
 });
 
 test('QA dialog keeps transport and context mode as independent choices', async () => {
@@ -35,7 +36,12 @@ test('QA dialog keeps transport and context mode as independent choices', async 
   expect(source).toContain("transport === 'sip' ? <label");
   expect(source).toContain('Teléfono del caller (contexto)');
   expect(source).toContain('Contact ID manual');
-  expect(source).toContain('Variables JSON controladas');
+  expect(source).toContain('Variables adicionales de SessionContext');
+  expect(source).toContain('Contexto que recibirá el agente');
+  expect(source).toContain('fetchVoiceQaContextPreviewAction');
+  expect(source).toContain('disabled={!preflightReady}');
+  expect(source).toContain('preferred_date: preferredDate');
+  expect(source).toContain('preferred_time: preferredTime');
 });
 
 test('conversation mode omits CRM context, skips lead lookup and explains WebRTC limits', async () => {
@@ -65,6 +71,21 @@ test('QA console renders transcripts, tool outcomes and lead errors', async () =
   expect(source).toContain('lead_context_required');
   expect(source).toContain('Context mode');
   expect(source).toContain("contextMode === 'conversation' ? 'Conversacional' : 'Precargado'");
+});
+
+test('QA tools are projected from the published generic catalog and binding', async () => {
+  const source = await readFile(
+    path.join(root, 'components/crm/agents/AgentVoiceTest.tsx'),
+    'utf8'
+  );
+  expect(source).toContain('toolCatalog.find((tool) => tool.key === binding.key)');
+  expect(source).toContain('definition?.input_schema.properties');
+  expect(source).toContain('definition?.context_requirements');
+  expect(source).toContain('definition?.source');
+  expect(source).toContain('binding.config');
+  expect(source).toContain('sanitizeConfigValue');
+  expect(source).toContain('credential|authorization|api.?key');
+  expect(source).toContain('toolsReady');
 });
 
 test('QA polling deduplicates by event_id and stops on terminal sessions', async () => {

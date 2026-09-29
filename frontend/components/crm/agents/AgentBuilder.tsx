@@ -712,6 +712,8 @@ export function AgentBuilder({
             <AgentVoiceTest
               agentId={agent.id}
               agentName={agent.name}
+              toolCatalog={toolCatalog}
+              toolBindings={publishedVersion.runtime_binding.tools ?? []}
               published={{
                 id: publishedVersion.id,
                 version: publishedVersion.version,
