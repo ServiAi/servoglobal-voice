@@ -23,6 +23,7 @@ from app.schemas.voice_sessions import (
     ToolInvokeRequest,
     ToolInvokeResponse,
     VoiceSessionCreateRequest,
+    VoiceSessionContextPreviewRequest,
     VoiceSessionContextResponse,
     VoiceSessionEventResponse,
     VoiceSessionEventsResponse,
@@ -31,7 +32,7 @@ from app.schemas.voice_sessions import (
 )
 from app.security.voice_runtime_auth import require_voice_runtime
 from app.services.agent_compiler_service import AgentCompilerError, AgentCompilerService
-from app.services.contact_resolution_service import ContactResolutionError
+from app.services.contact_resolution_service import ContactResolutionError, ContactResolutionService
 from app.services.tenant_feature_service import TenantFeatureDisabledError, TenantFeatureService, VOICE_RUNTIME_V2
 from app.services.tool_dispatch_service import (
     ToolArgumentError,
@@ -48,6 +49,29 @@ from app.services.voice_session_sip_service import VoiceSessionSipDialError, Voi
 router = APIRouter(tags=["Voice Runtime"])
 WRITE_ROLES = ["platform_admin", "tenant_admin"]
 logger = logging.getLogger(__name__)
+
+
+@router.post("/api/v1/voice/sessions/context-preview", response_model=SessionContextV1)
+def preview_voice_session_context(
+    body: VoiceSessionContextPreviewRequest,
+    context: AuthContext = Depends(require_roles(WRITE_ROLES)),
+    db: Session = Depends(get_db),
+) -> SessionContextV1:
+    try:
+        TenantFeatureService(db).require_enabled(context.tenant_id, VOICE_RUNTIME_V2)
+        return ContactResolutionService(db).resolve(
+            tenant_id=context.tenant_id,
+            phone=(body.to_phone if body.qa_context_mode == "conversation" and body.channel == "sip" else body.caller_phone),
+            contact_id=body.contact_id,
+            lead_id=body.lead_id,
+            trusted_ids=True,
+            source="outbound" if body.channel == "sip" else "webrtc",
+            variables=body.variables,
+        )
+    except TenantFeatureDisabledError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except (ContactResolutionError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.post("/api/v1/voice/sessions", response_model=VoiceSessionResponse, status_code=status.HTTP_201_CREATED)

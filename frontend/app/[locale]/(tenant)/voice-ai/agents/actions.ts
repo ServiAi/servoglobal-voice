@@ -150,6 +150,24 @@ export type VoiceQaSessionInput = {
   variables?: Record<string, unknown>;
 };
 
+export type VoiceQaContextPreviewInput = Pick<VoiceQaSessionInput, 'context_mode' | 'transport' | 'caller_phone' | 'contact_id' | 'lead_id' | 'to_phone' | 'variables'>;
+
+export async function fetchVoiceQaContextPreviewAction(
+  input: VoiceQaContextPreviewInput
+): Promise<FetchResult<Record<string, unknown>>> {
+  return withAccessToken((token) => requestVoiceEndpoint<Record<string, unknown>>(
+    'POST', 'sessions/context-preview', token, undefined, {
+      qa_context_mode: input.context_mode,
+      channel: input.transport,
+      caller_phone: input.context_mode === 'preloaded' ? input.caller_phone || undefined : undefined,
+      contact_id: input.context_mode === 'preloaded' ? input.contact_id || undefined : undefined,
+      lead_id: input.context_mode === 'preloaded' ? input.lead_id || undefined : undefined,
+      to_phone: input.transport === 'sip' ? input.to_phone : undefined,
+      variables: input.context_mode === 'preloaded' ? input.variables ?? {} : {},
+    }
+  ));
+}
+
 export type VoiceQaEvent = {
   event_id: string;
   event_type: string;

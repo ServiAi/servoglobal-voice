@@ -5,6 +5,7 @@ import { Activity, AlertTriangle, Braces, Headphones, Mic, MicOff, Phone, PhoneO
 import {
   createVoiceTestSessionAction,
   createVoiceTestTokenAction,
+  fetchVoiceQaContextPreviewAction,
   fetchVoiceQaLeadsAction,
   fetchVoiceTestEventsAction,
   type QaContextMode,
@@ -14,6 +15,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import type { LiveKitVoiceRuntimeAdapter } from '@/lib/voice-runtime/livekit-adapter';
+import type { AgentToolBinding, AgentToolCatalogEntry } from '@/types/agents';
 import type { LeadListItem } from '@/types/crm';
 
 type Transport = 'webrtc' | 'sip';
@@ -23,7 +25,7 @@ type PublishedAgentInfo = { id: string; version: number; provider: string; runti
 const TERMINAL = new Set(['ended', 'failed', 'cancelled']);
 const INPUT = 'h-10 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/15';
 
-export function AgentVoiceTest({ agentId, agentName, published }: { agentId: string; agentName: string; published: PublishedAgentInfo }) {
+export function AgentVoiceTest({ agentId, agentName, published, toolCatalog, toolBindings }: { agentId: string; agentName: string; published: PublishedAgentInfo; toolCatalog: AgentToolCatalogEntry[]; toolBindings: AgentToolBinding[] }) {
   const adapter = useRef<LiveKitVoiceRuntimeAdapter | null>(null);
   const [open, setOpen] = useState(false);
   const [stage, setStage] = useState<Stage>('config');
@@ -34,6 +36,13 @@ export function AgentVoiceTest({ agentId, agentName, published }: { agentId: str
   const [contactId, setContactId] = useState('');
   const [leadId, setLeadId] = useState('');
   const [variablesText, setVariablesText] = useState('{}');
+  const [service, setService] = useState('');
+  const [location, setLocation] = useState('');
+  const [preferredDate, setPreferredDate] = useState('');
+  const [preferredTime, setPreferredTime] = useState('');
+  const [notes, setNotes] = useState('');
+  const [contextPreview, setContextPreview] = useState<Record<string, unknown> | null>(null);
+  const [contextPreviewError, setContextPreviewError] = useState<string | null>(null);
   const [advanced, setAdvanced] = useState(false);
   const [leadSearch, setLeadSearch] = useState('');
   const [leads, setLeads] = useState<LeadListItem[]>([]);
@@ -66,6 +75,48 @@ export function AgentVoiceTest({ agentId, agentName, published }: { agentId: str
     }, 250);
     return () => window.clearTimeout(timer);
   }, [contextMode, leadSearch, open, stage]);
+
+  useEffect(() => {
+    if (!open || stage !== 'config') return;
+    setContextPreview(null);
+    let variables: Record<string, unknown> = {};
+    if (contextMode === 'preloaded') {
+      try {
+        const parsed: unknown = JSON.parse(variablesText);
+        if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object') throw new Error();
+        variables = parsed as Record<string, unknown>;
+        for (const [key, value] of Object.entries({ service, location, preferred_date: preferredDate, preferred_time: preferredTime, notes })) {
+          if (value.trim()) variables[key] = value.trim();
+          else delete variables[key];
+        }
+      } catch {
+        setContextPreview(null);
+        setContextPreviewError('Las variables deben ser un objeto JSON válido.');
+        return;
+      }
+    }
+    let active = true;
+    const timer = window.setTimeout(async () => {
+      const result = await fetchVoiceQaContextPreviewAction({
+        context_mode: contextMode,
+        transport,
+        caller_phone: callerPhone.trim() || undefined,
+        lead_id: leadId || undefined,
+        contact_id: contactId.trim() || undefined,
+        to_phone: toPhone.trim() || undefined,
+        variables,
+      });
+      if (!active) return;
+      if (result.ok) {
+        setContextPreview(result.data);
+        setContextPreviewError(null);
+      } else {
+        setContextPreview(null);
+        setContextPreviewError(result.detail);
+      }
+    }, 250);
+    return () => { active = false; window.clearTimeout(timer); };
+  }, [callerPhone, contactId, contextMode, leadId, location, notes, open, preferredDate, preferredTime, service, stage, toPhone, transport, variablesText]);
 
   useEffect(() => {
     const sessionId = session?.session.id;
@@ -108,6 +159,10 @@ export function AgentVoiceTest({ agentId, agentName, published }: { agentId: str
       try {
         variables = JSON.parse(variablesText) as Record<string, unknown>;
         if (!variables || Array.isArray(variables) || typeof variables !== 'object') throw new Error();
+        for (const [key, value] of Object.entries({ service, location, preferred_date: preferredDate, preferred_time: preferredTime, notes })) {
+          if (value.trim()) variables[key] = value.trim();
+          else delete variables[key];
+        }
       } catch {
         setError('Las variables deben ser un objeto JSON válido.');
         return;
@@ -166,10 +221,16 @@ export function AgentVoiceTest({ agentId, agentName, published }: { agentId: str
       setError('No fue posible conectar con LiveKit.');
       setStage('error');
     }
-  }, [agentId, callerPhone, contactId, contextMode, leadId, toPhone, transport, variablesText]);
+  }, [agentId, callerPhone, contactId, contextMode, leadId, location, notes, preferredDate, preferredTime, service, toPhone, transport, variablesText]);
 
   const transcripts = useMemo(() => events.filter((event) => event.event_type === 'voice.transcript.final'), [events]);
   const tools = useMemo(() => events.filter((event) => event.event_type === 'session.context.tool_used'), [events]);
+  const enabledBindings = toolBindings.filter((binding) => binding.enabled);
+  const enabledTools = enabledBindings.map((binding) => ({ binding, definition: toolCatalog.find((tool) => tool.key === binding.key) }));
+  const toolsReady = enabledTools.every(({ binding, definition }) => definition?.status === 'available' && definition.available && (!definition.configuration_required || Object.keys(binding.config ?? {}).length > 0));
+  const preflightReady = Boolean(contextPreview) && !contextPreviewError && Boolean(published.provider) && published.runtimeEngine === 'livekit' && published.pipelineType === 'realtime' && toolsReady;
+  const selectedLead = leads.find((lead) => lead.lead_id === leadId);
+  const resolvedContact = contextPreview?.contact as Record<string, unknown> | null | undefined;
 
   return (
     <>
@@ -220,15 +281,46 @@ export function AgentVoiceTest({ agentId, agentName, published }: { agentId: str
                       <label className="relative block"><Search className="absolute left-3 top-2.5 size-4 text-muted-foreground" aria-hidden="true" /><input className={`${INPUT} pl-9`} value={leadSearch} onChange={(event) => setLeadSearch(event.target.value)} placeholder="Buscar lead por nombre, teléfono o correo" /></label>
                       <select className={INPUT} value={leadId} onChange={(event) => { setLeadId(event.target.value); if (event.target.value) setContactId(''); }} aria-label="Lead para contexto QA">
                         <option value="">Sin lead seleccionado</option>
-                        {leads.map((lead) => <option key={lead.lead_id} value={lead.lead_id}>{lead.contact_name} · {lead.contact_phone ?? 'sin teléfono'}</option>)}
+                        {leads.map((lead) => <option key={lead.lead_id} value={lead.lead_id}>{lead.contact_name} · {lead.contact_phone ?? 'sin teléfono'} · {lead.contact_email ?? 'sin correo'}</option>)}
                       </select>
+                      {selectedLead ? <div className="grid gap-2 rounded-lg bg-muted/30 p-3 text-xs sm:grid-cols-2"><p><strong>Lead:</strong> {selectedLead.contact_name} · {selectedLead.lead_id}</p><p><strong>Teléfono:</strong> {selectedLead.contact_phone ?? '—'}</p><p><strong>Correo:</strong> {selectedLead.contact_email ?? '—'}</p><p><strong>Contact resuelto:</strong> {String(resolvedContact?.id ?? '—')} · {String(resolvedContact?.name ?? '')}</p></div> : null}
                       <p className="text-xs text-muted-foreground">Al seleccionar un lead, el backend deriva su contacto tenant-scoped y rechaza combinaciones incompatibles.</p>
                     </div>
+                    <section className="space-y-3 rounded-xl border border-border p-4">
+                      <h3 className="text-sm font-semibold">Contexto de negocio</h3>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <label className="space-y-1 text-xs font-medium">Servicio / intención<input className={INPUT} value={service} onChange={(event) => setService(event.target.value)} /></label>
+                        <label className="space-y-1 text-xs font-medium">Sede<input className={INPUT} value={location} onChange={(event) => setLocation(event.target.value)} /></label>
+                        <label className="space-y-1 text-xs font-medium">Fecha preferida<input className={INPUT} type="date" value={preferredDate} onChange={(event) => setPreferredDate(event.target.value)} /></label>
+                        <label className="space-y-1 text-xs font-medium">Hora preferida<input className={INPUT} type="time" value={preferredTime} onChange={(event) => setPreferredTime(event.target.value)} /></label>
+                        <label className="space-y-1 text-xs font-medium sm:col-span-2">Notas<input className={INPUT} value={notes} onChange={(event) => setNotes(event.target.value)} /></label>
+                      </div>
+                    </section>
+                    <section className="space-y-2 rounded-xl border border-border bg-muted/15 p-4">
+                      <h3 className="text-sm font-semibold">Contexto que recibirá el agente</h3>
+                      {contextPreview ? <pre className="max-h-56 overflow-auto rounded-lg bg-background p-3 text-xs">{JSON.stringify(contextPreview, null, 2)}</pre> : <p className="text-xs text-muted-foreground">{contextPreviewError ?? 'Resolviendo contexto…'}</p>}
+                    </section>
+                    <section className="space-y-3 rounded-xl border border-border p-4">
+                      <h3 className="text-sm font-semibold">Herramientas habilitadas</h3>
+                      {enabledTools.length ? enabledTools.map(({ binding, definition }) => <article key={binding.key} className="rounded-lg border border-border bg-muted/15 p-3 text-xs">
+                        <div className="flex flex-wrap items-center justify-between gap-2"><strong>{binding.key}</strong><span className={definition?.available ? 'text-emerald-700 dark:text-emerald-300' : 'text-destructive'}>{definition?.available ? 'Habilitada' : 'Integración o tool no disponible'}</span></div>
+                        <p className="mt-1 text-muted-foreground">{definition?.source ?? 'desconocido'} · {definition?.required_integration ?? 'sin integración requerida'}</p>
+                        <div className="mt-3 grid gap-2 sm:grid-cols-3"><ToolMetadata title="Argumentos LLM" items={Object.keys(((definition?.input_schema.properties ?? {}) as Record<string, unknown>))} /><ToolMetadata title="Contexto de sesión" items={(definition?.context_requirements ?? []).map((requirement) => `${requirement.path}${requirement.required ? ' · requerido' : ''}`)} /><ToolMetadata title="Configuración fija" items={Object.entries(binding.config ?? {}).map(([key, value]) => `${key}: ${JSON.stringify(sanitizeConfigValue(key, value))}`)} /></div>
+                      </article>) : <p className="text-xs text-muted-foreground">No hay tools publicadas habilitadas para este agente.</p>}
+                    </section>
+                    <section className="space-y-2 rounded-xl border border-border bg-muted/15 p-4 text-xs">
+                      <h3 className="text-sm font-semibold">Preparación de la prueba</h3>
+                      <p>{published.provider ? '✓ Agente publicado y proveedor configurado' : '✕ Proveedor de voz no configurado'}</p>
+                      <p>{published.runtimeEngine === 'livekit' ? '✓ Runtime LiveKit seleccionado' : '✕ Runtime LiveKit no disponible'}</p>
+                      <p>{contextPreview && !contextPreviewError ? '✓ SessionContext resuelto' : `✕ SessionContext: ${contextPreviewError ?? 'pendiente de resolución'}`}</p>
+                      <p>{toolsReady ? '✓ Tools publicadas e integraciones disponibles' : '✕ Verifica las tools habilitadas, su configuración e integración requerida'}</p>
+                      <p className="text-muted-foreground">La conectividad real de LiveKit se confirma al conectar; esta pantalla no hace una llamada de prueba al proveedor.</p>
+                    </section>
                     <button type="button" className="text-sm font-semibold text-cyan-700 dark:text-cyan-300" onClick={() => setAdvanced((value) => !value)}>{advanced ? 'Ocultar configuración avanzada' : 'Mostrar configuración avanzada'}</button>
                     {advanced ? (
                       <div className="grid gap-4 rounded-xl border border-border bg-muted/20 p-4 md:grid-cols-2">
                         <label className="space-y-1.5 text-sm font-medium"><span>Contact ID manual</span><input className={INPUT} value={contactId} disabled={Boolean(leadId)} onChange={(event) => setContactId(event.target.value)} /></label>
-                        <label className="space-y-1.5 text-sm font-medium md:col-span-2"><span className="flex items-center gap-2"><Braces className="size-4" /> Variables JSON controladas</span><textarea className={`${INPUT} min-h-28 py-2 font-mono`} value={variablesText} onChange={(event) => setVariablesText(event.target.value)} spellCheck={false} /></label>
+                        <label className="space-y-1.5 text-sm font-medium md:col-span-2"><span className="flex items-center gap-2"><Braces className="size-4" /> Variables adicionales de SessionContext</span><textarea className={`${INPUT} min-h-28 py-2 font-mono`} value={variablesText} onChange={(event) => setVariablesText(event.target.value)} spellCheck={false} /><span className="text-xs text-muted-foreground">Se inyectan como contexto confiable de la sesión; no son argumentos generados por el LLM.</span></label>
                       </div>
                     ) : null}
                   </>
@@ -239,7 +331,7 @@ export function AgentVoiceTest({ agentId, agentName, published }: { agentId: str
             {error ? <p role="alert" className="mt-4 rounded-lg border border-destructive/25 bg-destructive/5 p-3 text-sm text-destructive">{error}</p> : null}
           </div>
           <DialogFooter className="border-t border-border px-6 py-4">
-            {stage === 'config' ? <Button type="button" onClick={start}>Iniciar prueba {transport.toUpperCase()}</Button> : null}
+            {stage === 'config' ? <Button type="button" onClick={start} disabled={!preflightReady}>Iniciar prueba {transport.toUpperCase()}</Button> : null}
             {stage !== 'config' ? <Button type="button" variant="destructive" onClick={() => { reset(); setOpen(false); }}><PhoneOff className="mr-2 size-4" />Finalizar</Button> : null}
           </DialogFooter>
         </DialogContent>
@@ -279,6 +371,17 @@ function ToolRow({ event }: { event: VoiceQaEvent }) {
     ? 'lead_context_required — la sesión no tiene un lead resuelto'
     : String(event.payload.error_code ?? event.payload.summary ?? '');
   return <div className={`rounded-lg border px-3 py-2 text-sm ${failed ? 'border-destructive/30 bg-destructive/5' : 'border-border bg-muted/25'}`}><p className="font-semibold">{String(event.payload.tool_key ?? 'tool')}</p><p className={failed ? 'text-destructive' : 'text-muted-foreground'}>{String(event.payload.status ?? 'unknown')} · {String(event.payload.duration_ms ?? 0)} ms · {detail}</p></div>;
+}
+
+function ToolMetadata({ title, items }: { title: string; items: string[] }) {
+  return <div className="rounded-md bg-background p-2"><p className="font-semibold">{title}</p>{items.length ? <ul className="mt-1 space-y-1 text-muted-foreground">{items.map((item) => <li key={item} className="break-all">{item}</li>)}</ul> : <p className="mt-1 text-muted-foreground">—</p>}</div>;
+}
+
+function sanitizeConfigValue(key: string, value: unknown): unknown {
+  if (/secret|token|password|credential|authorization|api.?key|phone|email/i.test(key)) return '[oculto]';
+  if (Array.isArray(value)) return value.map((item) => sanitizeConfigValue('', item));
+  if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([childKey, child]) => [childKey, sanitizeConfigValue(childKey, child)]));
+  return value;
 }
 
 function Status({ icon: Icon, label, value, active }: { icon: typeof Radio; label: string; value: string; active: boolean }) {

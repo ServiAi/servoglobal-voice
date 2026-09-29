@@ -36,6 +36,29 @@ class VoiceSessionCreateRequest(BaseModel):
         return self
 
 
+class VoiceSessionContextPreviewRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    qa_context_mode: Literal["preloaded", "conversation"] = "preloaded"
+    channel: Literal["webrtc", "sip"] = "webrtc"
+    contact_id: str | None = Field(default=None, min_length=1, max_length=36)
+    lead_id: str | None = Field(default=None, min_length=1, max_length=36)
+    caller_phone: str | None = Field(default=None, min_length=1, max_length=32)
+    to_phone: str | None = Field(default=None, min_length=1, max_length=32)
+    variables: dict = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def validate_qa_context(self) -> "VoiceSessionContextPreviewRequest":
+        if self.qa_context_mode == "conversation" and (
+            self.caller_phone or self.contact_id or self.lead_id or self.variables
+        ):
+            raise ValueError("qa_conversation_context_must_be_empty")
+        if self.channel == "sip" and not self.to_phone:
+            raise ValueError("SIP sessions require to_phone.")
+        if self.channel == "webrtc" and self.to_phone is not None:
+            raise ValueError("to_phone is only valid for SIP sessions.")
+        return self
+
+
 class WebRTCParticipantTokenResponse(BaseModel):
     voice_session_id: str
     server_url: str
