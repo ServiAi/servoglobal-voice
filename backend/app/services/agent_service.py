@@ -8,15 +8,22 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.domain.tool_registry import ToolRegistryValidationError
 from app.domain.voice_registry import (
     VoiceRegistryValidationError,
     validate_model_settings,
     validate_runtime_selection,
 )
-from app.domain.resolved_tool import ResolvedToolDefinition
 from app.models.agents import TenantAgent, TenantAgentVersion
 from app.models.integrations import TenantVoiceAgentConfig
+from app.modules.tools.public import (
+    PlatformToolContractError,
+    PlatformToolContractService,
+    ResolvedToolDefinition,
+    ToolCatalogService,
+    ToolRegistryValidationError,
+    ToolResolverService,
+    is_custom_tool_credential_ready,
+)
 from app.schemas.agents import (
     AgentBehavior,
     AgentCreateRequest,
@@ -28,11 +35,7 @@ from app.schemas.agents import (
     AgentVersionResponse,
 )
 from app.services.integration_event_service import IntegrationEventService
-from app.services.platform_tool_contract_service import PlatformToolContractError, PlatformToolContractService
 from app.services.tenant_feature_service import AGENT_BUILDER, TenantFeatureService
-from app.services.tenant_tool_credential_service import TenantToolCredentialService
-from app.services.tool_catalog_service import ToolCatalogService
-from app.services.tool_resolver_service import ToolResolverService
 from app.services.voice_selection_service import VoiceSelectionError, VoiceSelectionService
 
 VERSION_CONSTRAINT = "uq_tenant_agent_versions_agent_version"
@@ -400,9 +403,7 @@ class AgentService:
         if resolved.source == "platform":
             return self._tool_integration_configured(tenant_id, resolved.required_integration)
         assert resolved.custom_tool_id is not None
-        return TenantToolCredentialService(self.db).is_configured_or_not_required(
-            tenant_id, resolved.custom_tool_id
-        )
+        return is_custom_tool_credential_ready(self.db, tenant_id, resolved.custom_tool_id)
 
     def list_versions(self, tenant_id: str, agent_id: str) -> list[TenantAgentVersion]:
         agent = self.get_agent(tenant_id, agent_id)

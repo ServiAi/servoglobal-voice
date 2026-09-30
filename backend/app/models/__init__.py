@@ -35,7 +35,7 @@ from app.models.notifications import (
     TenantNotificationRule,
 )
 from app.models.tenant_features import TenantFeatureGrant
-from app.models.tools import TenantHttpToolConfig, TenantTool, TenantToolCredential
+from app.modules.tools.infrastructure.models import TenantHttpToolConfig, TenantTool, TenantToolCredential
 from app.models.voice_context import TenantVoiceContextField, TenantVoiceContextSchema
 from app.models.voice_experiences import TenantVoiceExperience, TenantVoiceExperienceVersion
 from app.models.voice_submissions import (

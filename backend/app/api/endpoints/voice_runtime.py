@@ -34,7 +34,7 @@ from app.security.voice_runtime_auth import require_voice_runtime
 from app.services.agent_compiler_service import AgentCompilerError, AgentCompilerService
 from app.services.contact_resolution_service import ContactResolutionError, ContactResolutionService
 from app.services.tenant_feature_service import TenantFeatureDisabledError, TenantFeatureService, VOICE_RUNTIME_V2
-from app.services.tool_dispatch_service import (
+from app.modules.tools.public import (
     ToolArgumentError,
     ToolDispatchService,
     ToolExecutionError,

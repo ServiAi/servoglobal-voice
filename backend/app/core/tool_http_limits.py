@@ -1,6 +1,12 @@
-MAX_RESPONSE_BYTES = 1_048_576  # 1 MiB
-MAX_TIMEOUT_MS = 15_000
-MIN_TIMEOUT_MS = 1_000
-DEFAULT_TIMEOUT_MS = 8_000
-ALLOWED_CONTENT_TYPES = frozenset({"application/json", "text/plain"})
-ALLOWED_PORTS = frozenset({80, 443})
+"""TEMPORARY compatibility shim -- moved to `app.modules.tools.domain.limits`.
+
+Aliases this legacy path to the real module (same object, so `unittest.mock.patch`
+targets keep working and no logic is duplicated). New code must import from
+`app.modules.tools.public` instead. Remove once nothing imports this path; see
+docs/architecture/MODULAR_MONOLITH_MIGRATION.md.
+"""
+
+import importlib
+import sys
+
+sys.modules[__name__] = importlib.import_module("app.modules.tools.domain.limits")

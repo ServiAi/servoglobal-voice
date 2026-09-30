@@ -1,27 +1,12 @@
-from __future__ import annotations
+"""TEMPORARY compatibility shim -- moved to `app.modules.tools.domain.invocation`.
 
-from dataclasses import dataclass
-from typing import Any
+Aliases this legacy path to the real module (same object, so `unittest.mock.patch`
+targets keep working and no logic is duplicated). New code must import from
+`app.modules.tools.public` instead. Remove once nothing imports this path; see
+docs/architecture/MODULAR_MONOLITH_MIGRATION.md.
+"""
 
-from app.schemas.session_context import SessionContextV1
+import importlib
+import sys
 
-
-@dataclass
-class PlatformToolInvocation:
-    """The three sources a Platform Tool handler is allowed to read, kept
-    separate on purpose -- see PlatformToolContractService. Never merge
-    these into one dict (`{**llm_args, **context, **config}`): that erases
-    which source a value came from, which is exactly the trust boundary
-    this contract exists to preserve.
-
-    llm_args: what the model decided this call (validated against the
-        tool's effective LLM schema).
-    context: the session's own resolved SessionContextV1 (caller/contact/
-        lead/campaign) -- trusted, never LLM-supplied.
-    config: the admin's AgentToolBinding.config for this tool on the
-        published version -- fixed policy, never model- or caller-supplied.
-    """
-
-    llm_args: dict[str, Any]
-    context: SessionContextV1
-    config: dict[str, Any]
+sys.modules[__name__] = importlib.import_module("app.modules.tools.domain.invocation")

@@ -56,7 +56,7 @@ from app.api.endpoints import voice_public
 from app.api.endpoints import asterisk_provisioning
 from app.api.endpoints import scheduling
 from app.api.endpoints import agents
-from app.api.endpoints import tools_custom
+from app.modules.tools.api import router as tools_custom
 from app.api.endpoints import voice_registry
 from app.api.endpoints import voice_runtime
 from app.api.endpoints import voice_provider_admin
