@@ -39,8 +39,8 @@ Orden validado contra el grafo real: primero módulos con pocos consumidores ent
 | --- | --- | --- | --- |
 | 1 | Tool Platform | Baja | **Hecho** |
 | 2 | Agent Builder | Media | **Hecho** |
-| 3 | Voice Orchestration | Alta | **Siguiente** |
-| 4 | Telephony | Media-alta | |
+| 3 | Voice Orchestration | Alta | **Hecho** |
+| 4 | Telephony | Media-alta | **Siguiente** |
 | 5 | Scheduling | Alta | |
 | 6 | CRM | Alta | |
 | 7 | Notifications | Media | |
@@ -49,7 +49,7 @@ Orden validado contra el grafo real: primero módulos con pocos consumidores ent
 | 10 | Billing | Baja | |
 | 11 | Analytics | Media | |
 | — | Voice Experiences | Media | Tras Telephony |
-| — | Voice Providers | Media | Frontera creada (`voice_providers.public`); mover registro + adapters al migrar Voice |
+| — | Voice Providers | Media | **Frontera consolidada** (registro, adapters, credenciales) |
 | — | Voice Legacy | — | **No migrar**: aislado tras `voice_legacy.public` (mínimo); retirar cuando `voice_runtime_v2` sea el único camino |
 
 ### 1. Tool Platform — hecho (patrón de referencia)
@@ -106,22 +106,38 @@ AgentService ── VoiceProviderPort ── agents/wiring ── voice_provider
 - `RuntimeSessionSpecV1` sigue en `app/schemas/runtime_session.py` como contrato compartido (no se movió para no tocar el trust boundary del runtime).
 - `IntegrationEventService` sigue como auditoría compartida (allowlist).
 
-### 3. Voice Orchestration
+### 3. Voice Orchestration — hecho
 
-- **Ownership**: `voice_sessions`, `voice_session_events`, `tenant_voice_provider_configs` (traer desde Voice Legacy).
-- **Entrantes**: Tools, Telephony (outbound, SIP QA), Agents, Voice Experiences (webhooks), endpoints `voice`/`voice_runtime`.
-- **Salientes**: Agents, CRM (resolución de contexto, proyección), Telephony (SIP QA desde el endpoint), Voice Legacy (`voice_config_service`, `ultravox_ingestion_service`), Integrations (Chatwoot handoff), Billing/Analytics (`analytics.Call`).
-- **API pública propuesta**: `VoiceSessionFacade` (existe: `get_tool_session`, `record_event`, `enrich_context` por id con `ContactRef`/`LeadRef`, `release_sessions_of_deleted_agent`), `ToolSessionView` (existe), `create_session`, `dispatch`, `close_sessions_for_agent`, `SessionContextV1`, `RuntimeSessionSpecV1`, `resolve_runtime_credential`.
-- **Ya resuelto en la migración de Agent Builder**: Voice ya no importa modelos ni servicios de Agents (`lock_published_agent`, `get_agent_status`, `compile_runtime_spec`, `describe_agent`, `agent_names` vía `agents.public`) y `VoiceSession` ya no tiene relaciones ORM hacia `TenantAgent`/`TenantAgentVersion`.
-- **Imports a eliminar**: `contact_resolution_service → models.crm` (→ `crm.public` query), `voice_call_projection_service → models.crm/analytics` (→ evento `voice.session.completed` consumido por CRM y Analytics), `voice_runtime → voice_config_service` (mover al módulo).
-- **Riesgos**: altos. Es el trust boundary con `voice-runtime`; **no cambiar** `RuntimeSessionSpecV1`, `SessionContextV1`, rutas internas, JWT del runtime ni el resolver de credenciales. `voice-runtime/` sigue sin DB.
+Estructura: `app/modules/voice/{domain/{errors,lifecycle,session_context,runtime_contracts,views}.py, application/{session_service,context_resolution,runtime_dispatcher,runtime_events,facade,ports}.py, infrastructure/{models,livekit_runtime}.py, api/{router,schemas}.py, public.py, wiring.py}`.
+
+- **Ownership**: `voice_sessions`, `voice_session_events` (ORM en `infrastructure/models.py`, registrado en `app/models/__init__.py`; mismas tablas, FKs, índices y constraints; sin migración). Lifecycle (máquina de estados en `domain/lifecycle.py`, idéntica), creación idempotente, snapshot y enriquecimiento monotónico de `SessionContextV1`, dispatch al runtime, LiveKit room dispatch/cleanup (`infrastructure/livekit_runtime.py`), ingesta de eventos del runtime (`application/runtime_events.py`), spec del runtime, token WebRTC y orquestación del endpoint de tools.
+- **Contratos**: `SessionContextV1` (`domain/session_context.py`) y `RuntimeSessionSpecV1` (`domain/runtime_contracts.py`) movidos sin cambiar su forma serializada. `voice.public` sigue el patrón de `agents.public`: al importarse sólo carga contratos, vistas y errores (test `test_public_apis_import_light`), por eso el compilador de Agent Builder importa `RuntimeSessionSpecV1` desde `voice.public` sin ciclos.
+- **API pública** (`voice.public`): `VoiceSessionFacade.get_tool_session`, `record_event`, `enrich_context`, `release_sessions_of_deleted_agent`, `get_projection_facts`; DTOs `ToolSessionView`, `SessionProjectionFacts`, `SessionEventFact`; contratos y errores. Ningún método devuelve `VoiceSession`/`VoiceSessionEvent`. No se añadieron `create_session`/`dispatch_session`: no tienen consumidor fuera de Voice.
+- **Puertos** (`application/ports.py`): `CrmContextPort` (snapshots `ContactSnapshot`/`LeadSnapshot` de `crm.public`; Voice construye `ContactContext`/`LeadContext`/`CampaignContext`) y `VoiceProjectionPort` (`analytics.public.VoiceCallProjectionFacade`). Enlazados en `wiring.py`.
+- **Salientes** (sólo `public.py`): `agents` (agente publicado, estado, bindings, compilación), `crm` (snapshots), `tools` (invocación), `voice_providers` (registro, credenciales), `telephony` (normalización de teléfono, dial SIP QA), `analytics` (proyección), `identity` (`VOICE_RUNTIME_V2`). Shared: `api.auth.deps`, `core.config`, `db.*`, `security.voice_runtime_auth`.
+- **Router `voice_runtime`** (`api/router.py`, mismas URLs): sesiones, preview de contexto, eventos de QA, token WebRTC, spec y eventos del runtime son de Voice; la credencial la resuelve `voice_providers.public` (tenant derivado de la sesión, provider validado contra la sesión); la invocación de tools delega en `tools.public`; el dial SIP QA en `telephony.public`; la proyección y el estado de `CrmVoiceCall` en `analytics.public`.
+- **Proyección**: `VoiceCallProjectionService` (legacy, Analytics/CRM) consume `SessionProjectionFacts` en lugar del ORM de Voice y absorbe la actualización de estado de `CrmVoiceCall` que vivía en el endpoint. Voice no importa `app.models.crm` ni `app.models.analytics`.
+- **No migrado a propósito**: Telephony (`voice_session_sip_service`, `voice_sip_route_service`, `livekit_sip_service`, `outbound_voice_call_service`, `voice_capacity_service`), Voice Experiences, Voice Legacy y sus webhooks (`/webhook/{provider}`, `/events` de Ultravox, `voice_runtime_webhook_service` → `TenantVoiceRuntimeCall`: son del flujo Ultravox directo/Voice Experiences, no de `VoiceSession`).
+- **Shims** (4, con consumidores reales): `app.models.voice_sessions`, `app.services.voice_session_service`, `app.services.livekit_runtime_backend`, `app.services.voice_runtime_dispatcher`. Consumidores: Telephony (`outbound_voice_call_service`, `voice_session_sip_service`), llamadas legacy (`voice_call_service`) y `scripts/backfill_voice_session_calls.py`. Se retiran al migrar Telephony (y el script).
+- **Pendiente**: la componente conexa Agents ↔ Tools ↔ Voice ↔ Analytics (sólo vía `public.py`/wiring) creció al pasar la proyección detrás de `analytics.public`; se reducirá cuando la proyección se dispare por eventos (`voice.session.*`) al migrar CRM/Analytics.
+
+### Voice Providers — frontera consolidada
+
+Estructura: `app/modules/voice_providers/{domain/{registry,contracts,errors}.py, application/{service,ports}.py, infrastructure/{adapters,ultravox,credentials}.py, public.py}`.
+
+- `app/domain/voice_registry.py` → `domain/registry.py` (catálogo de proveedores, modelos, capacidades, parámetros y compatibilidad de voz). Agent Builder, Voice y las APIs usan `voice_providers.public`.
+- `VoiceProviderAdapter` (puerto) + registro de adapters (`infrastructure/adapters.py`); `UltravoxProviderAdapter` es el único archivo que conoce `UltravoxProviderError` y lo traduce a `VoiceProviderError(code, remote=True, reason)`. `public.py`, `application` y `domain` no conocen ningún proveedor concreto (test).
+- Credenciales del runtime: `VoiceProviderFacade.resolve_runtime_credential(tenant_id, provider)` sobre `TenantVoiceProviderConfig` (cifrado, agnóstico de proveedor). El endpoint interno no cambia y conserva el trust boundary: Voice resuelve la `VoiceSession` por `session_id`, deriva el tenant y valida el provider antes de pedir la credencial.
+- El workspace de administración Ultravox (`/integrations/voice/providers/{provider}/...`) sigue usando `UltravoxAdminService` vía `voice_provider_admin`; su `_error` mapea igual `UltravoxProviderError` y `VoiceProviderError(remote=True)`.
+- Pendiente: mover físicamente `UltravoxAdminService`/`ultravox_provider_client`/`voice_config_service` bajo `voice_providers/infrastructure` cuando se retire Voice Legacy (hoy también los usa el flujo legacy).
 
 ### 4. Telephony
 
 - **Ownership**: `tenant_sip_routes`; caso de uso outbound.
 - **Entrantes**: CRM (`crm_voice` endpoint, métricas de capacidad), Voice (SIP QA), Voice Experiences (rutas, teléfonos).
 - **Salientes**: Voice (session, dispatcher, projection, LiveKit backend), CRM (`CrmLead`, `CrmVoiceCall`), Voice Legacy/Experiences (callbacks).
-- **API pública propuesta**: `place_outbound_call(...) -> voice_session_id`, `normalize_phone`, `capacity_snapshot(tenant_id)`, `get_route(tenant_id)`.
+- **API pública**: existe mínima (`telephony.public`: `normalize_caller_id`, `VoicePhoneValidationError`, `SipQaFacade.dial_session`, `SipDialError`). Propuesta: `place_outbound_call(...) -> voice_session_id`, `capacity_snapshot(tenant_id)`, `get_route(tenant_id)`.
+- **Al migrar**: dejar de usar los 4 shims de Voice (consumir `voice.public`: crear/dispatch de sesión SIP, eventos) y retirarlos.
 - **Imports a eliminar**: `outbound_voice_call_service → models.crm` (CRM crea `CrmVoiceCall`), `voice_capacity_service → models.crm`.
 - **Riesgos**: `outbound_voice_call_service` depende del orden estricto dispatch → `voice.agent.ready` → participante SIP; mover sin tocar la secuencia. Pruebas actuales son con fakes: no hay E2E real.
 

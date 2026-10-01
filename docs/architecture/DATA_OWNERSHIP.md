@@ -26,9 +26,9 @@ Estado: ✅ ya respetado · 🟡 propietario claro, pero otros módulos acceden 
 
 | Tabla | Modelo | Estado |
 | --- | --- | --- |
-| `voice_sessions` | `VoiceSession` | 🔴 escrita por Voice y Telephony (outbound/SIP QA); Agents ya no la escribe: al borrar un agente pide `voice.public.release_sessions_of_deleted_agent`. Sin relaciones ORM hacia las tablas de Agents (sólo FKs) |
-| `voice_session_events` | `VoiceSessionEvent` | 🟡 Tool Platform escribe vía `VoiceSessionFacade.record_event(session_id, ...)` ✅ |
-| `tenant_voice_provider_configs` | `TenantVoiceProviderConfig` (`models/integrations.py`) | 🟡 hoy lo gestiona `voice_config_service` (Voice Legacy); propietario objetivo: Voice Orchestration |
+| `voice_sessions` | `VoiceSession` (`app/modules/voice/infrastructure/models.py`) | 🔴 escrita por Voice y todavía por Telephony vía shim (outbound/SIP QA) hasta su migración; Agents ya no la escribe: al borrar un agente pide `voice.public.release_sessions_of_deleted_agent`. Sin relaciones ORM hacia las tablas de Agents (sólo FKs) |
+| `voice_session_events` | `VoiceSessionEvent` (`app/modules/voice/infrastructure/models.py`) | ✅ Tool Platform escribe vía `VoiceSessionFacade.record_event(session_id, ...)`; la proyección lee `SessionProjectionFacts` |
+| `tenant_voice_provider_configs` | `TenantVoiceProviderConfig` (`models/integrations.py`) | 🟡 propietario: **Voice Providers**; el runtime lo lee sólo vía `voice_providers.public.resolve_runtime_credential` (tenant derivado de la sesión). Lo escribe todavía `voice_config_service` (UI de Integraciones) |
 
 ## Telephony
 
