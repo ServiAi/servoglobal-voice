@@ -14,19 +14,19 @@ Estado: ✅ ya respetado · 🟡 propietario claro, pero otros módulos acceden 
 
 `app/db/mixins.py` (`TimestampMixin`, `_uuid`, `_utcnow`) es shared kernel; `models/identity.py` los reexporta por compatibilidad. `models/analytics.py` y `models/billing.py` aún declaran su propio `TimestampMixin` duplicado: unificar al migrar esos módulos.
 
-## Agent Builder
+## Agent Builder (migrado)
 
 | Tabla | Modelo | Estado |
 | --- | --- | --- |
-| `tenant_agents` | `TenantAgent` | 🟡 Voice (`voice_session_service`, projection) lo lee directamente |
-| `tenant_agent_versions` | `TenantAgentVersion` | 🟡 Voice lo lee (y lo proyecta a `ToolSessionView.tool_bindings`); Tool Platform pregunta vía `AgentsFacade` ✅. FK legacy `voice_agent_config_id` → `tenant_voice_agent_configs` (ver plan de aislamiento en `MODULAR_MONOLITH_MIGRATION.md`) |
+| `tenant_agents` | `TenantAgent` (`app/modules/agents/infrastructure/models.py`) | ✅ Voice lo lee sólo vía `agents.public` (`PublishedAgent`, `AgentDisplay`, estado, nombres); la importación de agentes de proveedor la escribe Agent Builder |
+| `tenant_agent_versions` | `TenantAgentVersion` (idem) | ✅ Agent Builder es el único que interpreta `runtime_binding_json` (Voice recibe `AgentToolBindingView`, el runtime recibe `RuntimeSessionSpecV1` compilado); Tool Platform pregunta vía `AgentsFacade`. FK legacy `voice_agent_config_id` → `tenant_voice_agent_configs` sin relación ORM: el valor se lee vía `voice_legacy.public` |
 | `tenant_agent_scheduling_configs` | `TenantAgentSchedulingConfig` (`models/integrations.py`) | 🟡 propietario Scheduling (configuración de agenda por agente) |
 
 ## Voice Orchestration
 
 | Tabla | Modelo | Estado |
 | --- | --- | --- |
-| `voice_sessions` | `VoiceSession` | 🔴 escrita por Voice, Telephony (outbound/SIP QA) y Agents (cancelación al borrar agente) |
+| `voice_sessions` | `VoiceSession` | 🔴 escrita por Voice y Telephony (outbound/SIP QA); Agents ya no la escribe: al borrar un agente pide `voice.public.release_sessions_of_deleted_agent`. Sin relaciones ORM hacia las tablas de Agents (sólo FKs) |
 | `voice_session_events` | `VoiceSessionEvent` | 🟡 Tool Platform escribe vía `VoiceSessionFacade.record_event(session_id, ...)` ✅ |
 | `tenant_voice_provider_configs` | `TenantVoiceProviderConfig` (`models/integrations.py`) | 🟡 hoy lo gestiona `voice_config_service` (Voice Legacy); propietario objetivo: Voice Orchestration |
 

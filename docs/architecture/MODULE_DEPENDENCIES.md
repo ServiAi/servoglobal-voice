@@ -123,9 +123,13 @@ Aplicadas por `backend/test_module_boundaries.py`:
 3. Tool Platform no importa servicios/modelos/schemas legacy de otros dominios, salvo la allowlist de shared kernel.
 4. `app.modules.tools.domain` no importa application/infrastructure/api en runtime (sólo `TYPE_CHECKING`) ni otros módulos salvo `voice.public` (`SessionContextV1` es parte del contrato de invocación).
 5. El dispatcher no importa CRM, Scheduling ni Integrations: sólo puertos.
-6. Ningún archivo de producción usa las rutas legacy de tools.
-7. Las rutas legacy son alias del mismo objeto módulo (no copias).
+6. ~~Ningún archivo de producción usa las rutas legacy de tools~~ / 7. ~~Las rutas legacy son alias~~: retiradas junto con los 18 shims de Tool Platform (2026-10-01).
 8. No hay ciclos de import dentro de `app.modules.tools`.
+13. Agent Builder no importa código legacy de otros dominios salvo `AGENTS_LEGACY_ALLOWED` (`api.auth.deps`, `db.*`, `schemas.runtime_session`, `integration_event_service`).
+14. Ningún archivo de `app.modules.agents` importa (ni siquiera de forma perezosa) `app.services.ultravox_*` ni `app.services.voice_provider_admin`; esos adapters no importan Agent Builder, ni ningún `app.modules.*` en runtime.
+15. Ninguna componente fuertemente conexa del grafo de imports (incluidos los perezosos) contiene a la vez un módulo de Agent Builder y un adapter de proveedor.
+16. `app.modules.agents.domain` es puro (sólo dominio propio y `voice_providers.public` para el registro); `application` no importa `api` en runtime (los requests HTTP sólo bajo `TYPE_CHECKING`).
+17. Nadie navega las relaciones eliminadas `.agent_version` / `.voice_agent_config`.
 
 ## Reglas de datos vigentes
 
@@ -134,4 +138,20 @@ Aplicadas por `DataBoundaryTests` en `backend/test_module_boundaries.py`:
 9. Las APIs críticas (`VoiceSessionFacade`, `CrmFacade`, `WhatsAppFacade`, `SchedulingFacade`, `AgentsFacade`, `FeatureFlags` y los cuatro `Protocol` de `ToolPorts`) no declaran en parámetros ni retorno ninguna clase ORM ni `Any` directo. `Any` sólo se permite como tipo de valor de un `dict`/`Mapping` de payload, más la excepción explícita `create_lead_booking(notes)`.
 10. Los DTOs públicos son `@dataclass(frozen=True)` y sus campos no contienen ORM ni `Any` directo.
 11. Ningún archivo de `app.modules.tools` navega atributos de filas ORM ajenas (`agent_version`, `session_context_json`, `runtime_binding_json`, `_row`).
-12. Las mutaciones sobre datos de otro módulo se piden por id y DTO; el propietario recarga sus filas y valida tenant (`VoiceSessionFacade.enrich_context`).
+12. Las mutaciones sobre datos de otro módulo se piden por id y DTO; el propietario recarga sus filas y valida tenant (`VoiceSessionFacade.enrich_context`, `VoiceSessionFacade.release_sessions_of_deleted_agent`).
+18. Las APIs y DTOs de Agent Builder, Voice Providers y Voice Legacy (`AgentsFacade`, `AgentPorts`, `VoiceProviderFacade`, `VoiceLegacyFacade`, `PublishedAgent`, `AgentDisplay`, `ImportedAgent`, `AgentToolBindingView`, `ProviderAgentSnapshot`, `ProviderAgentImport`, `ProviderToolRef`, `ProviderVoiceSelection`, `LegacyVoiceDefaults`) cumplen 9-10 y además no exponen ningún tipo de un módulo `*ultravox*`.
+
+## Migración de Agent Builder (2026-10-01)
+
+Medido con el mismo grafo AST (imports perezosos incluidos), `develop@32c624d` → esta rama:
+
+| Métrica | Antes | Después |
+| --- | --- | --- |
+| Imports Agents → implementaciones de proveedor (`ultravox_*`, `voice_provider_admin`) | 2 (`agent_service → ultravox_admin_service`, `→ ultravox_provider_client`) | **0** |
+| Imports de otros dominios → internals de Agents | 10 (`voice_runtime`, `voice_session_service`, `voice_call_projection_service`, `voice_call_service`, `runtime_session`, `ultravox_admin_service` ×3, `voice_provider_admin` service y endpoint) | **0** (sólo `agents.public`; `main.py` monta el router y `models/__init__` registra el ORM) |
+| ORM de Agents cruzando la frontera pública | `TenantAgent`/`TenantAgentVersion` leídos por 4 servicios de Voice + relaciones `VoiceSession.agent`/`.agent_version`; `TenantVoiceAgentConfig` vía relación ORM en Agents | **0** (DTOs y relaciones eliminadas; FKs intactas) |
+| Imports legacy `app.models.agents` (app + tests) | 7 en app + 9 en tests | **0** |
+| Imports legacy `app.services.agent_*` / `voice_selection_service` | 4 en app + 4 en tests | **0** |
+| Ciclos de archivo que involucran Agent Builder | 1 directo (`agent_service ↔ ultravox_admin_service`) | **0** con adapters; queda una componente Agents ↔ Tools ↔ Voice sólo a través de `public.py` y wiring perezoso |
+| Shims de Tool Platform | 18 | **0** |
+| Shims de Agent Builder creados | — | **0** (sin consumidores en `develop` ni en ramas abiertas) |
