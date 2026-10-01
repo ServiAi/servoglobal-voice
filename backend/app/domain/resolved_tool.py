@@ -1,62 +1,12 @@
-from __future__ import annotations
+"""TEMPORARY compatibility shim -- moved to `app.modules.tools.domain.resolved_tool`.
 
-from dataclasses import dataclass, field
-from typing import Any, Literal
+Aliases this legacy path to the real module (same object, so `unittest.mock.patch`
+targets keep working and no logic is duplicated). New code must import from
+`app.modules.tools.public` instead. Remove once nothing imports this path; see
+docs/architecture/MODULAR_MONOLITH_MIGRATION.md.
+"""
 
-from app.domain.tool_registry import ToolContextRequirement, ToolDefinition
-from app.models.tools import TenantHttpToolConfig, TenantTool
+import importlib
+import sys
 
-
-@dataclass(frozen=True)
-class ResolvedToolDefinition:
-    """A single contract for both Platform Tools and Tenant Custom Tools.
-
-    Not a Pydantic model: it never crosses a network boundary itself, it
-    only feeds ToolCatalogService (-> AgentToolCatalogEntryResponse) and
-    AgentCompilerService (-> CompiledToolSpec), both of which construct
-    their own response explicitly field-by-field. `required_integration`
-    is always None for source="custom" -- a custom tool's "is this tenant
-    ready to run it" concept is credential-based, not this closed enum.
-    `context_requirements` and `binding_config_schema` are always empty for
-    source="custom" -- Custom HTTP Tools have their own request-mapping
-    contract (app.domain.tool_mapping) and never adopt this Platform Tool
-    contract (see PlatformToolContractService's docstring).
-    """
-
-    key: str
-    name: str
-    description: str
-    status: Literal["available", "planned"]
-    input_schema: dict[str, Any]
-    source: Literal["platform", "custom"]
-    required_integration: Literal["booking", "whatsapp", "crm", "chatwoot"] | None
-    custom_tool_id: str | None = None
-    context_requirements: tuple[ToolContextRequirement, ...] = ()
-    binding_config_schema: dict[str, Any] = field(default_factory=dict)
-
-
-def from_platform(tool: ToolDefinition) -> ResolvedToolDefinition:
-    return ResolvedToolDefinition(
-        key=tool.key,
-        name=tool.name,
-        description=tool.description,
-        status=tool.status,
-        input_schema=tool.input_schema,
-        source="platform",
-        required_integration=tool.required_integration,
-        context_requirements=tool.context_requirements,
-        binding_config_schema=tool.binding_config_schema,
-    )
-
-
-def from_custom(tenant_tool: TenantTool, config: TenantHttpToolConfig) -> ResolvedToolDefinition:
-    return ResolvedToolDefinition(
-        key=tenant_tool.key,
-        name=tenant_tool.name,
-        description=tenant_tool.description,
-        status="available" if tenant_tool.status == "active" else "planned",
-        input_schema=config.input_schema_json,
-        source="custom",
-        required_integration=None,
-        custom_tool_id=tenant_tool.id,
-    )
+sys.modules[__name__] = importlib.import_module("app.modules.tools.domain.resolved_tool")

@@ -6,6 +6,7 @@
 - [ARCHITECTURE.md](ARCHITECTURE.md): componentes, datos, seguridad y flujos principales.
 - [API_REFERENCE.md](API_REFERENCE.md): familias de endpoints y reglas de acceso.
 - [OPERATIONS.md](OPERATIONS.md): configuración local, migraciones, pruebas y despliegue.
+- [architecture/](architecture/): monolito modular — mapa de módulos, dependencias, ownership de datos y roadmap de migración.
 - [../SPECS.md](../SPECS.md): especificación funcional vigente.
 - [../landing_content.md](../landing_content.md): inventario editorial/comercial de la landing.
 

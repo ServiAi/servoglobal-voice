@@ -1,45 +1,12 @@
-from __future__ import annotations
+"""TEMPORARY compatibility shim -- moved to `app.modules.tools.domain.schema`.
 
-from typing import Any
+Aliases this legacy path to the real module (same object, so `unittest.mock.patch`
+targets keep working and no logic is duplicated). New code must import from
+`app.modules.tools.public` instead. Remove once nothing imports this path; see
+docs/architecture/MODULAR_MONOLITH_MIGRATION.md.
+"""
 
+import importlib
+import sys
 
-class ToolSchemaError(ValueError):
-    pass
-
-
-def validate_arguments_against_schema(input_schema: dict[str, Any], arguments: dict[str, Any]) -> None:
-    """Minimal, purpose-built shape check (string/object/array/int/number/
-    bool/null properties, required list, enum) -- not a general JSON Schema
-    validator, and deliberately so: this codebase never adds a jsonschema
-    dependency for the small, hand-authored schemas Platform Tools declare.
-    Shared by ToolDispatchService (re-validating a live tool call) and
-    PlatformToolContractService (validating a tool's effective LLM schema
-    against what the model actually sent).
-    """
-    if not isinstance(arguments, dict):
-        raise ToolSchemaError("Arguments must be an object.")
-    properties = input_schema.get("properties", {})
-    required = input_schema.get("required", [])
-    if not isinstance(properties, dict) or not isinstance(required, list):
-        raise ToolSchemaError("Tool input schema is invalid.")
-    for required_key in required:
-        if required_key not in arguments:
-            raise ToolSchemaError(f"Missing required argument '{required_key}'.")
-    for key, value in arguments.items():
-        spec = properties.get(key)
-        if spec is None:
-            raise ToolSchemaError(f"Unknown argument '{key}'.")
-        expected = spec.get("type")
-        matches = {
-            "string": isinstance(value, str),
-            "object": isinstance(value, dict),
-            "array": isinstance(value, list),
-            "integer": isinstance(value, int) and not isinstance(value, bool),
-            "number": isinstance(value, (int, float)) and not isinstance(value, bool),
-            "boolean": isinstance(value, bool),
-            "null": value is None,
-        }.get(expected, False)
-        if not matches:
-            raise ToolSchemaError(f"Argument '{key}' must be of type '{expected}'.")
-        if "enum" in spec and value not in spec["enum"]:
-            raise ToolSchemaError(f"Argument '{key}' is not an allowed value.")
+sys.modules[__name__] = importlib.import_module("app.modules.tools.domain.schema")

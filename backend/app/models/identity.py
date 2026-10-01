@@ -1,28 +1,13 @@
 from __future__ import annotations
 
 import sqlalchemy as sa
-import uuid
-from datetime import UTC, datetime
+from datetime import datetime
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Index, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
-
-
-def _uuid() -> str:
-    return str(uuid.uuid4())
-
-
-def _utcnow() -> datetime:
-    return datetime.now(UTC)
-
-
-class TimestampMixin:
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False
-    )
+from app.db.mixins import TimestampMixin, _utcnow, _uuid
 
 
 class Tenant(Base, TimestampMixin):

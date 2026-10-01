@@ -3,13 +3,17 @@ from __future__ import annotations
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
-from app.domain.resolved_tool import ResolvedToolDefinition, from_platform
-from app.domain.tool_registry import get_tool
 from app.domain.voice_registry import VoiceRegistryValidationError, resolve_execution_model_id
 from app.models.agents import TenantAgent, TenantAgentVersion
+from app.modules.tools.public import (
+    PlatformToolContractService,
+    ResolvedToolDefinition,
+    ToolResolverService,
+    from_platform,
+    get_tool,
+)
 from app.schemas.agents import AgentBehavior, AgentIdentity, AgentInstructions
 from app.schemas.runtime_session import RuntimeSessionSpecV1
-from app.services.platform_tool_contract_service import PlatformToolContractService
 
 
 class AgentCompilerError(ValueError):
@@ -152,8 +156,6 @@ class AgentCompilerService:
 
     def _resolve_tool(self, tenant_id: str, key: str) -> ResolvedToolDefinition | None:
         if self.db is not None:
-            from app.services.tool_resolver_service import ToolResolverService
-
             return ToolResolverService(self.db).resolve(tenant_id, key)
         if key.startswith("custom."):
             return None
