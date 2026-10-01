@@ -19,7 +19,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.db.base import Base
 import app.models  # noqa: F401  (registers all mapped models on Base.metadata)
-from app.models.agents import TenantAgent, TenantAgentVersion
+from app.modules.agents.infrastructure.models import TenantAgent, TenantAgentVersion
 from app.models.identity import Tenant
 from app.models.integrations import TenantVoiceAgentConfig
 

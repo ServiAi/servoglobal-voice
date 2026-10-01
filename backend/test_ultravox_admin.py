@@ -81,9 +81,9 @@ class UltravoxAdminServiceTests(unittest.TestCase):
     # -- Phase D: external voice preview + BYOK preflight --
 
     def test_preview_external_voice_builds_elevenlabs_definition_and_calls_client(self):
-        from app.schemas.agents import AgentVoiceConfig
+        from app.modules.voice_providers.public import ProviderVoiceSelection
 
-        voice = AgentVoiceConfig(
+        voice = ProviderVoiceSelection(
             mode="provider_external", provider="elevenlabs", voice_id="ABC123",
             settings={"model": "eleven_turbo_v2_5", "speed": 1.0},
         )
@@ -96,31 +96,35 @@ class UltravoxAdminServiceTests(unittest.TestCase):
         })
 
     def test_preview_external_voice_rejects_provider_mode(self):
-        from app.schemas.agents import AgentVoiceConfig
+        from app.modules.voice_providers.public import ProviderVoiceSelection
 
-        voice = AgentVoiceConfig(mode="provider", provider="ultravox", voice_id="Mark")
+        voice = ProviderVoiceSelection(mode="provider", provider="ultravox", voice_id="Mark")
         with self.assertRaises(ValueError):
             self.service.preview_external_voice("tenant-a", voice)
         self.assertEqual(self.client.calls, [])
 
     def test_preview_external_voice_rejects_non_elevenlabs_provider(self):
-        from app.schemas.agents import AgentVoiceConfig
+        from app.modules.voice_providers.public import ProviderVoiceSelection
 
-        voice = AgentVoiceConfig(mode="provider_external", provider="cartesia", voice_id="x")
+        voice = ProviderVoiceSelection(mode="provider_external", provider="cartesia", voice_id="x")
         with self.assertRaises(ValueError):
             self.service.preview_external_voice("tenant-a", voice)
         self.assertEqual(self.client.calls, [])
 
-    def test_preview_external_voice_rejects_invalid_settings_before_calling_ultravox(self):
-        from app.schemas.agents import AgentVoiceConfig
+    def test_preview_external_voice_leaves_settings_rules_to_agent_builder(self):
+        # The ElevenLabs settings rules (keys/ranges) belong to Agent Builder's
+        # domain; the HTTP adapter enforces them before this call (see
+        # test_voice_provider_admin_external_voice_preview). The adapter only
+        # knows what Ultravox can delegate to, and maps only known fields.
+        from app.modules.voice_providers.public import ProviderVoiceSelection
 
-        voice = AgentVoiceConfig(
-            mode="provider_external", provider="elevenlabs", voice_id="x", settings={"pitch": 1}
+        voice = ProviderVoiceSelection(
+            mode="provider_external", provider="elevenlabs", voice_id="x", settings={"model": "m", "pitch": 1}
         )
-        with self.assertRaises(ValueError) as ctx:
-            self.service.preview_external_voice("tenant-a", voice)
-        self.assertEqual(str(ctx.exception), "voice_settings_invalid")
-        self.assertEqual(self.client.calls, [])
+        self.service.preview_external_voice("tenant-a", voice)
+        self.assertEqual(
+            self.client.last_external_voice_payload["definition"], {"elevenLabs": {"voiceId": "x", "model": "m"}}
+        )
 
     def test_validate_external_voice_credentials_passes_when_elevenlabs_key_present(self):
         self.client.tts_keys_response = {"elevenLabs": {"prefix": "abc"}}
@@ -159,10 +163,10 @@ class UltravoxAdminServiceTests(unittest.TestCase):
         # and voice-runtime are separate deploys/packages with no shared code,
         # so this hardcodes the same mapping table rather than importing
         # across that boundary.
-        from app.schemas.agents import AgentVoiceConfig
+        from app.modules.voice_providers.public import ProviderVoiceSelection
         from app.services.ultravox_admin_service import build_elevenlabs_external_voice
 
-        voice = AgentVoiceConfig(
+        voice = ProviderVoiceSelection(
             mode="provider_external", provider="elevenlabs", voice_id="ABC123",
             settings={
                 "model": "eleven_turbo_v2_5", "speed": 1.0, "stability": 0.8,
@@ -183,10 +187,10 @@ class UltravoxAdminServiceTests(unittest.TestCase):
     def test_elevenlabs_mapper_only_forwards_the_known_settings_keys(self):
         # Defense in depth: even if an unvalidated voice reached the mapper,
         # it can never leak an unknown settings key through to Ultravox.
-        from app.schemas.agents import AgentVoiceConfig
+        from app.modules.voice_providers.public import ProviderVoiceSelection
         from app.services.ultravox_admin_service import build_elevenlabs_external_voice
 
-        voice = AgentVoiceConfig(mode="provider_external", provider="elevenlabs", voice_id="ABC123")
+        voice = ProviderVoiceSelection(mode="provider_external", provider="elevenlabs", voice_id="ABC123")
         self.assertEqual(build_elevenlabs_external_voice(voice), {"elevenLabs": {"voiceId": "ABC123"}})
 
     def test_tool_boundary_is_structural_and_fails_closed_for_client_tools(self):

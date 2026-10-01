@@ -6,7 +6,8 @@ from sqlalchemy.orm import Session
 from app.api.auth.deps import AuthContext
 from app.api.endpoints.integrations import require_enabled_integration
 from app.db.session import get_db
-from app.schemas.agents import AgentVoiceConfig
+from app.modules.agents.public import AgentsFacade, AgentVoiceConfig, VoiceSelectionError, validate_voice_settings
+from app.modules.voice_providers.public import ProviderVoiceSelection, VoiceProviderFacade
 from app.schemas.ultravox_admin import (
     UltravoxAgentDetail, UltravoxAgentPage, UltravoxImportResponse,
     UltravoxVoicePage, UltravoxVoiceSummary,
@@ -67,9 +68,15 @@ def get_agent(provider: str, agent_id: str, context: AuthContext = Depends(requi
 
 @router.post("/agents/{agent_id}/import", response_model=UltravoxImportResponse)
 def import_agent(provider: str, agent_id: str, context: AuthContext = Depends(require_enabled_integration("voice", WRITE_ROLES)), db: Session = Depends(get_db)):
+    # This HTTP adapter is the composition boundary: Voice describes the
+    # remote agent, Agent Builder creates its own agent from that snapshot.
+    # Neither module calls the other's internals.
     try:
-        service = get_provider_admin_service(db, provider)
-        return service.import_agent(context.tenant.id, agent_id, context.user.id)
+        snapshot = VoiceProviderFacade(db).get_agent_import(context.tenant.id, provider, agent_id)
+        imported = AgentsFacade(db).import_provider_agent(context.tenant.id, context.user.id, snapshot)
+        return UltravoxImportResponse(
+            agent_id=imported.agent_id, draft_version_id=imported.draft_version_id, warnings=list(imported.warnings)
+        )
     except (ValueError, UltravoxProviderError) as exc:
         _error(exc)
 
@@ -133,7 +140,15 @@ def preview_external_voice(
 ):
     try:
         service = get_provider_admin_service(db, provider)
-        preview = service.preview_external_voice(context.tenant.id, body)
+        voice = ProviderVoiceSelection(
+            mode=body.mode, provider=body.provider, voice_id=body.voice_id, settings=dict(body.settings)
+        )
+        service.ensure_external_voice_supported(voice)
+        try:
+            validate_voice_settings(body)
+        except VoiceSelectionError as exc:
+            raise ValueError("voice_settings_invalid") from exc
+        preview = service.preview_external_voice(context.tenant.id, voice)
     except (ValueError, UltravoxProviderError) as exc:
         _error(exc)
     else:

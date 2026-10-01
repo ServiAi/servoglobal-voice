@@ -33,27 +33,20 @@ TOOLS_LEGACY_ALLOWED = {
     "app.services.secret_manager_service",  # shared encryption (Fernet)
 }
 
-# Paths moved into app.modules.tools; only their shims may still live there.
-LEGACY_TOOL_PATHS = {
-    "app.domain.tool_registry": "app.modules.tools.domain.registry",
-    "app.domain.tool_schema": "app.modules.tools.domain.schema",
-    "app.domain.tool_namespace": "app.modules.tools.domain.namespace",
-    "app.domain.resolved_tool": "app.modules.tools.domain.resolved_tool",
-    "app.domain.platform_tool_invocation": "app.modules.tools.domain.invocation",
-    "app.domain.tool_mapping": "app.modules.tools.domain.mapping",
-    "app.core.tool_http_limits": "app.modules.tools.domain.limits",
-    "app.services.tool_resolver_service": "app.modules.tools.application.resolver",
-    "app.services.tool_dispatch_service": "app.modules.tools.application.dispatcher",
-    "app.services.platform_tool_contract_service": "app.modules.tools.application.contracts",
-    "app.services.tool_catalog_service": "app.modules.tools.application.catalog",
-    "app.services.tenant_tool_service": "app.modules.tools.application.tenant_tools",
-    "app.services.custom_http_tool_executor": "app.modules.tools.infrastructure.http_executor",
-    "app.services.tenant_tool_credential_service": "app.modules.tools.infrastructure.credentials",
-    "app.services.tool_http_safety": "app.modules.tools.infrastructure.http_safety",
-    "app.models.tools": "app.modules.tools.infrastructure.models",
-    "app.schemas.tools_custom": "app.modules.tools.api.schemas",
-    "app.api.endpoints.tools_custom": "app.modules.tools.api.router",
+# Legacy (not yet migrated) modules Agent Builder may still import directly.
+AGENTS_LEGACY_ALLOWED = {
+    "app.api.auth.deps",  # shared security: AuthContext / roles
+    "app.db.base",
+    "app.db.mixins",
+    "app.db.session",
+    "app.schemas.runtime_session",  # RuntimeSessionSpecV1: shared runtime contract (Voice <-> voice-runtime)
+    "app.services.integration_event_service",  # shared audit trail (tenant_integration_events)
 }
+
+# Provider implementations (Voice Legacy / Ultravox). Agent Builder must
+# reach them only through VoiceProviderPort -> voice.public, and they must
+# never reach back into Agent Builder.
+PROVIDER_IMPLEMENTATIONS = ("app.services.ultravox_", "app.services.voice_provider_admin")
 
 
 def _module_name(path: Path) -> str:
@@ -101,6 +94,52 @@ def _graph() -> dict[str, tuple[Path, set[str]]]:
         _module_name(path): (path, _runtime_imports(ast.parse(_source(path))))
         for path in APP.rglob("*.py")
     }
+
+
+def _strongly_connected(graph: dict[str, tuple[Path, set[str]]]) -> list[set[str]]:
+    """Tarjan, iterative (the app graph is too deep for recursion)."""
+    edges = {m: [t for t in targets if t in graph and t != m] for m, (_, targets) in graph.items()}
+    index: dict[str, int] = {}
+    low: dict[str, int] = {}
+    stack: list[str] = []
+    on_stack: set[str] = set()
+    components: list[set[str]] = []
+    counter = 0
+    for root, root_edges in edges.items():
+        if root in index:
+            continue
+        work = [(root, iter(root_edges))]
+        index[root] = low[root] = counter
+        counter += 1
+        stack.append(root)
+        on_stack.add(root)
+        while work:
+            node, children = work[-1]
+            child = next(children, None)
+            if child is not None:
+                if child not in index:
+                    index[child] = low[child] = counter
+                    counter += 1
+                    stack.append(child)
+                    on_stack.add(child)
+                    work.append((child, iter(edges[child])))
+                elif child in on_stack:
+                    low[node] = min(low[node], index[child])
+                continue
+            work.pop()
+            if work:
+                low[work[-1][0]] = min(low[work[-1][0]], low[node])
+            if low[node] == index[node]:
+                component = set()
+                while True:
+                    member = stack.pop()
+                    on_stack.discard(member)
+                    component.add(member)
+                    if member == node:
+                        break
+                if len(component) > 1:
+                    components.append(component)
+    return components
 
 
 def _owner(module: str) -> str | None:
@@ -180,18 +219,108 @@ class ModuleBoundaryTests(unittest.TestCase):
         forbidden = {t for t in targets if _owner(t) in {"crm", "scheduling", "integrations"}}
         self.assertEqual(forbidden, set(), "Wire CRM/Scheduling/Messaging in app.modules.tools.wiring, not the dispatcher")
 
-    def test_no_production_code_uses_legacy_tool_paths(self) -> None:
-        violations = []
-        for source, (path, targets) in self.graph.items():
-            if SHIM_MARKER in _source(path):
-                continue
-            violations += [f"{source} -> {t}" for t in targets & LEGACY_TOOL_PATHS.keys()]
-        self.assertEqual(sorted(violations), [], "Import from app.modules.tools.public instead of legacy paths")
+    def test_every_app_import_in_backend_resolves(self) -> None:
+        # Catches stale imports of retired paths in any form -- including
+        # `from app.domain import tool_registry`, which a dotted-path grep
+        # misses -- across app/ and every test module.
+        problems = set()
+        for path in [*APP.rglob("*.py"), *APP.parent.glob("test_*.py")]:
+            for node in ast.walk(ast.parse(_source(path))):
+                if isinstance(node, ast.ImportFrom) and node.level == 0 and (node.module or "").startswith("app"):
+                    pairs = [(node.module, alias.name) for alias in node.names if alias.name != "*"]
+                elif isinstance(node, ast.Import):
+                    pairs = [(alias.name, None) for alias in node.names if alias.name.startswith("app")]
+                else:
+                    continue
+                for module_name, name in pairs:
+                    try:
+                        module = importlib.import_module(module_name)
+                    except ImportError:
+                        problems.add(f"{path.name}: {module_name}")
+                        continue
+                    if name and not hasattr(module, name):
+                        try:
+                            importlib.import_module(f"{module_name}.{name}")
+                        except ImportError:
+                            problems.add(f"{path.name}: {module_name}.{name}")
+        self.assertEqual(sorted(problems), [])
 
-    def test_legacy_tool_paths_are_aliases_not_copies(self) -> None:
-        for legacy, new in LEGACY_TOOL_PATHS.items():
-            with self.subTest(legacy=legacy):
-                self.assertIs(importlib.import_module(legacy), importlib.import_module(new))
+    # -- Agent Builder --------------------------------------------------------
+
+    def test_agents_does_not_import_other_domains_legacy_internals(self) -> None:
+        violations = self._violations(
+            lambda s, t: _owner(s) == "agents" and _owner(t) is None and t not in AGENTS_LEGACY_ALLOWED
+        )
+        self.assertEqual(violations, [], "Agent Builder must reach other domains via their public API or a port")
+
+    def test_agents_never_imports_a_voice_provider_implementation(self) -> None:
+        # Function-level (lazy) imports count too: this is the rule that used
+        # to be broken by AgentService -> UltravoxAdminService.
+        violations = self._violations(lambda s, t: _owner(s) == "agents" and t.startswith(PROVIDER_IMPLEMENTATIONS))
+        self.assertEqual(violations, [], "Use VoiceProviderPort (wired to voice.public), never a provider adapter")
+
+    def test_voice_provider_implementations_never_import_agent_builder(self) -> None:
+        # The reverse edge of the old cycle (UltravoxAdminService ->
+        # AgentService) and any other way back into Agent Builder.
+        violations = self._violations(
+            lambda s, t: s.startswith(PROVIDER_IMPLEMENTATIONS) and _owner(t) == "agents"
+        )
+        self.assertEqual(violations, [], "Provider adapters describe remote agents; Agent Builder writes agents")
+
+    def test_agent_service_ultravox_cycle_is_gone(self) -> None:
+        service = "app.modules.agents.application.service"
+        _, service_targets = self.graph[service]
+        self.assertFalse({t for t in service_targets if t.startswith(PROVIDER_IMPLEMENTATIONS)})
+        for module, (_, targets) in self.graph.items():
+            if module.startswith(PROVIDER_IMPLEMENTATIONS):
+                self.assertNotIn(service, targets, module)
+
+    def test_provider_implementations_import_no_module_at_runtime(self) -> None:
+        # Adapters return their own models; voice_providers.public translates
+        # them. Annotations may use TYPE_CHECKING imports.
+        violations = self._violations(
+            lambda s, t: s.startswith(PROVIDER_IMPLEMENTATIONS) and _owner(t) is not None
+        )
+        self.assertEqual(violations, [])
+
+    def test_no_import_cycle_links_agent_builder_and_a_provider_implementation(self) -> None:
+        # Strongly connected components of the whole import graph, lazy
+        # imports included: Agents may reach a provider adapter (through its
+        # port), but no path may lead back -- not even transitively.
+        offending = [
+            sorted(component)
+            for component in _strongly_connected(self.graph)
+            if any(_owner(m) == "agents" for m in component)
+            and any(m.startswith(PROVIDER_IMPLEMENTATIONS) for m in component)
+        ]
+        self.assertEqual(offending, [])
+
+    def test_agents_domain_layer_is_pure(self) -> None:
+        def violates(source: str, target: str) -> bool:
+            if not source.startswith("app.modules.agents.domain"):
+                return False
+            if target.startswith("app.modules.agents."):
+                return not target.startswith("app.modules.agents.domain")
+            return target != "app.modules.voice_providers.public"  # voice registry compatibility rules
+
+        self.assertEqual(self._violations(violates), [])
+
+    def test_agents_application_does_not_depend_on_api_layer_at_runtime(self) -> None:
+        violations = self._violations(
+            lambda s, t: s.startswith("app.modules.agents.application") and t.startswith("app.modules.agents.api")
+        )
+        self.assertEqual(violations, [], "HTTP request types may only be imported under TYPE_CHECKING")
+
+    def test_no_code_navigates_removed_cross_module_relationships(self) -> None:
+        # VoiceSession.agent / .agent_version and
+        # TenantAgentVersion.voice_agent_config no longer exist as ORM
+        # relationships; the owners' public APIs replace them.
+        found = []
+        for path in APP.rglob("*.py"):
+            for node in ast.walk(ast.parse(_source(path))):
+                if isinstance(node, ast.Attribute) and node.attr in {"agent_version", "voice_agent_config"}:
+                    found.append(f"{_module_name(path)}:{node.lineno} .{node.attr}")
+        self.assertEqual(found, [])
 
     def test_import_graph_inside_tools_is_acyclic(self) -> None:
         tools = {m: {t for t in ts if t in self.graph and _owner(t) == "tools"} for m, (_, ts) in self.graph.items() if _owner(m) == "tools"}
@@ -218,11 +347,20 @@ FOREIGN_ORM_ATTRIBUTES = {"agent_version", "session_context_json", "runtime_bind
 # Cross-module APIs that must speak DTOs only (no ORM rows, no bare Any).
 CRITICAL_PUBLIC_APIS = {
     "app.modules.voice.public": ["VoiceSessionFacade"],
+    "app.modules.voice_providers.public": ["VoiceProviderFacade"],
     "app.modules.crm.public": ["CrmFacade"],
     "app.modules.integrations.public": ["WhatsAppFacade"],
     "app.modules.scheduling.public": ["SchedulingFacade"],
-    "app.modules.agents.public": ["AgentsFacade"],
+
     "app.modules.identity.public": ["FeatureFlags"],
+    "app.modules.voice_legacy.public": ["VoiceLegacyFacade"],
+    "app.modules.agents.public": ["AgentsFacade"],
+    "app.modules.agents.application.ports": [
+        "VoiceProviderPort",
+        "LegacyVoicePort",
+        "IntegrationReadinessPort",
+        "VoiceSessionsPort",
+    ],
     "app.modules.tools.application.ports": [
         "SchedulingToolPort",
         "CrmToolPort",
@@ -232,6 +370,14 @@ CRITICAL_PUBLIC_APIS = {
 }
 PUBLIC_DTOS = {
     "app.modules.voice.public": ["ToolSessionView", "ToolBindingView"],
+    "app.modules.voice_providers.public": [
+        "ProviderToolRef",
+        "ProviderAgentSnapshot",
+        "ProviderVoiceSelection",
+        "ProviderAgentImport",
+    ],
+    "app.modules.agents.public": ["AgentToolBindingView", "PublishedAgent", "AgentDisplay", "ImportedAgent"],
+    "app.modules.voice_legacy.public": ["LegacyVoiceDefaults"],
     "app.modules.crm.public": ["ContactRef", "LeadRef"],
     "app.modules.integrations.public": ["WhatsAppTemplateContract", "WhatsAppSendOutcome"],
     "app.modules.scheduling.public": ["BookingSummary"],
@@ -253,6 +399,8 @@ def _boundary_problems(annotation: object, where: str, base: type) -> list[str]:
         return [f"{where}: Any"]
     if isinstance(annotation, type) and issubclass(annotation, base):
         return [f"{where}: ORM {annotation.__name__}"]
+    if isinstance(annotation, type) and "ultravox" in annotation.__module__:
+        return [f"{where}: provider-specific {annotation.__name__}"]
     origin = typing.get_origin(annotation)
     args = typing.get_args(annotation)
     if isinstance(origin, type) and issubclass(origin, Mapping):
@@ -262,6 +410,15 @@ def _boundary_problems(annotation: object, where: str, base: type) -> list[str]:
         if arg is not Ellipsis:
             problems += _boundary_problems(arg, where, base)
     return problems
+
+
+def _type_namespace(module) -> dict:
+    """Module globals plus the names some public APIs only import under
+    TYPE_CHECKING (to keep import-time dependencies light)."""
+    from app.modules.voice_providers import public as voice_providers_public
+    from app.schemas import runtime_session
+
+    return {**vars(runtime_session), **vars(voice_providers_public), **vars(module)}
 
 
 class DataBoundaryTests(unittest.TestCase):
@@ -277,7 +434,7 @@ class DataBoundaryTests(unittest.TestCase):
                 for name, member in vars(cls).items():
                     if name.startswith("_") or not callable(member):
                         continue
-                    hints = typing.get_type_hints(member, vars(module))
+                    hints = typing.get_type_hints(member, _type_namespace(module))
                     for param, annotation in hints.items():
                         if (name, param) in ANY_ALLOWED:
                             continue
@@ -291,7 +448,7 @@ class DataBoundaryTests(unittest.TestCase):
             for class_name in classes:
                 cls = getattr(module, class_name)
                 self.assertTrue(cls.__dataclass_params__.frozen, f"{class_name} must be frozen")
-                hints = typing.get_type_hints(cls, vars(module))
+                hints = typing.get_type_hints(cls)  # resolved in the defining module
                 for f in dataclasses.fields(cls):
                     problems += _boundary_problems(hints[f.name], f"{class_name}.{f.name}", base)
         self.assertEqual(problems, [])
@@ -310,6 +467,9 @@ class DataBoundaryTests(unittest.TestCase):
         base = _orm_base()
         self.assertTrue(_boundary_problems(tuple[typing.Any, CrmLead], "x", base))
         self.assertTrue(_boundary_problems(CrmLead | None, "x", base))
+        from app.schemas.ultravox_admin import UltravoxAgentDetail
+
+        self.assertTrue(_boundary_problems(tuple[UltravoxAgentDetail, ...], "x", base))
         self.assertFalse(_boundary_problems(dict[str, typing.Any], "x", base))
 
 

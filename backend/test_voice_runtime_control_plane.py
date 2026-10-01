@@ -11,7 +11,7 @@ from fastapi.security import HTTPAuthorizationCredentials
 from _integrations_2a_test_base import Integration2ATestCase
 from app.core.config import settings
 from app.db.session import SessionLocal
-from app.models.agents import TenantAgent, TenantAgentVersion
+from app.modules.agents.infrastructure.models import TenantAgent, TenantAgentVersion
 from app.models.crm import CrmContact, CrmLead, CrmPipelineStage
 from app.schemas.integrations import VoiceProviderConfigRequest
 from app.security.voice_runtime_auth import create_runtime_token, require_voice_runtime

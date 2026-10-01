@@ -4,7 +4,7 @@ import unittest
 
 from _integrations_2a_test_base import Integration2ATestCase
 from app.db.session import SessionLocal
-from app.models.agents import TenantAgent, TenantAgentVersion
+from app.modules.agents.infrastructure.models import TenantAgent, TenantAgentVersion
 from app.models.crm import CrmContact, CrmLead, CrmPipelineStage
 from app.modules.crm.public import ContactRef, LeadRef
 from app.modules.voice.public import ToolSessionView, VoiceSessionFacade
@@ -163,9 +163,9 @@ class VoiceSessionTests(Integration2ATestCase):
         # still produce a valid, empty RuntimeSessionSpecV1.context.
         # Uses the logical model key ("ultravox"), not the raw execution
         # id -- unlike VoiceSessionService.create() (used by every other
-        # test in this file), AgentCompilerService.compile() resolves it
+        # test in this file), the compiler resolves it
         # through voice_registry and needs the real key.
-        from app.services.agent_compiler_service import AgentCompilerService
+        from app.modules.agents.public import AgentsFacade
 
         with SessionLocal() as db:
             agent = TenantAgent(tenant_id=self.tenant.id, name="Sandra", status="draft")
@@ -188,8 +188,9 @@ class VoiceSessionTests(Integration2ATestCase):
             session.session_context_json = None
             db.commit()
             db.refresh(session)
-            spec = AgentCompilerService().compile(
-                session.agent, session.agent_version, session_id=session.id, context=session.session_context_json
+            spec = AgentsFacade(db).compile_runtime_spec(
+                session.tenant_id, session.agent_id, session.agent_version_id,
+                session_id=session.id, context=session.session_context_json,
             )
             self.assertIsNone(spec.context.contact)
             self.assertEqual(spec.context.variables, {})

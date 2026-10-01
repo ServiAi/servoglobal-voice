@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, patch
 from sqlalchemy import func, select
 
 from _integrations_2a_test_base import Integration2ATestCase, SessionLocal
-from app.models.agents import TenantAgent, TenantAgentVersion
+from app.modules.agents.infrastructure.models import TenantAgent, TenantAgentVersion
 from app.models.crm import CrmVoiceCall
 from app.models.integrations import TenantSipRoute
 from app.models.voice_sessions import VoiceSession

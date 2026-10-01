@@ -39,6 +39,16 @@ class WhatsAppFacade:
     def __init__(self, db: Session) -> None:
         self.db = db
 
+    def is_configured(self, tenant_id: str) -> bool:
+        """Same resolution WhatsApp sends use at call time."""
+        from app.services.whatsapp_config_service import WhatsAppConfigService
+
+        try:
+            WhatsAppConfigService(self.db).get_active_client_config(tenant_id)
+            return True
+        except ValueError:
+            return False
+
     def get_approved_template_contract(self, tenant_id: str, template_key: str) -> WhatsAppTemplateContract | None:
         """None if the tenant has no such template. Raises ValueError if an
         approved template's parameters are malformed."""

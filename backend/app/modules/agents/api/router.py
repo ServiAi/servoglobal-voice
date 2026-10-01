@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.api.auth.deps import AuthContext, require_roles
 from app.db.session import get_db
-from app.schemas.agents import (
+from app.modules.agents.api.schemas import (
     AgentCreateRequest,
     AgentDraftUpdateRequest,
     AgentPublishRequest,
@@ -18,21 +18,23 @@ from app.schemas.agents import (
     AgentToolCatalogEntryResponse,
     AgentUpdateRequest,
     AgentVersionResponse,
+    agent_response,
+    version_response,
 )
-from app.services.agent_service import (
+from app.modules.agents.domain.errors import (
     AgentConflictError,
     AgentNotFoundError,
-    AgentService,
     AgentValidationError,
 )
-from app.services.tenant_feature_service import TenantFeatureDisabledError
+from app.modules.agents.wiring import agent_service
+from app.modules.identity.public import FeatureDisabledError
 
 router = APIRouter(prefix="/api/v1/agents", tags=["Agent Builder"])
 READ_ROLES = ["platform_admin", "tenant_admin", "tenant_analyst", "tenant_viewer"]
 WRITE_ROLES = ["platform_admin", "tenant_admin"]
 
 SERVICE_ERRORS = (
-    TenantFeatureDisabledError,
+    FeatureDisabledError,
     AgentNotFoundError,
     AgentConflictError,
     AgentValidationError,
@@ -52,12 +54,12 @@ def require_agent_write(
 
 
 def _raise_service_error(
-    exc: TenantFeatureDisabledError
+    exc: FeatureDisabledError
     | AgentNotFoundError
     | AgentConflictError
     | AgentValidationError,
 ) -> NoReturn:
-    if isinstance(exc, TenantFeatureDisabledError):
+    if isinstance(exc, FeatureDisabledError):
         code = status.HTTP_403_FORBIDDEN
     elif isinstance(exc, AgentNotFoundError):
         code = status.HTTP_404_NOT_FOUND
@@ -73,9 +75,9 @@ def list_agents(
     context: AuthContext = Depends(require_agent_read),
     db: Session = Depends(get_db),
 ) -> Any:
-    service = AgentService(db)
+    service = agent_service(db)
     try:
-        return [service.response(agent) for agent in service.list_agents(context.tenant.id)]
+        return [agent_response(agent) for agent in service.list_agents(context.tenant.id)]
     except SERVICE_ERRORS as exc:
         _raise_service_error(exc)
 
@@ -86,9 +88,9 @@ def create_agent(
     context: AuthContext = Depends(require_agent_write),
     db: Session = Depends(get_db),
 ) -> Any:
-    service = AgentService(db)
+    service = agent_service(db)
     try:
-        return service.response(service.create_agent(context.tenant.id, body, context.user.id))
+        return agent_response(service.create_agent(context.tenant.id, body, context.user.id))
     except SERVICE_ERRORS as exc:
         _raise_service_error(exc)
 
@@ -102,7 +104,7 @@ def get_tool_catalog(
     (required_integration configured or not) -- drives the "Herramientas"
     tab. Not agent_id-scoped: the catalog and each tool's availability
     depend only on the tenant's integrations, not on any one agent."""
-    service = AgentService(db)
+    service = agent_service(db)
     try:
         return service.tool_catalog(context.tenant.id)
     except SERVICE_ERRORS as exc:
@@ -115,9 +117,9 @@ def get_agent(
     context: AuthContext = Depends(require_agent_read),
     db: Session = Depends(get_db),
 ) -> Any:
-    service = AgentService(db)
+    service = agent_service(db)
     try:
-        return service.response(service.get_agent(context.tenant.id, agent_id))
+        return agent_response(service.get_agent(context.tenant.id, agent_id))
     except SERVICE_ERRORS as exc:
         _raise_service_error(exc)
 
@@ -129,9 +131,9 @@ def update_agent(
     context: AuthContext = Depends(require_agent_write),
     db: Session = Depends(get_db),
 ) -> Any:
-    service = AgentService(db)
+    service = agent_service(db)
     try:
-        return service.response(service.update_agent(context.tenant.id, agent_id, body))
+        return agent_response(service.update_agent(context.tenant.id, agent_id, body))
     except SERVICE_ERRORS as exc:
         _raise_service_error(exc)
 
@@ -142,10 +144,10 @@ def list_agent_versions(
     context: AuthContext = Depends(require_agent_read),
     db: Session = Depends(get_db),
 ) -> Any:
-    service = AgentService(db)
+    service = agent_service(db)
     try:
         return [
-            service.version_response(version)
+            version_response(version)
             for version in service.list_versions(context.tenant.id, agent_id)
         ]
     except SERVICE_ERRORS as exc:
@@ -158,9 +160,9 @@ def get_agent_draft(
     context: AuthContext = Depends(require_agent_read),
     db: Session = Depends(get_db),
 ) -> Any:
-    service = AgentService(db)
+    service = agent_service(db)
     try:
-        return service.version_response(service.get_draft(context.tenant.id, agent_id))
+        return version_response(service.get_draft(context.tenant.id, agent_id))
     except SERVICE_ERRORS as exc:
         _raise_service_error(exc)
 
@@ -172,9 +174,9 @@ def update_agent_draft(
     context: AuthContext = Depends(require_agent_write),
     db: Session = Depends(get_db),
 ) -> Any:
-    service = AgentService(db)
+    service = agent_service(db)
     try:
-        return service.version_response(
+        return version_response(
             service.update_draft(context.tenant.id, agent_id, body)
         )
     except SERVICE_ERRORS as exc:
@@ -188,9 +190,9 @@ def create_agent_next_draft(
     db: Session = Depends(get_db),
 ) -> Any:
     """Branch a new editable draft from the currently published version."""
-    service = AgentService(db)
+    service = agent_service(db)
     try:
-        return service.version_response(
+        return version_response(
             service.create_next_draft(context.tenant.id, agent_id, context.user.id)
         )
     except SERVICE_ERRORS as exc:
@@ -204,10 +206,10 @@ def publish_agent(
     context: AuthContext = Depends(require_agent_write),
     db: Session = Depends(get_db),
 ) -> Any:
-    service = AgentService(db)
+    service = agent_service(db)
     expected_draft_version_id = body.expected_draft_version_id if body else None
     try:
-        return service.response(
+        return agent_response(
             service.publish(
                 context.tenant.id, agent_id, context.user.id, expected_draft_version_id
             )
@@ -222,9 +224,9 @@ def archive_agent(
     context: AuthContext = Depends(require_agent_write),
     db: Session = Depends(get_db),
 ) -> Any:
-    service = AgentService(db)
+    service = agent_service(db)
     try:
-        return service.response(service.archive_agent(context.tenant.id, agent_id, context.user.id))
+        return agent_response(service.archive_agent(context.tenant.id, agent_id, context.user.id))
     except SERVICE_ERRORS as exc:
         _raise_service_error(exc)
 
@@ -235,9 +237,9 @@ def unpublish_agent(
     context: AuthContext = Depends(require_agent_write),
     db: Session = Depends(get_db),
 ) -> Any:
-    service = AgentService(db)
+    service = agent_service(db)
     try:
-        return service.response(
+        return agent_response(
             service.unpublish(context.tenant.id, agent_id, context.user.id)
         )
     except SERVICE_ERRORS as exc:
@@ -250,7 +252,7 @@ async def delete_agent(
     context: AuthContext = Depends(require_agent_write),
     db: Session = Depends(get_db),
 ) -> None:
-    service = AgentService(db)
+    service = agent_service(db)
     try:
         await service.delete_agent(context.tenant.id, agent_id, context.user.id)
     except SERVICE_ERRORS as exc:

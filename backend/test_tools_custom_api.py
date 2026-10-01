@@ -18,7 +18,7 @@ from app.api.auth.deps import AuthContext, get_current_auth_context
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.main import app
-from app.models.agents import TenantAgent, TenantAgentVersion
+from app.modules.agents.infrastructure.models import TenantAgent, TenantAgentVersion
 from app.models.identity import Tenant, TenantMembership, User
 from app.modules.tools.infrastructure.models import TenantHttpToolConfig
 from app.services.tenant_feature_service import CUSTOM_HTTP_TOOLS, TenantFeatureService

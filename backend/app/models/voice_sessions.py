@@ -72,8 +72,8 @@ class VoiceSession(Base, TimestampMixin):
     # view of the CRM.
     session_context_json: Mapped[dict | None] = mapped_column(sa.JSON, nullable=True)
 
-    agent = relationship("TenantAgent", foreign_keys=[agent_id])
-    agent_version = relationship("TenantAgentVersion", foreign_keys=[agent_version_id])
+    # No ORM relationship to TenantAgent/TenantAgentVersion: those rows are
+    # owned by Agent Builder and read through app.modules.agents.public.
     events = relationship("VoiceSessionEvent", back_populates="voice_session", order_by="VoiceSessionEvent.created_at")
 
 

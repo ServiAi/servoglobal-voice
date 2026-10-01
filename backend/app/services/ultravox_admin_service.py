@@ -1,23 +1,26 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy.orm import Session
 
-from app.schemas.agents import AgentCreateRequest, AgentInstructions, AgentVoiceConfig
 from app.schemas.ultravox_admin import (
     UltravoxAgentDetail,
+    UltravoxAgentImport,
     UltravoxAgentPage,
     UltravoxAgentSummary,
-    UltravoxImportResponse,
     UltravoxToolSummary,
     UltravoxVoicePage,
     UltravoxVoiceSummary,
 )
-from app.services.agent_service import AgentService
+from app.services.ultravox_provider_client import (
+    UltravoxProviderClient,
+    VoicePreviewAudio,
+)
 from app.services.voice_config_service import VoiceConfigService
-from app.services.voice_selection_service import VoiceSelectionError, VoiceSelectionService
-from app.services.ultravox_provider_client import UltravoxProviderClient, VoicePreviewAudio
+
+if TYPE_CHECKING:  # annotations only: the adapter never imports app.modules at runtime
+    from app.modules.voice_providers.public import ProviderVoiceSelection
 
 
 # Explicit ServiGlobal -> Ultravox field mapping for an ElevenLabs external
@@ -36,13 +39,17 @@ _ELEVENLABS_SETTINGS_TO_ULTRAVOX_FIELDS = {
 }
 
 
-def build_elevenlabs_external_voice(voice: AgentVoiceConfig) -> dict[str, Any]:
+def build_elevenlabs_external_voice(voice: ProviderVoiceSelection) -> dict[str, Any]:
     elevenlabs: dict[str, Any] = {"voiceId": voice.voice_id}
     for settings_key, ultravox_key in _ELEVENLABS_SETTINGS_TO_ULTRAVOX_FIELDS.items():
         if settings_key in voice.settings:
             elevenlabs[ultravox_key] = voice.settings[settings_key]
     return {"elevenLabs": elevenlabs}
 
+
+# Model an imported Ultravox agent runs on in ServiGlobal (logical alias,
+# resolved to Ultravox's execution model id by the voice registry).
+IMPORTED_AGENT_MODEL = "ultravox-v0.7"
 
 SUPPORTED_TOOLS = {
     "check_availability",
@@ -214,18 +221,20 @@ class UltravoxAdminService:
             raise ValueError("provider_voice_not_accessible")
         return self.client.get_voice_preview(key, voice_id)
 
-    def preview_external_voice(self, tenant_id: str, voice: AgentVoiceConfig) -> VoicePreviewAudio:
-        """Explicit "Probar voz" action for provider_external + elevenlabs.
-        Local-only validation, then a single (no-retry) call to Ultravox's
-        own ad-hoc voice_preview endpoint -- ServiGlobal never resolves or
-        stores an ElevenLabs credential; Ultravox uses the BYOK key already
-        configured on the tenant's Ultravox account."""
+    @staticmethod
+    def ensure_external_voice_supported(voice: ProviderVoiceSelection) -> None:
+        """Ultravox can only delegate synthesis to ElevenLabs."""
         if voice.mode != "provider_external" or voice.provider != "elevenlabs":
             raise ValueError("voice_provider_not_supported")
-        try:
-            VoiceSelectionService.validate_settings(voice)
-        except VoiceSelectionError as exc:
-            raise ValueError("voice_settings_invalid") from exc
+
+    def preview_external_voice(self, tenant_id: str, voice: ProviderVoiceSelection) -> VoicePreviewAudio:
+        """Explicit "Probar voz" action for provider_external + elevenlabs:
+        a single (no-retry) call to Ultravox's own ad-hoc voice_preview
+        endpoint -- ServiGlobal never resolves or stores an ElevenLabs
+        credential; Ultravox uses the BYOK key already configured on the
+        tenant's Ultravox account. The voice settings rules belong to Agent
+        Builder and are checked by the HTTP adapter before this call."""
+        self.ensure_external_voice_supported(voice)
         payload = {
             "name": "ServiGlobal External Voice Preview",
             "definition": build_elevenlabs_external_voice(voice),
@@ -245,47 +254,34 @@ class UltravoxAdminService:
         if not isinstance(prefix, str) or not prefix.strip():
             raise ValueError("external_tts_credentials_unavailable")
 
-    def import_agent(self, tenant_id: str, agent_id: str, user_id: str | None) -> UltravoxImportResponse:
+    def get_agent_import(self, tenant_id: str, agent_id: str) -> UltravoxAgentImport:
+        """Provider-side half of "import agent": describes the remote agent in
+        provider-agnostic terms. Never creates anything -- Agent Builder
+        writes the agent. Every value goes through _safe_value, exactly as
+        the persisted realtime block always did."""
         raw = self.client.get_agent(self._api_key(tenant_id), agent_id)
         remote = self._agent(raw, detail=True)
         template = raw.get("callTemplate") if isinstance(raw.get("callTemplate"), dict) else {}
-        warnings = [
-            f"Tool '{tool.name}' remains provider_only."
-            for tool in remote.tools
-            if tool.classification != "serviglobal_supported"
-        ]
-        created = AgentService(self.db).create_agent(
-            tenant_id,
-            AgentCreateRequest(
-                name=remote.name,
-                language=remote.language_hint or "es",
-                instructions=AgentInstructions(system_prompt=str(template.get("systemPrompt") or "")),
-                provider="ultravox",
-                model="ultravox-v0.7",
-            ),
-            user_id,
-        )
-        draft = created.draft_version
-        binding = dict(draft.runtime_binding_json)
-        realtime = dict(binding["realtime"])
-        realtime["provider_extensions"] = {
-            "source": "ultravox_import",
-            "source_agent_id": remote.agent_id,
-            "source_revision_id": remote.published_revision_id,
-            "tools": [tool.model_dump() for tool in remote.tools],
-            "warnings": warnings,
-            "temperature": remote.temperature,
-            "first_speaker": remote.first_speaker,
-            "max_duration": remote.max_duration,
-            "vad_settings": remote.vad_settings,
-        }
-        if remote.voice_name:
-            realtime["voice"] = {
-                "mode": "provider", "provider": "ultravox", "voice_id": remote.voice_name
-            }
-        binding["realtime"] = self._safe_value(realtime)
-        draft.runtime_binding_json = binding
-        self.db.commit()
-        return UltravoxImportResponse(
-            agent_id=created.id, draft_version_id=draft.id, warnings=warnings
+        safe = self._safe_value({
+            "agent_id": remote.agent_id,
+            "revision_id": remote.published_revision_id,
+            "voice_id": remote.voice_name,
+            "settings": {
+                "temperature": remote.temperature,
+                "first_speaker": remote.first_speaker,
+                "max_duration": remote.max_duration,
+                "vad_settings": remote.vad_settings,
+            },
+        })
+        return UltravoxAgentImport(
+            provider_agent_id=safe["agent_id"],
+            provider_revision_id=safe["revision_id"],
+            name=remote.name,
+            language=remote.language_hint,
+            system_prompt=str(template.get("systemPrompt") or ""),
+            model=IMPORTED_AGENT_MODEL,
+            voice_id=safe["voice_id"],
+            # _safe_value caps lists at 50 items; the persisted tools list always was.
+            tools=remote.tools[:50],
+            provider_settings=safe["settings"],
         )

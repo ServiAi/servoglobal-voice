@@ -15,7 +15,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from app.schemas.agents import AgentBehavior, AgentIdentity, AgentInstructions, AgentVoiceConfig
+from app.modules.agents.public import AgentBehavior, AgentIdentity, AgentInstructions, AgentVoiceConfig
 from app.schemas.session_context import SessionContextV1
 
 

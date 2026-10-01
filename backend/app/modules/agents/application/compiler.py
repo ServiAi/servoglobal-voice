@@ -3,8 +3,14 @@ from __future__ import annotations
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
-from app.domain.voice_registry import VoiceRegistryValidationError, resolve_execution_model_id
-from app.models.agents import TenantAgent, TenantAgentVersion
+from app.modules.agents.application.ports import LegacyVoicePort
+from app.modules.agents.domain.contracts import (
+    AgentBehavior,
+    AgentIdentity,
+    AgentInstructions,
+)
+from app.modules.agents.domain.errors import AgentCompilerError
+from app.modules.agents.infrastructure.models import TenantAgent, TenantAgentVersion
 from app.modules.tools.public import (
     PlatformToolContractService,
     ResolvedToolDefinition,
@@ -12,12 +18,14 @@ from app.modules.tools.public import (
     from_platform,
     get_tool,
 )
-from app.schemas.agents import AgentBehavior, AgentIdentity, AgentInstructions
-from app.schemas.runtime_session import RuntimeSessionSpecV1
-
-
-class AgentCompilerError(ValueError):
-    pass
+from app.modules.voice_legacy.public import LegacyVoiceDefaults
+from app.modules.voice_providers.public import (
+    VoiceRegistryValidationError,
+    resolve_execution_model_id,
+)
+from app.schemas.runtime_session import (
+    RuntimeSessionSpecV1,  # shared runtime contract, owned by Voice
+)
 
 
 class AgentCompilerService:
@@ -33,10 +41,34 @@ class AgentCompilerService:
     (via ToolResolverService) -- platform tool bindings resolve from the
     static Registry either way, so callers that never bind custom tools
     (and existing tests) can keep constructing this with no arguments.
+
+    `legacy_voice` reads the legacy TenantVoiceAgentConfig default voice a
+    version may still point to (voice_agent_config_id); without it a
+    version compiles as if it had no legacy config.
     """
 
-    def __init__(self, db: Session | None = None) -> None:
+    def __init__(self, db: Session | None = None, legacy_voice: LegacyVoicePort | None = None) -> None:
         self.db = db
+        self.legacy_voice = legacy_voice
+
+    def compile_version(
+        self,
+        tenant_id: str,
+        agent_id: str | None,
+        agent_version_id: str | None,
+        *,
+        context: dict | None = None,
+        session_id: str | None = None,
+    ) -> RuntimeSessionSpecV1:
+        """Loads the rows by id (tenant-scoped) and compiles them -- the entry
+        point for other modules, which only hold ids."""
+        if self.db is None or not agent_id or not agent_version_id:
+            raise AgentCompilerError("Agent version not found.")
+        agent = self.db.get(TenantAgent, agent_id)
+        version = self.db.get(TenantAgentVersion, agent_version_id)
+        if agent is None or version is None or agent.tenant_id != tenant_id:
+            raise AgentCompilerError("Agent version not found.")
+        return self.compile(agent, version, context=context, session_id=session_id)
 
     def compile(
         self,
@@ -56,7 +88,8 @@ class AgentCompilerService:
             )
         runtime_binding = dict(version.runtime_binding_json)
         realtime = runtime_binding.get("realtime")
-        voice_config = version.voice_agent_config
+        legacy = self._legacy_voice_defaults(version)
+        default_voice = legacy.default_voice if legacy else None
         if isinstance(realtime, dict):
             realtime = dict(realtime)
             realtime.setdefault("management_mode", "serviglobal_managed")
@@ -68,22 +101,22 @@ class AgentCompilerService:
             except VoiceRegistryValidationError as exc:
                 raise AgentCompilerError(f"Invalid runtime binding: {exc}") from exc
 
-            # New voice contract (schemas.agents.AgentVoiceConfig shape): if a
+            # New voice contract (domain.contracts.AgentVoiceConfig shape): if a
             # draft or an Ultravox import already populated realtime.voice, it
             # is the source of truth and is left untouched. Otherwise,
             # synthesize one from the legacy TenantVoiceAgentConfig link so
             # old and new agents compile to the same shape.
-            if not realtime.get("voice") and voice_config and voice_config.default_voice:
+            if not realtime.get("voice") and default_voice:
                 realtime["voice"] = {
-                    "mode": "provider", "provider": "ultravox",
-                    "voice_id": voice_config.default_voice, "settings": {},
+                    "mode": "provider", "provider": legacy.voice_provider,
+                    "voice_id": default_voice, "settings": {},
                 }
 
             # Keep the legacy settings.voice bridge for older runtime consumers.
             # The current runtime prefers realtime.voice when present.
-            if voice_config and voice_config.default_voice:
+            if default_voice:
                 realtime["settings"] = {
-                    "voice": voice_config.default_voice,
+                    "voice": default_voice,
                     **realtime.get("settings", {}),
                 }
             runtime_binding["realtime"] = realtime
@@ -153,6 +186,11 @@ class AgentCompilerService:
         return self.compile(
             agent, agent.published_version, context=context, session_id=session_id
         )
+
+    def _legacy_voice_defaults(self, version: TenantAgentVersion) -> LegacyVoiceDefaults | None:
+        if self.legacy_voice is None or not version.voice_agent_config_id:
+            return None
+        return self.legacy_voice.get_voice_agent_defaults(version.tenant_id, version.voice_agent_config_id)
 
     def _resolve_tool(self, tenant_id: str, key: str) -> ResolvedToolDefinition | None:
         if self.db is not None:

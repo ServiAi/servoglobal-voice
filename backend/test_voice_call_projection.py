@@ -8,7 +8,7 @@ from unittest.mock import patch
 from sqlalchemy import func, select
 
 from _integrations_2a_test_base import Integration2ATestCase, SessionLocal
-from app.models.agents import TenantAgent
+from app.modules.agents.infrastructure.models import TenantAgent
 from app.models.analytics import Agent, Call
 from app.models.crm import CrmActivity, CrmLead, CrmVoiceCall
 from app.models.voice_sessions import VoiceSession, VoiceSessionEvent
