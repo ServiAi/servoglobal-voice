@@ -10,7 +10,7 @@ from app.core.config import settings
 from app.db.session import SessionLocal
 from app.security.voice_runtime_auth import create_runtime_token
 from app.services.tenant_feature_service import AGENT_BUILDER, CUSTOM_HTTP_TOOLS, TenantFeatureService
-from app.services.tool_http_safety import SafeHttpClient
+from app.modules.tools.infrastructure.http_safety import SafeHttpClient
 from app.services.voice_session_service import VoiceSessionService
 
 
@@ -38,7 +38,7 @@ class CustomToolsEndToEndTests(Integration2ATestCase):
         token = create_runtime_token()
         return {"Authorization": f"Bearer {token}"}
 
-    @patch("app.services.tool_http_safety.socket.getaddrinfo")
+    @patch("app.modules.tools.infrastructure.http_safety.socket.getaddrinfo")
     def test_full_lifecycle_create_to_invoke(self, mock_getaddrinfo):
         mock_getaddrinfo.return_value = _addrinfo("93.184.216.34")
         self._enable_features()
@@ -143,7 +143,7 @@ class CustomToolsEndToEndTests(Integration2ATestCase):
                 )
 
             transport = httpx.MockTransport(handler)
-            with patch("app.services.custom_http_tool_executor.SafeHttpClient") as mock_cls:
+            with patch("app.modules.tools.infrastructure.http_executor.SafeHttpClient") as mock_cls:
                 mock_cls.return_value = SafeHttpClient(transport=transport)
                 invoke_response = self.client.post(
                     f"/api/v1/internal/voice-runtime/sessions/{session_id}/tools/custom.customer_balance/invoke",

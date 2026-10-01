@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.api.auth.deps import AuthContext, require_roles
 from app.db.session import get_db
+from app.modules.identity.public import FeatureDisabledError
 from app.modules.tools.api.schemas import (
     CustomToolCreateRequest,
     CustomToolResponse,
@@ -27,14 +28,13 @@ from app.modules.tools.infrastructure.credentials import (
     TenantToolCredentialError,
     TenantToolNotFoundError,
 )
-from app.services.tenant_feature_service import TenantFeatureDisabledError
 
 router = APIRouter(prefix="/api/v1/tools/custom", tags=["Custom Tools"])
 READ_ROLES = ["platform_admin", "tenant_admin", "tenant_analyst", "tenant_viewer"]
 WRITE_ROLES = ["platform_admin", "tenant_admin"]
 
 SERVICE_ERRORS = (
-    TenantFeatureDisabledError,
+    FeatureDisabledError,
     TenantToolNotFoundError,
     DuplicateToolKeyError,
     ToolInUseError,
@@ -52,9 +52,9 @@ def require_tools_write(context: AuthContext = Depends(require_roles(WRITE_ROLES
 
 
 def _raise_service_error(
-    exc: TenantFeatureDisabledError | TenantToolNotFoundError | DuplicateToolKeyError | ToolInUseError | TenantToolError | TenantToolCredentialError,
+    exc: FeatureDisabledError | TenantToolNotFoundError | DuplicateToolKeyError | ToolInUseError | TenantToolError | TenantToolCredentialError,
 ) -> NoReturn:
-    if isinstance(exc, TenantFeatureDisabledError):
+    if isinstance(exc, FeatureDisabledError):
         code = status.HTTP_403_FORBIDDEN
     elif isinstance(exc, TenantToolNotFoundError):
         code = status.HTTP_404_NOT_FOUND

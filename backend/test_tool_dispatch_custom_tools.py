@@ -20,15 +20,15 @@ from app.db.session import SessionLocal, engine
 from app.models.agents import TenantAgent, TenantAgentVersion
 from app.models.identity import Tenant
 from app.models.integrations import TenantIntegrationEvent
-from app.models.tools import TenantHttpToolConfig, TenantTool
-from app.services.tool_dispatch_service import (
+from app.modules.tools.infrastructure.models import TenantHttpToolConfig, TenantTool
+from app.modules.tools.application.dispatcher import (
     ToolArgumentError,
     ToolDispatchService,
     ToolExecutionError,
     ToolNotAvailableError,
     ToolNotFoundError,
 )
-from app.services.tool_http_safety import SafeHttpClient
+from app.modules.tools.infrastructure.http_safety import SafeHttpClient
 from app.services.tenant_feature_service import CUSTOM_HTTP_TOOLS, TenantFeatureService
 from app.services.voice_session_service import VoiceSessionService
 
@@ -130,7 +130,7 @@ class ToolDispatchCustomToolsTests(unittest.TestCase):
         db.commit()
         return session.id
 
-    @patch("app.services.tool_http_safety.socket.getaddrinfo")
+    @patch("app.modules.tools.infrastructure.http_safety.socket.getaddrinfo")
     def test_full_lifecycle_returns_mapped_result(self, mock_getaddrinfo):
         mock_getaddrinfo.return_value = _addrinfo("93.184.216.34")
 
@@ -149,7 +149,7 @@ class ToolDispatchCustomToolsTests(unittest.TestCase):
             session_id = self._create_session(db, self.tenant_id, tool.key)
 
         with SessionLocal() as db:
-            with patch("app.services.custom_http_tool_executor.SafeHttpClient") as mock_cls:
+            with patch("app.modules.tools.infrastructure.http_executor.SafeHttpClient") as mock_cls:
                 mock_cls.return_value = SafeHttpClient(transport=transport)
                 result = ToolDispatchService(db).invoke(session_id, tool.key, {"document": "79123456"})
         self.assertEqual(result, {"balance": 4500})
@@ -189,7 +189,7 @@ class ToolDispatchCustomToolsTests(unittest.TestCase):
             with self.assertRaises(ToolArgumentError):
                 ToolDispatchService(db).invoke(session_id, tool.key, {})
 
-    @patch("app.services.tool_http_safety.socket.getaddrinfo")
+    @patch("app.modules.tools.infrastructure.http_safety.socket.getaddrinfo")
     def test_upstream_5xx_raises_tool_execution_error(self, mock_getaddrinfo):
         mock_getaddrinfo.return_value = _addrinfo("93.184.216.34")
 
@@ -201,12 +201,12 @@ class ToolDispatchCustomToolsTests(unittest.TestCase):
             tool = self._create_custom_tool(db, self.tenant_id)
             session_id = self._create_session(db, self.tenant_id, tool.key)
         with SessionLocal() as db:
-            with patch("app.services.custom_http_tool_executor.SafeHttpClient") as mock_cls:
+            with patch("app.modules.tools.infrastructure.http_executor.SafeHttpClient") as mock_cls:
                 mock_cls.return_value = SafeHttpClient(transport=transport)
                 with self.assertRaises(ToolExecutionError):
                     ToolDispatchService(db).invoke(session_id, tool.key, {"document": "1"})
 
-    @patch("app.services.tool_http_safety.socket.getaddrinfo")
+    @patch("app.modules.tools.infrastructure.http_safety.socket.getaddrinfo")
     def test_upstream_4xx_raises_tool_execution_error(self, mock_getaddrinfo):
         mock_getaddrinfo.return_value = _addrinfo("93.184.216.34")
         transport = httpx.MockTransport(
@@ -218,7 +218,7 @@ class ToolDispatchCustomToolsTests(unittest.TestCase):
             tool = self._create_custom_tool(db, self.tenant_id)
             session_id = self._create_session(db, self.tenant_id, tool.key)
         with SessionLocal() as db:
-            with patch("app.services.custom_http_tool_executor.SafeHttpClient") as mock_cls:
+            with patch("app.modules.tools.infrastructure.http_executor.SafeHttpClient") as mock_cls:
                 mock_cls.return_value = SafeHttpClient(transport=transport)
                 with self.assertRaises(ToolExecutionError):
                     ToolDispatchService(db).invoke(session_id, tool.key, {"document": "1"})
@@ -239,7 +239,7 @@ class ToolDispatchCustomToolsTests(unittest.TestCase):
                 {"amount": "not-a-number"},
             )
 
-    @patch("app.services.tool_http_safety.socket.getaddrinfo")
+    @patch("app.modules.tools.infrastructure.http_safety.socket.getaddrinfo")
     def test_oversized_response_raises_tool_execution_error(self, mock_getaddrinfo):
         mock_getaddrinfo.return_value = _addrinfo("93.184.216.34")
         oversized = b"x" * (1_048_576 + 1)
@@ -252,12 +252,12 @@ class ToolDispatchCustomToolsTests(unittest.TestCase):
             tool = self._create_custom_tool(db, self.tenant_id)
             session_id = self._create_session(db, self.tenant_id, tool.key)
         with SessionLocal() as db:
-            with patch("app.services.custom_http_tool_executor.SafeHttpClient") as mock_cls:
+            with patch("app.modules.tools.infrastructure.http_executor.SafeHttpClient") as mock_cls:
                 mock_cls.return_value = SafeHttpClient(transport=transport)
                 with self.assertRaises(ToolExecutionError):
                     ToolDispatchService(db).invoke(session_id, tool.key, {"document": "1"})
 
-    @patch("app.services.tool_http_safety.socket.getaddrinfo")
+    @patch("app.modules.tools.infrastructure.http_safety.socket.getaddrinfo")
     def test_disallowed_content_type_raises_tool_execution_error(self, mock_getaddrinfo):
         mock_getaddrinfo.return_value = _addrinfo("93.184.216.34")
 
@@ -269,12 +269,12 @@ class ToolDispatchCustomToolsTests(unittest.TestCase):
             tool = self._create_custom_tool(db, self.tenant_id)
             session_id = self._create_session(db, self.tenant_id, tool.key)
         with SessionLocal() as db:
-            with patch("app.services.custom_http_tool_executor.SafeHttpClient") as mock_cls:
+            with patch("app.modules.tools.infrastructure.http_executor.SafeHttpClient") as mock_cls:
                 mock_cls.return_value = SafeHttpClient(transport=transport)
                 with self.assertRaises(ToolExecutionError):
                     ToolDispatchService(db).invoke(session_id, tool.key, {"document": "1"})
 
-    @patch("app.services.tool_http_safety.socket.getaddrinfo")
+    @patch("app.modules.tools.infrastructure.http_safety.socket.getaddrinfo")
     def test_ssrf_target_raises_tool_execution_error(self, mock_getaddrinfo):
         mock_getaddrinfo.return_value = _addrinfo("10.0.0.5")
         with SessionLocal() as db:
@@ -284,7 +284,7 @@ class ToolDispatchCustomToolsTests(unittest.TestCase):
             with self.assertRaises(ToolExecutionError):
                 ToolDispatchService(db).invoke(session_id, tool.key, {"document": "1"})
 
-    @patch("app.services.tool_http_safety.socket.getaddrinfo")
+    @patch("app.modules.tools.infrastructure.http_safety.socket.getaddrinfo")
     def test_audit_event_never_contains_endpoint_or_arguments(self, mock_getaddrinfo):
         mock_getaddrinfo.return_value = _addrinfo("93.184.216.34")
 
@@ -296,7 +296,7 @@ class ToolDispatchCustomToolsTests(unittest.TestCase):
             tool = self._create_custom_tool(db, self.tenant_id)
             session_id = self._create_session(db, self.tenant_id, tool.key)
         with SessionLocal() as db:
-            with patch("app.services.custom_http_tool_executor.SafeHttpClient") as mock_cls:
+            with patch("app.modules.tools.infrastructure.http_executor.SafeHttpClient") as mock_cls:
                 mock_cls.return_value = SafeHttpClient(transport=transport)
                 ToolDispatchService(db).invoke(session_id, tool.key, {"document": "79123456"})
         with SessionLocal() as db:

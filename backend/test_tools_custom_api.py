@@ -20,7 +20,7 @@ from app.db.session import SessionLocal, engine
 from app.main import app
 from app.models.agents import TenantAgent, TenantAgentVersion
 from app.models.identity import Tenant, TenantMembership, User
-from app.models.tools import TenantHttpToolConfig
+from app.modules.tools.infrastructure.models import TenantHttpToolConfig
 from app.services.tenant_feature_service import CUSTOM_HTTP_TOOLS, TenantFeatureService
 
 _BASE = "/api/v1/tools/custom"

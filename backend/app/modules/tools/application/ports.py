@@ -4,6 +4,10 @@ Structural Protocols: the other modules' public facades satisfy them
 without inheriting from anything, and tests can pass plain fakes. The
 dispatcher depends only on these; ``app.modules.tools.wiring`` is the one
 place that binds them to the concrete facades.
+
+Every cross-module entity is a frozen DTO from the owner's public API --
+never an ORM row. ``Any`` remains only for genuinely dynamic payloads
+(LLM-supplied ``notes``, provider availability results).
 """
 
 from __future__ import annotations
@@ -12,16 +16,24 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Protocol
 
+from app.modules.crm.public import ContactRef, LeadRef
+from app.modules.voice.public import ToolSessionView
+
 
 class BookingResult(Protocol):
-    id: str
-    status: str
-    start_at: datetime
+    @property
+    def id(self) -> str: ...
+    @property
+    def status(self) -> str: ...
+    @property
+    def start_at(self) -> datetime: ...
 
 
 class SendResult(Protocol):
-    status: str
-    provider_message_id: str | None
+    @property
+    def status(self) -> str: ...
+    @property
+    def provider_message_id(self) -> str | None: ...
 
 
 class SchedulingToolPort(Protocol):
@@ -41,7 +53,9 @@ class SchedulingToolPort(Protocol):
 
 
 class CrmToolPort(Protocol):
-    def get_or_create_open_lead(self, *, tenant_id: str, phone: str, email: Any, name: str) -> tuple[Any, Any]: ...
+    def get_or_create_open_lead(
+        self, *, tenant_id: str, phone: str, email: str | None, name: str
+    ) -> tuple[ContactRef, LeadRef]: ...
 
 
 class MessagingToolPort(Protocol):
@@ -59,11 +73,13 @@ class MessagingToolPort(Protocol):
 
 
 class VoiceSessionToolPort(Protocol):
-    def get(self, session_id: str) -> Any: ...
+    def get_tool_session(self, session_id: str) -> ToolSessionView: ...
 
-    def record_event(self, session: Any, event_type: str, *, source: str, payload: dict[str, Any]) -> None: ...
+    def record_event(self, session_id: str, event_type: str, *, source: str, payload: dict[str, Any]) -> None: ...
 
-    def enrich_context(self, session: Any, *, contact: Any, lead: Any, event_source: str) -> None: ...
+    def enrich_context(
+        self, session_id: str, *, contact: ContactRef | None, lead: LeadRef | None, event_source: str
+    ) -> None: ...
 
 
 @dataclass(frozen=True)

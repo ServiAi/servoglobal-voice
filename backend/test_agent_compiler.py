@@ -288,7 +288,7 @@ class AgentCompilerCustomToolTests(unittest.TestCase):
         from app.db.base import Base
         from app.db.session import SessionLocal, engine
         from app.models.identity import Tenant
-        from app.models.tools import TenantHttpToolConfig, TenantTool
+        from app.modules.tools.infrastructure.models import TenantHttpToolConfig, TenantTool
         from app.services.tenant_feature_service import CUSTOM_HTTP_TOOLS, TenantFeatureService
 
         self.engine = engine

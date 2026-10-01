@@ -7,6 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.modules.agents.public import AgentsFacade
+from app.modules.identity.public import CUSTOM_HTTP_TOOLS, FeatureFlags
 from app.modules.tools.api.schemas import (
     CredentialMaskedResponse,
     CustomToolCreateRequest,
@@ -23,7 +24,6 @@ from app.modules.tools.infrastructure.credentials import (
 from app.modules.tools.infrastructure.http_executor import CustomHttpToolExecutor
 from app.modules.tools.infrastructure.models import TenantHttpToolConfig, TenantTool
 from app.modules.voice.public import SessionContextV1
-from app.services.tenant_feature_service import CUSTOM_HTTP_TOOLS, TenantFeatureService
 
 
 class TenantToolError(ValueError):
@@ -46,7 +46,7 @@ class TenantToolService:
 
     def __init__(self, db: Session) -> None:
         self.db = db
-        self.feature_service = TenantFeatureService(db)
+        self.feature_service = FeatureFlags(db)
         self.credential_service = TenantToolCredentialService(db)
 
     def list_tools(self, tenant_id: str) -> list[CustomToolResponse]:

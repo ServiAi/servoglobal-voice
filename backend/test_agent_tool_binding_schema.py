@@ -10,7 +10,7 @@ from app.schemas.agents import AgentToolBinding
 class AgentToolBindingSchemaTests(unittest.TestCase):
     """AgentToolBinding validates shape only: key/enabled/config types and
     no secret-like config keys. Whether `key` is a known, executable tool
-    is app.domain.tool_registry's job -- see test_tool_registry.py."""
+    is app.modules.tools.domain.registry's job -- see test_tool_registry.py."""
 
     def test_minimal_binding_defaults_enabled_true_and_empty_config(self) -> None:
         binding = AgentToolBinding(key="calendar.check_availability")
@@ -44,7 +44,7 @@ class AgentToolBindingSchemaTests(unittest.TestCase):
     def test_schema_does_not_validate_whether_key_is_a_known_tool(self) -> None:
         # Proves the shape-only boundary: an arbitrary key is a valid shape
         # here -- rejecting unknown/unavailable keys is
-        # app.domain.tool_registry.validate_tool_bindings' job.
+        # app.modules.tools.domain.registry.validate_tool_bindings' job.
         AgentToolBinding(key="totally_unknown_tool_key")
 
 

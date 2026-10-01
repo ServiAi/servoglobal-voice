@@ -18,6 +18,8 @@ docs/*
 !docs/ARCHITECTURE.md
 !docs/API_REFERENCE.md
 !docs/OPERATIONS.md
+!docs/CUSTOM_TOOLS.md
+!docs/architecture/
 
 # Environment variables
 .env

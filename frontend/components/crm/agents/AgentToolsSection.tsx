@@ -33,7 +33,7 @@ export function AgentToolsSection({
 }) {
   // Only tools the platform can actually execute are ever offered here --
   // "planned" Registry entries (e.g. calendar.create_booking) never appear,
-  // selectable or otherwise. See app.domain.tool_registry's docstring for
+  // selectable or otherwise. See app.modules.tools.domain.registry's docstring for
   // why: no fictional tools.
   const selectable = catalog.filter((tool) => tool.status === 'available');
   const platformTools = selectable.filter((tool) => tool.source === 'platform');

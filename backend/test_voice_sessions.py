@@ -6,6 +6,8 @@ from _integrations_2a_test_base import Integration2ATestCase
 from app.db.session import SessionLocal
 from app.models.agents import TenantAgent, TenantAgentVersion
 from app.models.crm import CrmContact, CrmLead, CrmPipelineStage
+from app.modules.crm.public import ContactRef, LeadRef
+from app.modules.voice.public import ToolSessionView, VoiceSessionFacade
 from app.services.contact_resolution_service import ContactResolutionError
 from app.services.voice_session_service import (
     SessionContextContactConflictError,
@@ -291,6 +293,62 @@ class VoiceSessionTests(Integration2ATestCase):
             )
             self.assertNotIn("Carlos", str(enriched_events[0].payload_json))
             self.assertNotIn("+57", str(enriched_events[0].payload_json))
+
+    # -- public facade (DTO boundary used by Tool Platform) --
+
+    def _refs(self, contact_id: str, lead_id: str, tenant_id: str) -> tuple[ContactRef, LeadRef]:
+        return ContactRef(id=contact_id, tenant_id=tenant_id), LeadRef(
+            id=lead_id, tenant_id=tenant_id, contact_id=contact_id, status="open"
+        )
+
+    def test_facade_enrich_context_by_refs_is_monotonic(self) -> None:
+        agent_id = self._published_agent()
+        contact_id, lead_id = self._seed_contact_and_lead(self.tenant.id)
+        contact_ref, lead_ref = self._refs(contact_id, lead_id, self.tenant.id)
+        with SessionLocal() as db:
+            session = VoiceSessionService(db).create(self.tenant.id, agent_id, channel="webrtc", direction="internal")
+            facade = VoiceSessionFacade(db)
+            facade.enrich_context(session.id, contact=contact_ref, lead=lead_ref, event_source="crm.create_lead")
+            facade.enrich_context(session.id, contact=contact_ref, lead=lead_ref, event_source="crm.create_lead")
+            view = facade.get_tool_session(session.id)
+            self.assertEqual((view.context.contact.id, view.context.lead.id), (contact_id, lead_id))
+
+            stage = db.query(CrmPipelineStage).filter_by(tenant_id=self.tenant.id).first()
+            other_contact = CrmContact(tenant_id=self.tenant.id, name="Otra", phone="3009998877", phone_normalized="+573009998877")
+            db.add(other_contact)
+            db.flush()
+            other_lead = CrmLead(tenant_id=self.tenant.id, contact_id=contact_id, current_stage_id=stage.id, status="open")
+            db.add(other_lead)
+            db.commit()
+            with self.assertRaisesRegex(SessionContextContactConflictError, "session_context_contact_conflict"):
+                facade.enrich_context(session.id, contact=ContactRef(id=other_contact.id, tenant_id=self.tenant.id), lead=None, event_source="t")
+            with self.assertRaisesRegex(SessionContextLeadConflictError, "session_context_lead_conflict"):
+                facade.enrich_context(session.id, contact=contact_ref, lead=LeadRef(id=other_lead.id, tenant_id=self.tenant.id, contact_id=contact_id, status="open"), event_source="t")
+
+    def test_facade_enrich_context_rejects_forged_cross_tenant_ref(self) -> None:
+        # The ref claims this tenant but points at another tenant's row: the
+        # owner re-loads the row and checks its real tenant_id.
+        agent_id = self._published_agent()
+        other_tenant, _ = self._seed_tenant_user(slug="voice-session-enrich-dto", email="vsdto@example.com")
+        other_contact_id, other_lead_id = self._seed_contact_and_lead(other_tenant.id)
+        contact_ref, lead_ref = self._refs(other_contact_id, other_lead_id, self.tenant.id)
+        with SessionLocal() as db:
+            session = VoiceSessionService(db).create(self.tenant.id, agent_id, channel="webrtc", direction="internal")
+            with self.assertRaisesRegex(SessionContextTenantConflictError, "session_context_tenant_conflict"):
+                VoiceSessionFacade(db).enrich_context(session.id, contact=contact_ref, lead=lead_ref, event_source="t")
+            db.refresh(session)
+            self.assertIsNone(session.session_context_json.get("contact"))
+
+    def test_facade_tool_session_view_exposes_no_orm(self) -> None:
+        agent_id = self._published_agent()
+        with SessionLocal() as db:
+            session = VoiceSessionService(db).create(self.tenant.id, agent_id, channel="webrtc", direction="internal")
+            view = VoiceSessionFacade(db).get_tool_session(session.id)
+            self.assertIsInstance(view, ToolSessionView)
+            self.assertEqual((view.id, view.tenant_id, view.agent_id), (session.id, self.tenant.id, agent_id))
+            self.assertFalse(view.is_terminal)
+            for value in vars(view).values():
+                self.assertFalse(hasattr(type(value), "__table__"), f"ORM leaked: {type(value)}")
 
 
 if __name__ == "__main__":

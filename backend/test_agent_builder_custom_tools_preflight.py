@@ -5,9 +5,13 @@ from unittest.mock import patch
 
 from _integrations_2a_test_base import Integration2ATestCase
 from app.db.session import SessionLocal
-from app.models.tools import TenantHttpToolConfig, TenantTool
-from app.services.tenant_feature_service import AGENT_BUILDER, CUSTOM_HTTP_TOOLS, TenantFeatureService
-from app.services.tenant_tool_credential_service import TenantToolCredentialService
+from app.modules.tools.infrastructure.credentials import TenantToolCredentialService
+from app.modules.tools.infrastructure.models import TenantHttpToolConfig, TenantTool
+from app.services.tenant_feature_service import (
+    AGENT_BUILDER,
+    CUSTOM_HTTP_TOOLS,
+    TenantFeatureService,
+)
 
 
 class AgentBuilderCustomToolsPreflightTests(Integration2ATestCase):
@@ -91,7 +95,9 @@ class AgentBuilderCustomToolsPreflightTests(Integration2ATestCase):
                     # Simulates a tool whose auth_type was picked in the UI
                     # but no secret has been provided yet -- the row exists,
                     # secrets_json_encrypted stays null.
-                    from app.models.tools import TenantToolCredential
+                    from app.modules.tools.infrastructure.models import (
+                        TenantToolCredential,
+                    )
 
                     db.add(
                         TenantToolCredential(

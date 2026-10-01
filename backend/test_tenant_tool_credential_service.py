@@ -14,12 +14,12 @@ os.environ["DATABASE_URL"] = f"sqlite:///./{TEST_DB_PATH.as_posix()}"
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.models.identity import Tenant
-from app.models.tools import TenantTool
-from app.services.tenant_tool_credential_service import (
+from app.modules.tools.infrastructure.credentials import (
     TenantToolCredentialError,
     TenantToolCredentialService,
     TenantToolNotFoundError,
 )
+from app.modules.tools.infrastructure.models import TenantTool
 
 
 class TenantToolCredentialServiceTests(unittest.TestCase):

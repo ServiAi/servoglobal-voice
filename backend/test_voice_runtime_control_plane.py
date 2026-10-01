@@ -474,8 +474,8 @@ class AgentToolInvokeEndpointTests(Integration2ATestCase):
         # never falls back to executing an unrecognized key just because
         # the (mocked) Registry vouches for it.
         session_id = self._session_with_tools([{"key": "totally.new_tool", "enabled": True, "config": {}}])
-        with patch("app.services.tool_dispatch_service.get_tool") as mocked:
-            from app.domain.tool_registry import ToolDefinition
+        with patch("app.modules.tools.application.dispatcher.get_tool") as mocked:
+            from app.modules.tools.domain.registry import ToolDefinition
 
             mocked.return_value = ToolDefinition(
                 key="totally.new_tool", name="X", description="X", status="available",

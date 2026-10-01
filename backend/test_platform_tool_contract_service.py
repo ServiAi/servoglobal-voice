@@ -13,12 +13,12 @@ os.environ["DATABASE_URL"] = f"sqlite:///./{TEST_DB_PATH.as_posix()}"
 
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
-from app.domain.resolved_tool import from_platform
-from app.domain.tool_registry import get_tool
+from app.modules.tools.domain.resolved_tool import from_platform
+from app.modules.tools.domain.registry import get_tool
 from app.models.identity import Tenant
 from app.models.integrations import TenantWhatsAppTemplate
 from app.schemas.session_context import CallerContext, ContactContext, SessionContextV1
-from app.services.platform_tool_contract_service import PlatformToolContractError, PlatformToolContractService
+from app.modules.tools.application.contracts import PlatformToolContractError, PlatformToolContractService
 
 WHATSAPP_TOOL = get_tool("whatsapp.send_message")
 CALENDAR_TOOL = get_tool("calendar.check_availability")
@@ -183,7 +183,7 @@ class PlatformToolContractServiceTests(unittest.TestCase):
     # -- resolve_whatsapp_send ------------------------------------------------
 
     def _invocation(self, *, llm_args=None, context=None, config=None):
-        from app.domain.platform_tool_invocation import PlatformToolInvocation
+        from app.modules.tools.domain.invocation import PlatformToolInvocation
 
         return PlatformToolInvocation(
             llm_args=llm_args if llm_args is not None else {"appointment_date": "2026-09-25"},

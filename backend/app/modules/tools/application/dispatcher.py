@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from time import perf_counter
-from typing import Any, Callable
+from typing import Any
 
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
@@ -26,19 +27,20 @@ from app.modules.tools.domain.resolved_tool import from_platform
 from app.modules.tools.infrastructure.http_executor import CustomHttpToolExecutor
 from app.modules.voice.public import (
     SessionContextEnrichmentError,
-    SessionContextV1,
+    ToolBindingView,
+    ToolSessionView,
     VoiceSessionError,
 )
 from app.services.integration_event_service import IntegrationEventService
 
 # Handlers reach other modules only through ToolPorts (scheduling, CRM,
-# messaging, voice sessions) -- never by importing their services. `session`
-# is the opaque VoiceSession handle returned by ports.sessions.get().
-Handler = Callable[[Session, ToolPorts, str, PlatformToolInvocation, Any], dict[str, Any]]
+# messaging, voice sessions) -- never by importing their services, and they
+# only ever see DTOs (ToolSessionView, ContactRef/LeadRef), never ORM rows.
+Handler = Callable[[Session, ToolPorts, str, PlatformToolInvocation, ToolSessionView], dict[str, Any]]
 
 
 def _handle_check_availability(
-    db: Session, ports: ToolPorts, tenant_id: str, invocation: PlatformToolInvocation, session: Any
+    db: Session, ports: ToolPorts, tenant_id: str, invocation: PlatformToolInvocation, session: ToolSessionView
 ) -> dict[str, Any]:
     try:
         return ports.scheduling.get_available_slots(
@@ -49,7 +51,7 @@ def _handle_check_availability(
 
 
 def _handle_send_whatsapp(
-    db: Session, ports: ToolPorts, tenant_id: str, invocation: PlatformToolInvocation, session: Any
+    db: Session, ports: ToolPorts, tenant_id: str, invocation: PlatformToolInvocation, session: ToolSessionView
 ) -> dict[str, Any]:
     # V2 contract: to_phone/template_key/variables are never LLM arguments
     # anymore -- PlatformToolContractService.resolve_whatsapp_send resolves
@@ -74,7 +76,7 @@ def _handle_send_whatsapp(
 
 
 def _handle_create_booking(
-    db: Session, ports: ToolPorts, tenant_id: str, invocation: PlatformToolInvocation, session: Any
+    db: Session, ports: ToolPorts, tenant_id: str, invocation: PlatformToolInvocation, session: ToolSessionView
 ) -> dict[str, Any]:
     # lead_id, attendee_name and attendee_email come from the session's
     # own resolved context -- never from the LLM. See SessionContextV1 /
@@ -104,7 +106,7 @@ def _handle_create_booking(
 
 
 def _handle_create_lead(
-    db: Session, ports: ToolPorts, tenant_id: str, invocation: PlatformToolInvocation, session: Any
+    db: Session, ports: ToolPorts, tenant_id: str, invocation: PlatformToolInvocation, session: ToolSessionView
 ) -> dict[str, Any]:
     # phone comes from the session's own caller identity, never an
     # LLM-supplied argument -- a hallucinated/mistranscribed phone number
@@ -121,7 +123,7 @@ def _handle_create_lead(
     # LLM ever supplying lead_id/contact_id -- see
     # VoiceSessionService.enrich_context for the monotonic-only guarantee.
     try:
-        ports.sessions.enrich_context(session, contact=contact, lead=lead, event_source="crm.create_lead")
+        ports.sessions.enrich_context(session.id, contact=contact, lead=lead, event_source="crm.create_lead")
     except SessionContextEnrichmentError as exc:
         raise ToolExecutionError(str(exc)) from exc
     return {"lead_id": lead.id, "contact_id": contact.id, "status": lead.status}
@@ -156,16 +158,11 @@ class ToolDispatchService:
         self.ports = ports
 
     def invoke(self, session_id: str, tool_key: str, arguments: dict[str, Any]) -> dict[str, Any]:
-        session = self.ports.sessions.get(session_id)
-        if session.status in {"ended", "failed", "cancelled"} or session.agent_id is None or session.agent.status == "archived":
+        session = self.ports.sessions.get_tool_session(session_id)
+        if session.is_terminal:
             raise VoiceSessionError("Voice session is terminal.")
-        version = session.agent_version
-        bindings = (version.runtime_binding_json or {}).get("tools", []) if version else []
-        binding = next(
-            (b for b in bindings if isinstance(b, dict) and b.get("key") == tool_key),
-            None,
-        )
-        if binding is None or not binding.get("enabled", True):
+        binding = session.binding(tool_key)
+        if binding is None or not binding.enabled:
             raise ToolNotFoundError(tool_key)
 
         # custom.* tools are dispatched through a dedicated executor
@@ -183,7 +180,7 @@ class ToolDispatchService:
             raise ToolNotAvailableError(tool_key)
 
         resolved = from_platform(tool)
-        binding_config = binding.get("config") if isinstance(binding.get("config"), dict) else {}
+        binding_config = dict(binding.config)
         contract = PlatformToolContractService(self.db)
         # Argument-shape validation stays outside the timed/recorded block,
         # same as before this refactor: a malformed LLM call is never
@@ -193,7 +190,7 @@ class ToolDispatchService:
         except PlatformToolContractError as exc:
             raise ToolArgumentError(exc.message) from exc
 
-        context = SessionContextV1.model_validate(session.session_context_json or {})
+        context = session.context
         started = perf_counter()
         try:
             # Each handler still validates its own context requirements
@@ -242,13 +239,13 @@ class ToolDispatchService:
         return result
 
     def _invoke_custom(
-        self, session: Any, tool_key: str, binding: dict[str, Any], arguments: dict[str, Any]
+        self, session: ToolSessionView, tool_key: str, binding: ToolBindingView, arguments: dict[str, Any]
     ) -> dict[str, Any]:
         row = ToolResolverService(self.db).get_active_custom_tool(session.tenant_id, tool_key)
         if row is None:
             raise ToolNotAvailableError(tool_key)
         tenant_tool, config = row
-        context = SessionContextV1.model_validate(session.session_context_json or {})
+        context = session.context
         started = perf_counter()
         try:
             result = CustomHttpToolExecutor(self.db).execute(
@@ -257,7 +254,7 @@ class ToolDispatchService:
                 config=config,
                 arguments=arguments,
                 context=context,
-                binding_config=binding.get("config") or {},
+                binding_config=dict(binding.config),
             )
         except ToolExecutionError as exc:
             duration_ms = max(0, round((perf_counter() - started) * 1000))
@@ -283,7 +280,7 @@ class ToolDispatchService:
 
     def _record_context_tool_event(
         self,
-        session: Any,
+        session: ToolSessionView,
         tool_key: str,
         *,
         status: str,
@@ -296,7 +293,7 @@ class ToolDispatchService:
         # this call" be read from VoiceSession.events alone. Same no-PII
         # discipline: tool_key + outcome only, never arguments/results.
         self.ports.sessions.record_event(
-            session, "session.context.tool_used", source="control-plane",
+            session.id, "session.context.tool_used", source="control-plane",
             payload={
                 "tool_key": tool_key,
                 "status": status,
