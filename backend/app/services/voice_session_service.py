@@ -243,6 +243,27 @@ class VoiceSessionService:
             self.db.refresh(session)
         return enriched
 
+    def enrich_context_by_ids(
+        self,
+        session: VoiceSession,
+        *,
+        contact_id: str | None,
+        lead_id: str | None,
+        event_source: str | None = None,
+    ) -> SessionContextV1:
+        """enrich_context for callers outside this module, which only hold
+        ids: re-loads the rows here (by id only, so a cross-tenant row still
+        reaches the tenant check above and fails with
+        session_context_tenant_conflict) and applies the exact same
+        monotonic rules."""
+        contact = self.db.get(CrmContact, contact_id) if contact_id else None
+        if contact_id and contact is None:
+            raise SessionContextContactConflictError("session_context_contact_conflict")
+        lead = self.db.get(CrmLead, lead_id) if lead_id else None
+        if lead_id and lead is None:
+            raise SessionContextLeadConflictError("session_context_lead_conflict")
+        return self.enrich_context(session, contact=contact, lead=lead, event_source=event_source)
+
     def get(self, session_id: str, tenant_id: str | None = None) -> VoiceSession:
         query = select(VoiceSession).where(VoiceSession.id == session_id)
         if tenant_id is not None:

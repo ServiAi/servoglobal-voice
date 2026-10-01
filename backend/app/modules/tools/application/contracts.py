@@ -5,7 +5,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.modules.integrations.public import WhatsAppFacade, WhatsAppTemplateRef
+from app.modules.integrations.public import WhatsAppFacade, WhatsAppTemplateContract
 from app.modules.tools.domain.invocation import PlatformToolInvocation
 from app.modules.tools.domain.mapping import MappingPathError, resolve_path
 from app.modules.tools.domain.resolved_tool import ResolvedToolDefinition
@@ -147,7 +147,7 @@ class PlatformToolContractService:
         strategy = (config.get("recipient") or {}).get("strategy")
         to_phone = self._resolve_whatsapp_recipient(strategy, context_dump)
 
-        required_keys = WhatsAppFacade(self.db).approved_parameter_keys(template)
+        required_keys = template.approved_parameter_keys
         variables_config = config.get("variables") if isinstance(config.get("variables"), dict) else {}
         variables: dict[str, str] = {}
         for key in required_keys:
@@ -191,7 +191,7 @@ class PlatformToolContractService:
         variables_config = config.get("variables")
         if not isinstance(variables_config, dict):
             raise PlatformToolContractError("whatsapp_variable_mapping_incomplete", "whatsapp.send_message requires a variables mapping.")
-        required_keys = WhatsAppFacade(self.db).approved_parameter_keys(template)
+        required_keys = template.approved_parameter_keys
         missing = [key for key in required_keys if key not in variables_config]
         if missing:
             raise PlatformToolContractError(
@@ -273,11 +273,11 @@ class PlatformToolContractService:
             )
         return str(phone)
 
-    def _get_approved_template(self, tenant_id: str, template_key: str) -> WhatsAppTemplateRef:
-        template = WhatsAppFacade(self.db).find_template(tenant_id, template_key)
+    def _get_approved_template(self, tenant_id: str, template_key: str) -> WhatsAppTemplateContract:
+        template = WhatsAppFacade(self.db).get_approved_template_contract(tenant_id, template_key)
         if template is None:
             raise PlatformToolContractError("whatsapp_template_not_found", f"WhatsApp template '{template_key}' not found for this tenant.")
-        if template.status != "approved":
+        if not template.is_approved:
             raise PlatformToolContractError("whatsapp_template_not_approved", f"WhatsApp template '{template_key}' is not approved.")
         return template
 

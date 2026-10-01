@@ -3,6 +3,7 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.modules.identity.public import CUSTOM_HTTP_TOOLS, FeatureFlags
 from app.modules.tools.domain.registry import get_tool, list_tools
 from app.modules.tools.domain.resolved_tool import (
     ResolvedToolDefinition,
@@ -10,7 +11,6 @@ from app.modules.tools.domain.resolved_tool import (
     from_platform,
 )
 from app.modules.tools.infrastructure.models import TenantHttpToolConfig, TenantTool
-from app.services.tenant_feature_service import CUSTOM_HTTP_TOOLS, TenantFeatureService
 
 
 class ToolResolverService:
@@ -53,7 +53,7 @@ class ToolResolverService:
         """Exposes the raw ORM rows (not just the compiled contract) --
         CustomHttpToolExecutor needs the actual HTTP config to run, which
         ResolvedToolDefinition deliberately never carries."""
-        if not TenantFeatureService(self.db).is_enabled(tenant_id, CUSTOM_HTTP_TOOLS):
+        if not FeatureFlags(self.db).is_enabled(tenant_id, CUSTOM_HTTP_TOOLS):
             return None
         row = self.db.execute(
             select(TenantTool, TenantHttpToolConfig)
@@ -69,7 +69,7 @@ class ToolResolverService:
     def _list_active_custom_tools(
         self, tenant_id: str
     ) -> list[tuple[TenantTool, TenantHttpToolConfig]]:
-        if not TenantFeatureService(self.db).is_enabled(tenant_id, CUSTOM_HTTP_TOOLS):
+        if not FeatureFlags(self.db).is_enabled(tenant_id, CUSTOM_HTTP_TOOLS):
             return []
         rows = self.db.execute(
             select(TenantTool, TenantHttpToolConfig)

@@ -6,18 +6,27 @@ and app.models.integrations. Services are imported lazily.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+__all__ = ["WhatsAppFacade", "WhatsAppSendOutcome", "WhatsAppTemplateContract"]
+
 
 @dataclass(frozen=True)
-class WhatsAppTemplateRef:
+class WhatsAppTemplateContract:
+    """What a caller may rely on about a tenant's template. Parameter keys
+    are only resolved for approved templates (empty otherwise)."""
+
     template_key: str
     status: str
-    _row: Any = field(repr=False, compare=False)
+    approved_parameter_keys: tuple[str, ...]
+
+    @property
+    def is_approved(self) -> bool:
+        return self.status == "approved"
 
 
 @dataclass(frozen=True)
@@ -30,8 +39,11 @@ class WhatsAppFacade:
     def __init__(self, db: Session) -> None:
         self.db = db
 
-    def find_template(self, tenant_id: str, template_key: str) -> WhatsAppTemplateRef | None:
+    def get_approved_template_contract(self, tenant_id: str, template_key: str) -> WhatsAppTemplateContract | None:
+        """None if the tenant has no such template. Raises ValueError if an
+        approved template's parameters are malformed."""
         from app.models.integrations import TenantWhatsAppTemplate
+        from app.services.whatsapp_template_service import WhatsAppTemplateService
 
         row = self.db.scalar(
             select(TenantWhatsAppTemplate).where(
@@ -39,13 +51,12 @@ class WhatsAppFacade:
                 TenantWhatsAppTemplate.template_key == template_key,
             )
         )
-        return None if row is None else WhatsAppTemplateRef(template_key=row.template_key, status=row.status, _row=row)
-
-    def approved_parameter_keys(self, template: WhatsAppTemplateRef) -> list[str]:
-        """Raises ValueError if the template's parameters are malformed."""
-        from app.services.whatsapp_template_service import WhatsAppTemplateService
-
-        return WhatsAppTemplateService(self.db).get_approved_parameter_keys(template._row)
+        if row is None:
+            return None
+        keys = WhatsAppTemplateService(self.db).get_approved_parameter_keys(row) if row.status == "approved" else []
+        return WhatsAppTemplateContract(
+            template_key=row.template_key, status=row.status, approved_parameter_keys=tuple(keys)
+        )
 
     def send_template(
         self,
