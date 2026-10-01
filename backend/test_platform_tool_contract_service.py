@@ -17,7 +17,7 @@ from app.modules.tools.domain.resolved_tool import from_platform
 from app.modules.tools.domain.registry import get_tool
 from app.models.identity import Tenant
 from app.models.integrations import TenantWhatsAppTemplate
-from app.schemas.session_context import CallerContext, ContactContext, SessionContextV1
+from app.modules.voice.domain.session_context import CallerContext, ContactContext, SessionContextV1
 from app.modules.tools.application.contracts import PlatformToolContractError, PlatformToolContractService
 
 WHATSAPP_TOOL = get_tool("whatsapp.send_message")

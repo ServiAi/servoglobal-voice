@@ -11,7 +11,7 @@ from app.db.session import SessionLocal
 from app.security.voice_runtime_auth import create_runtime_token
 from app.services.tenant_feature_service import AGENT_BUILDER, CUSTOM_HTTP_TOOLS, TenantFeatureService
 from app.modules.tools.infrastructure.http_safety import SafeHttpClient
-from app.services.voice_session_service import VoiceSessionService
+from app.modules.voice.application.session_service import VoiceSessionService
 
 
 def _addrinfo(ip: str) -> list[tuple]:

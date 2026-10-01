@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime, timedelta
+from datetime import timedelta
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -11,29 +11,13 @@ from sqlalchemy.orm import Session
 from app.api.auth.deps import AuthContext, require_roles
 from app.core.config import settings
 from app.db.session import get_db
-from app.models.crm import CrmVoiceCall
-from app.models.voice_sessions import VoiceSession, VoiceSessionEvent
-from app.domain.voice_registry import get_provider
-from app.schemas.runtime_session import RuntimeSessionSpecV1
-from app.schemas.session_context import SessionContextV1
-from app.schemas.voice_credentials import ProviderCredentialResponse
-from app.schemas.voice_sessions import (
-    RuntimeEventAck,
-    RuntimeEventV1,
-    ToolInvokeRequest,
-    ToolInvokeResponse,
-    VoiceSessionCreateRequest,
-    VoiceSessionContextPreviewRequest,
-    VoiceSessionContextResponse,
-    VoiceSessionEventResponse,
-    VoiceSessionEventsResponse,
-    VoiceSessionResponse,
-    WebRTCParticipantTokenResponse,
-)
-from app.security.voice_runtime_auth import require_voice_runtime
 from app.modules.agents.public import AgentCompilerError, AgentsFacade
-from app.services.contact_resolution_service import ContactResolutionError, ContactResolutionService
-from app.services.tenant_feature_service import TenantFeatureDisabledError, TenantFeatureService, VOICE_RUNTIME_V2
+from app.modules.identity.public import (
+    VOICE_RUNTIME_V2,
+    FeatureDisabledError,
+    FeatureFlags,
+)
+from app.modules.telephony.public import SipDialError, SipQaFacade
 from app.modules.tools.public import (
     ToolArgumentError,
     ToolDispatchService,
@@ -41,10 +25,40 @@ from app.modules.tools.public import (
     ToolNotAvailableError,
     ToolNotFoundError,
 )
-from app.services.voice_config_service import VoiceConfigService
-from app.services.voice_runtime_dispatcher import VoiceRuntimeDispatcher
-from app.services.voice_session_service import VoiceSessionError, VoiceSessionNotFoundError, VoiceSessionService
-from app.services.voice_session_sip_service import VoiceSessionSipDialError, VoiceSessionSipService
+from app.modules.voice.api.schemas import (
+    ProviderCredentialResponse,
+    RuntimeEventAck,
+    RuntimeEventV1,
+    ToolInvokeRequest,
+    ToolInvokeResponse,
+    VoiceSessionContextPreviewRequest,
+    VoiceSessionContextResponse,
+    VoiceSessionCreateRequest,
+    VoiceSessionEventResponse,
+    VoiceSessionEventsResponse,
+    VoiceSessionResponse,
+    WebRTCParticipantTokenResponse,
+)
+from app.modules.voice.application.context_resolution import ContactResolutionService
+from app.modules.voice.application.runtime_dispatcher import VoiceRuntimeDispatcher
+from app.modules.voice.application.runtime_events import RuntimeEventIngestor
+from app.modules.voice.application.session_service import VoiceSessionService
+from app.modules.voice.domain.errors import (
+    ContactResolutionError,
+    InvalidRuntimeEventError,
+    VoiceSessionError,
+    VoiceSessionNotFoundError,
+)
+from app.modules.voice.domain.lifecycle import TERMINAL_STATUSES
+from app.modules.voice.domain.runtime_contracts import RuntimeSessionSpecV1
+from app.modules.voice.domain.session_context import SessionContextV1
+from app.modules.voice.infrastructure.models import VoiceSession, VoiceSessionEvent
+from app.modules.voice_providers.public import (
+    VoiceProviderError,
+    VoiceProviderFacade,
+    is_known_provider,
+)
+from app.security.voice_runtime_auth import require_voice_runtime
 
 router = APIRouter(tags=["Voice Runtime"])
 WRITE_ROLES = ["platform_admin", "tenant_admin"]
@@ -58,7 +72,7 @@ def preview_voice_session_context(
     db: Session = Depends(get_db),
 ) -> SessionContextV1:
     try:
-        TenantFeatureService(db).require_enabled(context.tenant_id, VOICE_RUNTIME_V2)
+        FeatureFlags(db).require_enabled(context.tenant_id, VOICE_RUNTIME_V2)
         return ContactResolutionService(db).resolve(
             tenant_id=context.tenant_id,
             phone=(body.to_phone if body.qa_context_mode == "conversation" and body.channel == "sip" else body.caller_phone),
@@ -68,7 +82,7 @@ def preview_voice_session_context(
             source="outbound" if body.channel == "sip" else "webrtc",
             variables=body.variables,
         )
-    except TenantFeatureDisabledError as exc:
+    except FeatureDisabledError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     except (ContactResolutionError, ValueError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -86,7 +100,7 @@ async def create_voice_session(
                 raise VoiceSessionError("SIP sessions require purpose=qa, direction=outbound and to_phone.")
         elif body.to_phone is not None or body.direction != "internal":
             raise VoiceSessionError("to_phone/outbound are only valid for SIP QA sessions.")
-        TenantFeatureService(db).require_enabled(context.tenant_id, VOICE_RUNTIME_V2)
+        FeatureFlags(db).require_enabled(context.tenant_id, VOICE_RUNTIME_V2)
         caller_phone = (
             body.to_phone
             if body.purpose == "qa" and body.channel == "sip" and body.qa_context_mode == "conversation"
@@ -98,15 +112,16 @@ async def create_voice_session(
             caller_phone=caller_phone, variables=body.variables, purpose=body.purpose,
             qa_context_mode=body.qa_context_mode,
         )
-        session = (
-            await VoiceSessionSipService(db).dial(session, body.to_phone)
-            if body.channel == "sip"
-            else await VoiceRuntimeDispatcher(db).dispatch(session)
-        )
+        if body.channel == "sip":
+            # SIP belongs to Telephony: it dials this session through the
+            # tenant's route and updates it in this same DB session.
+            await SipQaFacade(db).dial_session(session.id, body.to_phone)
+        else:
+            session = await VoiceRuntimeDispatcher(db).dispatch(session)
         return VoiceSessionResponse.model_validate(session)
-    except TenantFeatureDisabledError as exc:
+    except FeatureDisabledError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
-    except (VoiceSessionError, ContactResolutionError, VoiceSessionSipDialError, ValueError) as exc:
+    except (VoiceSessionError, ContactResolutionError, SipDialError, ValueError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -129,7 +144,7 @@ _QA_EVENT_FIELDS = {
 
 
 def _is_terminal(db: Session, session: VoiceSession) -> bool:
-    if session.status in {"ended", "failed", "cancelled"} or session.agent_id is None:
+    if session.status in TERMINAL_STATUSES or session.agent_id is None:
         return True
     return AgentsFacade(db).get_agent_status(session.tenant_id, session.agent_id) == "archived"
 
@@ -197,7 +212,7 @@ def create_webrtc_participant_token(
     db: Session = Depends(get_db),
 ) -> WebRTCParticipantTokenResponse:
     try:
-        TenantFeatureService(db).require_enabled(context.tenant_id, VOICE_RUNTIME_V2)
+        FeatureFlags(db).require_enabled(context.tenant_id, VOICE_RUNTIME_V2)
         session = VoiceSessionService(db).get(session_id, tenant_id=context.tenant_id)
         if _is_terminal(db, session):
             raise VoiceSessionError("Voice session is terminal.")
@@ -249,7 +264,7 @@ def create_webrtc_participant_token(
             participant_token=token,
             expires_in=ttl_seconds,
         )
-    except TenantFeatureDisabledError as exc:
+    except FeatureDisabledError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     except VoiceSessionNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -287,7 +302,7 @@ def get_runtime_provider_credential(session_id: str, provider: str, db: Session 
     appears in RuntimeSessionSpecV1, LiveKit metadata, or logs -- only in
     this response, over the authenticated internal channel.
     """
-    if get_provider(provider) is None:
+    if not is_known_provider(provider):
         raise HTTPException(status_code=422, detail="Unsupported voice provider.")
     try:
         session = VoiceSessionService(db).get(session_id)
@@ -297,103 +312,34 @@ def get_runtime_provider_credential(session_id: str, provider: str, db: Session 
         raise HTTPException(status_code=404, detail="Provider is not associated with this voice session.")
     if _is_terminal(db, session):
         raise HTTPException(status_code=409, detail="Voice session is terminal.")
-    voice_config_service = VoiceConfigService(db)
+    # Tenant comes from the session, never from the runtime; Voice Providers
+    # owns how the credential is stored and decrypted.
     try:
-        config = voice_config_service.get_active_provider_config(session.tenant_id, provider)
-        api_key = voice_config_service.decrypt_api_key(config)
-    except ValueError as exc:
+        credential = VoiceProviderFacade(db).resolve_runtime_credential(session.tenant_id, provider)
+    except VoiceProviderError as exc:
         raise HTTPException(status_code=409, detail="provider_credentials_unavailable") from exc
     logger.info(
         "Voice runtime credential resolved",
         extra={"tenant_id": session.tenant_id, "voice_session_id": session.id, "provider": provider},
     )
-    return ProviderCredentialResponse(provider=provider, api_key=api_key, base_url=None)
+    return ProviderCredentialResponse(
+        provider=credential.provider, api_key=credential.api_key, base_url=credential.base_url
+    )
 
 
 @router.post("/api/v1/internal/voice-runtime/sessions/{session_id}/events", response_model=RuntimeEventAck, dependencies=[Depends(require_voice_runtime)])
 def post_runtime_event(session_id: str, body: RuntimeEventV1, db: Session = Depends(get_db)) -> RuntimeEventAck:
     if body.session_id != session_id:
         raise HTTPException(status_code=422, detail="Event session_id does not match path")
-    service = VoiceSessionService(db)
-    from app.services.voice_call_projection_service import VoiceCallProjectionService
-    from app.services.voice_session_service import TRANSITIONS
-
-    projector = VoiceCallProjectionService(db)
     try:
-        session = service.get(session_id)
-        allowed_payload = {
-            key: value for key, value in body.payload.items()
-            if key in {"livekit_job_id", "provider_session_id", "end_reason", "error_code", "speaker", "text", "timestamp", "participant_identity", "track_source"}
-        }
-        if body.event_type == "voice.transcript.final":
-            if (allowed_payload.get("speaker") not in {"user", "assistant"}
-                    or not isinstance(allowed_payload.get("text"), str)
-                    or not allowed_payload["text"].strip()
-                    or len(allowed_payload["text"]) > 10000):
-                raise HTTPException(status_code=422, detail="Invalid final transcript")
-        event, duplicate = service.record_event(session, body.event_type, source=body.source, event_id=body.event_id, sequence=body.sequence, payload=allowed_payload, occurred_at=body.occurred_at, commit=False)
-        if duplicate:
-            db.rollback()
-            projector.reconcile_session(session_id, tenant_id=session.tenant_id)
-            return RuntimeEventAck(duplicate=True)
-        if "livekit_job_id" in allowed_payload:
-            session.livekit_job_id = str(allowed_payload["livekit_job_id"])[:160]
-        if "provider_session_id" in allowed_payload:
-            session.provider_session_id = str(allowed_payload["provider_session_id"])[:255]
-        if body.event_type == "voice.agent.ready" and session.runtime_ready_at is None:
-            session.runtime_ready_at = body.occurred_at or datetime.now(UTC)
-        if body.event_type == "voice.session.ended" and session.status == "connected":
-            service.transition(session, "ending", commit=False)
-        target = {
-            "voice.session.started": "starting",
-            "voice.session.connected": "connected",
-            "voice.session.ended": "ended",
-            "voice.session.failed": "failed",
-        }.get(body.event_type)
-        if target and target in TRANSITIONS.get(session.status, set()):
-            service.transition(session, target, commit=False)
-        if body.event_type == "voice.session.started" and session.started_at is not None:
-            session.started_at = min(projector._utc(session.started_at), projector._utc(body.occurred_at))
-        elif body.event_type == "voice.session.connected" and (
-                session.ended_at is None or projector._utc(body.occurred_at) <= projector._utc(session.ended_at)):
-            session.connected_at = min(projector._utc(session.connected_at), projector._utc(body.occurred_at)) if session.connected_at else projector._utc(body.occurred_at)
-        elif body.event_type in {"voice.session.ended", "voice.session.failed"} and session.status in {"ended", "failed"}:
-            session.ended_at = min(projector._utc(session.ended_at), projector._utc(body.occurred_at)) if session.ended_at else projector._utc(body.occurred_at)
-        if body.event_type == "voice.session.ended":
-            session.end_reason = str(allowed_payload.get("end_reason", "unknown"))[:40]
-        elif body.event_type == "voice.session.failed":
-            session.error_code = str(allowed_payload.get("error_code", "runtime_failed"))[:80]
-        if session.crm_voice_call_id:
-            call = db.get(CrmVoiceCall, session.crm_voice_call_id)
-            if call is not None and call.tenant_id == session.tenant_id:
-                now = body.occurred_at or datetime.now(UTC)
-                if body.event_type == "voice.session.connected" and call.status == "answered":
-                    call.status = "in_progress"
-                elif body.event_type == "voice.session.ended" and call.status not in {
-                    "busy", "rejected", "no_answer", "failed", "completed"
-                }:
-                    call.status = "completed" if call.answered_at else "no_answer"
-                    call.ended_at = now
-                    logger.info(
-                        "LiveKit SIP outbound completed | tenant_id=%s | crm_voice_call_id=%s | voice_session_id=%s | livekit_room_name=%s | livekit_dispatch_id=%s | livekit_sip_trunk_id=%s | sip_participant_identity=%s | sip_call_id=%s",
-                        session.tenant_id,
-                        call.id,
-                        session.id,
-                        session.livekit_room_name,
-                        session.livekit_dispatch_id,
-                        session.livekit_sip_trunk_id,
-                        session.livekit_sip_participant_identity,
-                        session.sip_call_id,
-                    )
-                elif body.event_type == "voice.session.failed" and call.status not in {
-                    "busy", "rejected", "no_answer", "failed", "completed"
-                }:
-                    call.status = "failed"
-                    call.ended_at = now
-        db.flush()
-        projector.project_event(session_id, event, commit=False)
-        db.commit()
-        return RuntimeEventAck()
+        duplicate = RuntimeEventIngestor(db).ingest(
+            session_id, event_type=body.event_type, source=body.source, event_id=body.event_id,
+            sequence=body.sequence, payload=body.payload, occurred_at=body.occurred_at,
+        )
+        return RuntimeEventAck(duplicate=True) if duplicate else RuntimeEventAck()
+    except InvalidRuntimeEventError as exc:
+        db.rollback()
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     except VoiceSessionNotFoundError as exc:
         db.rollback()
         raise HTTPException(status_code=404, detail=str(exc)) from exc

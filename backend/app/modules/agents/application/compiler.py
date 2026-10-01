@@ -18,13 +18,13 @@ from app.modules.tools.public import (
     from_platform,
     get_tool,
 )
+from app.modules.voice.public import (
+    RuntimeSessionSpecV1,  # runtime contract, owned by Voice
+)
 from app.modules.voice_legacy.public import LegacyVoiceDefaults
 from app.modules.voice_providers.public import (
     VoiceRegistryValidationError,
     resolve_execution_model_id,
-)
-from app.schemas.runtime_session import (
-    RuntimeSessionSpecV1,  # shared runtime contract, owned by Voice
 )
 
 

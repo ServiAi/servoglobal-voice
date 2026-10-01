@@ -1,28 +1,22 @@
 from __future__ import annotations
 
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.crm import CrmContact, CrmLead
-from app.schemas.session_context import (
+from app.modules.telephony.public import VoicePhoneValidationError, normalize_caller_id
+from app.modules.voice.application.ports import ContactView, CrmContextPort, LeadView
+from app.modules.voice.domain.errors import (
+    ContactResolutionError,
+    CrossTenantResolutionError,
+)
+from app.modules.voice.domain.session_context import (
     CallerContext,
     CampaignContext,
     ContactContext,
     LeadContext,
     SessionContextV1,
 )
-from app.services.voice_phone_service import VoicePhoneValidationError, normalize_caller_id
 
-
-class ContactResolutionError(ValueError):
-    pass
-
-
-class CrossTenantResolutionError(ContactResolutionError):
-    """An explicit contact_id/lead_id does not belong to the given tenant,
-    or a lead_id/contact_id pair points at two different contacts. Always
-    a hard failure -- never silently degraded to "unresolved", since that
-    could mask a real cross-tenant bug or an attempted ID-guessing attack."""
+__all__ = ["ContactResolutionError", "ContactResolutionService", "CrossTenantResolutionError"]
 
 
 class ContactResolutionService:
@@ -37,10 +31,18 @@ class ContactResolutionService:
     (the caller must be an authenticated internal component asserting an
     ID it already knows to be correct -- never a bare pass-through of
     caller/LLM-supplied input) -> lookup by normalized phone -> unresolved.
+
+    Voice owns how SessionContextV1 is built; CRM owns how contacts/leads
+    are read, and only hands over snapshots (CrmContextPort).
     """
 
-    def __init__(self, db: Session) -> None:
+    def __init__(self, db: Session, crm: CrmContextPort | None = None) -> None:
         self.db = db
+        if crm is None:
+            from app.modules.voice.wiring import crm_context
+
+            crm = crm_context(db)
+        self.crm = crm
 
     def resolve(
         self,
@@ -53,8 +55,8 @@ class ContactResolutionService:
         source: str | None = None,
         variables: dict | None = None,
     ) -> SessionContextV1:
-        contact: CrmContact | None = None
-        lead: CrmLead | None = None
+        contact: ContactView | None = None
+        lead: LeadView | None = None
 
         if trusted_ids and (contact_id or lead_id):
             contact, lead = self._resolve_trusted_ids(tenant_id, contact_id=contact_id, lead_id=lead_id)
@@ -72,26 +74,24 @@ class ContactResolutionService:
 
     def _resolve_trusted_ids(
         self, tenant_id: str, *, contact_id: str | None, lead_id: str | None
-    ) -> tuple[CrmContact | None, CrmLead | None]:
-        lead: CrmLead | None = None
-        contact: CrmContact | None = None
+    ) -> tuple[ContactView | None, LeadView | None]:
+        lead: LeadView | None = None
+        contact: ContactView | None = None
         if lead_id:
-            lead = self.db.scalar(select(CrmLead).where(CrmLead.tenant_id == tenant_id, CrmLead.id == lead_id))
-            if lead is None:
+            lead = self.crm.get_lead(lead_id)
+            if lead is None or lead.tenant_id != tenant_id:
                 raise CrossTenantResolutionError(f"lead_id '{lead_id}' does not belong to this tenant.")
-            contact = lead.contact
+            contact = self.crm.get_contact(lead.contact_id)
         if contact_id:
-            resolved_contact = self.db.scalar(
-                select(CrmContact).where(CrmContact.tenant_id == tenant_id, CrmContact.id == contact_id)
-            )
-            if resolved_contact is None:
+            resolved_contact = self.crm.get_contact(contact_id)
+            if resolved_contact is None or resolved_contact.tenant_id != tenant_id:
                 raise CrossTenantResolutionError(f"contact_id '{contact_id}' does not belong to this tenant.")
             if contact is not None and contact.id != resolved_contact.id:
                 raise CrossTenantResolutionError("lead_id does not belong to contact_id.")
             contact = resolved_contact
         return contact, lead
 
-    def _lookup_contact_by_phone(self, tenant_id: str, phone: str) -> CrmContact | None:
+    def _lookup_contact_by_phone(self, tenant_id: str, phone: str) -> ContactView | None:
         try:
             normalized = normalize_caller_id(phone)
         except VoicePhoneValidationError:
@@ -99,12 +99,10 @@ class ContactResolutionService:
             # (see resolve()) with no contact match -- never a hard error,
             # a malformed ANI must not break session creation.
             return None
-        return self.db.scalar(
-            select(CrmContact).where(CrmContact.tenant_id == tenant_id, CrmContact.phone_normalized == normalized)
-        )
+        return self.crm.find_contact_by_normalized_phone(tenant_id, normalized)
 
     @staticmethod
-    def to_contact_context(contact: CrmContact) -> ContactContext:
+    def to_contact_context(contact: ContactView) -> ContactContext:
         """Public because VoiceSessionService.enrich_context() reuses this
         exact mapping when enriching an already-created session's context
         (e.g. after crm.create_lead resolves a Contact/Lead) -- the safe
@@ -112,5 +110,5 @@ class ContactResolutionService:
         return ContactContext(id=contact.id, name=contact.name, phone=contact.phone, email=contact.email)
 
     @staticmethod
-    def to_lead_context(lead: CrmLead) -> LeadContext:
-        return LeadContext(id=lead.id, status=lead.status, stage=lead.stage.key if lead.stage else None)
+    def to_lead_context(lead: LeadView) -> LeadContext:
+        return LeadContext(id=lead.id, status=lead.status, stage=lead.stage_key)

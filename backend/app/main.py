@@ -58,7 +58,7 @@ from app.api.endpoints import scheduling
 from app.modules.agents.api import router as agents
 from app.modules.tools.api import router as tools_custom
 from app.api.endpoints import voice_registry
-from app.api.endpoints import voice_runtime
+from app.modules.voice.api import router as voice_runtime
 from app.api.endpoints import voice_provider_admin
 
 app.include_router(notifications.router)

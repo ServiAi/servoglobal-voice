@@ -167,3 +167,15 @@ class ToolInvokeRequest(BaseModel):
 
 class ToolInvokeResponse(BaseModel):
     result: dict = Field(default_factory=dict)
+
+
+class ProviderCredentialResponse(BaseModel):
+    """Contract returned by the internal Control Plane credential endpoint.
+    Consumed only by the Voice Runtime over the authenticated internal
+    channel (see app.security.voice_runtime_auth); never returned to a
+    tenant-facing endpoint or the frontend."""
+
+    model_config = ConfigDict(extra="forbid")
+    provider: str
+    api_key: str
+    base_url: str | None = None

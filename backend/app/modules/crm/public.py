@@ -12,7 +12,7 @@ from dataclasses import dataclass
 
 from sqlalchemy.orm import Session
 
-__all__ = ["ContactRef", "CrmFacade", "LeadRef"]
+__all__ = ["ContactRef", "ContactSnapshot", "CrmFacade", "LeadRef", "LeadSnapshot"]
 
 
 @dataclass(frozen=True)
@@ -27,6 +27,40 @@ class LeadRef:
     tenant_id: str
     contact_id: str
     status: str
+
+
+@dataclass(frozen=True)
+class ContactSnapshot:
+    id: str
+    tenant_id: str
+    name: str | None
+    phone: str | None
+    email: str | None
+
+
+@dataclass(frozen=True)
+class LeadSnapshot:
+    id: str
+    tenant_id: str
+    contact_id: str
+    status: str
+    stage_key: str | None
+    campaign: str | None
+
+
+def _contact_snapshot(row) -> ContactSnapshot:
+    return ContactSnapshot(id=row.id, tenant_id=row.tenant_id, name=row.name, phone=row.phone, email=row.email)
+
+
+def _lead_snapshot(row) -> LeadSnapshot:
+    return LeadSnapshot(
+        id=row.id,
+        tenant_id=row.tenant_id,
+        contact_id=row.contact_id,
+        status=row.status,
+        stage_key=row.stage.key if row.stage else None,
+        campaign=row.campaign,
+    )
 
 
 class CrmFacade:
@@ -46,3 +80,31 @@ class CrmFacade:
             ContactRef(id=contact.id, tenant_id=contact.tenant_id),
             LeadRef(id=lead.id, tenant_id=lead.tenant_id, contact_id=lead.contact_id, status=lead.status),
         )
+
+    # -- read-only snapshots (Voice builds SessionContextV1 from these) ------
+    #
+    # get_contact / get_lead are looked up by id only, NOT tenant-scoped:
+    # callers must compare ``tenant_id`` themselves. That lets them fail
+    # closed with a cross-tenant error instead of a silent "not found".
+
+    def get_contact(self, contact_id: str) -> ContactSnapshot | None:
+        from app.models.crm import CrmContact
+
+        row = self.db.get(CrmContact, contact_id)
+        return _contact_snapshot(row) if row is not None else None
+
+    def get_lead(self, lead_id: str) -> LeadSnapshot | None:
+        from app.models.crm import CrmLead
+
+        row = self.db.get(CrmLead, lead_id)
+        return _lead_snapshot(row) if row is not None else None
+
+    def find_contact_by_normalized_phone(self, tenant_id: str, phone_normalized: str) -> ContactSnapshot | None:
+        from sqlalchemy import select
+
+        from app.models.crm import CrmContact
+
+        row = self.db.scalar(
+            select(CrmContact).where(CrmContact.tenant_id == tenant_id, CrmContact.phone_normalized == phone_normalized)
+        )
+        return _contact_snapshot(row) if row is not None else None

@@ -39,9 +39,30 @@ AGENTS_LEGACY_ALLOWED = {
     "app.db.base",
     "app.db.mixins",
     "app.db.session",
-    "app.schemas.runtime_session",  # RuntimeSessionSpecV1: shared runtime contract (Voice <-> voice-runtime)
     "app.services.integration_event_service",  # shared audit trail (tenant_integration_events)
 }
+
+# Legacy modules Voice Orchestration may still import: shared kernel only.
+VOICE_LEGACY_ALLOWED = {
+    "app.api.auth.deps",
+    "app.core.config",
+    "app.db.base",
+    "app.db.mixins",
+    "app.db.session",
+    "app.security.voice_runtime_auth",  # runtime JWT (shared security)
+}
+
+# Legacy code Voice Providers wraps, and the only files allowed to touch it.
+VOICE_PROVIDERS_LEGACY_ALLOWED = {
+    "app.modules.voice_providers.infrastructure.ultravox": {
+        "app.services.ultravox_admin_service",
+        "app.services.ultravox_provider_client",
+    },
+    "app.modules.voice_providers.infrastructure.credentials": {"app.services.voice_config_service"},
+}
+
+# Third-party frameworks a pure domain layer must not depend on.
+FRAMEWORK_PREFIXES = ("sqlalchemy", "fastapi", "starlette", "livekit", "httpx")
 
 # Provider implementations (Voice Legacy / Ultravox). Agent Builder must
 # reach them only through VoiceProviderPort -> voice.public, and they must
@@ -276,12 +297,105 @@ class ModuleBoundaryTests(unittest.TestCase):
                 self.assertNotIn(service, targets, module)
 
     def test_provider_implementations_import_no_module_at_runtime(self) -> None:
-        # Adapters return their own models; voice_providers.public translates
-        # them. Annotations may use TYPE_CHECKING imports.
+        # Adapters return their own models; Voice Providers translates them.
+        # The only module they may reach is voice_providers.public (its
+        # registry/errors, which load no adapter). Annotations may use
+        # TYPE_CHECKING imports.
         violations = self._violations(
-            lambda s, t: s.startswith(PROVIDER_IMPLEMENTATIONS) and _owner(t) is not None
+            lambda s, t: s.startswith(PROVIDER_IMPLEMENTATIONS)
+            and _owner(t) is not None
+            and t != "app.modules.voice_providers.public"
         )
         self.assertEqual(violations, [])
+
+    # -- Voice Orchestration / Voice Providers ---------------------------------
+
+    def test_voice_does_not_import_other_domains_legacy_internals(self) -> None:
+        # No CRM/Analytics models, no Telephony/SIP services, no provider
+        # adapters, no Voice Legacy, no tenant_feature_service: only other
+        # modules' public APIs plus the shared kernel.
+        violations = self._violations(
+            lambda s, t: _owner(s) == "voice" and _owner(t) is None and t not in VOICE_LEGACY_ALLOWED
+        )
+        self.assertEqual(violations, [], "Voice must reach other domains via their public API or a port")
+
+    def test_voice_providers_touches_legacy_only_from_its_adapters(self) -> None:
+        def violates(source: str, target: str) -> bool:
+            if _owner(source) != "voice_providers" or _owner(target) is not None:
+                return False
+            return target not in VOICE_PROVIDERS_LEGACY_ALLOWED.get(source, set())
+
+        self.assertEqual(self._violations(violates), [])
+
+    def test_voice_providers_public_knows_no_concrete_provider(self) -> None:
+        for name in ("public", "application.service", "application.ports", "domain.errors", "domain.contracts"):
+            module = f"app.modules.voice_providers.{name}"
+            path, targets = self.graph[module]
+            with self.subTest(module=module):
+                self.assertFalse({t for t in targets if "ultravox" in t or t.startswith("app.services")})
+                self.assertNotIn("UltravoxProviderError", _source(path))
+
+    def test_voice_domain_layer_is_pure(self) -> None:
+        # Runtime contracts reuse Agent Builder's value objects (documented).
+        def violates(source: str, target: str) -> bool:
+            if not source.startswith("app.modules.voice.domain"):
+                return False
+            if target.startswith("app.modules.voice."):
+                return not target.startswith("app.modules.voice.domain")
+            return target != "app.modules.agents.public"
+
+        self.assertEqual(self._violations(violates), [])
+        frameworks = []
+        for path in (APP / "modules" / "voice" / "domain").rglob("*.py"):
+            for node in ast.walk(ast.parse(_source(path))):
+                names = (
+                    [node.module or ""] if isinstance(node, ast.ImportFrom)
+                    else [a.name for a in node.names] if isinstance(node, ast.Import) else []
+                )
+                frameworks += [f"{path.name}: {n}" for n in names if n.startswith(FRAMEWORK_PREFIXES)]
+        self.assertEqual(frameworks, [])
+
+    def test_voice_orm_never_leaves_the_voice_module(self) -> None:
+        # Shims are the only (temporary) exception; they alias the module.
+        models = "app.modules.voice.infrastructure.models"
+        violations = self._violations(
+            lambda s, t: t == models and _owner(s) != "voice" and s != "app.models"
+            and SHIM_MARKER not in _source(self.graph[s][0])
+        )
+        self.assertEqual(violations, [])
+
+    def test_public_apis_import_light(self) -> None:
+        # Importing a public API must not load use cases, ORM, LiveKit,
+        # CRM/Analytics services or provider adapters (other modules' compile
+        # paths import these, e.g. Agent Builder -> RuntimeSessionSpecV1).
+        import subprocess
+        import sys
+
+        heavy = (
+            "app.services", "app.models.crm", "app.models.analytics", "livekit",
+            "app.modules.voice.application", "app.modules.voice.infrastructure",
+            "app.modules.agents.application", "app.modules.voice_providers.application",
+            "app.modules.voice_providers.infrastructure",
+        )
+        for module in ("app.modules.voice.public", "app.modules.voice_providers.public", "app.modules.agents.public"):
+            code = (
+                f"import sys, {module}; "
+                f"print(sorted(n for n in sys.modules if n.startswith({heavy!r})))"
+            )
+            out = subprocess.run(
+                [sys.executable, "-c", code], cwd=APP.parent, capture_output=True, text=True, check=True
+            ).stdout.strip()
+            with self.subTest(module=module):
+                self.assertEqual(out, "[]")
+
+    def test_no_import_cycle_links_voice_and_a_provider_implementation(self) -> None:
+        offending = [
+            sorted(component)
+            for component in _strongly_connected(self.graph)
+            if any(_owner(m) == "voice" for m in component)
+            and any(m.startswith(PROVIDER_IMPLEMENTATIONS) for m in component)
+        ]
+        self.assertEqual(offending, [])
 
     def test_no_import_cycle_links_agent_builder_and_a_provider_implementation(self) -> None:
         # Strongly connected components of the whole import graph, lazy
@@ -347,7 +461,11 @@ FOREIGN_ORM_ATTRIBUTES = {"agent_version", "session_context_json", "runtime_bind
 # Cross-module APIs that must speak DTOs only (no ORM rows, no bare Any).
 CRITICAL_PUBLIC_APIS = {
     "app.modules.voice.public": ["VoiceSessionFacade"],
+    "app.modules.voice.application.ports": ["CrmContextPort", "VoiceProjectionPort"],
     "app.modules.voice_providers.public": ["VoiceProviderFacade"],
+    "app.modules.voice_providers.application.ports": ["VoiceProviderAdapter"],
+    "app.modules.telephony.public": ["SipQaFacade"],
+    "app.modules.analytics.public": ["VoiceCallProjectionFacade"],
     "app.modules.crm.public": ["CrmFacade"],
     "app.modules.integrations.public": ["WhatsAppFacade"],
     "app.modules.scheduling.public": ["SchedulingFacade"],
@@ -369,16 +487,17 @@ CRITICAL_PUBLIC_APIS = {
     ],
 }
 PUBLIC_DTOS = {
-    "app.modules.voice.public": ["ToolSessionView", "ToolBindingView"],
+    "app.modules.voice.public": ["ToolSessionView", "ToolBindingView", "SessionProjectionFacts", "SessionEventFact"],
+    "app.modules.crm.public": ["ContactRef", "LeadRef", "ContactSnapshot", "LeadSnapshot"],
     "app.modules.voice_providers.public": [
         "ProviderToolRef",
         "ProviderAgentSnapshot",
         "ProviderVoiceSelection",
         "ProviderAgentImport",
+        "ProviderCredential",
     ],
     "app.modules.agents.public": ["AgentToolBindingView", "PublishedAgent", "AgentDisplay", "ImportedAgent"],
     "app.modules.voice_legacy.public": ["LegacyVoiceDefaults"],
-    "app.modules.crm.public": ["ContactRef", "LeadRef"],
     "app.modules.integrations.public": ["WhatsAppTemplateContract", "WhatsAppSendOutcome"],
     "app.modules.scheduling.public": ["BookingSummary"],
 }
@@ -415,10 +534,10 @@ def _boundary_problems(annotation: object, where: str, base: type) -> list[str]:
 def _type_namespace(module) -> dict:
     """Module globals plus the names some public APIs only import under
     TYPE_CHECKING (to keep import-time dependencies light)."""
+    from app.modules.voice import public as voice_public
     from app.modules.voice_providers import public as voice_providers_public
-    from app.schemas import runtime_session
 
-    return {**vars(runtime_session), **vars(voice_providers_public), **vars(module)}
+    return {**vars(voice_public), **vars(voice_providers_public), **vars(module)}
 
 
 class DataBoundaryTests(unittest.TestCase):

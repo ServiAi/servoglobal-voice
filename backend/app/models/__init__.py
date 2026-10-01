@@ -45,7 +45,7 @@ from app.models.voice_submissions import (
     TenantVoiceExperienceSubmissionValue,
     VoicePublicRateLimitWindow,
 )
-from app.models.voice_sessions import VoiceSession, VoiceSessionEvent
+from app.modules.voice.infrastructure.models import VoiceSession, VoiceSessionEvent
 
 __all__ = [
     "AccessAuditLog",

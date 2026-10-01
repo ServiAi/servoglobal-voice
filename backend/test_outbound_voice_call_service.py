@@ -13,9 +13,9 @@ from app.core.config import settings
 from app.modules.agents.infrastructure.models import TenantAgent, TenantAgentVersion
 from app.models.crm import CrmVoiceCall
 from app.models.integrations import TenantSipRoute
-from app.models.voice_sessions import VoiceSession
+from app.modules.voice.infrastructure.models import VoiceSession
 from app.schemas.integrations import VoiceCallActionRequest
-from app.services.livekit_runtime_backend import RuntimeDispatchResult
+from app.modules.voice.infrastructure.livekit_runtime import RuntimeDispatchResult
 from app.services.livekit_sip_service import (
     LiveKitSipDialError,
     LiveKitSipDialResult,
@@ -27,7 +27,7 @@ from app.services.tenant_feature_service import (
     VOICE_RUNTIME_V2,
     TenantFeatureService,
 )
-from app.services.voice_session_service import VoiceSessionService
+from app.modules.voice.application.session_service import VoiceSessionService
 from app.services.voice_sip_route_service import VoiceSipRouteService
 
 

@@ -7,9 +7,9 @@ from _integrations_2a_test_base import Integration2ATestCase, SessionLocal
 from app.modules.agents.infrastructure.models import TenantAgent, TenantAgentVersion
 from app.models.crm import CrmVoiceCall
 from app.models.integrations import TenantSipRoute
-from app.models.voice_sessions import VoiceSession
+from app.modules.voice.infrastructure.models import VoiceSession
 from app.modules.tools.public import ToolDispatchService, ToolExecutionError
-from app.services.voice_session_service import VoiceSessionService
+from app.modules.voice.application.session_service import VoiceSessionService
 from app.services.voice_session_sip_service import VoiceSessionSipService
 from app.services.tenant_feature_service import TenantFeatureService, VOICE_RUNTIME_V2
 from test_outbound_voice_call_service import FakeSip, ReadyBackend
@@ -137,7 +137,7 @@ class VoiceQaHarnessTests(Integration2ATestCase):
                 self.tenant.id, VOICE_RUNTIME_V2, True, {}, self.user.id
             )
         with patch(
-            "app.api.endpoints.voice_runtime.VoiceRuntimeDispatcher.dispatch",
+            "app.modules.voice.api.router.VoiceRuntimeDispatcher.dispatch",
             new_callable=AsyncMock,
             side_effect=lambda session: session,
         ):
@@ -199,7 +199,7 @@ class VoiceQaHarnessTests(Integration2ATestCase):
                 self.tenant.id, VOICE_RUNTIME_V2, True, {}, self.user.id
             )
         with patch(
-            "app.api.endpoints.voice_runtime.VoiceRuntimeDispatcher.dispatch",
+            "app.modules.voice.api.router.VoiceRuntimeDispatcher.dispatch",
             new_callable=AsyncMock,
             side_effect=lambda session: session,
         ):
@@ -228,7 +228,7 @@ class VoiceQaHarnessTests(Integration2ATestCase):
                 self.tenant.id, VOICE_RUNTIME_V2, True, {}, self.user.id
             )
         with patch(
-            "app.api.endpoints.voice_runtime.VoiceSessionSipService.dial",
+            "app.services.voice_session_sip_service.VoiceSessionSipService.dial",
             new_callable=AsyncMock,
             side_effect=lambda session, _to_phone: session,
         ):

@@ -4,7 +4,7 @@ import unittest
 
 from pydantic import ValidationError
 
-from app.schemas.session_context import (
+from app.modules.voice.domain.session_context import (
     CallerContext,
     CampaignContext,
     ContactContext,

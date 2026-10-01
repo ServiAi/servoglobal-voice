@@ -15,8 +15,13 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from app.modules.agents.public import AgentBehavior, AgentIdentity, AgentInstructions, AgentVoiceConfig
-from app.schemas.session_context import SessionContextV1
+from app.modules.agents.public import (
+    AgentBehavior,
+    AgentIdentity,
+    AgentInstructions,
+    AgentVoiceConfig,
+)
+from app.modules.voice.domain.session_context import SessionContextV1
 
 
 class _StrictModel(BaseModel):

@@ -6,17 +6,30 @@ from sqlalchemy.orm import Session
 from app.api.auth.deps import AuthContext
 from app.api.endpoints.integrations import require_enabled_integration
 from app.db.session import get_db
-from app.modules.agents.public import AgentsFacade, AgentVoiceConfig, VoiceSelectionError, validate_voice_settings
-from app.modules.voice_providers.public import ProviderVoiceSelection, VoiceProviderFacade
+from app.modules.agents.public import (
+    AgentsFacade,
+    AgentVoiceConfig,
+    VoiceSelectionError,
+    validate_voice_settings,
+)
+from app.modules.voice_providers.public import (
+    ProviderVoiceSelection,
+    VoiceProviderError,
+    VoiceProviderFacade,
+    VoiceProviderNotAvailableError,
+)
 from app.schemas.ultravox_admin import (
-    UltravoxAgentDetail, UltravoxAgentPage, UltravoxImportResponse,
-    UltravoxVoicePage, UltravoxVoiceSummary,
+    UltravoxAgentDetail,
+    UltravoxAgentPage,
+    UltravoxImportResponse,
+    UltravoxVoicePage,
+    UltravoxVoiceSummary,
 )
-from app.services.ultravox_provider_client import PREVIEW_REJECTION_REASONS, UltravoxProviderError
-from app.services.voice_provider_admin import (
-    VoiceProviderNotAvailableError, get_provider_admin_service,
+from app.services.ultravox_provider_client import (
+    PREVIEW_REJECTION_REASONS,
+    UltravoxProviderError,
 )
-
+from app.services.voice_provider_admin import get_provider_admin_service
 
 router = APIRouter(
     prefix="/api/v1/integrations/voice/providers/{provider}",
@@ -29,7 +42,10 @@ WRITE_ROLES = ["platform_admin", "tenant_admin"]
 def _error(exc: Exception) -> None:
     if isinstance(exc, VoiceProviderNotAvailableError):
         raise HTTPException(status_code=404, detail="provider_not_available") from None
-    if isinstance(exc, UltravoxProviderError):
+    # Provider-side failures arrive either raw from the Ultravox admin
+    # workspace service or, through VoiceProviderFacade, already translated
+    # to VoiceProviderError(remote=True): same HTTP contract for both.
+    if isinstance(exc, UltravoxProviderError) or (isinstance(exc, VoiceProviderError) and exc.remote):
         if exc.code == "voice_preview_rejected":
             reason = exc.reason if exc.reason in PREVIEW_REJECTION_REASONS else "other"
             raise HTTPException(

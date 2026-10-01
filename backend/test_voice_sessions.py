@@ -4,18 +4,18 @@ import unittest
 
 from _integrations_2a_test_base import Integration2ATestCase
 from app.db.session import SessionLocal
-from app.modules.agents.infrastructure.models import TenantAgent, TenantAgentVersion
 from app.models.crm import CrmContact, CrmLead, CrmPipelineStage
-from app.modules.crm.public import ContactRef, LeadRef
-from app.modules.voice.public import ToolSessionView, VoiceSessionFacade
-from app.services.contact_resolution_service import ContactResolutionError
-from app.services.voice_session_service import (
+from app.modules.agents.infrastructure.models import TenantAgent, TenantAgentVersion
+from app.modules.crm.public import ContactRef, CrmFacade, LeadRef
+from app.modules.voice.application.context_resolution import ContactResolutionError
+from app.modules.voice.application.session_service import (
     SessionContextContactConflictError,
     SessionContextLeadConflictError,
     SessionContextTenantConflictError,
     VoiceSessionError,
     VoiceSessionService,
 )
+from app.modules.voice.public import ToolSessionView, VoiceSessionFacade
 
 
 class VoiceSessionTests(Integration2ATestCase):
@@ -205,8 +205,8 @@ class VoiceSessionTests(Integration2ATestCase):
         with SessionLocal() as db:
             session = VoiceSessionService(db).create(self.tenant.id, agent_id, channel="webrtc", direction="internal")
             self.assertIsNone(session.session_context_json.get("contact"))
-            contact = db.get(CrmContact, contact_id)
-            lead = db.get(CrmLead, lead_id)
+            contact = CrmFacade(db).get_contact(contact_id)
+            lead = CrmFacade(db).get_lead(lead_id)
             enriched = VoiceSessionService(db).enrich_context(session, contact=contact, lead=lead, event_source="crm.create_lead")
             self.assertEqual(enriched.contact.id, contact_id)
             self.assertEqual(enriched.lead.id, lead_id)
@@ -221,8 +221,8 @@ class VoiceSessionTests(Integration2ATestCase):
         contact_id, lead_id = self._seed_contact_and_lead(self.tenant.id)
         with SessionLocal() as db:
             session = VoiceSessionService(db).create(self.tenant.id, agent_id, channel="webrtc", direction="internal")
-            contact = db.get(CrmContact, contact_id)
-            lead = db.get(CrmLead, lead_id)
+            contact = CrmFacade(db).get_contact(contact_id)
+            lead = CrmFacade(db).get_lead(lead_id)
             first = VoiceSessionService(db).enrich_context(session, contact=contact, lead=lead, event_source="crm.create_lead")
             second = VoiceSessionService(db).enrich_context(session, contact=contact, lead=lead, event_source="crm.create_lead")
             self.assertEqual(first.contact.id, second.contact.id)
@@ -237,15 +237,15 @@ class VoiceSessionTests(Integration2ATestCase):
         contact_id, lead_id = self._seed_contact_and_lead(self.tenant.id)
         with SessionLocal() as db:
             session = VoiceSessionService(db).create(self.tenant.id, agent_id, channel="webrtc", direction="internal")
-            contact = db.get(CrmContact, contact_id)
-            lead = db.get(CrmLead, lead_id)
+            contact = CrmFacade(db).get_contact(contact_id)
+            lead = CrmFacade(db).get_lead(lead_id)
             VoiceSessionService(db).enrich_context(session, contact=contact, lead=lead, event_source="crm.create_lead")
             other_contact = CrmContact(tenant_id=self.tenant.id, name="Otra Persona", phone="3009998877", phone_normalized="+573009998877")
             db.add(other_contact)
             db.commit()
             db.refresh(other_contact)
             with self.assertRaises(SessionContextContactConflictError):
-                VoiceSessionService(db).enrich_context(session, contact=other_contact, event_source="crm.create_lead")
+                VoiceSessionService(db).enrich_context(session, contact=CrmFacade(db).get_contact(other_contact.id), event_source="crm.create_lead")
 
     def test_enrich_context_rejects_replacing_an_already_resolved_lead(self) -> None:
         # Caso 4: lead conflict -> FAIL.
@@ -253,8 +253,8 @@ class VoiceSessionTests(Integration2ATestCase):
         contact_id, lead_id = self._seed_contact_and_lead(self.tenant.id)
         with SessionLocal() as db:
             session = VoiceSessionService(db).create(self.tenant.id, agent_id, channel="webrtc", direction="internal")
-            contact = db.get(CrmContact, contact_id)
-            lead = db.get(CrmLead, lead_id)
+            contact = CrmFacade(db).get_contact(contact_id)
+            lead = CrmFacade(db).get_lead(lead_id)
             VoiceSessionService(db).enrich_context(session, contact=contact, lead=lead, event_source="crm.create_lead")
             stage = db.query(CrmPipelineStage).filter_by(tenant_id=self.tenant.id).first()
             other_lead = CrmLead(tenant_id=self.tenant.id, contact_id=contact_id, current_stage_id=stage.id, status="open")
@@ -262,7 +262,7 @@ class VoiceSessionTests(Integration2ATestCase):
             db.commit()
             db.refresh(other_lead)
             with self.assertRaises(SessionContextLeadConflictError):
-                VoiceSessionService(db).enrich_context(session, contact=contact, lead=other_lead, event_source="crm.create_lead")
+                VoiceSessionService(db).enrich_context(session, contact=contact, lead=CrmFacade(db).get_lead(other_lead.id), event_source="crm.create_lead")
 
     def test_enrich_context_rejects_cross_tenant_contact_and_persists_nothing(self) -> None:
         # Caso 5: cross-tenant enrichment attempt -> FAIL, nothing persisted.
@@ -271,9 +271,9 @@ class VoiceSessionTests(Integration2ATestCase):
         other_contact_id, other_lead_id = self._seed_contact_and_lead(other_tenant.id)
         with SessionLocal() as db:
             session = VoiceSessionService(db).create(self.tenant.id, agent_id, channel="webrtc", direction="internal")
-            other_contact = db.get(CrmContact, other_contact_id)
+            other_contact = CrmFacade(db).get_contact(other_contact_id)
             with self.assertRaises(SessionContextTenantConflictError):
-                VoiceSessionService(db).enrich_context(session, contact=other_contact, event_source="crm.create_lead")
+                VoiceSessionService(db).enrich_context(session, contact=CrmFacade(db).get_contact(other_contact.id), event_source="crm.create_lead")
             db.refresh(session)
             self.assertIsNone(session.session_context_json.get("contact"))
 
@@ -283,8 +283,8 @@ class VoiceSessionTests(Integration2ATestCase):
         contact_id, lead_id = self._seed_contact_and_lead(self.tenant.id)
         with SessionLocal() as db:
             session = VoiceSessionService(db).create(self.tenant.id, agent_id, channel="webrtc", direction="internal")
-            contact = db.get(CrmContact, contact_id)
-            lead = db.get(CrmLead, lead_id)
+            contact = CrmFacade(db).get_contact(contact_id)
+            lead = CrmFacade(db).get_lead(lead_id)
             VoiceSessionService(db).enrich_context(session, contact=contact, lead=lead, event_source="crm.create_lead")
             enriched_events = [e for e in session.events if e.event_type == "session.context.enriched"]
             self.assertEqual(len(enriched_events), 1)
