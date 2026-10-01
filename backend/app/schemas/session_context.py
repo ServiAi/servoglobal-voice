@@ -8,7 +8,7 @@ RuntimeSessionSpecV1.context by AgentCompilerService. Deliberately
 provider-agnostic (nothing Ultravox-specific) and carries no secrets --
 same discipline as AgentVoiceConfig/RealtimeModelSpec in this package,
 duplicated rather than imported to keep each contract file self-contained
-(same convention already used between schemas/agents.py and
+(same convention already used between app/modules/agents/domain/contracts.py and
 schemas/runtime_session.py).
 
 Caller != Contact != Lead: a caller is just this call's telecom identity

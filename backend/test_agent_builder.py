@@ -10,8 +10,8 @@ from sqlalchemy import select
 from _integrations_2a_test_base import Integration2ATestCase
 from app.db.session import SessionLocal
 from app.models.integrations import TenantIntegrationEvent, TenantVoiceAgentConfig, TenantWhatsAppConfig
-from app.schemas.agents import AgentCreateRequest
-from app.services.agent_service import AgentService
+from app.modules.agents.api.schemas import AgentCreateRequest
+from app.modules.agents.application.service import AgentService
 from app.services.secret_manager_service import SecretManager
 from app.services.tenant_feature_service import AGENT_BUILDER, TenantFeatureService
 from app.schemas.ultravox_admin import UltravoxToolSummary

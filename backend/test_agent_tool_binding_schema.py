@@ -4,7 +4,7 @@ import unittest
 
 from pydantic import ValidationError
 
-from app.schemas.agents import AgentToolBinding
+from app.modules.agents.domain.contracts import AgentToolBinding
 
 
 class AgentToolBindingSchemaTests(unittest.TestCase):

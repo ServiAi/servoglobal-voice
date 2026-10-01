@@ -4,7 +4,7 @@ import unittest
 
 from pydantic import ValidationError
 
-from app.schemas.agents import AgentVoiceConfig
+from app.modules.agents.domain.contracts import AgentVoiceConfig
 
 
 class AgentVoiceConfigSchemaTests(unittest.TestCase):
@@ -35,7 +35,7 @@ class AgentVoiceConfigSchemaTests(unittest.TestCase):
             AgentVoiceConfig(mode="tts", provider="elevenlabs", voice_id="x")
 
     def test_import_agent_shape_without_settings_key_still_parses(self) -> None:
-        # Exact shape UltravoxAdminService.import_agent() persists today.
+        # Exact shape AgentService.import_provider_agent() persists for an Ultravox import.
         voice = AgentVoiceConfig.model_validate({
             "mode": "provider", "provider": "ultravox", "voice_id": "Mark",
         })

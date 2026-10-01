@@ -17,7 +17,7 @@ os.environ["DATABASE_URL"] = f"sqlite:///./{TEST_DB_PATH.as_posix()}"
 
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
-from app.models.agents import TenantAgent, TenantAgentVersion
+from app.modules.agents.infrastructure.models import TenantAgent, TenantAgentVersion
 from app.models.identity import Tenant
 from app.models.integrations import TenantIntegrationEvent
 from app.modules.tools.infrastructure.models import TenantHttpToolConfig, TenantTool

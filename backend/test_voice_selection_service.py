@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import unittest
 
-from app.schemas.agents import AgentVoiceConfig
-from app.services.voice_selection_service import VoiceSelectionError, VoiceSelectionService
+from app.modules.agents.domain.contracts import AgentVoiceConfig
+from app.modules.agents.domain.voice_selection import VoiceSelectionError, VoiceSelectionService
 
 
 class VoiceSelectionServiceTests(unittest.TestCase):

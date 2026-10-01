@@ -9,12 +9,30 @@ os.environ.setdefault("AUTH0_AUDIENCE", "https://api.example.test")
 os.environ["SERVIAI_TEST_SECRET_FALLBACK"] = "1"
 os.environ.setdefault("DATABASE_URL", "sqlite:///./serviai_agent_compiler_test.db")
 
-from app.models.agents import TenantAgent, TenantAgentVersion
-from app.services.agent_compiler_service import (
+from app.modules.agents.application.compiler import (
     AgentCompilerError,
     AgentCompilerService,
     compile_runtime_session_spec,
 )
+from app.modules.agents.infrastructure.models import TenantAgent, TenantAgentVersion
+from app.modules.voice_legacy.public import LegacyVoiceDefaults
+
+
+class _FakeLegacyVoice:
+    """LegacyVoicePort fake: the compiler reads the legacy default voice
+    through Voice Legacy's public API, never through an ORM relationship."""
+
+    def __init__(self, default_voice: str | None) -> None:
+        self.default_voice = default_voice
+        self.calls: list[tuple[str, str]] = []
+
+    def get_voice_agent_defaults(self, tenant_id: str, config_id: str) -> LegacyVoiceDefaults:
+        self.calls.append((tenant_id, config_id))
+        return LegacyVoiceDefaults(config_id=config_id, tenant_id=tenant_id, default_voice=self.default_voice)
+
+
+def _legacy_compiler(default_voice: str | None) -> AgentCompilerService:
+    return AgentCompilerService(legacy_voice=_FakeLegacyVoice(default_voice))
 
 
 def _agent(**overrides) -> TenantAgent:
@@ -157,7 +175,7 @@ class AgentCompilerServiceTests(unittest.TestCase):
             self.compiler.compile(agent, version)
 
     def test_preserves_new_voice_contract_when_already_populated(self) -> None:
-        # Exact shape UltravoxAdminService.import_agent() persists today.
+        # Exact shape AgentService.import_provider_agent() persists for an Ultravox import.
         agent = _agent()
         version = _published_version(
             runtime_binding_json={
@@ -175,8 +193,8 @@ class AgentCompilerServiceTests(unittest.TestCase):
     def test_synthesizes_provider_voice_from_legacy_default_voice_when_voice_is_absent(self) -> None:
         agent = _agent()
         version = _published_version()
-        version.voice_agent_config = type("Cfg", (), {"default_voice": "Mark"})()
-        spec = self.compiler.compile(agent, version)
+        version.voice_agent_config_id = "legacy-cfg"
+        spec = _legacy_compiler("Mark").compile(agent, version)
         self.assertEqual(spec.runtime.realtime.voice.mode, "provider")
         self.assertEqual(spec.runtime.realtime.voice.provider, "ultravox")
         self.assertEqual(spec.runtime.realtime.voice.voice_id, "Mark")
@@ -201,8 +219,8 @@ class AgentCompilerServiceTests(unittest.TestCase):
                 },
             }
         )
-        version.voice_agent_config = type("Cfg", (), {"default_voice": "Mark"})()
-        spec = self.compiler.compile(agent, version)
+        version.voice_agent_config_id = "legacy-cfg"
+        spec = _legacy_compiler("Mark").compile(agent, version)
         self.assertEqual(spec.runtime.realtime.voice.mode, "provider_external")
         self.assertEqual(spec.runtime.realtime.voice.provider, "elevenlabs")
 
@@ -288,8 +306,14 @@ class AgentCompilerCustomToolTests(unittest.TestCase):
         from app.db.base import Base
         from app.db.session import SessionLocal, engine
         from app.models.identity import Tenant
-        from app.modules.tools.infrastructure.models import TenantHttpToolConfig, TenantTool
-        from app.services.tenant_feature_service import CUSTOM_HTTP_TOOLS, TenantFeatureService
+        from app.modules.tools.infrastructure.models import (
+            TenantHttpToolConfig,
+            TenantTool,
+        )
+        from app.services.tenant_feature_service import (
+            CUSTOM_HTTP_TOOLS,
+            TenantFeatureService,
+        )
 
         self.engine = engine
         self.SessionLocal = SessionLocal

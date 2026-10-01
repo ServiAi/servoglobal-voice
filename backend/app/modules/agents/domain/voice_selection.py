@@ -1,7 +1,11 @@
 from __future__ import annotations
 
-from app.domain.voice_registry import VoiceRegistryValidationError, validate_voice_compatibility
-from app.schemas.agents import AgentVoiceConfig
+from app.modules.agents.domain.contracts import AgentVoiceConfig
+from app.modules.agents.domain.errors import VoiceSelectionError
+from app.modules.voice_providers.public import (
+    VoiceRegistryValidationError,
+    validate_voice_compatibility,
+)
 
 _ELEVENLABS_SETTINGS_KEYS = {"model", "speed", "stability", "similarity_boost", "use_speaker_boost"}
 _ELEVENLABS_SETTINGS_RANGES: dict[str, tuple[float, float]] = {
@@ -10,10 +14,6 @@ _ELEVENLABS_SETTINGS_RANGES: dict[str, tuple[float, float]] = {
     "similarity_boost": (0.0, 1.0),
 }
 _ELEVENLABS_MODEL_MAX_LENGTH = 80
-
-
-class VoiceSelectionError(ValueError):
-    pass
 
 
 class VoiceSelectionService:

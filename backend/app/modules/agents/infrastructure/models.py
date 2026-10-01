@@ -7,7 +7,7 @@ from sqlalchemy import DateTime, ForeignKey, Index, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
-from app.models.identity import TimestampMixin, _utcnow, _uuid
+from app.db.mixins import TimestampMixin, _utcnow, _uuid
 
 
 class TenantAgent(Base, TimestampMixin):
@@ -117,5 +117,6 @@ class TenantAgentVersion(Base):
 
     agent: Mapped[TenantAgent] = relationship(back_populates="versions", foreign_keys=[agent_id])
     tenant = relationship("Tenant")
-    voice_agent_config = relationship("TenantVoiceAgentConfig")
+    # voice_agent_config_id stays a plain FK: the legacy config is owned by
+    # Voice Legacy and read through app.modules.voice_legacy.public.
     created_by_user = relationship("User")

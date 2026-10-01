@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
-from app.models.agents import TenantAgent, TenantAgentVersion
+from app.modules.agents.public import AgentsFacade
 from app.models.analytics import Agent, Call
 from app.models.crm import CrmActivity, CrmContact, CrmLead, CrmVoiceCall
 from app.models.voice_sessions import VoiceSession, VoiceSessionEvent
@@ -118,14 +118,9 @@ class VoiceCallProjectionService:
             Agent.external_provider == "serviglobal_voice_runtime",
             Agent.external_agent_id == canonical_id,
         ).with_for_update())
-        canonical = self.db.scalar(select(TenantAgent).where(
-            TenantAgent.id == canonical_id, TenantAgent.tenant_id == session.tenant_id,
-        ))
-        version = self.db.scalar(select(TenantAgentVersion).where(
-            TenantAgentVersion.id == session.agent_version_id,
-            TenantAgentVersion.tenant_id == session.tenant_id,
-        )) if session.agent_version_id else None
-        name = (canonical.name if canonical else (version.identity_json or {}).get("name") if version else None) or "Agente de voz"
+        display = AgentsFacade(self.db).describe_agent(session.tenant_id, canonical_id, session.agent_version_id)
+        name = display.name or "Agente de voz"
+        status = display.status or "archived"
         if agent is None and self.db.get_bind().dialect.name == "postgresql":
             self.db.execute(pg_insert(Agent).values(
                 tenant_id=session.tenant_id,
@@ -133,7 +128,7 @@ class VoiceCallProjectionService:
                 external_agent_id=canonical_id,
                 name=name,
                 channel_type="voice",
-                status=canonical.status if canonical else "archived",
+                status=status,
             ).on_conflict_do_nothing(constraint="uq_agents_tenant_provider_external_agent"))
             agent = self.db.scalar(select(Agent).where(
                 Agent.tenant_id == session.tenant_id,
@@ -143,12 +138,12 @@ class VoiceCallProjectionService:
         if agent is None:
             agent = Agent(tenant_id=session.tenant_id, external_provider="serviglobal_voice_runtime",
                           external_agent_id=canonical_id, name=name, channel_type="voice",
-                          status=canonical.status if canonical else "archived")
+                          status=status)
             self.db.add(agent)
             self.db.flush()
         else:
             agent.name = name
-            agent.status = canonical.status if canonical else "archived"
+            agent.status = status
         return agent
 
     def _activity(self, session: VoiceSession, crm_call: CrmVoiceCall | None, call: Call,

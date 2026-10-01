@@ -5,6 +5,7 @@ from typing import Protocol
 from sqlalchemy.orm import Session
 
 from app.models.voice_sessions import VoiceSession
+from app.modules.agents.public import AgentsFacade
 from app.services.livekit_runtime_backend import LiveKitRuntimeBackend, RuntimeDispatchResult
 from app.services.voice_session_service import VoiceSessionService
 
@@ -18,11 +19,15 @@ class VoiceRuntimeDispatcher:
         self.sessions = VoiceSessionService(db)
         self.backend = backend or LiveKitRuntimeBackend()
 
+    def _agent_status(self, session: VoiceSession) -> str | None:
+        # Always read from the database: archival may win while LiveKit works.
+        if session.agent_id is None:
+            return None
+        return AgentsFacade(self.sessions.db).get_agent_status(session.tenant_id, session.agent_id)
+
     async def dispatch(self, session: VoiceSession) -> VoiceSession:
         self.sessions.db.refresh(session)
-        if session.agent is not None:
-            self.sessions.db.refresh(session.agent)
-        if session.status != "requested" or session.agent is None or session.agent.status != "active":
+        if session.status != "requested" or self._agent_status(session) != "active":
             return session
         self.sessions.transition(session, "dispatching")
         try:
@@ -31,9 +36,7 @@ class VoiceRuntimeDispatcher:
             self.sessions.fail(session, "livekit_dispatch_failed", "LiveKit dispatch failed")
             return session
         self.sessions.db.refresh(session)
-        if session.agent is not None:
-            self.sessions.db.refresh(session.agent)
-        if session.status != "dispatching" or session.agent is None or session.agent.status != "active":
+        if session.status != "dispatching" or self._agent_status(session) != "active":
             # Archival may win while LiveKit creates the room. Never leave that room running.
             session.livekit_room_name = result.room_name
             session.livekit_dispatch_id = result.dispatch_id

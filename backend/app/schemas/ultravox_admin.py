@@ -63,6 +63,21 @@ class UltravoxVoicePage(_StrictModel):
     total: int = 0
 
 
+class UltravoxAgentImport(_StrictModel):
+    """Provider-side description of a remote agent to import. Values are
+    already sanitized; never contains credentials."""
+
+    provider_agent_id: str
+    provider_revision_id: str | None = None
+    name: str
+    language: str | None = None
+    system_prompt: str
+    model: str
+    voice_id: str | None = None
+    tools: list[UltravoxToolSummary] = Field(default_factory=list)
+    provider_settings: dict[str, Any] = Field(default_factory=dict)
+
+
 class UltravoxImportResponse(_StrictModel):
     agent_id: str
     draft_version_id: str

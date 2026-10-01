@@ -12,7 +12,7 @@ from app.api.auth.deps import AuthContext, require_roles
 from app.core.config import settings
 from app.db.session import get_db
 from app.models.crm import CrmVoiceCall
-from app.models.voice_sessions import VoiceSessionEvent
+from app.models.voice_sessions import VoiceSession, VoiceSessionEvent
 from app.domain.voice_registry import get_provider
 from app.schemas.runtime_session import RuntimeSessionSpecV1
 from app.schemas.session_context import SessionContextV1
@@ -31,7 +31,7 @@ from app.schemas.voice_sessions import (
     WebRTCParticipantTokenResponse,
 )
 from app.security.voice_runtime_auth import require_voice_runtime
-from app.services.agent_compiler_service import AgentCompilerError, AgentCompilerService
+from app.modules.agents.public import AgentCompilerError, AgentsFacade
 from app.services.contact_resolution_service import ContactResolutionError, ContactResolutionService
 from app.services.tenant_feature_service import TenantFeatureDisabledError, TenantFeatureService, VOICE_RUNTIME_V2
 from app.modules.tools.public import (
@@ -128,6 +128,12 @@ _QA_EVENT_FIELDS = {
 }
 
 
+def _is_terminal(db: Session, session: VoiceSession) -> bool:
+    if session.status in {"ended", "failed", "cancelled"} or session.agent_id is None:
+        return True
+    return AgentsFacade(db).get_agent_status(session.tenant_id, session.agent_id) == "archived"
+
+
 def _safe_qa_event_payload(event: VoiceSessionEvent) -> dict[str, str | int | bool | None]:
     allowed = _QA_EVENT_FIELDS.get(event.event_type, set())
     return {
@@ -193,7 +199,7 @@ def create_webrtc_participant_token(
     try:
         TenantFeatureService(db).require_enabled(context.tenant_id, VOICE_RUNTIME_V2)
         session = VoiceSessionService(db).get(session_id, tenant_id=context.tenant_id)
-        if session.status in {"ended", "failed", "cancelled"} or session.agent_id is None or session.agent.status == "archived":
+        if _is_terminal(db, session):
             raise VoiceSessionError("Voice session is terminal.")
         if session.channel != "webrtc" or session.runtime_engine != "livekit" or not session.livekit_room_name:
             raise VoiceSessionError("Voice session is not ready for LiveKit WebRTC.")
@@ -255,11 +261,11 @@ def create_webrtc_participant_token(
 def get_runtime_session_spec(session_id: str, db: Session = Depends(get_db)) -> RuntimeSessionSpecV1:
     try:
         session = VoiceSessionService(db).get(session_id)
-        if session.status in {"ended", "failed", "cancelled"} or session.agent_id is None or session.agent.status == "archived":
+        if _is_terminal(db, session):
             raise VoiceSessionError("Voice session is terminal.")
-        return AgentCompilerService(db).compile(
-            session.agent, session.agent_version, session_id=session.id,
-            context=session.session_context_json,
+        return AgentsFacade(db).compile_runtime_spec(
+            session.tenant_id, session.agent_id, session.agent_version_id,
+            session_id=session.id, context=session.session_context_json,
         )
     except VoiceSessionNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -289,7 +295,7 @@ def get_runtime_provider_credential(session_id: str, provider: str, db: Session 
         raise HTTPException(status_code=404, detail="Voice session not found.") from exc
     if session.provider != provider:
         raise HTTPException(status_code=404, detail="Provider is not associated with this voice session.")
-    if session.status in {"ended", "failed", "cancelled"} or session.agent_id is None or session.agent.status == "archived":
+    if _is_terminal(db, session):
         raise HTTPException(status_code=409, detail="Voice session is terminal.")
     voice_config_service = VoiceConfigService(db)
     try:

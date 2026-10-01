@@ -24,6 +24,16 @@ class SchedulingFacade:
     def __init__(self, db: Session) -> None:
         self.db = db
 
+    def is_booking_configured(self, tenant_id: str) -> bool:
+        """Same resolution the booking tools use at call time."""
+        from app.services.booking_service import BookingService
+
+        try:
+            BookingService(self.db)._effective_config(tenant_id)
+            return True
+        except ValueError:
+            return False
+
     def get_available_slots(self, *, tenant_id: str, date_input: str) -> dict[str, Any]:
         """Raises ValueError on invalid dates or provider errors."""
         from app.services.booking_service import BookingService

@@ -1,20 +1,22 @@
 from __future__ import annotations
 
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
 from sqlalchemy.orm import Session
 
 from app.domain.voice_registry import get_provider
-from app.schemas.agents import AgentVoiceConfig
 from app.schemas.ultravox_admin import (
     UltravoxAgentDetail,
+    UltravoxAgentImport,
     UltravoxAgentPage,
-    UltravoxImportResponse,
     UltravoxVoicePage,
     UltravoxVoiceSummary,
 )
 from app.services.ultravox_admin_service import UltravoxAdminService
 from app.services.ultravox_provider_client import VoicePreviewAudio
+
+if TYPE_CHECKING:  # annotations only: no runtime path back into app.modules
+    from app.modules.voice_providers.public import ProviderVoiceSelection
 
 
 class VoiceProviderNotAvailableError(ValueError):
@@ -34,11 +36,15 @@ class VoiceProviderAdminService(Protocol):
 
     def list_agents(self, tenant_id: str, **filters) -> UltravoxAgentPage: ...
     def get_agent(self, tenant_id: str, agent_id: str) -> UltravoxAgentDetail: ...
-    def import_agent(self, tenant_id: str, agent_id: str, user_id: str | None) -> UltravoxImportResponse: ...
+    def get_agent_import(self, tenant_id: str, agent_id: str) -> UltravoxAgentImport: ...
+    def validate_provider_agent_link(self, tenant_id: str, agent_id: str) -> UltravoxAgentDetail: ...
+    def validate_execution_preflight(self, tenant_id: str, agent_id: str) -> UltravoxAgentDetail: ...
     def list_voices(self, tenant_id: str, **filters) -> UltravoxVoicePage: ...
     def get_voice(self, tenant_id: str, voice_id: str) -> UltravoxVoiceSummary: ...
     def preview(self, tenant_id: str, voice_id: str) -> VoicePreviewAudio: ...
-    def preview_external_voice(self, tenant_id: str, voice: AgentVoiceConfig) -> VoicePreviewAudio: ...
+    def ensure_external_voice_supported(self, voice: ProviderVoiceSelection) -> None: ...
+    def preview_external_voice(self, tenant_id: str, voice: ProviderVoiceSelection) -> VoicePreviewAudio: ...
+    def validate_external_voice_credentials(self, tenant_id: str, provider: str) -> None: ...
 
 
 # Add an entry here once a provider has a real adapter backing it (see the

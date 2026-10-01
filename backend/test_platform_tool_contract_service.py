@@ -69,6 +69,29 @@ class PlatformToolContractServiceTests(unittest.TestCase):
             ))
             db.commit()
 
+    # -- invalid data (documented edge case, NOT a supported contract) ------
+
+    def test_malformed_approved_template_fails_while_building_its_contract(self):
+        # An "approved" template whose stored parameters are malformed is
+        # corrupt data. Since WhatsAppTemplateContract resolves the approved
+        # parameter keys when it is built, the ValueError surfaces before
+        # recipient.strategy is validated -- kept as-is on purpose.
+        with SessionLocal() as db:
+            db.add(TenantWhatsAppTemplate(
+                tenant_id=self.tenant_id, template_key="booking_confirmation",
+                provider_template_name="booking_confirmation", name="booking_confirmation",
+                category="utility", language="es", body="Hola {{1}}",
+                status="approved", source="meta_sync", parameter_format="POSITIONAL",
+                variables_json={"parameters": "not-a-list"},
+            ))
+            db.commit()
+            config = _v2_config(recipient={"strategy": "not-a-strategy"})
+            with self.assertRaisesRegex(ValueError, "Template parameters are malformed") as ctx:
+                PlatformToolContractService(db).validate_binding_config(
+                    self.tenant_id, from_platform(WHATSAPP_TOOL), config
+                )
+        self.assertNotIsInstance(ctx.exception, PlatformToolContractError)
+
     # -- compile_llm_schema --------------------------------------------------
 
     def test_compile_llm_schema_only_includes_llm_source_variables(self):

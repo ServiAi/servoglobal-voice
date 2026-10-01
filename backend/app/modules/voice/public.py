@@ -3,20 +3,19 @@
 Boundary only: the implementation still lives in the legacy layers
 (app.services.voice_session_service, app.schemas.session_context) until
 this module is migrated. Other modules import from here, never from those.
-Nothing returned here is an ORM row: VoiceSession, TenantAgent and
-TenantAgentVersion stay inside this module.
+Nothing returned here is an ORM row: VoiceSession stays inside this module.
+Voice providers (registry, adapters) have their own boundary:
+app.modules.voice_providers.public.
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-from copy import deepcopy
-from dataclasses import dataclass, field
-from types import MappingProxyType
+from dataclasses import dataclass
 from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app.modules.agents.public import AgentsFacade, AgentToolBindingView
 from app.modules.crm.public import ContactRef, LeadRef
 from app.schemas.session_context import SessionContextV1
 from app.services import voice_session_service as _sessions
@@ -24,6 +23,7 @@ from app.services.voice_session_service import (
     SessionContextEnrichmentError,
     VoiceSessionError,
     VoiceSessionNotFoundError,
+    VoiceSessionsBusyError,
 )
 
 __all__ = [
@@ -34,20 +34,14 @@ __all__ = [
     "VoiceSessionError",
     "VoiceSessionFacade",
     "VoiceSessionNotFoundError",
+    "VoiceSessionsBusyError",
 ]
 
 _TERMINAL_STATUSES = frozenset({"ended", "failed", "cancelled"})
 
-
-@dataclass(frozen=True)
-class ToolBindingView:
-    """One entry of the published version's ``runtime_binding_json["tools"]``.
-    ``config`` is the admin-set binding payload; its schema belongs to Tool
-    Platform, so it stays a read-only mapping here."""
-
-    key: str
-    enabled: bool
-    config: Mapping[str, Any] = field(default_factory=lambda: MappingProxyType({}))
+# Agent Builder owns the parsing of runtime_binding_json["tools"]; Voice
+# only forwards the views to Tool Platform under this historical name.
+ToolBindingView = AgentToolBindingView
 
 
 @dataclass(frozen=True)
@@ -70,23 +64,6 @@ class ToolSessionView:
         return next((b for b in self.tool_bindings if b.key == tool_key), None)
 
 
-def _binding_views(runtime_binding_json: Any) -> tuple[ToolBindingView, ...]:
-    raw = (runtime_binding_json or {}).get("tools", []) if isinstance(runtime_binding_json, dict) else []
-    views = []
-    for item in raw if isinstance(raw, list) else []:
-        if not isinstance(item, dict) or not isinstance(item.get("key"), str):
-            continue
-        config = item.get("config")
-        views.append(
-            ToolBindingView(
-                key=item["key"],
-                enabled=bool(item.get("enabled", True)),
-                config=MappingProxyType(deepcopy(config) if isinstance(config, dict) else {}),
-            )
-        )
-    return tuple(views)
-
-
 class VoiceSessionFacade:
     """VoiceSession operations other modules may perform, addressed by id."""
 
@@ -96,15 +73,18 @@ class VoiceSessionFacade:
     def get_tool_session(self, session_id: str) -> ToolSessionView:
         """Raises VoiceSessionNotFoundError."""
         session = _sessions.VoiceSessionService(self.db).get(session_id)
-        agent = session.agent
-        version = session.agent_version
+        agents = AgentsFacade(self.db)
         return ToolSessionView(
             id=session.id,
             tenant_id=session.tenant_id,
             status=session.status,
             agent_id=session.agent_id,
-            agent_status=agent.status if agent is not None else None,
-            tool_bindings=_binding_views(version.runtime_binding_json if version is not None else None),
+            agent_status=agents.get_agent_status(session.tenant_id, session.agent_id) if session.agent_id else None,
+            tool_bindings=(
+                agents.get_tool_bindings(session.tenant_id, session.agent_version_id)
+                if session.agent_version_id
+                else ()
+            ),
             context=SessionContextV1.model_validate(session.session_context_json or {}),
         )
 
@@ -124,3 +104,9 @@ class VoiceSessionFacade:
             lead_id=lead.id if lead else None,
             event_source=event_source,
         )
+
+    async def release_sessions_of_deleted_agent(self, tenant_id: str, agent_id: str) -> None:
+        """Closes live rooms, cancels and detaches every session of an agent
+        that is being deleted, inside the caller's transaction (no commit).
+        Raises VoiceSessionsBusyError (``.code``) when that is not safe."""
+        await _sessions.VoiceSessionService(self.db).release_sessions_of_deleted_agent(tenant_id, agent_id)

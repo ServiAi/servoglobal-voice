@@ -6,9 +6,9 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.models.agents import TenantAgent, TenantAgentVersion
 from app.models.crm import CrmContact, CrmLead
 from app.models.voice_sessions import VoiceSession, VoiceSessionEvent
+from app.modules.agents.public import AgentsFacade, PublishedAgentUnavailableError
 from app.schemas.session_context import CampaignContext, SessionContextV1
 from app.services.contact_resolution_service import ContactResolutionService
 
@@ -19,6 +19,15 @@ class VoiceSessionError(ValueError):
 
 class VoiceSessionNotFoundError(VoiceSessionError):
     pass
+
+
+class VoiceSessionsBusyError(VoiceSessionError):
+    """A session of an agent being deleted cannot be released safely;
+    ``code`` is the stable agent_delete_* reason."""
+
+    def __init__(self, code: str) -> None:
+        super().__init__(code)
+        self.code = code
 
 
 class SessionContextEnrichmentError(VoiceSessionError):
@@ -80,14 +89,13 @@ class VoiceSessionService:
             existing = self.db.scalar(select(VoiceSession).where(VoiceSession.tenant_id == tenant_id, VoiceSession.idempotency_key == idempotency_key))
             if existing:
                 return existing
-        agent = self.db.scalar(select(TenantAgent).where(TenantAgent.id == agent_id, TenantAgent.tenant_id == tenant_id).with_for_update())
-        if agent is None or agent.status != "active" or not agent.published_version_id:
-            raise VoiceSessionError("An active agent with a published version is required.")
-        version = self.db.scalar(select(TenantAgentVersion).where(TenantAgentVersion.id == agent.published_version_id, TenantAgentVersion.agent_id == agent.id, TenantAgentVersion.tenant_id == tenant_id, TenantAgentVersion.status == "published"))
-        if version is None:
-            raise VoiceSessionError("The agent's published version is invalid.")
-        runtime = version.runtime_binding_json
-        if runtime.get("pipeline_type") != "realtime" or not isinstance(runtime.get("realtime"), dict):
+        try:
+            published = AgentsFacade(self.db).lock_published_agent(tenant_id, agent_id)
+        except PublishedAgentUnavailableError as exc:
+            if exc.code == "published_version_invalid":
+                raise VoiceSessionError("The agent's published version is invalid.") from exc
+            raise VoiceSessionError("An active agent with a published version is required.") from exc
+        if not published.is_realtime:
             raise VoiceSessionError("Published agent is not configured for realtime voice.")
         # contact_id/lead_id/caller_phone are only ever trusted here: this
         # is the request-scoped, WRITE_ROLES-authenticated caller of
@@ -110,9 +118,9 @@ class VoiceSessionService:
             variables=variables,
         )
         session = VoiceSession(
-            tenant_id=tenant_id, agent_id=agent.id, agent_version_id=version.id, channel=channel, direction=direction,
+            tenant_id=tenant_id, agent_id=published.agent_id, agent_version_id=published.version_id, channel=channel, direction=direction,
             purpose=purpose,
-            runtime_engine="livekit", pipeline_type="realtime", provider=runtime["realtime"].get("provider", ""),
+            runtime_engine="livekit", pipeline_type="realtime", provider=published.realtime_provider,
             idempotency_key=idempotency_key, session_context_json=context.model_dump(mode="json"),
         )
         self.db.add(session)
@@ -242,6 +250,42 @@ class VoiceSessionService:
             self.db.commit()
             self.db.refresh(session)
         return enriched
+
+    async def release_sessions_of_deleted_agent(self, tenant_id: str, agent_id: str) -> None:
+        """Closes live rooms, then cancels and detaches (deleted_agent_id /
+        deleted_agent_version_id) every session of an agent being deleted.
+        Runs inside the caller's transaction: never commits."""
+        from app.services.livekit_runtime_backend import LiveKitRuntimeBackend
+
+        sessions = list(self.db.scalars(select(VoiceSession).where(
+            VoiceSession.tenant_id == tenant_id, VoiceSession.agent_id == agent_id
+        ).with_for_update()).all())
+        closer = LiveKitRuntimeBackend()
+        for session in sessions:
+            if session.status in {"ended", "failed", "cancelled"}:
+                continue
+            if session.status == "dispatching" and not session.livekit_room_name:
+                raise VoiceSessionsBusyError("agent_delete_session_dispatching")
+            if session.status != "requested":
+                if session.runtime_engine != "livekit" or session.livekit_room_name not in (None, f"sg-vs-{session.id}"):
+                    raise VoiceSessionsBusyError("agent_delete_session_unverified")
+                try:
+                    await closer.close_session_room(session.id)
+                except Exception as exc:
+                    raise VoiceSessionsBusyError("agent_delete_room_close_failed") from exc
+                self.db.refresh(session)
+        for session in sessions:
+            if session.status not in {"ended", "failed", "cancelled"}:
+                session.end_reason = "agent_deleted"
+                self.transition(session, "cancelled", commit=False)
+                self.record_event(
+                    session, "voice.session.cancelled", source="control-plane",
+                    payload={"end_reason": session.end_reason}, commit=False,
+                )
+            session.deleted_agent_id = session.agent_id
+            session.deleted_agent_version_id = session.agent_version_id
+            session.agent_id = None
+            session.agent_version_id = None
 
     def enrich_context_by_ids(
         self,

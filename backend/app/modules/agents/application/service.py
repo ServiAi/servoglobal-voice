@@ -2,19 +2,29 @@ from __future__ import annotations
 
 from copy import deepcopy
 from datetime import datetime, timezone
-from typing import Any
+from types import MappingProxyType
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.domain.voice_registry import (
-    VoiceRegistryValidationError,
-    validate_model_settings,
-    validate_runtime_selection,
+from app.modules.agents.application.ports import AgentPorts
+from app.modules.agents.domain.contracts import (
+    AgentBehavior,
+    AgentIdentity,
+    AgentInstructions,
 )
-from app.models.agents import TenantAgent, TenantAgentVersion
-from app.models.integrations import TenantVoiceAgentConfig
+from app.modules.agents.domain.errors import (
+    AgentConflictError,
+    AgentNotFoundError,
+    AgentValidationError,
+    VoiceSelectionError,
+)
+from app.modules.agents.domain.views import ImportedAgent
+from app.modules.agents.domain.voice_selection import VoiceSelectionService
+from app.modules.agents.infrastructure.models import TenantAgent, TenantAgentVersion
+from app.modules.identity.public import AGENT_BUILDER, FeatureFlags
 from app.modules.tools.public import (
     PlatformToolContractError,
     PlatformToolContractService,
@@ -24,34 +34,27 @@ from app.modules.tools.public import (
     ToolResolverService,
     is_custom_tool_credential_ready,
 )
-from app.schemas.agents import (
-    AgentBehavior,
-    AgentCreateRequest,
-    AgentDraftUpdateRequest,
-    AgentIdentity,
-    AgentInstructions,
-    AgentResponse,
-    AgentUpdateRequest,
-    AgentVersionResponse,
+from app.modules.voice.public import VoiceSessionsBusyError
+from app.modules.voice_providers.public import (
+    ProviderAgentImport,
+    ProviderVoiceSelection,
+    VoiceProviderError,
+    VoiceRegistryValidationError,
+    validate_model_settings,
+    validate_runtime_selection,
 )
-from app.services.integration_event_service import IntegrationEventService
-from app.services.tenant_feature_service import AGENT_BUILDER, TenantFeatureService
-from app.services.voice_selection_service import VoiceSelectionError, VoiceSelectionService
+from app.services.integration_event_service import (
+    IntegrationEventService,  # shared audit trail
+)
+
+if TYPE_CHECKING:
+    from app.modules.agents.api.schemas import (
+        AgentCreateRequest,
+        AgentDraftUpdateRequest,
+        AgentUpdateRequest,
+    )
 
 VERSION_CONSTRAINT = "uq_tenant_agent_versions_agent_version"
-
-
-class AgentNotFoundError(ValueError):
-    pass
-
-
-class AgentConflictError(ValueError):
-    pass
-
-
-class AgentValidationError(ValueError):
-    pass
-
 
 def _matches_constraint(exc: IntegrityError, name: str, sqlite_columns: str) -> bool:
     constraint_name = getattr(getattr(exc.orig, "diag", None), "constraint_name", None)
@@ -62,9 +65,14 @@ def _matches_constraint(exc: IntegrityError, name: str, sqlite_columns: str) -> 
 
 
 class AgentService:
-    def __init__(self, db: Session) -> None:
+    def __init__(self, db: Session, ports: AgentPorts | None = None) -> None:
         self.db = db
-        self.feature_service = TenantFeatureService(db)
+        if ports is None:
+            from app.modules.agents.wiring import default_agent_ports
+
+            ports = default_agent_ports(db)
+        self.ports = ports
+        self.feature_service = FeatureFlags(db)
         self.event_service = IntegrationEventService(db)
 
     def list_agents(self, tenant_id: str) -> list[TenantAgent]:
@@ -93,10 +101,83 @@ class AgentService:
     ) -> TenantAgent:
         self.feature_service.require_enabled(tenant_id, AGENT_BUILDER)
         self._validate_voice_agent_config(tenant_id, body.voice_agent_config_id)
-        agent = TenantAgent(
-            tenant_id=tenant_id,
+        return self._create_agent_record(
+            tenant_id,
+            user_id,
             name=body.name,
             description=body.description,
+            language=body.language,
+            timezone=body.timezone,
+            instructions=body.instructions,
+            behavior=body.behavior,
+            runtime_binding=self._build_runtime_binding_for_tenant(tenant_id, body),
+            voice_agent_config_id=body.voice_agent_config_id,
+        )
+
+    def import_provider_agent(
+        self, tenant_id: str, user_id: str | None, snapshot: ProviderAgentImport
+    ) -> ImportedAgent:
+        """Creates a serviglobal_managed draft from a provider-side agent
+        snapshot. Agent Builder is the only writer of the agent rows and of
+        runtime_binding_json (incl. provider_extensions); the provider side
+        only describes the remote agent (already sanitized, no secrets)."""
+        self.feature_service.require_enabled(tenant_id, AGENT_BUILDER)
+        warnings = tuple(
+            f"Tool '{tool.name}' remains provider_only."
+            for tool in snapshot.tools
+            if tool.classification != "serviglobal_supported"
+        )
+        language = snapshot.language or "es"
+        if not 2 <= len(language) <= 16:
+            raise AgentValidationError("Imported agent language is invalid.")
+        agent = self._create_agent_record(
+            tenant_id,
+            user_id,
+            name=snapshot.name,
+            description=None,
+            language=language,
+            timezone="America/Bogota",
+            instructions=AgentInstructions(system_prompt=snapshot.system_prompt),
+            behavior=AgentBehavior(),
+            runtime_binding=self._build_runtime_binding("realtime", snapshot.provider, snapshot.model),
+            voice_agent_config_id=None,
+        )
+        draft = agent.draft_version
+        binding = dict(draft.runtime_binding_json)
+        realtime = dict(binding["realtime"])
+        realtime["provider_extensions"] = {
+            "source": f"{snapshot.provider}_import",
+            "source_agent_id": snapshot.provider_agent_id,
+            "source_revision_id": snapshot.provider_revision_id,
+            "tools": [tool.as_dict() for tool in snapshot.tools],
+            "warnings": list(warnings),
+            **dict(snapshot.provider_settings),
+        }
+        if snapshot.voice_id:
+            realtime["voice"] = {"mode": "provider", "provider": snapshot.provider, "voice_id": snapshot.voice_id}
+        binding["realtime"] = realtime
+        draft.runtime_binding_json = binding
+        self.db.commit()
+        return ImportedAgent(agent_id=agent.id, draft_version_id=draft.id, warnings=warnings)
+
+    def _create_agent_record(
+        self,
+        tenant_id: str,
+        user_id: str | None,
+        *,
+        name: str,
+        description: str | None,
+        language: str,
+        timezone: str,
+        instructions: AgentInstructions,
+        behavior: AgentBehavior,
+        runtime_binding: dict,
+        voice_agent_config_id: str | None,
+    ) -> TenantAgent:
+        agent = TenantAgent(
+            tenant_id=tenant_id,
+            name=name,
+            description=description,
             status="draft",
             created_by_user_id=user_id,
         )
@@ -107,15 +188,13 @@ class AgentService:
             tenant_id=tenant_id,
             version=1,
             status="draft",
-            language=body.language,
-            timezone=body.timezone,
-            identity_json=AgentIdentity(
-                name=body.name, description=body.description
-            ).model_dump(),
-            instructions_json=body.instructions.model_dump(),
-            behavior_json=body.behavior.model_dump(),
-            runtime_binding_json=self._build_runtime_binding_for_tenant(tenant_id, body),
-            voice_agent_config_id=body.voice_agent_config_id,
+            language=language,
+            timezone=timezone,
+            identity_json=AgentIdentity(name=name, description=description).model_dump(),
+            instructions_json=instructions.model_dump(),
+            behavior_json=behavior.model_dump(),
+            runtime_binding_json=runtime_binding,
+            voice_agent_config_id=voice_agent_config_id,
             created_by_user_id=user_id,
         )
         self.db.add(version)
@@ -260,14 +339,11 @@ class AgentService:
         if management_mode == "provider_managed":
             provider_agent = realtime.get("provider_agent") or {}
             try:
-                from app.services.ultravox_admin_service import UltravoxAdminService
-                from app.services.ultravox_provider_client import UltravoxProviderError
-
-                UltravoxAdminService(self.db).validate_execution_preflight(
-                    tenant_id, str(provider_agent.get("agent_id") or "")
+                self.ports.voice_provider.validate_provider_execution(
+                    tenant_id, str(realtime.get("provider") or ""), str(provider_agent.get("agent_id") or "")
                 )
-            except (ValueError, UltravoxProviderError) as exc:
-                raise AgentValidationError(str(exc)) from exc
+            except VoiceProviderError as exc:
+                raise AgentValidationError(exc.code) from exc
         elif management_mode == "serviglobal_managed":
             self._publish_voice_preflight(tenant_id, draft, realtime)
             self._publish_tools_preflight(tenant_id, draft)
@@ -334,43 +410,15 @@ class AgentService:
         return agent
 
     async def delete_agent(self, tenant_id: str, agent_id: str, user_id: str | None) -> None:
-        from app.models.voice_sessions import VoiceSession
-        from app.services.livekit_runtime_backend import LiveKitRuntimeBackend
-        from app.services.voice_session_service import VoiceSessionService
-
         agent = self._locked_agent(tenant_id, agent_id)
         if agent.status != "archived":
             raise AgentConflictError("agent_delete_requires_archived")
-        sessions = list(self.db.scalars(select(VoiceSession).where(
-            VoiceSession.tenant_id == tenant_id, VoiceSession.agent_id == agent.id
-        ).with_for_update()).all())
-        closer = LiveKitRuntimeBackend()
-        for session in sessions:
-            if session.status in {"ended", "failed", "cancelled"}:
-                continue
-            if session.status == "dispatching" and not session.livekit_room_name:
-                raise AgentConflictError("agent_delete_session_dispatching")
-            if session.status != "requested":
-                if session.runtime_engine != "livekit" or session.livekit_room_name not in (None, f"sg-vs-{session.id}"):
-                    raise AgentConflictError("agent_delete_session_unverified")
-                try:
-                    await closer.close_session_room(session.id)
-                except Exception as exc:
-                    raise AgentConflictError("agent_delete_room_close_failed") from exc
-                self.db.refresh(session)
-        voice_sessions = VoiceSessionService(self.db)
-        for session in sessions:
-            if session.status not in {"ended", "failed", "cancelled"}:
-                session.end_reason = "agent_deleted"
-                voice_sessions.transition(session, "cancelled", commit=False)
-                voice_sessions.record_event(
-                    session, "voice.session.cancelled", source="control-plane",
-                    payload={"end_reason": session.end_reason}, commit=False,
-                )
-            session.deleted_agent_id = session.agent_id
-            session.deleted_agent_version_id = session.agent_version_id
-            session.agent_id = None
-            session.agent_version_id = None
+        # Voice owns VoiceSession/LiveKit: it closes rooms, cancels and
+        # detaches the agent's sessions inside this same transaction.
+        try:
+            await self.ports.voice_sessions.release_sessions_of_deleted_agent(tenant_id, agent.id)
+        except VoiceSessionsBusyError as exc:
+            raise AgentConflictError(exc.code) from exc
         resource_id = agent.id
         agent.published_version_id = None
         agent.draft_version_id = None
@@ -447,8 +495,7 @@ class AgentService:
     ) -> None:
         if voice_agent_config_id is None:
             return
-        config = self.db.get(TenantVoiceAgentConfig, voice_agent_config_id)
-        if config is None or config.tenant_id != tenant_id:
+        if self.ports.legacy_voice.get_voice_agent_defaults(tenant_id, voice_agent_config_id) is None:
             raise AgentValidationError(
                 "voice_agent_config_id does not exist or does not belong to this tenant."
             )
@@ -499,19 +546,16 @@ class AgentService:
                 raise AgentValidationError(str(exc)) from exc
             binding["tools"] = [tool.model_dump() for tool in body.tools]
         if body.management_mode == "provider_managed":
-            if body.provider != "ultravox" or body.provider_agent is None:
+            provider = self.ports.voice_provider
+            if body.provider_agent is None or not provider.supports_provider_managed(body.provider):
                 raise AgentValidationError("Unsupported provider-managed configuration.")
-            from app.services.ultravox_admin_service import UltravoxAdminService
-
-            remote = UltravoxAdminService(self.db).validate_provider_agent_link(
-                tenant_id, body.provider_agent.agent_id
-            )
+            remote = provider.link_provider_agent(tenant_id, body.provider, body.provider_agent.agent_id)
             realtime["provider_agent"] = {
-                "agent_id": remote.agent_id,
-                "observed_published_revision_id": remote.published_revision_id,
+                "agent_id": remote.agent_ref,
+                "observed_published_revision_id": remote.revision_ref,
             }
             realtime["provider_extensions"] = {
-                "tools": [tool.model_dump() for tool in remote.tools],
+                "tools": [tool.as_dict() for tool in remote.tools],
                 "has_unsupported_client_tools": remote.has_unsupported_client_tools,
             }
         return binding
@@ -537,31 +581,29 @@ class AgentService:
         data migration.
         """
         voice = realtime.get("voice")
-        if not voice and draft.voice_agent_config and draft.voice_agent_config.default_voice:
-            voice = {
-                "mode": "provider", "provider": "ultravox",
-                "voice_id": draft.voice_agent_config.default_voice, "settings": {},
-            }
+        if not voice and draft.voice_agent_config_id:
+            legacy = self.ports.legacy_voice.get_voice_agent_defaults(tenant_id, draft.voice_agent_config_id)
+            if legacy is not None and legacy.default_voice:
+                voice = {
+                    "mode": "provider", "provider": legacy.voice_provider,
+                    "voice_id": legacy.default_voice, "settings": {},
+                }
         if not isinstance(voice, dict) or not voice:
             return
         voice_mode = voice.get("mode")
         if voice_mode not in ("provider", "provider_external"):
             raise AgentValidationError("voice_provider_not_supported")
-
-        from app.services.ultravox_admin_service import UltravoxAdminService
-        from app.services.ultravox_provider_client import UltravoxProviderError
-
-        admin = UltravoxAdminService(self.db)
+        settings = voice.get("settings") if isinstance(voice.get("settings"), dict) else {}
+        selection = ProviderVoiceSelection(
+            mode=voice_mode,
+            provider=str(voice.get("provider") or ""),
+            voice_id=str(voice.get("voice_id") or ""),
+            settings=MappingProxyType(dict(settings)),
+        )
         try:
-            if voice_mode == "provider":
-                admin.get_voice(tenant_id, str(voice.get("voice_id") or ""))
-            else:
-                admin.validate_external_voice_credentials(tenant_id, str(voice.get("provider") or ""))
-        except UltravoxProviderError as exc:
-            code = "voice_not_accessible" if exc.code == "provider_resource_not_found" else exc.code
-            raise AgentValidationError(code) from exc
-        except ValueError as exc:
-            raise AgentValidationError(str(exc)) from exc
+            self.ports.voice_provider.validate_voice(tenant_id, str(realtime.get("provider") or ""), selection)
+        except VoiceProviderError as exc:
+            raise AgentValidationError(exc.code) from exc
 
     def _validate_tool_bindings_for_tenant(self, tenant_id: str, bindings: list[Any]) -> None:
         """Draft-save-time shape/existence check for tool bindings, tenant-
@@ -638,31 +680,7 @@ class AgentService:
         config resolution -- the same call the tool's actual execution path
         (Phase E) will make, so this can never say "available" for an
         integration that would then fail to resolve at call time."""
-        if required_integration == "booking":
-            from app.services.booking_service import BookingService
-
-            try:
-                BookingService(self.db)._effective_config(tenant_id)
-                return True
-            except ValueError:
-                return False
-        if required_integration == "whatsapp":
-            from app.services.whatsapp_config_service import WhatsAppConfigService
-
-            try:
-                WhatsAppConfigService(self.db).get_active_client_config(tenant_id)
-                return True
-            except ValueError:
-                return False
-        if required_integration == "crm":
-            # CRM is a first-party, always-on capability -- CrmContactService
-            # / CrmLeadService operate on the tenant's own DB-native CRM
-            # tables and require no external per-tenant integration to
-            # configure, unlike booking/whatsapp. crm.create_lead must never
-            # be reported unavailable for lack of something that doesn't
-            # exist to configure.
-            return True
-        return required_integration is None
+        return self.ports.integrations.is_configured(tenant_id, required_integration)
 
     @staticmethod
     def _ensure_mutable(agent: TenantAgent) -> None:
@@ -686,36 +704,4 @@ class AgentService:
             resource_type="agent",
             resource_id=agent.id,
             metadata=metadata,
-        )
-
-    @staticmethod
-    def response(agent: TenantAgent) -> AgentResponse:
-        return AgentResponse(
-            id=agent.id,
-            name=agent.name,
-            description=agent.description,
-            status=agent.status,
-            published_version_id=agent.published_version_id,
-            draft_version_id=agent.draft_version_id,
-            archived_at=agent.archived_at,
-            created_at=agent.created_at,
-            updated_at=agent.updated_at,
-        )
-
-    @staticmethod
-    def version_response(version: TenantAgentVersion) -> AgentVersionResponse:
-        return AgentVersionResponse(
-            id=version.id,
-            agent_id=version.agent_id,
-            version=version.version,
-            status=version.status,
-            language=version.language,
-            timezone=version.timezone,
-            identity=AgentIdentity.model_validate(version.identity_json),
-            instructions=AgentInstructions.model_validate(version.instructions_json),
-            behavior=AgentBehavior.model_validate(version.behavior_json),
-            runtime_binding=version.runtime_binding_json,
-            voice_agent_config_id=version.voice_agent_config_id,
-            published_at=version.published_at,
-            created_at=version.created_at,
         )
