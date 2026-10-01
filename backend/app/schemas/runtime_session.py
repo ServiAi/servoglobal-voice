@@ -82,7 +82,7 @@ class CompiledToolSpec(_StrictModel):
     backend re-resolves itself when the tool is actually invoked, and
     never a handler reference or credentials. Compiled once by
     AgentCompilerService from runtime_binding_json["tools"] against
-    app.domain.tool_registry; nothing here is trusted at face value by the
+    app.modules.tools.domain.registry; nothing here is trusted at face value by the
     tool-invoke endpoint, which re-validates against the published
     version's own binding."""
 

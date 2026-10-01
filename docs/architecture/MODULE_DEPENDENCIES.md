@@ -1,0 +1,137 @@
+# Dependencias entre módulos
+
+Generado a partir del grafo AST de imports de `backend/app/` (incluye imports locales dentro de funciones). Cada celda cuenta **pares únicos `archivo → archivo`** del dominio de la fila al de la columna. Shared kernel (`app.db`, `app.core.config`) y `main.py` se excluyen.
+
+## Matriz antes de esta iteración (`develop@f52e82f`)
+
+```text
+fila → columna      Agents Billing CRM Identity Integr Notif Sched Teleph Tools Voice VoiceExp VoiceLeg
+Agents                 -      .     .     5       3     .     1     .     10     4      .        2
+Billing/Analytics      .      -     .     3       .     .     .     .      .     .      .        .
+CRM                    .      5     -    12       7     .     1     2      .     .      .        3
+Identity               .      7     1     -      12     .     3     .      .     .      .        2
+Integrations           .      .     8     8       -     2     5     .      .     2      .        2
+Notifications          .      .     3     4      12     -     .     .      .     .      .        .
+Scheduling             .      .    13     1      21     3     -     .      .     2      .        .
+Telephony              .      1     3     2       8     .     .     -      .     9      4        4
+Tools                  1      .     3     5       6     .     1     .      -     7      .        .
+Voice (Orchestr.)      5      4    12    10       7     1     .     2      1     -      2        7
+Voice Experiences      .      1     6    13       6     .     .     4      .     4      -        3
+Voice Legacy           7      4     5     2      12     1     .     4      .     2      .        -
+```
+
+## Fila Tools después de esta iteración
+
+```text
+                    Agents CRM Identity Integr Sched Voice   (todas vía public.py / allowlist shared)
+Tools                  1    1     4       5      1     6
+```
+
+| Métrica (Tool Platform) | Antes | Después |
+| --- | --- | --- |
+| Imports de tools hacia internals de otros dominios | 16 | **0** |
+| Imports de otros dominios hacia internals de tools | 11 | **0** |
+| Consumidores entrantes | `agent_service`, `agent_compiler_service`, `voice_runtime` (11 imports a 7 archivos) | los mismos 3, sólo `app.modules.tools.public` |
+| Ciclos de import dentro de tools | 1 (`custom_http_tool_executor ↔ tool_dispatch_service`) | 0 (test automático) |
+
+Las dependencias restantes de tools hacia legacy son únicamente shared kernel explícito (`TOOLS_LEGACY_ALLOWED` en `backend/test_module_boundaries.py`): `api.auth.deps`, `core.config`, `db.*`, `integration_event_service` (auditoría) y `secret_manager_service` (cifrado). Los feature flags pasan por `identity.public` desde el hardening de 2026-10-01.
+
+### Hardening de la frontera de datos (2026-10-01)
+
+Una frontera de imports no basta si por ella viajan filas ORM o `Any`. Métricas de Tool Platform:
+
+| Métrica | Antes | Después |
+| --- | --- | --- |
+| Modelos ORM de otros módulos que cruzan la frontera de Tools | 6 (`VoiceSession`, `TenantAgent`, `TenantAgentVersion` por relación, `CrmContact`, `CrmLead`, `TenantWhatsAppTemplate` en `WhatsAppTemplateRef._row`) | **0** |
+| `Any` como entidad cross-module en `ToolPorts` | 7 (`sessions.get` return, `record_event`/`enrich_context` session, `contact`, `lead`, `tuple[Any, Any]` de CRM) | **0** (queda `notes: Any`, payload libre del LLM) |
+| `Any` como entidad en facades públicas usadas por Tools | 8 (las 7 equivalentes en `VoiceSessionFacade`/`CrmFacade` + `_row: Any`) | **0** |
+| Imports de rutas legacy de tools en tests | 58 en 14 archivos | **0** |
+| Excepciones de arquitectura para Tools | 8 en la allowlist legacy | 7 (sale `tenant_feature_service`) |
+
+DTOs que cruzan ahora la frontera: `ToolSessionView`/`ToolBindingView` (Voice), `ContactRef`/`LeadRef` (CRM), `WhatsAppTemplateContract`/`WhatsAppSendOutcome` (Integrations), `BookingSummary` (Scheduling); `FeatureFlags` (Identity) sólo devuelve `bool`/`None`.
+
+## Ciclos entre dominios detectados (antes)
+
+Ciclos bidireccionales a nivel de dominio: Agents↔Tools, Agents↔Voice, Agents↔VoiceLegacy, CRM↔Identity, CRM↔Integrations, CRM↔Scheduling, CRM↔Telephony, CRM↔VoiceLegacy, Identity↔Billing, Identity↔Integrations, Identity↔Scheduling, Identity↔VoiceLegacy, Integrations↔Notifications, Integrations↔Scheduling, Integrations↔Voice, Integrations↔VoiceLegacy, Telephony↔Voice, Telephony↔VoiceExperiences, Telephony↔VoiceLegacy, Tools↔Voice, Voice↔VoiceExperiences, Voice↔VoiceLegacy.
+
+Ciclos a nivel de archivo Python (imports reales): `agent_service ↔ ultravox_admin_service` (vigente, resuelto con import perezoso) y `custom_http_tool_executor ↔ tool_dispatch_service` (**eliminado**).
+
+Estado de los ciclos que tocan Tools tras esta iteración:
+- **Tools↔Voice**: tools sólo usa `voice.public` (`SessionContextV1`, errores, `VoiceSessionFacade`). Voice usa sólo `tools.public` desde el endpoint del runtime. Ciclo a nivel de API pública, **permitido**: `SessionContextV1` es un contrato del runtime y la invocación de tools es un caso de uso de la sesión.
+- **Agents↔Tools**: Agent Builder usa `tools.public`; tools consulta `agents.public` sólo para "¿esta tool custom está en una versión publicada?". **Cuestionable pero aceptado**: la alternativa (evento o puerto inverso) no reduce acoplamiento real para una query de lectura.
+
+## Clasificación de dependencias
+
+Leyenda: ✅ permitida · ⚠️ cuestionable · ❌ eliminar · 🔁 circular.
+
+| Dependencia | Evidencia | Clasificación | Mecanismo objetivo |
+| --- | --- | --- | --- |
+| Todos → Identity (`api.auth.deps`, `models.identity.Tenant`, `tenant_feature_service`) | ~60 imports | ✅ | `identity.public` (`AuthContext`, `require_roles`, `FeatureFlags`); FK a `tenants.id` es aceptable. |
+| Todos → `integration_event_service` | auditoría transversal | ✅ (shared) | Mover a `shared/audit` cuando migre Integrations. |
+| Tools → Scheduling / CRM / WhatsApp | handlers de dispatch | ✅ **resuelto** | Puertos `SchedulingToolPort`, `CrmToolPort`, `MessagingToolPort` (commands síncronos: la LLM espera el resultado). |
+| Tools → Voice (`VoiceSessionService`, `VoiceSession`) | dispatch + eventos + enrich | ✅ **resuelto** | Puerto `VoiceSessionToolPort` + `voice.public`; sólo `ToolSessionView` y operaciones por `session_id`. |
+| Tools → Integrations (`TenantWhatsAppTemplate`, `WhatsAppTemplateService`) | contrato WhatsApp | ✅ **resuelto** | Query service `WhatsAppFacade.get_approved_template_contract` → `WhatsAppTemplateContract`. |
+| Tools → Agents (`TenantAgentVersion`) | tool en uso | ✅ **resuelto** | `AgentsFacade.is_tool_bound_to_published_version`. |
+| Agents → Tools | catálogo, validación, compilación | ✅ **resuelto** | `tools.public`. |
+| Agents → Voice (`voice_session_service`, `livekit_runtime_backend`) | cierre de sesiones al borrar agente | ⚠️ | Command en `voice.public` (`close_sessions_for_agent`). |
+| Agents ↔ Voice Legacy (`ultravox_admin_service`) 🔁 | preflight de voz, importación de agentes Ultravox | ⚠️ | Puerto `VoiceProviderCatalogPort` en Agents, implementado por el adapter Ultravox. |
+| Agents → Scheduling / WhatsApp config | preflight `required_integration` | ⚠️ | Query `is_configured(tenant_id)` en cada `public.py`. |
+| Voice → Agents (`agent_compiler_service`, `models.agents`) | spec del runtime | ✅ | `agents.public.compile_runtime_spec`. |
+| Voice → CRM (`crm_contact/lead/call_context` services, `models.crm`) | resolución de contexto, proyección | ⚠️ | Query service `crm.public` (resolver por teléfono/id); la proyección a `CrmActivity` debería ser evento `voice.session.completed`. |
+| Voice → Telephony (`voice_session_sip_service`) desde `voice_runtime` endpoint 🔁 | QA SIP | ⚠️ | `telephony.public`. |
+| Voice → Voice Legacy (`voice_config_service`) | credenciales del runtime | ❌ | Mover `TenantVoiceProviderConfig` + `VoiceConfigService` a Voice Orchestration. |
+| Telephony → Voice (`voice_session_service`, dispatcher, projection) 🔁 | outbound y SIP QA | ✅ si vía `voice.public` | Telephony es dueño del caso de uso outbound y consume Voice. |
+| Telephony → CRM (`CrmLead`, `CrmVoiceCall`) | outbound | ❌ | CRM llama a `telephony.public.place_call(...)` con identidad validada; `CrmVoiceCall` lo crea CRM (o reacciona a `voice.session.*`). |
+| Telephony → Voice Experiences / Legacy (`voice_callback_service`) | callbacks públicos Ultravox | ⚠️ | Queda con Voice Legacy hasta su retiro. |
+| CRM → Telephony (`outbound_voice_call_service`, `voice_capacity_service`) | acción "llamar" y métricas | ✅ si vía `telephony.public` | |
+| CRM → Integrations (email, WhatsApp) | acciones del lead | ✅ si vía `integrations.public` | Commands. |
+| CRM ↔ Scheduling 🔁 | CRM endpoint → `booking_service`; booking → `CrmActivity`, `CrmLead` | ⚠️ | Scheduling valida lead vía `crm.public`; la actividad CRM se registra por evento `booking.*` (ya existe `NotificationEventPipeline`/`domain_events`). |
+| Scheduling → Notifications (`notification_event_pipeline`) | booking crea domain events | ✅ | Es exactamente el patrón de eventos deseado; exponer `notifications.public.publish(...)`. |
+| Integrations ↔ Notifications 🔁 | `whatsapp_message_service` → `NotificationDeliveryStatusService`; notificaciones → WhatsApp | ⚠️ | Notifications → `integrations.public` (command send); el status de entrega vuelve como callback/evento, no import directo. |
+| Integrations → CRM (`crm_activity_service`, `models.crm`) | timeline de mensajes/emails | ⚠️ | Evento `message.sent` → CRM, o `crm.public.record_activity`. |
+| Identity → Integrations (`admin/tenants.py` → 10 servicios) | panel admin | ⚠️ | Es un BFF de administración: consumir `public.py` de cada módulo. |
+| Identity ↔ Billing 🔁 | onboarding crea plan/uso; billing lee tenant | ⚠️ | Onboarding → `billing.public.provision_plan`. |
+| Voice Experiences → Telephony / Voice | callbacks, rutas SIP, context schemas | ⚠️ | `telephony.public`, y mover `voice_context` (context schemas) a Voice Experiences. |
+
+## Caso `tool_dispatch_service` (resuelto)
+
+| Handler | Antes | Después | Mecanismo |
+| --- | --- | --- | --- |
+| `_handle_check_availability` | `BookingService(db)` | `ports.scheduling.get_available_slots` | Query service vía puerto |
+| `_handle_create_booking` | `BookingCreateRequest` + `BookingService(db)` | `ports.scheduling.create_lead_booking` (el DTO HTTP de CRM ya no se construye en tools) | Command vía puerto |
+| `_handle_create_lead` | `CrmContactService` + `CrmLeadService` + `VoiceSessionService.enrich_context` | `ports.crm.get_or_create_open_lead` + `ports.sessions.enrich_context` | Command vía puerto |
+| `_handle_send_whatsapp` | `WhatsAppMessageService(db)` | `ports.messaging.send_template` | Command vía puerto |
+| Carga de sesión / eventos | `VoiceSessionService(db)` | `ports.sessions.get/record_event` | Facade pública |
+
+Por qué puertos y no eventos: los cuatro casos requieren respuesta síncrona para la LLM dentro de la llamada. `wiring.default_tool_ports(db)` es el único punto que conoce las implementaciones.
+
+## Caso `outbound_voice_call_service` (pendiente)
+
+Depende de CRM (`CrmLead`, `CrmVoiceCall`), Voice (`VoiceSession`, `VoiceSessionService`, `VoiceCallProjectionService`, `LiveKitRuntimeBackend`) y Telephony (`LiveKitSipService`, `VoiceCapacityService`, `VoiceSipRouteService`, `VoiceSessionSipService`, `normalize_outbound_phone`).
+
+Propietario: **Telephony**. El caso de uso es "originar una llamada SIP para un agente publicado", y 5 de sus 9 dependencias ya son Telephony. Propuesta:
+1. `telephony.public.place_outbound_call(tenant_id, to_phone, agent_id, context)` devuelve `voice_session_id`.
+2. CRM (endpoint `crm_voice`) resuelve y valida el lead, crea `CrmVoiceCall` y llama al punto 1; la correlación `CrmVoiceCall ↔ VoiceSession` queda en CRM.
+3. La proyección a CRM se dispara por evento de sesión (`voice.session.completed`), no por import.
+
+## Reglas de importación vigentes
+
+Aplicadas por `backend/test_module_boundaries.py`:
+
+1. Un módulo en `app/modules/<a>/` sólo puede importar de otro módulo `app/modules/<b>/public.py`.
+2. Código legacy (fuera de `app/modules/`) sólo puede importar `app.modules.<x>.public`. Excepciones de composition root: `app/main.py` puede montar `app.modules.<x>.api.*` y `app/models/__init__.py` registra `app.modules.<x>.infrastructure.models` para Alembic. Los shims marcados `TEMPORARY compatibility shim` están exentos.
+3. Tool Platform no importa servicios/modelos/schemas legacy de otros dominios, salvo la allowlist de shared kernel.
+4. `app.modules.tools.domain` no importa application/infrastructure/api en runtime (sólo `TYPE_CHECKING`) ni otros módulos salvo `voice.public` (`SessionContextV1` es parte del contrato de invocación).
+5. El dispatcher no importa CRM, Scheduling ni Integrations: sólo puertos.
+6. Ningún archivo de producción usa las rutas legacy de tools.
+7. Las rutas legacy son alias del mismo objeto módulo (no copias).
+8. No hay ciclos de import dentro de `app.modules.tools`.
+
+## Reglas de datos vigentes
+
+Aplicadas por `DataBoundaryTests` en `backend/test_module_boundaries.py`:
+
+9. Las APIs críticas (`VoiceSessionFacade`, `CrmFacade`, `WhatsAppFacade`, `SchedulingFacade`, `AgentsFacade`, `FeatureFlags` y los cuatro `Protocol` de `ToolPorts`) no declaran en parámetros ni retorno ninguna clase ORM ni `Any` directo. `Any` sólo se permite como tipo de valor de un `dict`/`Mapping` de payload, más la excepción explícita `create_lead_booking(notes)`.
+10. Los DTOs públicos son `@dataclass(frozen=True)` y sus campos no contienen ORM ni `Any` directo.
+11. Ningún archivo de `app.modules.tools` navega atributos de filas ORM ajenas (`agent_version`, `session_context_json`, `runtime_binding_json`, `_row`).
+12. Las mutaciones sobre datos de otro módulo se piden por id y DTO; el propietario recarga sus filas y valida tenant (`VoiceSessionFacade.enrich_context`).

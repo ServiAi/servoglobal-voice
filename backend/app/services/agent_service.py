@@ -565,7 +565,7 @@ class AgentService:
 
     def _validate_tool_bindings_for_tenant(self, tenant_id: str, bindings: list[Any]) -> None:
         """Draft-save-time shape/existence check for tool bindings, tenant-
-        and resolver-aware (unlike app.domain.tool_registry.validate_tool_
+        and resolver-aware (unlike app.modules.tools.domain.registry.validate_tool_
         bindings, which only ever knows the static platform Registry).
         custom.* keys can only be validated with a DB lookup -- this is why
         a resolver-based check replaces the pure-registry one here, not just

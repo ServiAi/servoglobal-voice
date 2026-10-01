@@ -80,7 +80,7 @@ class AgentVoiceConfig(_StrictModel):
 
 class AgentToolBinding(_StrictModel):
     """One tool bound to a serviglobal_managed agent version. `key` is
-    validated against the platform Tool Registry (app.domain.tool_registry)
+    validated against the platform Tool Registry (app.modules.tools.domain.registry)
     by AgentService, not here -- this schema validates shape only: key
     length, no duplicate enforcement (that needs the whole list), and no
     secrets in `config`. `config` is binding-time configuration (e.g. which
@@ -118,7 +118,7 @@ class _RuntimeSelection(_StrictModel):
     # voice_registry.validate_model_settings(), not by this schema.
     settings: dict[str, Any] = Field(default_factory=dict)
     # Tools bound to this agent version. Which keys are known/executable
-    # comes from app.domain.tool_registry, validated by AgentService --
+    # comes from app.modules.tools.domain.registry, validated by AgentService --
     # this schema only validates shape (see AgentToolBinding).
     tools: list[AgentToolBinding] = Field(default_factory=list)
 
