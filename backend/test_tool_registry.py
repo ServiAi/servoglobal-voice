@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 from types import SimpleNamespace
 
-from app.domain import tool_registry
+from app.modules.tools.domain import registry as tool_registry
 
 
 class ToolRegistryTests(unittest.TestCase):

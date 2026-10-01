@@ -219,6 +219,32 @@ class ModuleBoundaryTests(unittest.TestCase):
         forbidden = {t for t in targets if _owner(t) in {"crm", "scheduling", "integrations"}}
         self.assertEqual(forbidden, set(), "Wire CRM/Scheduling/Messaging in app.modules.tools.wiring, not the dispatcher")
 
+    def test_every_app_import_in_backend_resolves(self) -> None:
+        # Catches stale imports of retired paths in any form -- including
+        # `from app.domain import tool_registry`, which a dotted-path grep
+        # misses -- across app/ and every test module.
+        problems = set()
+        for path in [*APP.rglob("*.py"), *APP.parent.glob("test_*.py")]:
+            for node in ast.walk(ast.parse(_source(path))):
+                if isinstance(node, ast.ImportFrom) and node.level == 0 and (node.module or "").startswith("app"):
+                    pairs = [(node.module, alias.name) for alias in node.names if alias.name != "*"]
+                elif isinstance(node, ast.Import):
+                    pairs = [(alias.name, None) for alias in node.names if alias.name.startswith("app")]
+                else:
+                    continue
+                for module_name, name in pairs:
+                    try:
+                        module = importlib.import_module(module_name)
+                    except ImportError:
+                        problems.add(f"{path.name}: {module_name}")
+                        continue
+                    if name and not hasattr(module, name):
+                        try:
+                            importlib.import_module(f"{module_name}.{name}")
+                        except ImportError:
+                            problems.add(f"{path.name}: {module_name}.{name}")
+        self.assertEqual(sorted(problems), [])
+
     # -- Agent Builder --------------------------------------------------------
 
     def test_agents_does_not_import_other_domains_legacy_internals(self) -> None:
