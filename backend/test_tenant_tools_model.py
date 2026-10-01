@@ -16,7 +16,11 @@ from sqlalchemy.exc import IntegrityError
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.models.identity import Tenant
-from app.models.tools import TenantHttpToolConfig, TenantTool, TenantToolCredential
+from app.modules.tools.infrastructure.models import (
+    TenantHttpToolConfig,
+    TenantTool,
+    TenantToolCredential,
+)
 
 
 class TenantToolsModelTests(unittest.TestCase):

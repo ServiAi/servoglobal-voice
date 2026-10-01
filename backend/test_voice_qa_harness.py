@@ -8,7 +8,7 @@ from app.models.agents import TenantAgent, TenantAgentVersion
 from app.models.crm import CrmVoiceCall
 from app.models.integrations import TenantSipRoute
 from app.models.voice_sessions import VoiceSession
-from app.services.tool_dispatch_service import ToolDispatchService, ToolExecutionError
+from app.modules.tools.public import ToolDispatchService, ToolExecutionError
 from app.services.voice_session_service import VoiceSessionService
 from app.services.voice_session_sip_service import VoiceSessionSipService
 from app.services.tenant_feature_service import TenantFeatureService, VOICE_RUNTIME_V2

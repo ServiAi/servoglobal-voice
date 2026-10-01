@@ -9,8 +9,11 @@ decision: document it in docs/architecture/MODULE_DEPENDENCIES.md first.
 from __future__ import annotations
 
 import ast
+import dataclasses
 import importlib
+import typing
 import unittest
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -28,7 +31,6 @@ TOOLS_LEGACY_ALLOWED = {
     "app.db.session",
     "app.services.integration_event_service",  # shared audit trail (tenant_integration_events)
     "app.services.secret_manager_service",  # shared encryption (Fernet)
-    "app.services.tenant_feature_service",  # identity feature flags -- pending identity.public
 }
 
 # Paths moved into app.modules.tools; only their shims may still live there.
@@ -209,15 +211,118 @@ class ModuleBoundaryTests(unittest.TestCase):
             visit(module, [])
 
 
+# Attributes of other modules' ORM rows Tool Platform used to navigate.
+# Reading them again would mean an ORM object crossed the boundary.
+FOREIGN_ORM_ATTRIBUTES = {"agent_version", "session_context_json", "runtime_binding_json", "_row"}
+
+# Cross-module APIs that must speak DTOs only (no ORM rows, no bare Any).
+CRITICAL_PUBLIC_APIS = {
+    "app.modules.voice.public": ["VoiceSessionFacade"],
+    "app.modules.crm.public": ["CrmFacade"],
+    "app.modules.integrations.public": ["WhatsAppFacade"],
+    "app.modules.scheduling.public": ["SchedulingFacade"],
+    "app.modules.agents.public": ["AgentsFacade"],
+    "app.modules.identity.public": ["FeatureFlags"],
+    "app.modules.tools.application.ports": [
+        "SchedulingToolPort",
+        "CrmToolPort",
+        "MessagingToolPort",
+        "VoiceSessionToolPort",
+    ],
+}
+PUBLIC_DTOS = {
+    "app.modules.voice.public": ["ToolSessionView", "ToolBindingView"],
+    "app.modules.crm.public": ["ContactRef", "LeadRef"],
+    "app.modules.integrations.public": ["WhatsAppTemplateContract", "WhatsAppSendOutcome"],
+    "app.modules.scheduling.public": ["BookingSummary"],
+}
+# Genuinely dynamic payloads, not entities: free-text LLM argument.
+ANY_ALLOWED = {("create_lead_booking", "notes")}
+
+
+def _orm_base() -> type:
+    from app.db.base import Base
+
+    return Base
+
+
+def _boundary_problems(annotation: object, where: str, base: type) -> list[str]:
+    """ORM classes anywhere in the annotation, or Any used directly as a
+    value (Any as the value type of a dict/Mapping payload is fine)."""
+    if annotation is typing.Any:
+        return [f"{where}: Any"]
+    if isinstance(annotation, type) and issubclass(annotation, base):
+        return [f"{where}: ORM {annotation.__name__}"]
+    origin = typing.get_origin(annotation)
+    args = typing.get_args(annotation)
+    if isinstance(origin, type) and issubclass(origin, Mapping):
+        args = args[:1] + tuple(a for a in args[1:] if a is not typing.Any)
+    problems = []
+    for arg in args:
+        if arg is not Ellipsis:
+            problems += _boundary_problems(arg, where, base)
+    return problems
+
+
+class DataBoundaryTests(unittest.TestCase):
+    """Import rules alone let ORM rows travel through `Any`. These pin the
+    data contract of the critical cross-module APIs."""
+
+    def test_critical_public_apis_take_and_return_dtos_only(self) -> None:
+        base, problems = _orm_base(), []
+        for module_name, classes in CRITICAL_PUBLIC_APIS.items():
+            module = importlib.import_module(module_name)
+            for class_name in classes:
+                cls = getattr(module, class_name)
+                for name, member in vars(cls).items():
+                    if name.startswith("_") or not callable(member):
+                        continue
+                    hints = typing.get_type_hints(member, vars(module))
+                    for param, annotation in hints.items():
+                        if (name, param) in ANY_ALLOWED:
+                            continue
+                        problems += _boundary_problems(annotation, f"{class_name}.{name}({param})", base)
+        self.assertEqual(problems, [])
+
+    def test_public_dtos_are_frozen_and_carry_no_orm(self) -> None:
+        base, problems = _orm_base(), []
+        for module_name, classes in PUBLIC_DTOS.items():
+            module = importlib.import_module(module_name)
+            for class_name in classes:
+                cls = getattr(module, class_name)
+                self.assertTrue(cls.__dataclass_params__.frozen, f"{class_name} must be frozen")
+                hints = typing.get_type_hints(cls, vars(module))
+                for f in dataclasses.fields(cls):
+                    problems += _boundary_problems(hints[f.name], f"{class_name}.{f.name}", base)
+        self.assertEqual(problems, [])
+
+    def test_tools_never_navigates_foreign_orm_attributes(self) -> None:
+        found = []
+        for path in (APP / "modules" / "tools").rglob("*.py"):
+            for node in ast.walk(ast.parse(_source(path))):
+                if isinstance(node, ast.Attribute) and node.attr in FOREIGN_ORM_ATTRIBUTES:
+                    found.append(f"{_module_name(path)}:{node.lineno} .{node.attr}")
+        self.assertEqual(found, [])
+
+    def test_boundary_checker_detects_leaks(self) -> None:
+        from app.models.crm import CrmLead
+
+        base = _orm_base()
+        self.assertTrue(_boundary_problems(tuple[typing.Any, CrmLead], "x", base))
+        self.assertTrue(_boundary_problems(CrmLead | None, "x", base))
+        self.assertFalse(_boundary_problems(dict[str, typing.Any], "x", base))
+
+
 class ToolPortsTests(unittest.TestCase):
     """The dispatcher's platform handlers only talk to ToolPorts, so plain
     fakes are enough to exercise them -- no DB, no CRM/Scheduling services."""
 
     def setUp(self) -> None:
+        from app.modules.crm.public import ContactRef, LeadRef
         from app.modules.tools.application import dispatcher
         from app.modules.tools.application.ports import ToolPorts
         from app.modules.tools.domain.invocation import PlatformToolInvocation
-        from app.modules.voice.public import SessionContextV1
+        from app.modules.voice.public import SessionContextV1, ToolSessionView
 
         self.dispatcher = dispatcher
         self.calls: list[tuple] = []
@@ -235,39 +340,53 @@ class ToolPortsTests(unittest.TestCase):
         class Crm:
             def get_or_create_open_lead(self, **kw):
                 calls.append(("lead", kw))
-                return SimpleNamespace(id="c1"), SimpleNamespace(id="l1", status="new")
+                return ContactRef(id="c1", tenant_id="t1"), LeadRef(id="l1", tenant_id="t1", contact_id="c1", status="new")
 
         class Sessions:
-            def enrich_context(self, session, **kw):
-                calls.append(("enrich", kw["event_source"]))
+            def enrich_context(self, session_id, **kw):
+                calls.append(("enrich", session_id, kw["contact"], kw["lead"], kw["event_source"]))
 
         self.ports = ToolPorts(scheduling=Scheduling(), crm=Crm(), messaging=None, sessions=Sessions())
+        self.session = ToolSessionView(
+            id="s1", tenant_id="t1", status="connected", agent_id="a1", agent_status="active",
+            tool_bindings=(), context=SessionContextV1(),
+        )
         self.invocation = lambda args, ctx: PlatformToolInvocation(
             llm_args=args, context=SessionContextV1.model_validate(ctx), config={}
         )
 
-    def test_create_lead_uses_trusted_caller_phone_and_enriches_session(self) -> None:
+    def test_create_lead_uses_trusted_caller_phone_and_enriches_session_by_id_with_refs(self) -> None:
+        from app.modules.crm.public import ContactRef, LeadRef
+
         handler = self.dispatcher._HANDLERS["crm.create_lead"]
         invocation = self.invocation({"name": "Ana", "phone": "+10000000000"}, {"caller": {"phone": "+573000000000"}})
-        result = handler(None, self.ports, "t1", invocation, object())
+        result = handler(None, self.ports, "t1", invocation, self.session)
         self.assertEqual(result, {"lead_id": "l1", "contact_id": "c1", "status": "new"})
         self.assertEqual(self.calls[0][1]["phone"], "+573000000000")
-        self.assertEqual(self.calls[1], ("enrich", "crm.create_lead"))
+        _, session_id, contact, lead, source = self.calls[1]
+        self.assertEqual((session_id, source), ("s1", "crm.create_lead"))
+        self.assertIsInstance(contact, ContactRef)
+        self.assertIsInstance(lead, LeadRef)
 
     def test_create_booking_takes_lead_from_context_never_from_llm(self) -> None:
         handler = self.dispatcher._HANDLERS["calendar.create_booking"]
         invocation = self.invocation(
             {"start": "2026-01-01T10:00:00Z", "lead_id": "llm-lead"}, {"lead": {"id": "ctx-lead"}}
         )
-        result = handler(None, self.ports, "t1", invocation, object())
+        result = handler(None, self.ports, "t1", invocation, self.session)
         self.assertEqual(self.calls[0][1]["lead_id"], "ctx-lead")
         self.assertEqual(result["booking_id"], "b1")
 
     def test_create_booking_without_lead_context_fails_closed(self) -> None:
         handler = self.dispatcher._HANDLERS["calendar.create_booking"]
         with self.assertRaisesRegex(self.dispatcher.ToolExecutionError, "lead_context_required"):
-            handler(None, self.ports, "t1", self.invocation({"start": "x"}, {}), object())
+            handler(None, self.ports, "t1", self.invocation({"start": "x"}, {}), self.session)
         self.assertEqual(self.calls, [])
+
+    def test_session_view_terminal_rules_match_previous_dispatch_guard(self) -> None:
+        self.assertFalse(self.session.is_terminal)
+        for changes in ({"status": "ended"}, {"agent_id": None}, {"agent_status": "archived"}):
+            self.assertTrue(dataclasses.replace(self.session, **changes).is_terminal, changes)
 
 
 if __name__ == "__main__":

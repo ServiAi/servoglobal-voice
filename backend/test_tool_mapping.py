@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from app.domain.tool_mapping import (
+from app.modules.tools.domain.mapping import (
     MappingPathError,
     build_path,
     build_request_values,
