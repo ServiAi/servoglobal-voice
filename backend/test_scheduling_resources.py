@@ -140,8 +140,14 @@ class SchedulingResourcesTests(Integration2ATestCase):
             self.assertIsNotNone(chosen3)
             self.assertEqual(chosen3.id, r_alice.id)
 
+    @patch(
+        "app.services.google_calendar_service.GoogleCalendarService.get_freebusy_intervals",
+        return_value=[],
+    )
     @patch("app.services.google_calendar_service.GoogleCalendarService.create_event")
-    def test_booking_service_uses_round_robin_resource(self, mock_create_event):
+    def test_booking_service_uses_round_robin_resource(self, mock_create_event, mock_freebusy):
+        # FreeBusy is patched: unpatched, this test made a real HTTPS call to
+        # Google with a fake token and its outcome depended on network/latency.
         mock_create_event.return_value = {
             "id": "g_event_rr_1",
             "htmlLink": "https://calendar.google.com/event?eid=rr1",
@@ -181,6 +187,8 @@ class SchedulingResourcesTests(Integration2ATestCase):
             self.assertEqual(booking.status, "accepted")
             self.assertEqual(booking.host_name, "Alice Specialist")
 
+            mock_freebusy.assert_called_once()
+            self.assertEqual(mock_freebusy.call_args.kwargs["calendar_ids"], ["alice@example.com"])
             mock_create_event.assert_called_once()
             call_kwargs = mock_create_event.call_args.kwargs
             self.assertEqual(call_kwargs.get("calendar_id"), "alice@example.com")
