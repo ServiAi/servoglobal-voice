@@ -26,7 +26,7 @@ Estado: ✅ ya respetado · 🟡 propietario claro, pero otros módulos acceden 
 
 | Tabla | Modelo | Estado |
 | --- | --- | --- |
-| `voice_sessions` | `VoiceSession` (`app/modules/voice/infrastructure/models.py`) | 🔴 escrita por Voice y todavía por Telephony vía shim (outbound/SIP QA) hasta su migración; Agents ya no la escribe: al borrar un agente pide `voice.public.release_sessions_of_deleted_agent`. Sin relaciones ORM hacia las tablas de Agents (sólo FKs) |
+| `voice_sessions` | `VoiceSession` (`app/modules/voice/infrastructure/models.py`) | ✅ escrita sólo por Voice; Telephony pide cambios por `voice.public.VoiceTelephonyFacade` (vincular ruta/trunk, correlacionar `CrmVoiceCall`, dispatch, `sip_call_id`, cancelar) y consulta conteos con `count_active_telephony_sessions`; Agents ya no la escribe: al borrar un agente pide `voice.public.release_sessions_of_deleted_agent`. Sin relaciones ORM hacia las tablas de Agents (sólo FKs) |
 | `voice_session_events` | `VoiceSessionEvent` (`app/modules/voice/infrastructure/models.py`) | ✅ Tool Platform escribe vía `VoiceSessionFacade.record_event(session_id, ...)`; la proyección lee `SessionProjectionFacts` |
 | `tenant_voice_provider_configs` | `TenantVoiceProviderConfig` (`models/integrations.py`) | 🟡 propietario: **Voice Providers**; el runtime lo lee sólo vía `voice_providers.public.resolve_runtime_credential` (tenant derivado de la sesión). Lo escribe todavía `voice_config_service` (UI de Integraciones) |
 
@@ -34,7 +34,9 @@ Estado: ✅ ya respetado · 🟡 propietario claro, pero otros módulos acceden 
 
 | Tabla | Modelo | Estado |
 | --- | --- | --- |
-| `tenant_sip_routes` | `TenantSipRoute` (`models/integrations.py`) | 🟡 |
+| `tenant_sip_routes` | `TenantSipRoute` (`app/modules/telephony/infrastructure/models.py`) | ✅ propietario: **Telephony**. Misma tabla, FKs y constraints (sin migración). Fuera del módulo sólo se ve `SipRouteView`/`SipRouteConnection` (la contraseña SIP no aparece en vistas ni `repr`); `provider_config_id` referencia `tenant_voice_provider_configs`, de Voice Providers, que Telephony recibe como `ProviderConfigRef` |
+| `crm_voice_calls`, `crm_voice_call_events` | `CrmVoiceCall`, `CrmVoiceCallEvent` | 🟡 propietario: **CRM**. Telephony ya no los toca: el outbound abre/actualiza el registro por `crm.public.OutboundCallLedger` y la carga legacy en vuelo se cuenta por `CallLoadPort`. Voice (proyección) y Voice Legacy aún los escriben |
+| `tenant_integration_events` (`voice_capacity_*`, `voice_callback_*`, `voice.outbound.requested`, `voice.sip.dial.started`) | `TenantIntegrationEvent` | 🟡 auditoría compartida: Telephony escribe vía `IntegrationEventService.add_event` en la misma transacción |
 
 ## Tool Platform (migrado)
 
@@ -53,7 +55,7 @@ Datos de otros módulos que Tool Platform usa, siempre vía API pública y como 
 | `crm_contacts`, `crm_leads` | `CrmContact`, `CrmLead` | 🔴 escritos por CRM, Voice (resolución/proyección), Voice Legacy (ingestión), Tool Platform (vía `CrmFacade`, recibe sólo `ContactRef`/`LeadRef` ✅) |
 | `crm_pipeline_stages`, `crm_tasks`, `crm_call_contexts` | … | 🟡 |
 | `crm_activities` | `CrmActivity` | 🔴 escrita por Scheduling, Integrations, Voice, Voice Legacy → objetivo: evento o `crm.public.record_activity` |
-| `crm_voice_calls`, `crm_voice_call_events` | `CrmVoiceCall`, `CrmVoiceCallEvent` | 🔴 Telephony (outbound), Voice (projection), Voice Legacy |
+| `crm_voice_calls`, `crm_voice_call_events` | `CrmVoiceCall`, `CrmVoiceCallEvent` | 🟡 CRM (propietario); Telephony ya sólo vía `OutboundCallLedger`/`CallLoadPort`; Voice (projection) y Voice Legacy aún escriben |
 | `crm_whatsapp_messages` | `CrmWhatsAppMessage` | 🔴 propietario objetivo: Messaging (el mensaje es del canal; CRM lo muestra en timeline) |
 | `crm_bookings`, `crm_booking_events` | `CrmBooking`, `CrmBookingEvent` | 🔴 propietario objetivo: **Scheduling** (`BookingService` gobierna su ciclo de vida) |
 
