@@ -10,9 +10,9 @@ from app.modules.voice_providers.domain.errors import VoiceProviderError
 
 
 def resolve_credential(db: Session, tenant_id: str, provider: str) -> ProviderCredential:
-    from app.services.voice_config_service import VoiceConfigService
+    from app.services.voice_provider_config_store import VoiceProviderConfigStore
 
-    config_service = VoiceConfigService(db)
+    config_service = VoiceProviderConfigStore(db)
     try:
         config = config_service.get_active_provider_config(tenant_id, provider)
         api_key = config_service.decrypt_api_key(config)

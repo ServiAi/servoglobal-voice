@@ -5,7 +5,6 @@ from dataclasses import dataclass
 import phonenumbers
 from phonenumbers import PhoneNumberFormat, PhoneNumberType
 
-
 SUPPORTED_OUTBOUND_COUNTRIES = frozenset({"AR", "CL", "CO", "EC", "MX", "PA", "PE", "US"})
 FORMAT_ONLY_COUNTRIES = frozenset({"MX", "US"})
 

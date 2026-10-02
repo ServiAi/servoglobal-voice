@@ -108,7 +108,7 @@ async def create_sip_call_via_pbx(
         "Content-Type": "application/json",
     }
 
-    from app.services.voice_phone_service import normalize_outbound_phone
+    from app.modules.telephony.public import normalize_outbound_phone
 
     dialed = normalize_outbound_phone(phone, default_country="CO").e164
 
@@ -190,7 +190,7 @@ async def create_scheduled_sip_call_via_pbx(
     }
 
     # Normalize phone and construct SIP URI (reused from existing logic)
-    from app.services.voice_phone_service import normalize_outbound_phone
+    from app.modules.telephony.public import normalize_outbound_phone
 
     dialed = normalize_outbound_phone(phone, default_country="CO").e164
     pbx_uri = f"sip:{dialed}@{settings.ASTERISK_PUBLIC_HOST}:5060"

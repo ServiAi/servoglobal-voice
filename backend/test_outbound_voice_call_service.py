@@ -12,15 +12,18 @@ from _integrations_2a_test_base import Integration2ATestCase, SessionLocal
 from app.core.config import settings
 from app.modules.agents.infrastructure.models import TenantAgent, TenantAgentVersion
 from app.models.crm import CrmVoiceCall
-from app.models.integrations import TenantSipRoute
+from app.modules.telephony.infrastructure.models import TenantSipRoute
 from app.modules.voice.infrastructure.models import VoiceSession
 from app.schemas.integrations import VoiceCallActionRequest
 from app.modules.voice.infrastructure.livekit_runtime import RuntimeDispatchResult
-from app.services.livekit_sip_service import (
+from app.modules.telephony.infrastructure.livekit_sip import (
     LiveKitSipDialError,
     LiveKitSipDialResult,
     LiveKitSipError,
 )
+from app.modules.telephony.application.route_service import SipRouteService
+from app.modules.telephony.public import TelephonyFacade
+from app.modules.telephony.wiring import default_telephony_ports
 from app.services.outbound_voice_call_service import OutboundVoiceCallService
 from app.services.tenant_feature_service import (
     LIVEKIT_SIP_OUTBOUND_V2,
@@ -28,7 +31,6 @@ from app.services.tenant_feature_service import (
     TenantFeatureService,
 )
 from app.modules.voice.application.session_service import VoiceSessionService
-from app.services.voice_sip_route_service import VoiceSipRouteService
 
 
 class ReadyBackend:
@@ -87,6 +89,13 @@ class FakeTrunkProvisioner:
         if self.error:
             raise self.error
         return SimpleNamespace(sip_trunk_id="ST_persisted")
+
+
+def _service(db, sip, backend) -> OutboundVoiceCallService:
+    """The CRM adapter wired to Telephony with the two external transports
+    (LiveKit SIP and the voice runtime's room) replaced by fakes."""
+    ports = default_telephony_ports(db, sip_transport=sip, runtime_backend=backend)
+    return OutboundVoiceCallService(db, telephony=TelephonyFacade(db, ports=ports))
 
 
 class OutboundVoiceCallServiceTests(Integration2ATestCase):
@@ -165,7 +174,7 @@ class OutboundVoiceCallServiceTests(Integration2ATestCase):
         backend = ReadyBackend(order)
         with SessionLocal() as db:
             response = asyncio.run(
-                OutboundVoiceCallService(db, sip_service=sip, runtime_backend=backend).start_call(
+                _service(db, sip, backend).start_call(
                     self.tenant.id, lead_id, self._request(agent_id)
                 )
             )
@@ -190,7 +199,7 @@ class OutboundVoiceCallServiceTests(Integration2ATestCase):
         sip = FakeSip(order)
         backend = ReadyBackend(order)
         with SessionLocal() as db:
-            service = OutboundVoiceCallService(db, sip_service=sip, runtime_backend=backend)
+            service = _service(db, sip, backend)
             first = asyncio.run(service.start_call(self.tenant.id, lead_id, self._request(agent_id)))
             second = asyncio.run(service.start_call(self.tenant.id, lead_id, self._request(agent_id)))
         self.assertEqual(first.voice_call_id, second.voice_call_id)
@@ -207,7 +216,7 @@ class OutboundVoiceCallServiceTests(Integration2ATestCase):
             route.livekit_provision_status = "disabled"
             db.commit()
             asyncio.run(
-                VoiceSipRouteService(db).provision_livekit_outbound(
+                SipRouteService(db).provision_livekit_outbound(
                     route, FakeTrunkProvisioner()
                 )
             )
@@ -223,7 +232,7 @@ class OutboundVoiceCallServiceTests(Integration2ATestCase):
             db.commit()
             with self.assertRaisesRegex(ValueError, "provisioning failed"):
                 asyncio.run(
-                    VoiceSipRouteService(db).provision_livekit_outbound(
+                    SipRouteService(db).provision_livekit_outbound(
                         route,
                         FakeTrunkProvisioner(LiveKitSipError("livekit_sip_unavailable")),
                     )
@@ -241,7 +250,7 @@ class OutboundVoiceCallServiceTests(Integration2ATestCase):
         with SessionLocal() as db:
             with self.assertRaisesRegex(ValueError, "livekit_sip_busy"):
                 asyncio.run(
-                    OutboundVoiceCallService(db, sip_service=sip, runtime_backend=backend).start_call(
+                    _service(db, sip, backend).start_call(
                         self.tenant.id, lead_id, self._request(agent_id)
                     )
                 )
@@ -264,9 +273,7 @@ class OutboundVoiceCallServiceTests(Integration2ATestCase):
                 with SessionLocal() as db:
                     with self.assertRaises(ValueError):
                         asyncio.run(
-                            OutboundVoiceCallService(
-                                db, sip_service=sip, runtime_backend=ReadyBackend([])
-                            ).start_call(
+                            _service(db, sip, ReadyBackend([])).start_call(
                                 self.tenant.id,
                                 lead_id,
                                 self._request(agent_id, f"status-{index}"),
@@ -292,7 +299,7 @@ class OutboundVoiceCallServiceTests(Integration2ATestCase):
             with SessionLocal() as db:
                 with self.assertRaisesRegex(ValueError, "did not become ready"):
                     asyncio.run(
-                        OutboundVoiceCallService(db, sip_service=sip, runtime_backend=backend).start_call(
+                        _service(db, sip, backend).start_call(
                             self.tenant.id, lead_id, self._request(agent_id)
                         )
                     )
@@ -309,9 +316,7 @@ class OutboundVoiceCallServiceTests(Integration2ATestCase):
         with SessionLocal() as db:
             with self.assertRaisesRegex(ValueError, "inactiva"):
                 asyncio.run(
-                    OutboundVoiceCallService(
-                        db, sip_service=FakeSip([]), runtime_backend=backend
-                    ).start_call(self.tenant.id, lead_id, self._request(agent_id))
+                    _service(db, FakeSip([]), backend).start_call(self.tenant.id, lead_id, self._request(agent_id))
                 )
         self.assertEqual(backend.order, [])
 
@@ -336,9 +341,7 @@ class OutboundVoiceCallServiceTests(Integration2ATestCase):
         with SessionLocal() as db:
             with self.assertRaisesRegex(ValueError, "capacity exceeded"):
                 asyncio.run(
-                    OutboundVoiceCallService(
-                        db, sip_service=sip, runtime_backend=ReadyBackend([])
-                    ).start_call(self.tenant.id, lead_id, self._request(agent_id))
+                    _service(db, sip, ReadyBackend([])).start_call(self.tenant.id, lead_id, self._request(agent_id))
                 )
         self.assertEqual(sip.calls, 0)
         with SessionLocal() as db:
@@ -354,9 +357,7 @@ class OutboundVoiceCallServiceTests(Integration2ATestCase):
         with SessionLocal() as db:
             with self.assertRaises(ValueError):
                 asyncio.run(
-                    OutboundVoiceCallService(
-                        db, sip_service=FakeSip([]), runtime_backend=ReadyBackend([])
-                    ).start_call(self.tenant.id, lead_id, request)
+                    _service(db, FakeSip([]), ReadyBackend([])).start_call(self.tenant.id, lead_id, request)
                 )
 
     def test_cross_tenant_agent_is_rejected(self) -> None:
@@ -367,9 +368,7 @@ class OutboundVoiceCallServiceTests(Integration2ATestCase):
         with SessionLocal() as db:
             with self.assertRaisesRegex(ValueError, "published version"):
                 asyncio.run(
-                    OutboundVoiceCallService(
-                        db, sip_service=FakeSip([]), runtime_backend=ReadyBackend([])
-                    ).start_call(self.tenant.id, lead_id, self._request(other_agent))
+                    _service(db, FakeSip([]), ReadyBackend([])).start_call(self.tenant.id, lead_id, self._request(other_agent))
                 )
 
     def test_cross_tenant_lead_is_rejected(self) -> None:
@@ -382,9 +381,7 @@ class OutboundVoiceCallServiceTests(Integration2ATestCase):
         with SessionLocal() as db:
             with self.assertRaisesRegex(ValueError, "does not belong"):
                 asyncio.run(
-                    OutboundVoiceCallService(
-                        db, sip_service=FakeSip([]), runtime_backend=ReadyBackend([])
-                    ).start_call(self.tenant.id, lead_id, self._request(agent_id))
+                    _service(db, FakeSip([]), ReadyBackend([])).start_call(self.tenant.id, lead_id, self._request(agent_id))
                 )
 
     def test_route_and_trunk_are_derived_from_tenant_not_request(self) -> None:
@@ -402,9 +399,7 @@ class OutboundVoiceCallServiceTests(Integration2ATestCase):
         sip = FakeSip([])
         with SessionLocal() as db:
             asyncio.run(
-                OutboundVoiceCallService(
-                    db, sip_service=sip, runtime_backend=ReadyBackend([])
-                ).start_call(self.tenant.id, lead_id, request)
+                _service(db, sip, ReadyBackend([])).start_call(self.tenant.id, lead_id, request)
             )
         self.assertEqual(sip.last_kwargs["trunk_id"], "ST_tenant_a")
 

@@ -20,6 +20,10 @@ from types import SimpleNamespace
 
 APP = Path(__file__).resolve().parent / "app"
 SHIM_MARKER = "TEMPORARY compatibility shim"
+# Every compatibility shim that may exist, by module. Empty on purpose: a new
+# shim must be registered here (and listed in MODULAR_MONOLITH_MIGRATION.md)
+# together with the roadmap step that retires it.
+KNOWN_SHIMS: set[str] = set()
 
 # Legacy (not yet migrated) modules Tool Platform may still import directly.
 # Each is shared infrastructure or a module without a public API yet.
@@ -58,8 +62,41 @@ VOICE_PROVIDERS_LEGACY_ALLOWED = {
         "app.services.ultravox_admin_service",
         "app.services.ultravox_provider_client",
     },
-    "app.modules.voice_providers.infrastructure.credentials": {"app.services.voice_config_service"},
+    "app.modules.voice_providers.infrastructure.credentials": {"app.services.voice_provider_config_store"},
 }
+
+# Legacy modules Telephony may still import: shared kernel only.
+TELEPHONY_LEGACY_ALLOWED = {
+    "app.core.config",
+    "app.db.base",
+    "app.db.mixins",
+    "app.db.session",
+    "app.services.integration_event_service",  # shared audit trail
+    "app.services.secret_manager_service",  # shared encryption (Fernet)
+}
+
+# Things Telephony must never touch, whatever the route: Voice and CRM
+# internals, and the projection/runtime implementations behind voice.public /
+# analytics.public.
+TELEPHONY_FORBIDDEN_PREFIXES = (
+    "app.models.voice_sessions",
+    "app.models.crm",
+    "app.models.analytics",
+    "app.modules.voice.infrastructure",
+    "app.modules.voice.application",
+    "app.modules.voice.domain",
+    "app.modules.voice.api",
+    "app.modules.voice_providers.infrastructure",
+    "app.modules.voice_providers.application",
+    "app.services.voice_call_projection_service",
+    "app.services.voice_session_service",
+    "app.services.livekit_runtime_backend",
+    "app.services.voice_runtime_dispatcher",
+    "app.services.ultravox_",
+    "app.services.voice_provider_admin",
+    "app.services.voice_config_service",
+    "app.services.tenant_feature_service",
+)
 
 # Third-party frameworks a pure domain layer must not depend on.
 FRAMEWORK_PREFIXES = ("sqlalchemy", "fastapi", "starlette", "livekit", "httpx")
@@ -204,6 +241,11 @@ class ModuleBoundaryTests(unittest.TestCase):
             if source == "app.main" and target.startswith(f"app.modules.{_owner(target)}.api"):
                 return True
             if source == "app.models" and target.endswith(".infrastructure.models"):
+                return True
+            # Process entrypoints are composition roots: the PBX-side agent
+            # launcher imports the agent module directly so the agent stays
+            # stdlib-only (see app/workers/asterisk_provisioner.py).
+            if source == "app.workers.asterisk_provisioner" and target == "app.modules.telephony.infrastructure.asterisk_agent":
                 return True
             path, _ = self.graph[source]
             return SHIM_MARKER in _source(path)
@@ -356,13 +398,95 @@ class ModuleBoundaryTests(unittest.TestCase):
         self.assertEqual(frameworks, [])
 
     def test_voice_orm_never_leaves_the_voice_module(self) -> None:
-        # Shims are the only (temporary) exception; they alias the module.
         models = "app.modules.voice.infrastructure.models"
+        violations = self._violations(lambda s, t: t == models and _owner(s) != "voice" and s != "app.models")
+        self.assertEqual(violations, [])
+
+    def test_compatibility_shims_match_the_registry(self) -> None:
+        found = {
+            module
+            for module, (path, _) in self.graph.items()
+            if SHIM_MARKER in _source(path) and not module.endswith("test_module_boundaries")
+        }
+        self.assertEqual(found, KNOWN_SHIMS, "Register new shims in KNOWN_SHIMS and the migration roadmap")
+
+    # -- Telephony ----------------------------------------------------------------
+
+    def test_telephony_does_not_import_other_domains_legacy_internals(self) -> None:
         violations = self._violations(
-            lambda s, t: t == models and _owner(s) != "voice" and s != "app.models"
-            and SHIM_MARKER not in _source(self.graph[s][0])
+            lambda s, t: _owner(s) == "telephony" and _owner(t) is None and t not in TELEPHONY_LEGACY_ALLOWED
+        )
+        self.assertEqual(violations, [], "Telephony must reach other domains via their public API or a port")
+
+    def test_telephony_never_touches_voice_crm_or_provider_internals(self) -> None:
+        violations = self._violations(
+            lambda s, t: _owner(s) == "telephony" and t.startswith(TELEPHONY_FORBIDDEN_PREFIXES)
+        )
+        self.assertEqual(violations, [], "Telephony may use voice.public / crm.public / analytics.public only")
+
+    def test_telephony_domain_layer_is_pure(self) -> None:
+        def violates(source: str, target: str) -> bool:
+            if not source.startswith("app.modules.telephony.domain"):
+                return False
+            return not target.startswith("app.modules.telephony.domain")
+
+        self.assertEqual(self._violations(violates), [])
+        frameworks = []
+        for path in (APP / "modules" / "telephony" / "domain").rglob("*.py"):
+            for node in ast.walk(ast.parse(_source(path))):
+                names = (
+                    [node.module or ""] if isinstance(node, ast.ImportFrom)
+                    else [a.name for a in node.names] if isinstance(node, ast.Import) else []
+                )
+                frameworks += [f"{path.name}: {n}" for n in names if n.startswith(FRAMEWORK_PREFIXES)]
+        self.assertEqual(frameworks, [])
+
+    def test_telephony_application_does_not_depend_on_api_layer(self) -> None:
+        violations = self._violations(
+            lambda s, t: s.startswith("app.modules.telephony.application")
+            and t.startswith("app.modules.telephony.api")
+            and s != "app.modules.telephony.application.provisioning_service"  # api schemas are its contract
         )
         self.assertEqual(violations, [])
+
+    def test_telephony_orm_never_leaves_the_telephony_module(self) -> None:
+        models = "app.modules.telephony.infrastructure.models"
+        violations = self._violations(lambda s, t: t == models and _owner(s) != "telephony" and s != "app.models")
+        self.assertEqual(violations, [])
+
+    def test_nobody_imports_the_old_telephony_paths(self) -> None:
+        gone = (
+            "app.services.voice_phone_service",
+            "app.services.livekit_sip_service",
+            "app.services.voice_sip_route_service",
+            "app.services.voice_capacity_service",
+            "app.services.voice_session_sip_service",
+            "app.services.asterisk_provisioning_service",
+            "app.schemas.asterisk_provisioning",
+            "app.api.endpoints.asterisk_provisioning",
+        )
+        self.assertEqual(self._violations(lambda s, t: t in gone), [])
+
+    def test_no_import_cycle_links_telephony_and_a_provider_implementation(self) -> None:
+        offending = [
+            sorted(component)
+            for component in _strongly_connected(self.graph)
+            if any(_owner(m) == "telephony" for m in component)
+            and any(m.startswith(PROVIDER_IMPLEMENTATIONS) for m in component)
+        ]
+        self.assertEqual(offending, [])
+
+    def test_provider_adapters_do_not_reach_telephony_or_voice_even_transitively(self) -> None:
+        # The adapter (and the light config store it uses) must not depend on
+        # any module, so no route/session/agent code can sit behind it.
+        offending = []
+        for module, (_, targets) in self.graph.items():
+            if module.startswith(PROVIDER_IMPLEMENTATIONS) or module == "app.services.voice_provider_config_store":
+                offending += [
+                    f"{module} -> {t}" for t in targets
+                    if _owner(t) is not None and t != "app.modules.voice_providers.public"
+                ]
+        self.assertEqual(offending, [])
 
     def test_public_apis_import_light(self) -> None:
         # Importing a public API must not load use cases, ORM, LiveKit,
@@ -377,7 +501,14 @@ class ModuleBoundaryTests(unittest.TestCase):
             "app.modules.agents.application", "app.modules.voice_providers.application",
             "app.modules.voice_providers.infrastructure",
         )
-        for module in ("app.modules.voice.public", "app.modules.voice_providers.public", "app.modules.agents.public"):
+        for module in (
+            "app.modules.voice.public",
+            "app.modules.voice_providers.public",
+            "app.modules.agents.public",
+            "app.modules.telephony.public",
+            "app.modules.crm.public",
+            "app.modules.analytics.public",
+        ):
             code = (
                 f"import sys, {module}; "
                 f"print(sorted(n for n in sys.modules if n.startswith({heavy!r})))"
@@ -460,11 +591,18 @@ FOREIGN_ORM_ATTRIBUTES = {"agent_version", "session_context_json", "runtime_bind
 
 # Cross-module APIs that must speak DTOs only (no ORM rows, no bare Any).
 CRITICAL_PUBLIC_APIS = {
-    "app.modules.voice.public": ["VoiceSessionFacade"],
+    "app.modules.voice.public": ["VoiceSessionFacade", "VoiceTelephonyFacade"],
     "app.modules.voice.application.ports": ["CrmContextPort", "VoiceProjectionPort"],
     "app.modules.voice_providers.public": ["VoiceProviderFacade"],
     "app.modules.voice_providers.application.ports": ["VoiceProviderAdapter"],
-    "app.modules.telephony.public": ["SipQaFacade"],
+    "app.modules.telephony.public": ["TelephonyFacade", "SipRouteFacade", "CapacityFacade"],
+    "app.modules.telephony.application.ports": [
+        "VoiceTelephonyPort",
+        "SipTransportPort",
+        "CallLoadPort",
+        "CallProjectionPort",
+        "OutboundCallLedger",
+    ],
     "app.modules.analytics.public": ["VoiceCallProjectionFacade"],
     "app.modules.crm.public": ["CrmFacade"],
     "app.modules.integrations.public": ["WhatsAppFacade"],
@@ -487,14 +625,35 @@ CRITICAL_PUBLIC_APIS = {
     ],
 }
 PUBLIC_DTOS = {
-    "app.modules.voice.public": ["ToolSessionView", "ToolBindingView", "SessionProjectionFacts", "SessionEventFact"],
-    "app.modules.crm.public": ["ContactRef", "LeadRef", "ContactSnapshot", "LeadSnapshot"],
+    "app.modules.voice.public": [
+        "ToolSessionView",
+        "ToolBindingView",
+        "SessionProjectionFacts",
+        "SessionEventFact",
+        "TelephonySessionView",
+    ],
+    "app.modules.crm.public": [
+        "ContactRef",
+        "LeadRef",
+        "ContactSnapshot",
+        "LeadSnapshot",
+        "OutboundContactRef",
+        "CallState",
+    ],
+    "app.modules.telephony.public": [
+        "SipRouteView",
+        "SipRouteConnection",
+        "SipRouteSettings",
+        "PlaceOutboundCallCommand",
+        "OutboundCallResult",
+    ],
     "app.modules.voice_providers.public": [
         "ProviderToolRef",
         "ProviderAgentSnapshot",
         "ProviderVoiceSelection",
         "ProviderAgentImport",
         "ProviderCredential",
+        "ProviderConfigRef",
     ],
     "app.modules.agents.public": ["AgentToolBindingView", "PublishedAgent", "AgentDisplay", "ImportedAgent"],
     "app.modules.voice_legacy.public": ["LegacyVoiceDefaults"],
@@ -537,7 +696,9 @@ def _type_namespace(module) -> dict:
     from app.modules.voice import public as voice_public
     from app.modules.voice_providers import public as voice_providers_public
 
-    return {**vars(voice_public), **vars(voice_providers_public), **vars(module)}
+    from app.modules.telephony.application import ports as telephony_ports
+
+    return {**vars(telephony_ports), **vars(voice_public), **vars(voice_providers_public), **vars(module)}
 
 
 class DataBoundaryTests(unittest.TestCase):

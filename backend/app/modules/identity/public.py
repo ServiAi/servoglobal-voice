@@ -13,13 +13,21 @@ from app.services import tenant_feature_service as _features
 from app.services.tenant_feature_service import (
     AGENT_BUILDER,
     CUSTOM_HTTP_TOOLS,
+    LIVEKIT_SIP_OUTBOUND_V2,
     VOICE_RUNTIME_V2,
 )
 from app.services.tenant_feature_service import (
     TenantFeatureDisabledError as FeatureDisabledError,
 )
 
-__all__ = ["AGENT_BUILDER", "CUSTOM_HTTP_TOOLS", "VOICE_RUNTIME_V2", "FeatureDisabledError", "FeatureFlags"]
+__all__ = [
+    "AGENT_BUILDER",
+    "CUSTOM_HTTP_TOOLS",
+    "LIVEKIT_SIP_OUTBOUND_V2",
+    "VOICE_RUNTIME_V2",
+    "FeatureDisabledError",
+    "FeatureFlags",
+]
 
 
 class FeatureFlags:

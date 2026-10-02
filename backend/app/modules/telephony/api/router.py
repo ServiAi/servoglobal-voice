@@ -7,12 +7,14 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.db.session import get_db
-from app.schemas.asterisk_provisioning import (
+from app.modules.telephony.api.schemas import (
     AsteriskApplyResultsRequest,
     AsteriskApplyResultsResponse,
     AsteriskDesiredStateResponse,
 )
-from app.services.asterisk_provisioning_service import AsteriskProvisioningService
+from app.modules.telephony.application.provisioning_service import (
+    AsteriskProvisioningService,
+)
 
 router = APIRouter(prefix="/api/v1/internal/asterisk", tags=["Asterisk Provisioning"])
 

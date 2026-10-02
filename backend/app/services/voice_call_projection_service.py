@@ -41,16 +41,34 @@ class VoiceCallProjectionService:
     def __init__(self, db: Session) -> None:
         self.db = db
 
-    def project_session(self, session_id: str, *, tenant_id: str | None = None, commit: bool = True) -> Call | None:
-        session = VoiceSessionFacade(self.db).get_projection_facts(session_id, tenant_id)
-        events = list(session.events)
-        crm_call = self.db.scalar(select(CrmVoiceCall).where(
+    def _crm_call(self, session: SessionProjectionFacts) -> CrmVoiceCall | None:
+        return self.db.scalar(select(CrmVoiceCall).where(
             CrmVoiceCall.id == session.crm_voice_call_id,
             CrmVoiceCall.tenant_id == session.tenant_id,
         )) if session.crm_voice_call_id else None
+
+    @staticmethod
+    def _is_real(session: SessionProjectionFacts, crm_call: CrmVoiceCall | None) -> bool:
         crm_operational = bool(crm_call and (crm_call.started_at or crm_call.provider_attempt_started_at
                                              or crm_call.answered_at or session.sip_call_id))
-        if not crm_operational and not any(event.event_type in REAL_EVENTS for event in events):
+        return crm_operational or any(event.event_type in REAL_EVENTS for event in session.events)
+
+    def is_real_call(self, session_id: str, tenant_id: str | None = None) -> bool:
+        """Read-only preview of project_session's eligibility (no row locks)."""
+        session = VoiceSessionFacade(self.db).get_projection_facts(session_id, tenant_id, lock=False)
+        return self._is_real(session, self._crm_call(session))
+
+    def projection_exists(self, session_id: str, tenant_id: str) -> bool:
+        return self.db.scalar(select(Call.id).where(
+            Call.tenant_id == tenant_id,
+            Call.external_call_id == f"voice-session:{session_id}",
+        )) is not None
+
+    def project_session(self, session_id: str, *, tenant_id: str | None = None, commit: bool = True) -> Call | None:
+        session = VoiceSessionFacade(self.db).get_projection_facts(session_id, tenant_id)
+        events = list(session.events)
+        crm_call = self._crm_call(session)
+        if not self._is_real(session, crm_call):
             return None
 
         started_at = self._utc(crm_call.started_at if crm_call and crm_call.started_at else self._first(events, "voice.session.started") or session.started_at or session.requested_at)

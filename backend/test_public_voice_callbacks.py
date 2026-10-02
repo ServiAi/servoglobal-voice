@@ -13,9 +13,9 @@ from app.core.config import settings
 from app.db.session import SessionLocal
 from app.main import app
 from app.models.crm import CrmActivity, CrmVoiceCall
+from app.modules.telephony.infrastructure.models import TenantSipRoute
 from app.models.integrations import (
     TenantIntegrationEvent,
-    TenantSipRoute,
     TenantVoiceAgentConfig,
     TenantVoiceProviderConfig,
 )

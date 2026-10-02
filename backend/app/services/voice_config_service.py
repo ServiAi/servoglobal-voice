@@ -1,38 +1,31 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from sqlalchemy import select
+
 from sqlalchemy.orm import Session
 
 from app.models.integrations import TenantVoiceProviderConfig
-from app.schemas.integrations import VoiceProviderConfigRequest, VoiceProviderConfigResponse
-from app.services.secret_manager_service import SecretManager
+from app.modules.telephony.public import SipRouteFacade, SipRouteSettings, SipRouteView
+from app.modules.voice_providers.public import ProviderConfigRef
+from app.schemas.integrations import (
+    VoiceProviderConfigRequest,
+    VoiceProviderConfigResponse,
+    VoiceSipRouteResponse,
+)
 from app.services.integration_event_service import IntegrationEventService
-from app.services.voice_sip_route_service import VoiceSipRouteService
+from app.services.secret_manager_service import SecretManager
+from app.services.voice_provider_config_store import VoiceProviderConfigStore
 
 
-class VoiceConfigService:
+class VoiceConfigService(VoiceProviderConfigStore):
+    """Provider configuration management for the Integrations UI/API: the
+    store (lookup + secrets) plus config upsert/health and the tenant's SIP
+    route, which is Telephony's (SipRouteFacade)."""
+
     def __init__(self, db: Session, secret_manager: SecretManager | None = None) -> None:
-        self.db = db
-        self.secret_manager = secret_manager or SecretManager()
+        super().__init__(db, secret_manager)
         self.event_service = IntegrationEventService(db)
-        self.route_service = VoiceSipRouteService(db, self.secret_manager)
-
-    def get_provider_config(self, tenant_id: str, provider: str = "ultravox") -> TenantVoiceProviderConfig | None:
-        return self.db.scalar(
-            select(TenantVoiceProviderConfig).where(
-                TenantVoiceProviderConfig.tenant_id == tenant_id,
-                TenantVoiceProviderConfig.provider == provider,
-            )
-        )
-
-    def get_active_provider_config(self, tenant_id: str, provider: str = "ultravox") -> TenantVoiceProviderConfig:
-        config = self.get_provider_config(tenant_id, provider)
-        if not config or config.status != "active":
-            raise ValueError(f"Voice integration '{provider}' is not active for this tenant.")
-        if not config.api_key_encrypted:
-            raise ValueError(f"Voice provider '{provider}' API key is not configured.")
-        return config
+        self.route_service = SipRouteFacade(db, self.secret_manager)
 
     def upsert_provider_config(self, tenant_id: str, body: VoiceProviderConfigRequest) -> TenantVoiceProviderConfig:
         config = self.get_provider_config(tenant_id, body.provider)
@@ -62,7 +55,20 @@ class VoiceConfigService:
 
         if body.sip_route is not None:
             self.db.flush()
-            self.route_service.upsert(tenant_id, config, body.sip_route)
+            self.route_service.upsert(
+                tenant_id,
+                ProviderConfigRef(id=config.id, tenant_id=config.tenant_id, provider=config.provider),
+                SipRouteSettings(
+                    status=body.sip_route.status,
+                    pbx_host=body.sip_route.pbx_host,
+                    pbx_port=body.sip_route.pbx_port,
+                    sip_password=body.sip_route.sip_password,
+                    caller_id=body.sip_route.caller_id,
+                    default_country=body.sip_route.default_country,
+                    allowed_countries=tuple(body.sip_route.allowed_countries),
+                    max_concurrent_calls=body.sip_route.max_concurrent_calls,
+                ),
+            )
 
         self.db.commit()
         self.db.refresh(config)
@@ -78,16 +84,6 @@ class VoiceConfigService:
         )
 
         return config
-
-    def decrypt_api_key(self, config: TenantVoiceProviderConfig) -> str:
-        if not config.api_key_encrypted:
-            raise ValueError("API key is not configured for this voice provider.")
-        return self.secret_manager.decrypt_secret(config.api_key_encrypted)
-
-    def decrypt_webhook_secret(self, config: TenantVoiceProviderConfig) -> str | None:
-        if not config.webhook_secret_encrypted:
-            return None
-        return self.secret_manager.decrypt_secret(config.webhook_secret_encrypted)
 
     def test_connection(self, tenant_id: str, provider: str = "ultravox") -> tuple[str, str | None]:
         from app.services.ultravox_provider_client import UltravoxProviderClient
@@ -109,6 +105,34 @@ class VoiceConfigService:
         config.last_health_check_at = datetime.now(UTC)
         config.last_error_message = error_message
         self.db.commit()
+
+    @staticmethod
+    def _route_response(route: SipRouteView | None) -> VoiceSipRouteResponse | None:
+        """Telephony's SipRouteView as the (unchanged) HTTP contract."""
+        if route is None:
+            return None
+        return VoiceSipRouteResponse(
+            id=route.id,
+            status=route.status,
+            pbx_host=route.pbx_host,
+            pbx_port=route.pbx_port,
+            sip_username=route.sip_username,
+            caller_id=route.caller_id,
+            default_country=route.default_country,
+            allowed_countries=list(route.allowed_countries),
+            max_concurrent_calls=route.max_concurrent_calls,
+            has_sip_password=route.has_sip_password,
+            provision_status=route.provision_status,
+            desired_revision=route.desired_revision,
+            applied_revision=route.applied_revision,
+            provision_error_code=route.provision_error_code,
+            provisioned_at=route.provisioned_at,
+            last_provision_attempt_at=route.last_provision_attempt_at,
+            livekit_outbound_trunk_id=route.livekit_outbound_trunk_id,
+            livekit_provision_status=route.livekit_provision_status,
+            livekit_provision_error_code=route.livekit_provision_error_code,
+            livekit_provisioned_at=route.livekit_provisioned_at,
+        )
 
     def get_config_response(self, tenant_id: str, provider: str = "ultravox") -> VoiceProviderConfigResponse:
         config = self.get_provider_config(tenant_id, provider)
@@ -144,5 +168,5 @@ class VoiceConfigService:
             has_webhook_secret=bool(config.webhook_secret_encrypted),
             last_health_check_at=config.last_health_check_at,
             last_error_message=config.last_error_message,
-            sip_route=self.route_service.response(route),
+            sip_route=self._route_response(route),
         )

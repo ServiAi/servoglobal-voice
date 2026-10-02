@@ -9,7 +9,7 @@ from app.models.crm import CrmContact, CrmLead, CrmActivity, CrmTask, CrmPipelin
 from app.models.analytics import Call
 from app.models.identity import Tenant
 from app.services.crm_pipeline_service import CrmPipelineService
-from app.services.voice_capacity_service import VoiceCapacityService
+from app.services.voice_capacity_report_service import VoiceCapacityReportService
 
 
 class CrmDashboardMetricsService:
@@ -331,7 +331,7 @@ class CrmDashboardMetricsService:
             "sources": sources_list,
             "campaigns": campaigns_list,
             "calls": calls,
-            "voice_capacity": VoiceCapacityService(self.db).dashboard_snapshot(
+            "voice_capacity": VoiceCapacityReportService(self.db).dashboard_snapshot(
                 tenant_id=tenant_id,
                 date_from=date_from_utc,
                 date_to=date_to_utc,

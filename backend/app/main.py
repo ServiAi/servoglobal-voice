@@ -53,7 +53,7 @@ from app.api.endpoints import notification_admin
 from app.api.endpoints import voice_context_schemas
 from app.api.endpoints import voice_experiences
 from app.api.endpoints import voice_public
-from app.api.endpoints import asterisk_provisioning
+from app.modules.telephony.api import router as asterisk_provisioning
 from app.api.endpoints import scheduling
 from app.modules.agents.api import router as agents
 from app.modules.tools.api import router as tools_custom

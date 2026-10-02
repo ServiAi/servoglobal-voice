@@ -8,7 +8,7 @@ from livekit import api
 from livekit.api.twirp_client import SipCallError
 
 from app.core.config import settings
-from app.services.livekit_sip_service import (
+from app.modules.telephony.infrastructure.livekit_sip import (
     LiveKitSipDialError,
     LiveKitSipService,
     map_sip_status,

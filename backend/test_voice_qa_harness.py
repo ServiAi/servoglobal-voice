@@ -6,11 +6,12 @@ from sqlalchemy import func, select
 from _integrations_2a_test_base import Integration2ATestCase, SessionLocal
 from app.modules.agents.infrastructure.models import TenantAgent, TenantAgentVersion
 from app.models.crm import CrmVoiceCall
-from app.models.integrations import TenantSipRoute
+from app.modules.telephony.infrastructure.models import TenantSipRoute
 from app.modules.voice.infrastructure.models import VoiceSession
 from app.modules.tools.public import ToolDispatchService, ToolExecutionError
 from app.modules.voice.application.session_service import VoiceSessionService
-from app.services.voice_session_sip_service import VoiceSessionSipService
+from app.modules.telephony.public import TelephonyFacade
+from app.modules.telephony.wiring import default_telephony_ports
 from app.services.tenant_feature_service import TenantFeatureService, VOICE_RUNTIME_V2
 from test_outbound_voice_call_service import FakeSip, ReadyBackend
 
@@ -228,9 +229,9 @@ class VoiceQaHarnessTests(Integration2ATestCase):
                 self.tenant.id, VOICE_RUNTIME_V2, True, {}, self.user.id
             )
         with patch(
-            "app.services.voice_session_sip_service.VoiceSessionSipService.dial",
+            "app.modules.telephony.application.dial_service.TelephonyDialService.dial",
             new_callable=AsyncMock,
-            side_effect=lambda session, _to_phone: session,
+            side_effect=lambda session_id, tenant_id, _to_phone: None,
         ):
             response = self.client.post(
                 "/api/v1/voice/sessions",
@@ -339,13 +340,15 @@ class VoiceQaHarnessTests(Integration2ATestCase):
                 direction="outbound",
                 purpose="qa",
             )
-            result = asyncio.run(
-                VoiceSessionSipService(
+            asyncio.run(
+                TelephonyFacade(
                     db,
-                    sip_service=FakeSip([]),
-                    runtime_backend=ReadyBackend([]),
-                ).dial(session, "+573001112244")
+                    ports=default_telephony_ports(
+                        db, sip_transport=FakeSip([]), runtime_backend=ReadyBackend([])
+                    ),
+                ).dial_qa_session(session.id, self.tenant.id, "+573001112244")
             )
+            result = db.get(VoiceSession, session.id)
             self.assertEqual(result.purpose, "qa")
             self.assertEqual(result.sip_call_id, "SC_1")
             self.assertIsNone(result.crm_voice_call_id)

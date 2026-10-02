@@ -34,3 +34,26 @@ class VoiceCallProjectionFacade:
         )
 
         VoiceCallProjectionService(self.db).reconcile_session(session_id, tenant_id=tenant_id)
+
+    def project_session(self, session_id: str, tenant_id: str, *, commit: bool = True) -> None:
+        from app.services.voice_call_projection_service import (
+            VoiceCallProjectionService,
+        )
+
+        VoiceCallProjectionService(self.db).project_session(session_id, tenant_id=tenant_id, commit=commit)
+
+    def is_real_call(self, session_id: str, tenant_id: str | None = None) -> bool:
+        """Whether the session carries real call evidence (read-only; holds
+        no row locks)."""
+        from app.services.voice_call_projection_service import (
+            VoiceCallProjectionService,
+        )
+
+        return VoiceCallProjectionService(self.db).is_real_call(session_id, tenant_id)
+
+    def projection_exists(self, session_id: str, tenant_id: str) -> bool:
+        from app.services.voice_call_projection_service import (
+            VoiceCallProjectionService,
+        )
+
+        return VoiceCallProjectionService(self.db).projection_exists(session_id, tenant_id)

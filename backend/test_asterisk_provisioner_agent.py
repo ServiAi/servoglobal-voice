@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from app.workers.asterisk_provisioner import (
+from app.modules.telephony.infrastructure.asterisk_agent import (
     AsteriskProvisioner,
     ProvisionerSettings,
     render_pjsip_include,

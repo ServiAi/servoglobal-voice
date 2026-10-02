@@ -28,12 +28,12 @@ from app.services.public_voice_experience_service import (
     PublicVoiceExperienceService,
     PublicVoiceSnapshot,
 )
-from app.services.voice_phone_service import (
+from app.modules.telephony.public import (
+    SipRouteFacade,
     VoicePhoneValidationError,
     normalize_caller_id,
     normalize_outbound_phone,
 )
-from app.services.voice_sip_route_service import VoiceSipRouteService
 
 
 EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
@@ -106,11 +106,11 @@ class PublicVoiceSubmissionService:
                 call_settings = snapshot.version.call_settings_json
                 allowed_countries = None
                 if call_settings.get("mode") in ("callback", "both"):
-                    route = VoiceSipRouteService(db).get_route(
+                    route = SipRouteFacade(db).get_route(
                         snapshot.experience.tenant_id
                     )
-                    if route is not None and route.allowed_countries_json:
-                        allowed_countries = frozenset(route.allowed_countries_json)
+                    if route is not None and route.allowed_countries:
+                        allowed_countries = frozenset(route.allowed_countries)
                 errors = validate_submission(
                     payload, snapshot, allowed_countries=allowed_countries
                 )

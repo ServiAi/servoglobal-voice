@@ -61,3 +61,14 @@ class ProviderCredential:
     provider: str
     api_key: str = field(repr=False)
     base_url: str | None = None
+
+
+@dataclass(frozen=True)
+class ProviderConfigRef:
+    """Identity of a tenant's provider configuration, for modules that only
+    need to reference it (e.g. a SIP route belongs to one provider config).
+    Never the TenantVoiceProviderConfig row, never a credential."""
+
+    id: str
+    tenant_id: str
+    provider: str

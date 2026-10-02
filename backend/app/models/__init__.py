@@ -1,4 +1,5 @@
 from app.modules.agents.infrastructure.models import TenantAgent, TenantAgentVersion
+from app.modules.telephony.infrastructure.models import TenantSipRoute
 from app.models.analytics import Agent, Call, CallEvent, MetricSnapshotDaily
 from app.models.billing import ExternalProviderPricing, TenantBillingPlan, TenantUsageAlert
 from app.models.identity import AccessAuditLog, Tenant, TenantMembership, User
@@ -10,7 +11,6 @@ from app.models.integrations import (
     TenantIntegration,
     TenantIntegrationEvent,
     TenantVoiceProviderConfig,
-    TenantSipRoute,
     TenantVoiceAgentConfig,
     TenantWhatsAppConfig,
     TenantWhatsAppFlow,
