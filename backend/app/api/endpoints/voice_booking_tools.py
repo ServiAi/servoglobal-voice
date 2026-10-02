@@ -1,9 +1,8 @@
 from __future__ import annotations
 
+import hmac
 import logging
 from typing import Any
-
-import hmac
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from sqlalchemy import select
@@ -13,9 +12,13 @@ from app.core.config import settings
 from app.db.session import get_db
 from app.models.crm import CrmLead
 from app.models.integrations import TenantVoiceAgentConfig
-from app.schemas.crm import VoiceAvailabilityRequest, VoiceBookingRequest, VoiceHandoffRequest
-from app.schemas.integrations import HANDOFF_TRIGGER_CUSTOMER_REQUEST
 from app.modules.scheduling.public import CreateBookingCommand, SchedulingFacade
+from app.schemas.crm import (
+    VoiceAvailabilityRequest,
+    VoiceBookingRequest,
+    VoiceHandoffRequest,
+)
+from app.schemas.integrations import HANDOFF_TRIGGER_CUSTOMER_REQUEST
 from app.services.voice_booking_context_service import VoiceBookingContextService
 from app.services.voice_handoff_service import VoiceHandoffService
 

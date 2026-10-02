@@ -4,7 +4,10 @@ from dataclasses import asdict, dataclass
 from datetime import datetime
 from typing import Any, Protocol
 
-from app.modules.scheduling.domain.contracts import BookingCustomer, CreateBookingCommand
+from app.modules.scheduling.domain.contracts import (
+    BookingCustomer,
+    CreateBookingCommand,
+)
 from app.modules.scheduling.infrastructure.models import CrmBooking
 
 

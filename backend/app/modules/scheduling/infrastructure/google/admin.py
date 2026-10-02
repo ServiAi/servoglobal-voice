@@ -7,15 +7,19 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.modules.scheduling.infrastructure.models import (
-    TenantGoogleCalendarConnection,
-    TenantSchedulingConfig,
-    TenantSchedulingEventType,
+from app.modules.scheduling.application.config_service import SchedulingConfigService
+from app.modules.scheduling.application.ports import (
+    SchedulingAdminProvider,
+    SchedulingProviderCapabilities,
+)
+from app.modules.scheduling.application.resource_service import (
+    SchedulingResourceService,
 )
 from app.modules.scheduling.infrastructure.google.calendar import GoogleCalendarService
-from app.modules.scheduling.application.config_service import SchedulingConfigService
-from app.modules.scheduling.application.ports import SchedulingAdminProvider, SchedulingProviderCapabilities
-from app.modules.scheduling.application.resource_service import SchedulingResourceService
+from app.modules.scheduling.infrastructure.models import (
+    TenantGoogleCalendarConnection,
+    TenantSchedulingEventType,
+)
 
 logger = logging.getLogger(__name__)
 

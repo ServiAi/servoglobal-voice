@@ -107,6 +107,8 @@ def default_scheduling_ports(db: Session) -> SchedulingPorts:
 def run_booking_event_task(*, tenant_id: str, booking_id: str, event_type: str) -> None:
     """Background-task entry point to announce a booking fact (opens its own
     session; never raises). Used by the Cal.com webhook."""
-    from app.services.notification_event_pipeline import run_booking_notification_pipeline_task
+    from app.services.notification_event_pipeline import (
+        run_booking_notification_pipeline_task,
+    )
 
     run_booking_notification_pipeline_task(tenant_id=tenant_id, booking_id=booking_id, event_type=event_type)

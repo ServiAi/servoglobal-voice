@@ -2,23 +2,22 @@ import base64
 import hashlib
 import hmac
 import json
+import re
 import secrets
 import time
 from datetime import UTC, datetime, timedelta
 from urllib.parse import urlencode
-
-import re
 
 import httpx
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.modules.scheduling.domain.contracts import GoogleCalendarConnectionResponse
 from app.modules.scheduling.infrastructure.models import (
     TenantGoogleCalendarConnection,
     TenantSchedulingResourceCalendar,
 )
-from app.modules.scheduling.domain.contracts import GoogleCalendarConnectionResponse
 from app.services.secret_manager_service import SecretManager
 
 

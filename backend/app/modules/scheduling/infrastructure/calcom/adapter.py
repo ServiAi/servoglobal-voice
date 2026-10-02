@@ -9,8 +9,14 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.modules.scheduling.domain.booking import calcom_booking_fields
-from app.modules.scheduling.domain.contracts import BookingCustomer, CreateBookingCommand
-from app.modules.scheduling.infrastructure.calcom.client import CalComClient, CalComClientConfig
+from app.modules.scheduling.domain.contracts import (
+    BookingCustomer,
+    CreateBookingCommand,
+)
+from app.modules.scheduling.infrastructure.calcom.client import (
+    CalComClient,
+    CalComClientConfig,
+)
 from app.modules.scheduling.infrastructure.models import CrmBooking
 
 logger = logging.getLogger(__name__)

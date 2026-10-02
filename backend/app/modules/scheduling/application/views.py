@@ -14,8 +14,8 @@ from app.modules.scheduling.infrastructure.models import (
     TenantAgentSchedulingConfig,
     TenantSchedulingAvailabilityException,
     TenantSchedulingEventType,
-    TenantSchedulingSchedule,
     TenantSchedulingResource,
+    TenantSchedulingSchedule,
     TenantSchedulingTeam,
 )
 

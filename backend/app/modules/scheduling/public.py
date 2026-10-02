@@ -90,7 +90,9 @@ class SchedulingFacade:
 
     def find_voice_booking_config_id(self, tenant_id: str, provider_agent_id: str | None) -> str | None:
         """The active voice booking config of a provider agent, as an id."""
-        from app.modules.scheduling.application.voice_booking import find_voice_booking_config_id
+        from app.modules.scheduling.application.voice_booking import (
+            find_voice_booking_config_id,
+        )
 
         return find_voice_booking_config_id(self.db, tenant_id, provider_agent_id)
 
@@ -162,31 +164,41 @@ class SchedulingFacade:
     # -- tenant-level administration (platform admin / integrations UI) ------
 
     def get_booking_config(self, tenant_id: str) -> BookingConfigResponse:
-        from app.modules.scheduling.application.booking_config_service import BookingConfigService
+        from app.modules.scheduling.application.booking_config_service import (
+            BookingConfigService,
+        )
 
         return BookingConfigService(self.db).get_config_response(tenant_id)
 
     def configure_calcom(self, tenant_id: str, request: BookingConfigRequest) -> BookingConfigResponse:
         """Raises ValueError (422 upstream) on an invalid configuration."""
-        from app.modules.scheduling.application.integration_admin import configure_calcom
+        from app.modules.scheduling.application.integration_admin import (
+            configure_calcom,
+        )
 
         return configure_calcom(self.db, tenant_id, request)
 
     def test_calcom(self, tenant_id: str) -> tuple[str, str | None]:
         """(status, error_message). Raises ValueError when not configured."""
-        from app.modules.scheduling.application.booking_config_service import BookingConfigService
+        from app.modules.scheduling.application.booking_config_service import (
+            BookingConfigService,
+        )
 
         return BookingConfigService(self.db).test_connection(tenant_id)
 
     def list_google_connections(self, tenant_id: str) -> list[GoogleCalendarConnectionResponse]:
-        from app.modules.scheduling.infrastructure.google.oauth import GoogleCalendarOAuthService
+        from app.modules.scheduling.infrastructure.google.oauth import (
+            GoogleCalendarOAuthService,
+        )
 
         service = GoogleCalendarOAuthService(self.db)
         return [service.response(c) for c in service.list_connections(tenant_id)]
 
     def delete_google_connection(self, tenant_id: str, connection_id: str) -> None:
         """Raises ValueError when the connection does not exist."""
-        from app.modules.scheduling.infrastructure.google.oauth import GoogleCalendarOAuthService
+        from app.modules.scheduling.infrastructure.google.oauth import (
+            GoogleCalendarOAuthService,
+        )
 
         GoogleCalendarOAuthService(self.db).delete_connection(tenant_id, connection_id)
 
@@ -195,6 +207,8 @@ class SchedulingFacade:
     def catalog_status_inputs(self, tenant_id: str) -> dict[str, Any]:
         """What the integrations catalog needs to classify Cal.com/Google:
         booleans and status strings only."""
-        from app.modules.scheduling.application.integration_admin import catalog_status_inputs
+        from app.modules.scheduling.application.integration_admin import (
+            catalog_status_inputs,
+        )
 
         return catalog_status_inputs(self.db, tenant_id)

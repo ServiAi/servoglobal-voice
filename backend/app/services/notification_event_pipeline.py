@@ -13,9 +13,16 @@ from app.core.config import settings
 from app.db.session import SessionLocal
 from app.domain.events import _check_json_safe
 from app.models.crm import CrmContact, CrmLead, CrmVoiceCall
-from app.modules.scheduling.public import BookingNotFoundError, BookingView, SchedulingFacade
 from app.models.notifications import DomainEvent
-from app.services.domain_event_service import DomainEventIdempotencyConflictError, DomainEventService
+from app.modules.scheduling.public import (
+    BookingNotFoundError,
+    BookingView,
+    SchedulingFacade,
+)
+from app.services.domain_event_service import (
+    DomainEventIdempotencyConflictError,
+    DomainEventService,
+)
 from app.services.notification_orchestrator import NotificationOrchestrator
 from app.services.notification_retry_policy import NotificationRetryPolicy
 from app.services.notification_schedule_reconciliation_service import (

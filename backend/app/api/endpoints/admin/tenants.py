@@ -7,28 +7,23 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.auth.deps import AuthContext, get_current_auth_context
+from app.api.endpoints.integrations import (
+    _integration_catalog_statuses,
+    _resend_response,
+    _whatsapp_template_detail,
+)
 from app.db.session import get_db
 from app.models.identity import User
+from app.modules.scheduling.public import (
+    BookingConfigRequest,
+    BookingConfigResponse,
+    CalComTestResponse,
+    CreateBookingCommand,
+    GoogleCalendarConnectionResponse,
+    SchedulingFacade,
+)
 from app.schemas.billing import TenantPlanRequest
-from app.schemas.onboarding import (
-    AgentCreateRequest,
-    AgentResponse,
-    MembershipCreateRequest,
-    MembershipResponse,
-    TenantCreateRequest,
-    TenantResponse,
-    TenantUpdateRequest,
-)
-from app.services.auth0_provisioning_service import (
-    Auth0ProvisioningError,
-    Auth0ProvisioningService,
-)
-from app.services.onboarding_service import (
-    OnboardingConsistencyError,
-    OnboardingService,
-    TenantDeletionBlockedError,
-)
-from app.services.tenant_usage_service import TenantUsageService
+from app.schemas.crm import BookingCreateRequest, BookingResponse
 from app.schemas.integrations import (
     ChatwootAgentInviteRequest,
     ChatwootAgentSummary,
@@ -44,12 +39,16 @@ from app.schemas.integrations import (
     ChatwootTeamUpdateRequest,
     ChatwootTestResponse,
     IntegrationAvailabilityResponse,
-    IntegrationCatalogStatusResponse,
     IntegrationAvailabilityUpdateRequest,
+    IntegrationCatalogStatusResponse,
     ResendIntegrationConfigRequest,
     ResendIntegrationConfigResponse,
     ResendTestEmailRequest,
     ResendTestEmailResponse,
+    VoiceAgentConfigRequest,
+    VoiceAgentConfigResponse,
+    VoiceProviderConfigRequest,
+    VoiceProviderConfigResponse,
     WhatsAppConfigRequest,
     WhatsAppConfigResponse,
     WhatsAppTemplateCreateRequest,
@@ -63,35 +62,38 @@ from app.schemas.integrations import (
     WhatsAppTestMessageResponse,
     WhatsAppTestRequest,
     WhatsAppTestResponse,
-    VoiceProviderConfigRequest,
-    VoiceProviderConfigResponse,
-    VoiceAgentConfigRequest,
-    VoiceAgentConfigResponse,
 )
-from app.modules.scheduling.domain.contracts import (
-    BookingConfigRequest,
-    BookingConfigResponse,
-    CalComTestResponse,
-    GoogleCalendarConnectionResponse,
+from app.schemas.onboarding import (
+    AgentCreateRequest,
+    MembershipCreateRequest,
+    TenantCreateRequest,
+    TenantUpdateRequest,
 )
-from app.schemas.crm import BookingCreateRequest, BookingResponse
-from app.api.endpoints.integrations import _integration_catalog_statuses, _resend_response, _whatsapp_template_detail
+from app.services.auth0_provisioning_service import (
+    Auth0ProvisioningError,
+    Auth0ProvisioningService,
+)
 from app.services.chatwoot_client import ChatwootClientError, sanitize_chatwoot_error
-from app.services.chatwoot_config_service import ChatwootAccountConflictError, ChatwootConfigService
-from app.modules.scheduling.public import CreateBookingCommand, SchedulingFacade
+from app.services.chatwoot_config_service import (
+    ChatwootAccountConflictError,
+    ChatwootConfigService,
+)
 from app.services.email_config_service import EmailConfigService
 from app.services.email_send_service import EmailSendService
 from app.services.email_template_service import EmailTemplateService
-from app.services.voice_config_service import VoiceConfigService
-from app.services.voice_agent_service import VoiceAgentService
 from app.services.integration_event_service import IntegrationEventService
 from app.services.integration_service import IntegrationService
+from app.services.onboarding_service import (
+    OnboardingConsistencyError,
+    OnboardingService,
+    TenantDeletionBlockedError,
+)
+from app.services.tenant_usage_service import TenantUsageService
+from app.services.voice_agent_service import VoiceAgentService
+from app.services.voice_config_service import VoiceConfigService
 from app.services.whatsapp_config_service import WhatsAppConfigService
 from app.services.whatsapp_message_service import WhatsAppMessageService
 from app.services.whatsapp_template_service import WhatsAppTemplateService
-from app.services.voice_config_service import VoiceConfigService
-from app.services.voice_agent_service import VoiceAgentService
-
 
 logger = logging.getLogger(__name__)
 

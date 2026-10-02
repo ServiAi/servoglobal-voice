@@ -1,19 +1,18 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Any, List, Optional
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
-from app.api.auth.deps import AuthContext, get_current_auth_context, require_roles
+from app.api.auth.deps import AuthContext, require_roles
 from app.db.session import get_db
-from app.models.crm import CrmContact, CrmPipelineStage, CrmLead, CrmActivity, CrmTask
-from app.modules.scheduling.infrastructure.models import CrmBooking, CrmBookingEvent
-
+from app.models.crm import CrmContact, CrmLead
+from app.modules.scheduling.public import CreateBookingCommand, SchedulingFacade
 from app.schemas.crm import (
     ActivitySchema,
-    BookingCancelRequest,
     BookingCreateRequest,
     BookingRescheduleRequest,
     BookingResponse,
@@ -29,12 +28,11 @@ from app.schemas.crm import (
     EmailActionResponse,
     LeadDetailResponse,
     LeadListItem,
+    LeadsListResponse,
     LeadStageCount,
     LeadUpdateRequest,
-    LeadsListResponse,
     NoteCreateRequest,
     PipelineBoardResponse,
-    PipelineBoardLeadItem,
     PipelineStageLeads,
     PipelineStageSchema,
     StageUpdateRequest,
@@ -42,16 +40,15 @@ from app.schemas.crm import (
     TaskResponse,
     TaskUpdateRequest,
 )
-from app.services.crm_pipeline_service import CrmPipelineService
-from app.services.crm_lead_service import CrmLeadService
-from app.services.crm_activity_service import CrmActivityService
-from app.services.crm_task_service import CrmTaskService
-from app.services.crm_metrics_service import CrmMetricsService
-from app.services.crm_query_service import CrmQueryService
-from app.services.crm_dashboard_metrics_service import CrmDashboardMetricsService
-from app.services.email_send_service import EmailSendService
 from app.services.call_summary_service import CallSummaryService
-from app.modules.scheduling.public import CreateBookingCommand, SchedulingFacade
+from app.services.crm_activity_service import CrmActivityService
+from app.services.crm_dashboard_metrics_service import CrmDashboardMetricsService
+from app.services.crm_lead_service import CrmLeadService
+from app.services.crm_metrics_service import CrmMetricsService
+from app.services.crm_pipeline_service import CrmPipelineService
+from app.services.crm_query_service import CrmQueryService
+from app.services.crm_task_service import CrmTaskService
+from app.services.email_send_service import EmailSendService
 
 router = APIRouter(prefix="/api/v1/crm", tags=["CRM"])
 

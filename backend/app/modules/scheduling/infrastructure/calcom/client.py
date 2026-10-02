@@ -3,13 +3,13 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
 
-from app.modules.scheduling.infrastructure.calcom.constants import CALCOM_API_VERSIONS, DEFAULT_CALCOM_API_VERSION
 from app.core.config import settings
+from app.modules.scheduling.domain.dates import parse_reference_datetime
 from app.modules.scheduling.domain.errors import (
     SchedulingAuthenticationError,
     SchedulingConflictError,
@@ -29,7 +29,10 @@ from app.modules.scheduling.infrastructure.calcom.availability import (
     _is_booking_unavailable_response,
     _resolve_date_input,
 )
-from app.modules.scheduling.domain.dates import parse_reference_datetime
+from app.modules.scheduling.infrastructure.calcom.constants import (
+    CALCOM_API_VERSIONS,
+    DEFAULT_CALCOM_API_VERSION,
+)
 
 logger = logging.getLogger(__name__)
 CAL_SLOTS_API_VERSION = CALCOM_API_VERSIONS.get("slots", "2024-09-04")

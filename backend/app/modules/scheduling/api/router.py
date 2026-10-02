@@ -35,6 +35,16 @@ from app.modules.scheduling.api.schemas import (
     TenantSchedulingConfigResponse,
     TenantSchedulingConfigUpdateRequest,
 )
+from app.modules.scheduling.application.availability_service import (
+    SchedulingAvailabilityService,
+)
+from app.modules.scheduling.application.config_service import SchedulingConfigService
+from app.modules.scheduling.application.provider_resolver import (
+    SchedulingProviderResolver,
+)
+from app.modules.scheduling.application.resource_service import (
+    SchedulingResourceService,
+)
 from app.modules.scheduling.application.views import (
     list_local_event_types,
     list_local_schedules,
@@ -45,10 +55,6 @@ from app.modules.scheduling.application.views import (
 )
 from app.modules.scheduling.domain.errors import SchedulingNotFoundError
 from app.modules.scheduling.infrastructure.calcom.sync import CalComSyncService
-from app.modules.scheduling.application.availability_service import SchedulingAvailabilityService
-from app.modules.scheduling.application.config_service import SchedulingConfigService
-from app.modules.scheduling.application.provider_resolver import SchedulingProviderResolver
-from app.modules.scheduling.application.resource_service import SchedulingResourceService
 
 logger = logging.getLogger(__name__)
 

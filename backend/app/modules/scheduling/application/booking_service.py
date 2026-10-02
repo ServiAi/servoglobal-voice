@@ -17,7 +17,9 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.modules.scheduling.application.booking_config_service import BookingConfigService
+from app.modules.scheduling.application.booking_config_service import (
+    BookingConfigService,
+)
 from app.modules.scheduling.application.ports import SchedulingPorts
 from app.modules.scheduling.domain.booking import (
     BOOKING_EVENT_CANCELLED,
@@ -34,8 +36,13 @@ from app.modules.scheduling.domain.booking import (
     is_google_booking,
     safe_provider_summary,
 )
-from app.modules.scheduling.domain.contracts import BookingCustomer, CreateBookingCommand
-from app.modules.scheduling.domain.errors import BookingNotFoundError, SchedulingConfigurationError
+from app.modules.scheduling.domain.contracts import (
+    BookingCustomer,
+    CreateBookingCommand,
+)
+from app.modules.scheduling.domain.errors import (
+    BookingNotFoundError,
+)
 from app.modules.scheduling.infrastructure.calcom.adapter import CalComProvider
 from app.modules.scheduling.infrastructure.calcom.client import (
     CalComClient,
@@ -44,7 +51,9 @@ from app.modules.scheduling.infrastructure.calcom.client import (
     sanitize_calcom_error,
 )
 from app.modules.scheduling.infrastructure.google.adapter import GoogleCalendarProvider
-from app.modules.scheduling.infrastructure.google.calendar import sanitize_google_calendar_error
+from app.modules.scheduling.infrastructure.google.calendar import (
+    sanitize_google_calendar_error,
+)
 from app.modules.scheduling.infrastructure.models import (
     CrmBooking,
     CrmBookingEvent,

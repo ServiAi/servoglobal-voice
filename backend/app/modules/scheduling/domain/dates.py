@@ -7,7 +7,6 @@ from datetime import date, datetime, timedelta
 
 import pytz
 
-
 BOGOTA_TZ = pytz.timezone("America/Bogota")
 SPANISH_DAY_NAMES = [
     "lunes",

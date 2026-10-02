@@ -7,8 +7,13 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.modules.scheduling.application.booking_config_service import BookingConfigService
-from app.modules.scheduling.domain.contracts import BookingConfigRequest, BookingConfigResponse
+from app.modules.scheduling.application.booking_config_service import (
+    BookingConfigService,
+)
+from app.modules.scheduling.domain.contracts import (
+    BookingConfigRequest,
+    BookingConfigResponse,
+)
 from app.services.integration_event_service import IntegrationEventService
 
 
@@ -30,7 +35,9 @@ def configure_calcom(db: Session, tenant_id: str, request: BookingConfigRequest)
 
 def catalog_status_inputs(db: Session, tenant_id: str) -> dict[str, Any]:
     """Facts the integrations catalog classifies; no secrets, no ORM."""
-    from app.modules.scheduling.infrastructure.google.oauth import GoogleCalendarOAuthService
+    from app.modules.scheduling.infrastructure.google.oauth import (
+        GoogleCalendarOAuthService,
+    )
 
     config = BookingConfigService(db).get_config(tenant_id)
     connections = GoogleCalendarOAuthService(db).list_connections(tenant_id)

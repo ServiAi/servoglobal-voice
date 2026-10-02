@@ -2,14 +2,14 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
-from fastapi.responses import RedirectResponse
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.auth.deps import AuthContext, require_roles
 from app.db.session import get_db
 from app.models.integrations import TenantEmailTemplate, TenantWhatsAppTemplate
+from app.modules.scheduling.public import SchedulingFacade
 from app.schemas.integrations import (
     ChatwootAgentInviteRequest,
     ChatwootAgentSummary,
@@ -32,6 +32,10 @@ from app.schemas.integrations import (
     ResendIntegrationConfigResponse,
     ResendTestEmailRequest,
     ResendTestEmailResponse,
+    VoiceAgentConfigRequest,
+    VoiceAgentConfigResponse,
+    VoiceProviderConfigRequest,
+    VoiceProviderConfigResponse,
     WhatsAppConfigRequest,
     WhatsAppConfigResponse,
     WhatsAppTemplateCreateRequest,
@@ -45,39 +49,19 @@ from app.schemas.integrations import (
     WhatsAppTestMessageResponse,
     WhatsAppTestRequest,
     WhatsAppTestResponse,
-    VoiceProviderConfigRequest,
-    VoiceProviderConfigResponse,
-    VoiceAgentConfigRequest,
-    VoiceAgentConfigResponse,
-    VoiceCallActionRequest,
-    VoiceCallActionResponse,
-    VoiceCallResponse,
 )
-from app.modules.scheduling.domain.contracts import (
-    BookingConfigRequest,
-    BookingConfigResponse,
-    CalComTestResponse,
-    GoogleCalendarConnectionResponse,
-    GoogleCalendarConnectUrlResponse,
-    GoogleCalendarSyncResponse,
-    TenantGoogleCalendarResponse,
-    TenantGoogleCalendarUpdateRequest,
-    SchedulingResourceCalendarAssignRequest,
-    SchedulingResourceCalendarResponse,
-    SchedulingResourceCreateRequest,
-    SchedulingResourceResponse,
-)
-from app.core.config import settings
 from app.services.chatwoot_client import ChatwootClientError, sanitize_chatwoot_error
-from app.services.chatwoot_config_service import ChatwootAccountConflictError, ChatwootConfigService
+from app.services.chatwoot_config_service import (
+    ChatwootAccountConflictError,
+    ChatwootConfigService,
+)
 from app.services.email_config_service import EmailConfigService
 from app.services.email_send_service import EmailSendService
 from app.services.email_template_service import EmailTemplateService
-from app.modules.scheduling.public import SchedulingFacade
-from app.services.voice_config_service import VoiceConfigService
-from app.services.voice_agent_service import VoiceAgentService
 from app.services.integration_event_service import IntegrationEventService
 from app.services.integration_service import IntegrationService
+from app.services.voice_agent_service import VoiceAgentService
+from app.services.voice_config_service import VoiceConfigService
 from app.services.whatsapp_config_service import WhatsAppConfigService
 from app.services.whatsapp_message_service import WhatsAppMessageService
 from app.services.whatsapp_template_service import WhatsAppTemplateService

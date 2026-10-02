@@ -9,7 +9,9 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.modules.scheduling.application.resource_service import SchedulingResourceService
+from app.modules.scheduling.application.resource_service import (
+    SchedulingResourceService,
+)
 from app.modules.scheduling.domain.contracts import (
     GoogleCalendarConnectionResponse,
     GoogleCalendarSyncResponse,
@@ -22,7 +24,9 @@ from app.modules.scheduling.domain.contracts import (
 )
 from app.modules.scheduling.domain.errors import GoogleConnectionNotFoundError
 from app.modules.scheduling.infrastructure.google.calendar import GoogleCalendarService
-from app.modules.scheduling.infrastructure.google.oauth import GoogleCalendarOAuthService
+from app.modules.scheduling.infrastructure.google.oauth import (
+    GoogleCalendarOAuthService,
+)
 from app.modules.scheduling.infrastructure.models import (
     TenantGoogleCalendar,
     TenantGoogleCalendarConnection,

@@ -9,9 +9,17 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.modules.scheduling.domain.contracts import BookingCustomer, CreateBookingCommand
-from app.modules.scheduling.application.availability_service import SchedulingAvailabilityService
-from app.modules.scheduling.infrastructure.google.calendar import GoogleCalendarService, sanitize_google_calendar_error
+from app.modules.scheduling.application.availability_service import (
+    SchedulingAvailabilityService,
+)
+from app.modules.scheduling.domain.contracts import (
+    BookingCustomer,
+    CreateBookingCommand,
+)
+from app.modules.scheduling.infrastructure.google.calendar import (
+    GoogleCalendarService,
+    sanitize_google_calendar_error,
+)
 from app.modules.scheduling.infrastructure.models import (
     CrmBooking,
     TenantBookingConfig,
@@ -93,8 +101,12 @@ class GoogleCalendarProvider:
         duration = booking.duration_minutes or 30
         end_at = booking.end_at or (booking.start_at + timedelta(minutes=duration))
 
-        from app.modules.scheduling.application.config_service import SchedulingConfigService
-        from app.modules.scheduling.application.resource_service import SchedulingResourceService
+        from app.modules.scheduling.application.config_service import (
+            SchedulingConfigService,
+        )
+        from app.modules.scheduling.application.resource_service import (
+            SchedulingResourceService,
+        )
         sched_cfg = SchedulingConfigService(self.db).get_or_create_config(self.tenant_id)
         res_service = SchedulingResourceService(self.db, self.google_service)
 

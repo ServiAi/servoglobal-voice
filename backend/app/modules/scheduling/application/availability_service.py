@@ -8,26 +8,25 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
-from app.modules.scheduling.infrastructure.models import CrmBooking
-from app.modules.scheduling.infrastructure.models import (
-    TenantAgentSchedulingConfig,
-    TenantGoogleCalendar,
-    TenantGoogleCalendarConnection,
-    TenantSchedulingAvailabilityException,
-    TenantSchedulingConfig,
-    TenantSchedulingResource,
-    TenantSchedulingResourceCalendar,
-    TenantSchedulingTeam,
-    TenantSchedulingTeamMember,
-)
+from app.modules.scheduling.application.config_service import SchedulingConfigService
+from app.modules.scheduling.domain.dates import parse_reference_datetime
 from app.modules.scheduling.infrastructure.calcom.availability import (
     _build_summary,
     _in_jornada,
     _resolve_date_input,
 )
-from app.modules.scheduling.domain.dates import parse_reference_datetime
 from app.modules.scheduling.infrastructure.google.calendar import GoogleCalendarService
-from app.modules.scheduling.application.config_service import SchedulingConfigService
+from app.modules.scheduling.infrastructure.models import (
+    CrmBooking,
+    TenantAgentSchedulingConfig,
+    TenantGoogleCalendar,
+    TenantGoogleCalendarConnection,
+    TenantSchedulingAvailabilityException,
+    TenantSchedulingResource,
+    TenantSchedulingResourceCalendar,
+    TenantSchedulingTeam,
+    TenantSchedulingTeamMember,
+)
 
 logger = logging.getLogger(__name__)
 

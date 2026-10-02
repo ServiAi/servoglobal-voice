@@ -8,15 +8,20 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.integrations import TenantIntegrationEvent
+from app.modules.scheduling.application.booking_config_service import (
+    BookingConfigService,
+)
+from app.modules.scheduling.infrastructure.calcom.client import (
+    CalComClient,
+    CalComClientConfig,
+    sanitize_calcom_error,
+)
 from app.modules.scheduling.infrastructure.models import (
-    TenantBookingConfig,
     TenantSchedulingEventType,
     TenantSchedulingProviderObject,
     TenantSchedulingSchedule,
     TenantSchedulingTeam,
 )
-from app.modules.scheduling.application.booking_config_service import BookingConfigService
-from app.modules.scheduling.infrastructure.calcom.client import CalComClient, CalComClientConfig, sanitize_calcom_error
 
 logger = logging.getLogger(__name__)
 

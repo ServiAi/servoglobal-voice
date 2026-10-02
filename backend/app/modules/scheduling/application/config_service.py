@@ -7,16 +7,15 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.modules.scheduling.infrastructure.models import (
+    CrmBooking,
     TenantAgentSchedulingConfig,
     TenantGoogleCalendar,
     TenantGoogleCalendarConnection,
-    TenantSchedulingAvailabilityException,
     TenantSchedulingConfig,
     TenantSchedulingResource,
     TenantSchedulingTeam,
     TenantSchedulingTeamMember,
 )
-from app.modules.scheduling.infrastructure.models import CrmBooking
 
 logger = logging.getLogger(__name__)
 
