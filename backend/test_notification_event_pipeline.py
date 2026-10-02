@@ -996,7 +996,7 @@ class BookingServiceIntegrationTests(Integration2ATestCase):
         lead_id, _ = self.seed_lead()
 
         with patch("app.modules.scheduling.application.booking_service.CalComClient.create_booking") as create_booking, patch(
-            "app.modules.scheduling.application.booking_service.NotificationEventPipeline.process_booking_event"
+            "app.services.notification_event_pipeline.NotificationEventPipeline.process_booking_event"
         ) as process_event:
             create_booking.return_value = {"data": {"id": 1, "uid": "uid-1", "status": "accepted"}}
             response = self.client.post(
@@ -1017,20 +1017,20 @@ class BookingServiceIntegrationTests(Integration2ATestCase):
 
     def test_failed_booking_does_not_invoke_pipeline(self):
         from app.modules.scheduling.application.booking_service import BookingService
-        from app.schemas.crm import BookingCreateRequest
+        from app.modules.scheduling.public import CreateBookingCommand
 
         self.configure_calcom()
         lead_id, _ = self.seed_lead()
 
         with patch("app.modules.scheduling.application.booking_service.CalComClient.create_booking") as create_booking, patch(
-            "app.modules.scheduling.application.booking_service.NotificationEventPipeline.process_booking_event"
+            "app.services.notification_event_pipeline.NotificationEventPipeline.process_booking_event"
         ) as process_event:
             create_booking.side_effect = RuntimeError("cal.com is down")
             with SessionLocal() as db, self.assertRaises(RuntimeError):
                 BookingService(db).create_lead_booking(
                     tenant_id=self.tenant.id,
                     lead_id=lead_id,
-                    body=BookingCreateRequest(
+                    command=CreateBookingCommand(
                         start="2026-07-02T15:00:00Z",
                         attendee_name="Pedro Gomez",
                         attendee_email="lead@example.com",
@@ -1045,7 +1045,7 @@ class BookingServiceIntegrationTests(Integration2ATestCase):
         lead_id, _ = self.seed_lead()
 
         with patch("app.modules.scheduling.application.booking_service.CalComClient.create_booking") as create_booking, patch(
-            "app.modules.scheduling.application.booking_service.NotificationEventPipeline.process_booking_event"
+            "app.services.notification_event_pipeline.NotificationEventPipeline.process_booking_event"
         ) as process_event:
             create_booking.return_value = {"data": {"id": 1, "uid": "uid-1", "status": "accepted"}}
             process_event.side_effect = RuntimeError("boom")
@@ -1089,7 +1089,7 @@ class BookingServiceIntegrationTests(Integration2ATestCase):
             booking_id = booking.id
 
             with patch("app.modules.scheduling.application.booking_service.CalComClient.cancel_booking") as cancel_booking, patch(
-                "app.modules.scheduling.application.booking_service.NotificationEventPipeline.process_booking_event"
+                "app.services.notification_event_pipeline.NotificationEventPipeline.process_booking_event"
             ) as process_event:
                 cancel_booking.return_value = {"data": {"status": "cancelled"}}
                 BookingService(db).cancel_lead_booking(tenant_id=self.tenant.id, booking_id=booking_id)
@@ -1125,7 +1125,7 @@ class BookingServiceIntegrationTests(Integration2ATestCase):
             booking_id = booking.id
 
             with patch("app.modules.scheduling.application.booking_service.CalComClient.reschedule_booking") as reschedule_booking, patch(
-                "app.modules.scheduling.application.booking_service.NotificationEventPipeline.process_booking_event"
+                "app.services.notification_event_pipeline.NotificationEventPipeline.process_booking_event"
             ) as process_event:
                 reschedule_booking.return_value = {"data": {"status": "accepted"}}
                 BookingService(db).reschedule_lead_booking(
@@ -1189,7 +1189,7 @@ class CalComWebhookNotificationTests(Integration2ATestCase):
             with self.subTest(trigger_event=trigger_event):
                 booking_id = self._seed_booking(lead_id=lead_id, contact_id=contact_id)
                 with patch(
-                    "app.api.endpoints.calcom.run_booking_notification_pipeline_task"
+                    "app.modules.scheduling.api.calcom_router.run_booking_event_task"
                 ) as run_task:
                     response = self._post_webhook(trigger_event, booking_id, lead_id)
 
@@ -1219,7 +1219,7 @@ class CalComWebhookNotificationTests(Integration2ATestCase):
             "payload": {"id": 1, "uid": "uid-1", "status": "accepted", "startTime": "2026-07-02T15:00:00Z"},
         }
         with patch.dict(os.environ, {"CALCOM_WEBHOOK_SECRET": ""}), patch(
-            "app.api.endpoints.calcom.run_booking_notification_pipeline_task"
+            "app.modules.scheduling.api.calcom_router.run_booking_event_task"
         ) as run_task:
             response = self.client.post("/api/v1/calcom/webhook", json=payload)
 
@@ -1318,7 +1318,7 @@ class CalComWebhookHardeningTests(Integration2ATestCase):
             },
         }
         with patch.dict(os.environ, {"CALCOM_WEBHOOK_SECRET": ""}), patch(
-            "app.api.endpoints.calcom.run_booking_notification_pipeline_task"
+            "app.modules.scheduling.api.calcom_router.run_booking_event_task"
         ) as run_task:
             response = self.client.post("/api/v1/calcom/webhook", json=payload)
         return response, run_task
@@ -1441,8 +1441,8 @@ class CalComWebhookHardeningTests(Integration2ATestCase):
         booking_id = self._seed_booking(lead_id=lead_id, contact_id=contact_id)
 
         with patch.dict(os.environ, {"CALCOM_WEBHOOK_SECRET": ""}), patch(
-            "app.api.endpoints.calcom._sync_crm_booking_from_calcom_webhook"
-        ) as sync_mock, patch("app.api.endpoints.calcom.logger.error") as error_log:
+            "app.modules.scheduling.api.calcom_router.reconcile_calcom_webhook"
+        ) as sync_mock, patch("app.modules.scheduling.api.calcom_router.logger.error") as error_log:
             sync_mock.side_effect = RuntimeError(
                 "db error for secreto@example.com password=hunter2 select * from crm_bookings"
             )

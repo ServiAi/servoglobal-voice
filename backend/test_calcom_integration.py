@@ -175,9 +175,9 @@ class CalComIntegrationTests(Integration2ATestCase):
 
         with patch.dict(os.environ, {"CALCOM_WEBHOOK_SECRET": ""}), patch(
             "app.services.notification_service.notification_service.notify_new_booking"
-        ), patch("app.api.endpoints.calcom.logger.debug") as debug_log, patch(
-            "app.api.endpoints.calcom.logger.info"
-        ) as info_log, patch("app.api.endpoints.calcom.logger.warning") as warning_log:
+        ), patch("app.modules.scheduling.api.calcom_router.logger.debug") as debug_log, patch(
+            "app.modules.scheduling.api.calcom_router.logger.info"
+        ) as info_log, patch("app.modules.scheduling.api.calcom_router.logger.warning") as warning_log:
             response = self.client.post("/api/v1/calcom/webhook", json=payload)
 
         self.assertEqual(response.status_code, 200)

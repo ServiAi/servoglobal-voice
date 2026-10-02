@@ -12,7 +12,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-__all__ = ["WhatsAppFacade", "WhatsAppSendOutcome", "WhatsAppTemplateContract"]
+__all__ = ["IntegrationsFacade", "WhatsAppFacade", "WhatsAppSendOutcome", "WhatsAppTemplateContract"]
 
 
 @dataclass(frozen=True)
@@ -92,3 +92,15 @@ class WhatsAppFacade:
             contact_id=contact_id,
         )
         return WhatsAppSendOutcome(status=result.status, provider_message_id=result.provider_message_id)
+
+
+class IntegrationsFacade:
+    """Which integrations a tenant has enabled (the on/off switch only)."""
+
+    def __init__(self, db: Session) -> None:
+        self.db = db
+
+    def is_enabled(self, tenant_id: str, provider: str) -> bool:
+        from app.services.integration_service import IntegrationService
+
+        return IntegrationService(self.db).is_enabled(tenant_id, provider)

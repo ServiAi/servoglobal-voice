@@ -704,7 +704,7 @@ class AgentToolInvokeEndpointTests(Integration2ATestCase):
             response = self._invoke(session_id, "calendar.create_booking", {"start": "2026-09-15T15:00:00-05:00"})
         self.assertEqual(response.status_code, 200, response.text)
         self.assertEqual(mocked.call_args.kwargs["lead_id"], lead_id)
-        self.assertEqual(mocked.call_args.kwargs["body"].attendee_email, "carlos@example.com")
+        self.assertEqual(mocked.call_args.kwargs["command"].attendee_email, "carlos@example.com")
 
     def test_create_lead_tool_ignores_llm_supplied_phone_argument(self) -> None:
         # phone is not even in the LLM-visible input_schema -- passing one
@@ -791,7 +791,7 @@ class AgentToolInvokeEndpointTests(Integration2ATestCase):
         self.assertEqual(booking_response.status_code, 200, booking_response.text)
         self.assertEqual(mocked.call_args.kwargs["lead_id"], real_lead_id)
         self.assertNotEqual(mocked.call_args.kwargs["lead_id"], "attacker-supplied-lead")
-        self.assertEqual(mocked.call_args.kwargs["body"].attendee_email, "cliente@example.com")
+        self.assertEqual(mocked.call_args.kwargs["command"].attendee_email, "cliente@example.com")
 
     def test_create_lead_schema_still_rejects_contact_id_and_lead_id_arguments(self) -> None:
         # Caso 8 (schema protection, crm.create_lead side): phone was

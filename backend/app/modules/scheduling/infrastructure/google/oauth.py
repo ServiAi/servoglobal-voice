@@ -18,7 +18,7 @@ from app.modules.scheduling.infrastructure.models import (
     TenantGoogleCalendarConnection,
     TenantSchedulingResourceCalendar,
 )
-from app.schemas.integrations import GoogleCalendarConnectionResponse
+from app.modules.scheduling.domain.contracts import GoogleCalendarConnectionResponse
 from app.services.secret_manager_service import SecretManager
 
 

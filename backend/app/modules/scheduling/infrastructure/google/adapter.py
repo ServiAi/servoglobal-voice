@@ -9,7 +9,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.crm import CrmLead
+from app.modules.scheduling.domain.contracts import BookingCustomer, CreateBookingCommand
 from app.modules.scheduling.application.availability_service import SchedulingAvailabilityService
 from app.modules.scheduling.infrastructure.google.calendar import GoogleCalendarService, sanitize_google_calendar_error
 from app.modules.scheduling.infrastructure.models import (
@@ -18,7 +18,6 @@ from app.modules.scheduling.infrastructure.models import (
     TenantGoogleCalendar,
     TenantGoogleCalendarConnection,
 )
-from app.schemas.crm import BookingCreateRequest
 
 logger = logging.getLogger(__name__)
 
@@ -86,8 +85,8 @@ class GoogleCalendarProvider:
         self,
         *,
         booking: CrmBooking,
-        lead: CrmLead,
-        body: BookingCreateRequest,
+        customer: BookingCustomer,
+        command: CreateBookingCommand,
     ) -> CrmBooking:
         connection, target_cal_id = self._resolve_connection_and_calendar()
         tz = booking.timezone or "America/Bogota"
@@ -100,8 +99,8 @@ class GoogleCalendarProvider:
         res_service = SchedulingResourceService(self.db, self.google_service)
 
         metadata = dict(booking.metadata_json or {})
-        target_team_id = getattr(body, "scheduling_team_id", None) or metadata.get("scheduling_team_id") or sched_cfg.default_team_id
-        target_resource_id = getattr(body, "scheduling_resource_id", None) or metadata.get("scheduling_resource_id") or sched_cfg.default_resource_id
+        target_team_id = command.scheduling_team_id or metadata.get("scheduling_team_id") or sched_cfg.default_team_id
+        target_resource_id = command.scheduling_resource_id or metadata.get("scheduling_resource_id") or sched_cfg.default_resource_id
         team_name = metadata.get("team")
         buf_before = sched_cfg.buffer_before_minutes or 0
         buf_after = sched_cfg.buffer_after_minutes or 0
@@ -145,18 +144,18 @@ class GoogleCalendarProvider:
                 metadata["team"] = assigned_resource.team
             metadata["routing_strategy"] = sched_cfg.routing_strategy or "round_robin"
 
-        summary = booking.title or f"Cita ServiGlobal: {body.attendee_name}"
+        summary = booking.title or f"Cita ServiGlobal: {command.attendee_name}"
         host_line = f"\nAsignado a: {booking.host_name}" if booking.host_name else ""
-        notes = body.notes or booking.description or "Reserva gestionada por ServiGlobal IA"
+        notes = command.notes or booking.description or "Reserva gestionada por ServiGlobal IA"
 
         payload = self.google_service.build_event_payload(
             summary=summary,
-            description=f"{notes}{host_line}\n\nLead ID: {lead.id}\nTeléfono: {body.attendee_phone or 'N/A'}",
+            description=f"{notes}{host_line}\n\nLead ID: {customer.lead_id}\nTeléfono: {command.attendee_phone or 'N/A'}",
             start_at=booking.start_at,
             end_at=end_at,
             timezone=tz,
-            attendee_email=body.attendee_email,
-            attendee_name=body.attendee_name,
+            attendee_email=command.attendee_email,
+            attendee_name=command.attendee_name,
             enable_meet=True,
         )
 

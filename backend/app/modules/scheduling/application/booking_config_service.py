@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.modules.scheduling.infrastructure.models import TenantBookingConfig
-from app.schemas.integrations import BookingConfigRequest, BookingConfigResponse
+from app.modules.scheduling.domain.contracts import BookingConfigRequest, BookingConfigResponse
 from app.modules.scheduling.infrastructure.calcom.client import CalComClient, CalComClientConfig, sanitize_calcom_error
 from app.services.secret_manager_service import SecretManager
 

@@ -51,7 +51,7 @@ from app.services.crm_query_service import CrmQueryService
 from app.services.crm_dashboard_metrics_service import CrmDashboardMetricsService
 from app.services.email_send_service import EmailSendService
 from app.services.call_summary_service import CallSummaryService
-from app.modules.scheduling.application.booking_service import BookingService
+from app.modules.scheduling.public import CreateBookingCommand, SchedulingFacade
 
 router = APIRouter(prefix="/api/v1/crm", tags=["CRM"])
 
@@ -225,7 +225,9 @@ def create_lead_booking(
     db: Session = Depends(get_db),
 ) -> Any:
     try:
-        return BookingService(db).create_lead_booking(tenant_id=context.tenant.id, lead_id=lead_id, body=body)
+        return SchedulingFacade(db).create_booking(
+            tenant_id=context.tenant.id, lead_id=lead_id, command=CreateBookingCommand(**body.model_dump())
+        )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
 
@@ -238,10 +240,7 @@ def cancel_lead_booking(
     db: Session = Depends(get_db),
 ) -> Any:
     try:
-        return BookingService(db).cancel_lead_booking(
-            tenant_id=context.tenant.id,
-            booking_id=booking_id
-        )
+        return SchedulingFacade(db).cancel_booking(tenant_id=context.tenant.id, booking_id=booking_id)
     except HTTPException:
         raise
     except Exception as exc:
@@ -257,7 +256,7 @@ def reschedule_lead_booking(
     db: Session = Depends(get_db),
 ) -> Any:
     try:
-        return BookingService(db).reschedule_lead_booking(
+        return SchedulingFacade(db).reschedule_booking(
             tenant_id=context.tenant.id,
             booking_id=booking_id,
             new_start_time=body.new_start_time,

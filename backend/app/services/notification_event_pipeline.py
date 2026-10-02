@@ -13,7 +13,7 @@ from app.core.config import settings
 from app.db.session import SessionLocal
 from app.domain.events import _check_json_safe
 from app.models.crm import CrmContact, CrmLead, CrmVoiceCall
-from app.modules.scheduling.infrastructure.models import CrmBooking
+from app.modules.scheduling.public import BookingNotFoundError, BookingView, SchedulingFacade
 from app.models.notifications import DomainEvent
 from app.services.domain_event_service import DomainEventIdempotencyConflictError, DomainEventService
 from app.services.notification_orchestrator import NotificationOrchestrator
@@ -112,10 +112,9 @@ class NotificationEventPipeline:
             if event_type not in _BOOKING_EVENT_TYPES:
                 return _safe_result(error_code="unsupported_booking_event_type")
 
-            booking = self.db.scalar(
-                select(CrmBooking).where(CrmBooking.tenant_id == tenant_id, CrmBooking.id == booking_id)
-            )
-            if booking is None:
+            try:
+                booking = SchedulingFacade(self.db).get_booking(tenant_id=tenant_id, booking_id=booking_id)
+            except BookingNotFoundError:
                 return _safe_result(error_code="booking_not_found")
 
             payload = self._booking_payload(tenant_id=tenant_id, booking=booking)
@@ -339,7 +338,7 @@ class NotificationEventPipeline:
     # ------------------------------------------------------------------
     # Payload builders
     # ------------------------------------------------------------------
-    def _booking_payload(self, *, tenant_id: str, booking: CrmBooking) -> dict[str, Any]:
+    def _booking_payload(self, *, tenant_id: str, booking: BookingView) -> dict[str, Any]:
         booking_dict: dict[str, Any] = {
             "id": booking.id,
             "status": booking.status,
@@ -368,7 +367,7 @@ class NotificationEventPipeline:
             if lead is not None:
                 payload["lead"] = {"id": lead.id, "status": lead.status}
 
-        payload["custom"] = self._safe_custom(booking.metadata_json)
+        payload["custom"] = self._safe_custom({"notification_custom": booking.notification_custom})
         return payload
 
     def _call_payload(self, *, tenant_id: str, call: CrmVoiceCall) -> dict[str, Any]:
@@ -410,7 +409,7 @@ class NotificationEventPipeline:
     # ------------------------------------------------------------------
     # Idempotency keys
     # ------------------------------------------------------------------
-    def _booking_idempotency_key(self, *, booking: CrmBooking, event_type: str) -> str:
+    def _booking_idempotency_key(self, *, booking: BookingView, event_type: str) -> str:
         if event_type == "booking.created":
             return f"booking:{booking.id}:created"
         if event_type == "booking.cancelled":

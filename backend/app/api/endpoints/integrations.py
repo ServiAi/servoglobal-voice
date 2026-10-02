@@ -10,11 +10,7 @@ from sqlalchemy.orm import Session
 from app.api.auth.deps import AuthContext, require_roles
 from app.db.session import get_db
 from app.models.integrations import TenantEmailTemplate, TenantWhatsAppTemplate
-from app.modules.scheduling.infrastructure.models import TenantGoogleCalendarConnection
 from app.schemas.integrations import (
-    BookingConfigRequest,
-    BookingConfigResponse,
-    CalComTestResponse,
     ChatwootAgentInviteRequest,
     ChatwootAgentSummary,
     ChatwootAgentUpdateRequest,
@@ -30,15 +26,6 @@ from app.schemas.integrations import (
     ChatwootTestResponse,
     EmailTemplateItem,
     EmailTemplateUpsertRequest,
-    GoogleCalendarConnectionResponse,
-    GoogleCalendarConnectUrlResponse,
-    GoogleCalendarSyncResponse,
-    TenantGoogleCalendarResponse,
-    TenantGoogleCalendarUpdateRequest,
-    SchedulingResourceCalendarAssignRequest,
-    SchedulingResourceCalendarResponse,
-    SchedulingResourceCreateRequest,
-    SchedulingResourceResponse,
     IntegrationAvailabilityResponse,
     IntegrationCatalogStatusResponse,
     ResendIntegrationConfigRequest,
@@ -66,17 +53,27 @@ from app.schemas.integrations import (
     VoiceCallActionResponse,
     VoiceCallResponse,
 )
+from app.modules.scheduling.domain.contracts import (
+    BookingConfigRequest,
+    BookingConfigResponse,
+    CalComTestResponse,
+    GoogleCalendarConnectionResponse,
+    GoogleCalendarConnectUrlResponse,
+    GoogleCalendarSyncResponse,
+    TenantGoogleCalendarResponse,
+    TenantGoogleCalendarUpdateRequest,
+    SchedulingResourceCalendarAssignRequest,
+    SchedulingResourceCalendarResponse,
+    SchedulingResourceCreateRequest,
+    SchedulingResourceResponse,
+)
 from app.core.config import settings
-from app.modules.scheduling.application.booking_config_service import BookingConfigService
-from app.modules.scheduling.application.booking_service import BookingService
 from app.services.chatwoot_client import ChatwootClientError, sanitize_chatwoot_error
 from app.services.chatwoot_config_service import ChatwootAccountConflictError, ChatwootConfigService
 from app.services.email_config_service import EmailConfigService
 from app.services.email_send_service import EmailSendService
 from app.services.email_template_service import EmailTemplateService
-from app.modules.scheduling.infrastructure.google.oauth import GoogleCalendarOAuthService
-from app.modules.scheduling.infrastructure.google.calendar import GoogleCalendarService
-from app.modules.scheduling.application.resource_service import SchedulingResourceService
+from app.modules.scheduling.public import SchedulingFacade
 from app.services.voice_config_service import VoiceConfigService
 from app.services.voice_agent_service import VoiceAgentService
 from app.services.integration_event_service import IntegrationEventService
@@ -194,20 +191,23 @@ def _integration_catalog_statuses(
             has_error=bool(config and config.last_error_message),
         )
 
+    if "calcom" in selected or "google_calendar" in selected:
+        scheduling = SchedulingFacade(db).catalog_status_inputs(tenant_id)
+
     if "calcom" in selected:
-        config = BookingConfigService(db).get_config(tenant_id)
+        facts = scheduling["calcom"]
         statuses["calcom"] = _catalog_status(
-            configured=config is not None,
-            provider_status=config.status if config else None,
-            has_error=bool(config and config.last_error_message),
+            configured=facts["configured"],
+            provider_status=facts["status"],
+            has_error=facts["has_error"],
         )
 
     if "google_calendar" in selected:
-        connections = GoogleCalendarOAuthService(db).list_connections(tenant_id)
+        facts = scheduling["google_calendar"]
         statuses["google_calendar"] = _catalog_status(
-            configured=bool(connections),
-            provider_status="connected" if any(item.status == "connected" for item in connections) else None,
-            has_error=any(bool(item.last_error_message) or item.status in {"error", "failed"} for item in connections),
+            configured=facts["configured"],
+            provider_status="connected" if facts["connected"] else None,
+            has_error=facts["has_error"],
         )
 
     if "chatwoot" in selected:
@@ -231,406 +231,6 @@ def list_integration_catalog_statuses(
     db: Session = Depends(get_db),
 ) -> Any:
     return _integration_catalog_statuses(db, context.tenant.id)
-
-
-@router.get("/booking/config", response_model=BookingConfigResponse)
-def get_booking_config(
-    context: AuthContext = Depends(require_enabled_integration("calcom", _READ_ROLES)),
-    db: Session = Depends(get_db),
-) -> Any:
-    return BookingConfigService(db).get_config_response(context.tenant.id)
-
-
-@router.post("/calcom/config", response_model=BookingConfigResponse)
-def configure_calcom(
-    body: BookingConfigRequest,
-    context: AuthContext = Depends(require_enabled_integration("calcom", _WRITE_ROLES)),
-    db: Session = Depends(get_db),
-) -> Any:
-    try:
-        config = BookingConfigService(db).upsert_calcom_config(context.tenant.id, body)
-        IntegrationEventService(db).record_event(
-            tenant_id=context.tenant.id,
-            provider="calcom",
-            event_type="config_updated",
-            status="success",
-            resource_type="config",
-            resource_id=config.id,
-            metadata={"has_secret": bool(config.cal_api_key_encrypted), "calendar_mode": config.calendar_mode},
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
-    return BookingConfigService(db).get_config_response(context.tenant.id)
-
-
-@router.post("/calcom/test", response_model=CalComTestResponse)
-def test_calcom(
-    context: AuthContext = Depends(require_enabled_integration("calcom", _WRITE_ROLES)),
-    db: Session = Depends(get_db),
-) -> Any:
-    try:
-        result, error = BookingConfigService(db).test_connection(context.tenant.id)
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
-    if result != "active":
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=error or "Cal.com test failed.")
-    return CalComTestResponse(status=result)
-
-
-@router.get("/calcom/slots")
-def get_calcom_slots(
-    date: str,
-    jornada: str | None = None,
-    reference_datetime: str | None = None,
-    context: AuthContext = Depends(require_enabled_integration("calcom", _READ_ROLES)),
-    db: Session = Depends(get_db),
-) -> Any:
-    try:
-        return BookingService(db).get_available_slots_for_tenant(
-            tenant_id=context.tenant.id,
-            date_input=date,
-            jornada=jornada,
-            reference_datetime=reference_datetime,
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
-
-
-@router.get("/google-calendar/connect-url", response_model=GoogleCalendarConnectUrlResponse)
-def google_calendar_connect_url(
-    context: AuthContext = Depends(require_enabled_integration("google_calendar", _WRITE_ROLES)),
-    db: Session = Depends(get_db),
-) -> Any:
-    try:
-        url = GoogleCalendarOAuthService(db).build_auth_url(tenant_id=context.tenant.id, user_id=context.user.id)
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
-    return GoogleCalendarConnectUrlResponse(url=url)
-
-
-@router.get("/google-calendar/callback", response_model=GoogleCalendarConnectionResponse)
-def google_calendar_callback(
-    request: Request,
-    code: str | None = None,
-    state: str | None = None,
-    error: str | None = None,
-    redirect: bool | None = None,
-    db: Session = Depends(get_db),
-) -> Any:
-    # Determine whether to redirect: if redirect param is True, or if browser navigation (accept text/html)
-    accept = request.headers.get("accept", "")
-    should_redirect = redirect if redirect is not None else ("text/html" in accept)
-    frontend_base = (
-        settings.GOOGLE_CALENDAR_FRONTEND_REDIRECT_URL.rstrip("/")
-        if settings.GOOGLE_CALENDAR_FRONTEND_REDIRECT_URL
-        else "https://www.serviglobal-ia.com/es/integrations/google-calendar"
-    )
-
-    if error:
-        if should_redirect:
-            return RedirectResponse(url=f"{frontend_base}?status=error&detail={error}", status_code=302)
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Google OAuth error: {error}")
-    if not code or not state:
-        if should_redirect:
-            return RedirectResponse(url=f"{frontend_base}?status=error&detail=Missing+code+or+state", status_code=302)
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Missing code or state parameter.")
-
-    oauth_service = GoogleCalendarOAuthService(db)
-    try:
-        state_data = oauth_service.validate_and_decode_state(state)
-        tenant_id = state_data.get("tenant_id")
-        user_id = state_data.get("user_id")
-        if not tenant_id:
-            raise ValueError("State does not contain tenant_id.")
-
-        tokens = oauth_service.exchange_code_for_tokens(code)
-        access_token = tokens["access_token"]
-        refresh_token = tokens.get("refresh_token") or ""
-        expires_in = tokens.get("expires_in", 3600)
-        from datetime import UTC, datetime, timedelta
-        expires_at = datetime.now(UTC) + timedelta(seconds=expires_in)
-
-        email = oauth_service.fetch_user_email(access_token)
-
-        connection = oauth_service.store_connection(
-            tenant_id=tenant_id,
-            user_id=user_id,
-            google_account_email=email,
-            calendar_id="primary",
-            access_token=access_token,
-            refresh_token=refresh_token,
-            token_expires_at=expires_at,
-        )
-
-        calendar_service = GoogleCalendarService(db, oauth_service)
-        try:
-            calendar_service.sync_calendars(connection)
-        except Exception:
-            pass
-
-    except ValueError as exc:
-        if should_redirect:
-            return RedirectResponse(url=f"{frontend_base}?status=error&detail={str(exc)}", status_code=302)
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
-
-    if should_redirect:
-        return RedirectResponse(url=f"{frontend_base}?status=connected", status_code=302)
-
-    return oauth_service.response(connection)
-
-
-@router.get("/google-calendar/connections", response_model=list[GoogleCalendarConnectionResponse])
-def list_google_calendar_connections(
-    context: AuthContext = Depends(require_enabled_integration("google_calendar", _READ_ROLES)),
-    db: Session = Depends(get_db),
-) -> Any:
-    service = GoogleCalendarOAuthService(db)
-    return [service.response(connection) for connection in service.list_connections(context.tenant.id)]
-
-
-@router.post("/google-calendar/disconnect", response_model=GoogleCalendarConnectionResponse)
-def disconnect_google_calendar(
-    connection_id: str,
-    context: AuthContext = Depends(require_enabled_integration("google_calendar", _WRITE_ROLES)),
-    db: Session = Depends(get_db),
-) -> Any:
-    service = GoogleCalendarOAuthService(db)
-    try:
-        connection = service.disconnect_connection(context.tenant.id, connection_id)
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    return service.response(connection)
-
-
-@router.delete("/google-calendar/connections/{connection_id}", response_model=dict[str, Any])
-def delete_google_calendar_connection(
-    connection_id: str,
-    context: AuthContext = Depends(require_enabled_integration("google_calendar", _WRITE_ROLES)),
-    db: Session = Depends(get_db),
-) -> Any:
-    service = GoogleCalendarOAuthService(db)
-    try:
-        service.delete_connection(context.tenant.id, connection_id)
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    return {"deleted": True, "connection_id": connection_id}
-
-
-@router.post("/google-calendar/connections/{connection_id}/sync", response_model=GoogleCalendarSyncResponse)
-def sync_google_calendar_connection(
-    connection_id: str,
-    context: AuthContext = Depends(require_enabled_integration("google_calendar", _WRITE_ROLES)),
-    db: Session = Depends(get_db),
-) -> Any:
-    connection = db.scalar(
-        select(TenantGoogleCalendarConnection).where(
-            TenantGoogleCalendarConnection.tenant_id == context.tenant.id,
-            TenantGoogleCalendarConnection.id == connection_id,
-        )
-    )
-    if not connection:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Google Calendar connection not found.")
-
-    cal_service = GoogleCalendarService(db)
-    try:
-        calendars = cal_service.sync_calendars(connection)
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
-
-    return GoogleCalendarSyncResponse(
-        connection_id=connection.id,
-        synced_count=len(calendars),
-        calendars=[
-            TenantGoogleCalendarResponse(
-                id=c.id,
-                tenant_id=c.tenant_id,
-                connection_id=c.connection_id,
-                google_calendar_id=c.google_calendar_id,
-                summary=c.summary,
-                description=c.description,
-                time_zone=c.time_zone,
-                is_primary=c.is_primary,
-                is_blocking=c.is_blocking,
-                is_booking_destination=c.is_booking_destination,
-                access_role=c.access_role,
-                created_at=c.created_at,
-                updated_at=c.updated_at,
-            )
-            for c in calendars
-        ],
-    )
-
-
-@router.get("/google-calendar/calendars", response_model=list[TenantGoogleCalendarResponse])
-def list_google_calendars(
-    connection_id: str | None = None,
-    context: AuthContext = Depends(require_enabled_integration("google_calendar", _READ_ROLES)),
-    db: Session = Depends(get_db),
-) -> Any:
-    cal_service = GoogleCalendarService(db)
-    calendars = cal_service.list_tenant_calendars(context.tenant.id, connection_id=connection_id)
-    return [
-        TenantGoogleCalendarResponse(
-            id=c.id,
-            tenant_id=c.tenant_id,
-            connection_id=c.connection_id,
-            google_calendar_id=c.google_calendar_id,
-            summary=c.summary,
-            description=c.description,
-            time_zone=c.time_zone,
-            is_primary=c.is_primary,
-            is_blocking=c.is_blocking,
-            is_booking_destination=c.is_booking_destination,
-            access_role=c.access_role,
-            created_at=c.created_at,
-            updated_at=c.updated_at,
-        )
-        for c in calendars
-    ]
-
-
-@router.patch("/google-calendar/calendars/{calendar_id}", response_model=TenantGoogleCalendarResponse)
-def update_google_calendar(
-    calendar_id: str,
-    body: TenantGoogleCalendarUpdateRequest,
-    context: AuthContext = Depends(require_enabled_integration("google_calendar", _WRITE_ROLES)),
-    db: Session = Depends(get_db),
-) -> Any:
-    cal_service = GoogleCalendarService(db)
-    try:
-        cal = cal_service.update_calendar_settings(
-            tenant_id=context.tenant.id,
-            calendar_id=calendar_id,
-            is_blocking=body.is_blocking,
-            is_booking_destination=body.is_booking_destination,
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-
-    return TenantGoogleCalendarResponse(
-        id=cal.id,
-        tenant_id=cal.tenant_id,
-        connection_id=cal.connection_id,
-        google_calendar_id=cal.google_calendar_id,
-        summary=cal.summary,
-        description=cal.description,
-        time_zone=cal.time_zone,
-        is_primary=cal.is_primary,
-        is_blocking=cal.is_blocking,
-        is_booking_destination=cal.is_booking_destination,
-        access_role=cal.access_role,
-        created_at=cal.created_at,
-        updated_at=cal.updated_at,
-    )
-
-
-@router.post("/scheduling/resources", response_model=SchedulingResourceResponse)
-def create_scheduling_resource(
-    body: SchedulingResourceCreateRequest,
-    context: AuthContext = Depends(require_enabled_integration("google_calendar", _WRITE_ROLES)),
-    db: Session = Depends(get_db),
-) -> Any:
-    resource_service = SchedulingResourceService(db)
-    resource = resource_service.create_resource(
-        tenant_id=context.tenant.id,
-        name=body.name,
-        resource_type=body.resource_type,
-        team=body.team,
-        email=body.email,
-        phone=body.phone,
-        priority=body.priority,
-        timezone=body.timezone,
-        capacity=body.capacity,
-        working_hours_json=body.working_hours,
-    )
-    return SchedulingResourceResponse(
-        id=resource.id,
-        tenant_id=resource.tenant_id,
-        name=resource.name,
-        resource_type=resource.resource_type,
-        team=resource.team,
-        email=resource.email,
-        phone=resource.phone,
-        priority=resource.priority,
-        is_active=resource.is_active,
-        timezone=resource.timezone,
-        capacity=resource.capacity,
-        total_assigned_count=resource.total_assigned_count,
-        last_assigned_at=resource.last_assigned_at,
-        created_at=resource.created_at,
-        updated_at=resource.updated_at,
-        calendars=[],
-    )
-
-
-@router.get("/scheduling/resources", response_model=list[SchedulingResourceResponse])
-def list_scheduling_resources(
-    team: str | None = None,
-    context: AuthContext = Depends(require_enabled_integration("google_calendar", _READ_ROLES)),
-    db: Session = Depends(get_db),
-) -> Any:
-    resource_service = SchedulingResourceService(db)
-    resources = resource_service.list_resources(tenant_id=context.tenant.id, team=team)
-    return [
-        SchedulingResourceResponse(
-            id=r.id,
-            tenant_id=r.tenant_id,
-            name=r.name,
-            resource_type=r.resource_type,
-            team=r.team,
-            email=r.email,
-            phone=r.phone,
-            priority=r.priority,
-            is_active=r.is_active,
-            timezone=r.timezone,
-            capacity=r.capacity,
-            total_assigned_count=r.total_assigned_count,
-            last_assigned_at=r.last_assigned_at,
-            created_at=r.created_at,
-            updated_at=r.updated_at,
-            calendars=[
-                SchedulingResourceCalendarResponse(
-                    id=c.id,
-                    resource_id=c.resource_id,
-                    calendar_id=c.calendar_id,
-                    is_blocking=c.is_blocking,
-                    is_destination=c.is_destination,
-                    created_at=c.created_at,
-                )
-                for c in (r.resource_calendars or [])
-            ],
-        )
-        for r in resources
-    ]
-
-
-@router.post("/scheduling/resources/{resource_id}/calendars", response_model=SchedulingResourceCalendarResponse)
-def assign_calendar_to_resource(
-    resource_id: str,
-    body: SchedulingResourceCalendarAssignRequest,
-    context: AuthContext = Depends(require_enabled_integration("google_calendar", _WRITE_ROLES)),
-    db: Session = Depends(get_db),
-) -> Any:
-    resource_service = SchedulingResourceService(db)
-    try:
-        mapping = resource_service.assign_calendar_to_resource(
-            tenant_id=context.tenant.id,
-            resource_id=resource_id,
-            calendar_id=body.calendar_id,
-            is_blocking=body.is_blocking,
-            is_destination=body.is_destination,
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-
-    return SchedulingResourceCalendarResponse(
-        id=mapping.id,
-        resource_id=mapping.resource_id,
-        calendar_id=mapping.calendar_id,
-        is_blocking=mapping.is_blocking,
-        is_destination=mapping.is_destination,
-        created_at=mapping.created_at,
-    )
 
 
 @router.post("/resend/config", response_model=ResendIntegrationConfigResponse)

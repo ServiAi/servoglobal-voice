@@ -44,6 +44,12 @@ from app.modules.scheduling.api.schemas import (
     TenantSchedulingConfigResponse,
     TenantSchedulingConfigUpdateRequest,
 )
+from app.modules.scheduling.application.views import (
+    serialize_agent_config,
+    serialize_exception,
+    serialize_resource,
+    serialize_team,
+)
 from app.modules.scheduling.domain.errors import SchedulingNotFoundError
 from app.modules.scheduling.infrastructure.calcom.sync import CalComSyncService
 from app.modules.scheduling.application.availability_service import SchedulingAvailabilityService
@@ -57,107 +63,6 @@ router = APIRouter(prefix="/api/v1/scheduling", tags=["Scheduling"])
 
 READ_ROLES = ["platform_admin", "tenant_admin", "tenant_analyst", "tenant_viewer"]
 WRITE_ROLES = ["platform_admin", "tenant_admin"]
-
-
-def _serialize_resource(r: TenantSchedulingResource) -> dict[str, Any]:
-    return {
-        "id": r.id,
-        "tenant_id": r.tenant_id,
-        "name": r.name,
-        "resource_type": r.resource_type,
-        "team": r.team,
-        "email": r.email,
-        "phone": r.phone,
-        "priority": r.priority,
-        "is_active": r.is_active,
-        "timezone": r.timezone,
-        "capacity": r.capacity,
-        "working_hours": r.working_hours_json,
-        "total_assigned_count": r.total_assigned_count,
-        "last_assigned_at": r.last_assigned_at,
-        "created_at": r.created_at,
-        "updated_at": r.updated_at,
-        "calendars": [
-            {
-                "id": rc.id,
-                "resource_id": rc.resource_id,
-                "calendar_id": rc.calendar_id,
-                "is_blocking": rc.is_blocking,
-                "is_destination": rc.is_destination,
-                "created_at": rc.created_at,
-                "google_calendar_id": rc.calendar.google_calendar_id if rc.calendar else None,
-                "summary": rc.calendar.summary if rc.calendar else None,
-            }
-            for rc in (r.resource_calendars or [])
-        ],
-    }
-
-
-def _serialize_team(t: TenantSchedulingTeam) -> dict[str, Any]:
-    return {
-        "id": t.id,
-        "tenant_id": t.tenant_id,
-        "name": t.name,
-        "description": t.description,
-        "routing_strategy": t.routing_strategy,
-        "is_active": t.is_active,
-        "created_at": t.created_at,
-        "updated_at": t.updated_at,
-        "members": [
-            {
-                "id": m.id,
-                "team_id": m.team_id,
-                "resource_id": m.resource_id,
-                "priority": m.priority,
-                "is_active": m.is_active,
-                "created_at": m.created_at,
-                "resource_name": m.resource.name if m.resource else None,
-                "resource_email": m.resource.email if m.resource else None,
-            }
-            for m in (t.members or [])
-        ],
-    }
-
-
-def _serialize_exception(exc: TenantSchedulingAvailabilityException) -> dict[str, Any]:
-    return {
-        "id": exc.id,
-        "tenant_id": exc.tenant_id,
-        "resource_id": exc.resource_id,
-        "exception_date": exc.exception_date,
-        "exception_type": exc.exception_type,
-        "start_time": exc.start_time,
-        "end_time": exc.end_time,
-        "reason": exc.reason,
-        "created_at": exc.created_at,
-        "updated_at": exc.updated_at,
-        "resource_name": exc.resource.name if exc.resource else None,
-    }
-
-
-def _serialize_agent_config(cfg: TenantAgentSchedulingConfig) -> dict[str, Any]:
-    return {
-        "id": cfg.id,
-        "tenant_id": cfg.tenant_id,
-        "agent_id": cfg.agent_id,
-        "provider": cfg.provider,
-        "scheduling_config_id": cfg.scheduling_config_id,
-        "event_type_id": cfg.event_type_id,
-        "resource_id": cfg.resource_id,
-        "team_id": cfg.team_id,
-        "routing_strategy": cfg.routing_strategy,
-        "duration_minutes": cfg.duration_minutes,
-        "allow_check_availability": cfg.allow_check_availability,
-        "allow_create_booking": cfg.allow_create_booking,
-        "allow_reschedule": cfg.allow_reschedule,
-        "allow_cancel": cfg.allow_cancel,
-        "is_active": cfg.is_active,
-        "created_at": cfg.created_at,
-        "updated_at": cfg.updated_at,
-        "resource_name": cfg.resource.name if cfg.resource else None,
-        "team_name": cfg.team.name if cfg.team else None,
-        "event_type_name": cfg.event_type.name if cfg.event_type else None,
-    }
 
 
 # -----------------------------------------------------------------------------
@@ -202,7 +107,7 @@ def list_resources(
 ) -> Any:
     service = SchedulingResourceService(db)
     resources = service.list_resources(auth.tenant_id, team=team)
-    return [_serialize_resource(r) for r in resources]
+    return [serialize_resource(r) for r in resources]
 
 
 @router.post("/resources", response_model=SchedulingResourceResponse, status_code=status.HTTP_201_CREATED)
@@ -224,7 +129,7 @@ def create_resource(
         capacity=body.capacity,
         working_hours_json=body.working_hours,
     )
-    return _serialize_resource(resource)
+    return serialize_resource(resource)
 
 
 @router.get("/resources/{resource_id}", response_model=SchedulingResourceResponse)
@@ -237,7 +142,7 @@ def get_resource(
     resource = service.get_resource(auth.tenant_id, resource_id)
     if not resource:
         raise HTTPException(status_code=404, detail="Resource not found.")
-    return _serialize_resource(resource)
+    return serialize_resource(resource)
 
 
 @router.put("/resources/{resource_id}", response_model=SchedulingResourceResponse)
@@ -252,7 +157,7 @@ def update_resource(
         resource = service.update_resource(auth.tenant_id, resource_id, body.model_dump(exclude_unset=True))
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
-    return _serialize_resource(resource)
+    return serialize_resource(resource)
 
 
 @router.delete("/resources/{resource_id}")
@@ -281,7 +186,7 @@ def update_resource_availability(
         resource = service.update_resource_availability(auth.tenant_id, resource_id, working_hours)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
-    return _serialize_resource(resource)
+    return serialize_resource(resource)
 
 
 @router.post("/resources/{resource_id}/calendars", response_model=SchedulingResourceCalendarResponse)
@@ -324,7 +229,7 @@ def list_teams(
 ) -> Any:
     service = SchedulingResourceService(db)
     teams = service.list_teams(auth.tenant_id)
-    return [_serialize_team(t) for t in teams]
+    return [serialize_team(t) for t in teams]
 
 
 @router.post("/teams", response_model=SchedulingTeamResponse, status_code=status.HTTP_201_CREATED)
@@ -341,7 +246,7 @@ def create_team(
         routing_strategy=body.routing_strategy,
         is_active=body.is_active,
     )
-    return _serialize_team(team)
+    return serialize_team(team)
 
 
 @router.get("/teams/{team_id}", response_model=SchedulingTeamResponse)
@@ -354,7 +259,7 @@ def get_team(
     team = service.get_team(auth.tenant_id, team_id)
     if not team:
         raise HTTPException(status_code=404, detail="Team not found.")
-    return _serialize_team(team)
+    return serialize_team(team)
 
 
 @router.put("/teams/{team_id}", response_model=SchedulingTeamResponse)
@@ -369,7 +274,7 @@ def update_team(
         team = service.update_team(auth.tenant_id, team_id, body.model_dump(exclude_unset=True))
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
-    return _serialize_team(team)
+    return serialize_team(team)
 
 
 @router.delete("/teams/{team_id}")
@@ -442,7 +347,7 @@ def list_exceptions(
 ) -> Any:
     service = SchedulingResourceService(db)
     exceptions = service.list_exceptions(auth.tenant_id, resource_id=resource_id)
-    return [_serialize_exception(exc) for exc in exceptions]
+    return [serialize_exception(exc) for exc in exceptions]
 
 
 @router.post("/exceptions", response_model=SchedulingAvailabilityExceptionResponse, status_code=status.HTTP_201_CREATED)
@@ -464,7 +369,7 @@ def create_exception(
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    return _serialize_exception(exc)
+    return serialize_exception(exc)
 
 
 @router.delete("/exceptions/{exception_id}")
@@ -514,7 +419,7 @@ def get_agent_scheduling_config(
             "resource_name": None,
             "team_name": None,
         }
-    return _serialize_agent_config(cfg)
+    return serialize_agent_config(cfg)
 
 
 @router.put("/agents/{agent_id}", response_model=AgentSchedulingConfigResponse)
@@ -530,7 +435,7 @@ def upsert_agent_scheduling_config(
         agent_id=agent_id,
         payload=body.model_dump(exclude_unset=True),
     )
-    return _serialize_agent_config(cfg)
+    return serialize_agent_config(cfg)
 
 
 # -----------------------------------------------------------------------------

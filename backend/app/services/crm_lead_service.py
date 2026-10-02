@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from sqlalchemy import select, func, update, delete, or_
 from sqlalchemy.orm import Session
 from app.models.crm import CrmLead, CrmPipelineStage, CrmContact, CrmWhatsAppMessage, CrmVoiceCall
-from app.modules.scheduling.infrastructure.models import CrmBooking
+from app.modules.scheduling.public import SchedulingFacade
 from app.models.integrations import TenantEmailSend, TenantFormSubmission, TenantFormToken
 from app.services.crm_pipeline_service import CrmPipelineService
 from app.services.crm_activity_service import CrmActivityService
@@ -247,7 +247,10 @@ class CrmLeadService:
         # operational history outside the lead/contact lifecycle: keep the
         # rows but clear the now-dangling references instead of blocking the
         # delete on their foreign keys.
-        for model in (CrmBooking, CrmWhatsAppMessage, CrmVoiceCall, TenantEmailSend):
+        SchedulingFacade(self.db).detach_customers(
+            tenant_id=tenant_id, lead_ids=lead_ids, contact_ids=contact_ids
+        )
+        for model in (CrmWhatsAppMessage, CrmVoiceCall, TenantEmailSend):
             self.db.execute(
                 update(model)
                 .where(

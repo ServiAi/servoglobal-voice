@@ -33,7 +33,7 @@ from app.api.endpoints import notifications
 from app.api.endpoints import chatwoot_webhook
 from app.api.endpoints import voice
 from app.api.endpoints import voice_booking_tools
-from app.api.endpoints import calcom
+from app.modules.scheduling.api import calcom_router as calcom
 from app.api.endpoints import dashboard
 from app.api.endpoints import me
 from app.api.endpoints import ultravox_webhook
@@ -54,6 +54,7 @@ from app.api.endpoints import voice_context_schemas
 from app.api.endpoints import voice_experiences
 from app.api.endpoints import voice_public
 from app.modules.telephony.api import router as asterisk_provisioning
+from app.modules.scheduling.api import integrations_router as scheduling_integrations
 from app.modules.scheduling.api import router as scheduling
 from app.modules.agents.api import router as agents
 from app.modules.tools.api import router as tools_custom
@@ -73,6 +74,7 @@ app.include_router(admin_tenants.router)
 app.include_router(admin_tenant_features.router)
 app.include_router(auth0_endpoint.router)
 app.include_router(crm.router)
+app.include_router(scheduling_integrations.router)
 app.include_router(integrations.router)
 app.include_router(forms.router)
 app.include_router(email_assets.router)

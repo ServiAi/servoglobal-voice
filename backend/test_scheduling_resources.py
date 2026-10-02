@@ -14,7 +14,7 @@ from app.modules.scheduling.infrastructure.models import (
     TenantSchedulingResource,
     TenantSchedulingResourceCalendar,
 )
-from app.schemas.crm import BookingCreateRequest
+from app.modules.scheduling.public import CreateBookingCommand
 from app.modules.scheduling.application.booking_service import BookingService
 from app.modules.scheduling.infrastructure.google.oauth import GoogleCalendarOAuthService
 from app.modules.scheduling.application.resource_service import SchedulingResourceService
@@ -174,7 +174,7 @@ class SchedulingResourcesTests(Integration2ATestCase):
             booking = booking_svc.create_lead_booking(
                 tenant_id=self.tenant.id,
                 lead_id=self.lead_id,
-                body=BookingCreateRequest(
+                command=CreateBookingCommand(
                     start="2026-09-18T15:00:00Z",
                     attendee_name="Lead Customer",
                     attendee_email="customer@example.com",
