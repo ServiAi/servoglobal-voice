@@ -100,7 +100,7 @@ def update_scheduling_config(
 # -----------------------------------------------------------------------------
 @router.get("/resources", response_model=list[SchedulingResourceResponse])
 def list_resources(
-    team: Optional[str] = Query(None),
+    team: str | None = Query(None),
     auth: AuthContext = Depends(require_roles(READ_ROLES)),
     db: Session = Depends(get_db),
 ) -> Any:
@@ -340,7 +340,7 @@ def remove_team_member(
 # -----------------------------------------------------------------------------
 @router.get("/exceptions", response_model=list[SchedulingAvailabilityExceptionResponse])
 def list_exceptions(
-    resource_id: Optional[str] = Query(None),
+    resource_id: str | None = Query(None),
     auth: AuthContext = Depends(require_roles(READ_ROLES)),
     db: Session = Depends(get_db),
 ) -> Any:
@@ -443,11 +443,11 @@ def upsert_agent_scheduling_config(
 @router.get("/availability")
 def get_availability_slots(
     date: str = Query(..., description="Target date in YYYY-MM-DD format"),
-    jornada: Optional[str] = Query(None),
-    reference_datetime: Optional[str] = Query(None),
-    resource_id: Optional[str] = Query(None),
-    team_id: Optional[str] = Query(None),
-    agent_id: Optional[str] = Query(None),
+    jornada: str | None = Query(None),
+    reference_datetime: str | None = Query(None),
+    resource_id: str | None = Query(None),
+    team_id: str | None = Query(None),
+    agent_id: str | None = Query(None),
     auth: AuthContext = Depends(require_roles(READ_ROLES)),
     db: Session = Depends(get_db),
 ) -> Any:
@@ -485,7 +485,7 @@ def list_providers_with_capabilities(
 # -----------------------------------------------------------------------------
 @router.get("/schedules", response_model=list[SchedulingScheduleResponse])
 def list_schedules(
-    provider: Optional[str] = Query(None),
+    provider: str | None = Query(None),
     auth: AuthContext = Depends(require_roles(READ_ROLES)),
     db: Session = Depends(get_db),
 ) -> Any:
@@ -518,7 +518,7 @@ def list_schedules(
 @router.post("/schedules", response_model=SchedulingScheduleResponse, status_code=status.HTTP_201_CREATED)
 def create_schedule(
     body: SchedulingScheduleCreateRequest,
-    provider: Optional[str] = Query(None),
+    provider: str | None = Query(None),
     auth: AuthContext = Depends(require_roles(WRITE_ROLES)),
     db: Session = Depends(get_db),
 ) -> Any:
@@ -544,7 +544,7 @@ def create_schedule(
 def update_schedule(
     schedule_id: str,
     body: SchedulingScheduleUpdateRequest,
-    provider: Optional[str] = Query(None),
+    provider: str | None = Query(None),
     auth: AuthContext = Depends(require_roles(WRITE_ROLES)),
     db: Session = Depends(get_db),
 ) -> Any:
@@ -572,7 +572,7 @@ def update_schedule(
 @router.delete("/schedules/{schedule_id}")
 def delete_schedule(
     schedule_id: str,
-    provider: Optional[str] = Query(None),
+    provider: str | None = Query(None),
     auth: AuthContext = Depends(require_roles(WRITE_ROLES)),
     db: Session = Depends(get_db),
 ) -> Any:
@@ -589,7 +589,7 @@ def delete_schedule(
 # -----------------------------------------------------------------------------
 @router.get("/event-types", response_model=list[SchedulingEventTypeResponse])
 def list_event_types(
-    provider: Optional[str] = Query(None),
+    provider: str | None = Query(None),
     auth: AuthContext = Depends(require_roles(READ_ROLES)),
     db: Session = Depends(get_db),
 ) -> Any:
@@ -628,7 +628,7 @@ def list_event_types(
 @router.post("/event-types", response_model=SchedulingEventTypeResponse, status_code=status.HTTP_201_CREATED)
 def create_event_type(
     body: SchedulingEventTypeCreateRequest,
-    provider: Optional[str] = Query(None),
+    provider: str | None = Query(None),
     auth: AuthContext = Depends(require_roles(WRITE_ROLES)),
     db: Session = Depends(get_db),
 ) -> Any:
@@ -672,7 +672,7 @@ def create_event_type(
 def update_event_type(
     event_type_id: str,
     body: SchedulingEventTypeUpdateRequest,
-    provider: Optional[str] = Query(None),
+    provider: str | None = Query(None),
     auth: AuthContext = Depends(require_roles(WRITE_ROLES)),
     db: Session = Depends(get_db),
 ) -> Any:
@@ -712,7 +712,7 @@ def update_event_type(
 @router.delete("/event-types/{event_type_id}")
 def delete_event_type(
     event_type_id: str,
-    provider: Optional[str] = Query(None),
+    provider: str | None = Query(None),
     auth: AuthContext = Depends(require_roles(WRITE_ROLES)),
     db: Session = Depends(get_db),
 ) -> Any:

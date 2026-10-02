@@ -63,7 +63,7 @@ class CalComClient:
         self.base_url = (base_url or settings.CALCOM_API_BASE_URL).rstrip("/")
 
     @classmethod
-    def legacy(cls) -> tuple["CalComClient", CalComClientConfig]:
+    def legacy(cls) -> tuple[CalComClient, CalComClientConfig]:
         if not settings.CAL_API_KEY:
             raise CalComConfigurationError("CAL_API_KEY no esta configurada en las variables de entorno.")
         event_type_id = int(settings.CAL_EVENT_TYPE_ID) if settings.CAL_EVENT_TYPE_ID else None
