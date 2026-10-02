@@ -8,8 +8,8 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
+import app.modules.voice_providers.public as voice_registry
 from app.api.auth.deps import AuthContext, require_roles
-from app.domain import voice_registry
 from app.schemas.voice_registry import VoiceModelResponse, VoiceProviderResponse
 
 router = APIRouter(prefix="/api/v1/voice", tags=["Voice Registry"])

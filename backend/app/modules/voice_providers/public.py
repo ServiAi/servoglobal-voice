@@ -1,25 +1,39 @@
-"""Voice Providers -- public API (provider registry + provider-agnostic
-operations on a tenant's realtime voice provider).
+"""Voice Providers -- public API.
 
-Separate from Voice Orchestration on purpose: it must not depend on
-sessions or on Agent Builder, so provider adapters (Ultravox today) can
-never sit on an import path back into Agent Builder. Boundary only: the
-implementation still lives in app.domain.voice_registry,
-app.services.voice_provider_admin and the Ultravox adapter.
-Nothing returned here is a provider SDK/DTO, an ORM row or a secret.
+Provider registry (realtime providers, models, capabilities, parameters,
+voice compatibility), provider-agnostic operations on a tenant's provider,
+and runtime credential resolution. A sibling of Voice Orchestration, not
+part of it: it depends on neither sessions nor Agent Builder, so provider
+adapters can never sit on an import path back into them.
+
+Top-level imports are pure domain only; use cases load lazily. Nothing here
+knows a concrete provider or its client errors -- adapters translate those
+into VoiceProviderError (app.modules.voice_providers.infrastructure).
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-from dataclasses import dataclass, field
-from types import MappingProxyType
-from typing import Any
-
 from sqlalchemy.orm import Session
 
-from app.domain.voice_registry import (
+from app.modules.voice_providers.domain.contracts import (
+    ProviderAgentImport,
+    ProviderAgentSnapshot,
+    ProviderCredential,
+    ProviderToolRef,
+    ProviderVoiceSelection,
+)
+from app.modules.voice_providers.domain.errors import (
+    VoiceProviderError,
+    VoiceProviderNotAvailableError,
+)
+from app.modules.voice_providers.domain.registry import (
+    VoiceModel,
+    VoiceProvider,
     VoiceRegistryValidationError,
+    get_model,
+    get_provider,
+    list_models,
+    list_providers,
     resolve_execution_model_id,
     validate_model_settings,
     validate_runtime_selection,
@@ -29,11 +43,20 @@ from app.domain.voice_registry import (
 __all__ = [
     "ProviderAgentImport",
     "ProviderAgentSnapshot",
+    "ProviderCredential",
     "ProviderToolRef",
     "ProviderVoiceSelection",
+    "VoiceModel",
+    "VoiceProvider",
     "VoiceProviderError",
     "VoiceProviderFacade",
+    "VoiceProviderNotAvailableError",
     "VoiceRegistryValidationError",
+    "get_model",
+    "get_provider",
+    "is_known_provider",
+    "list_models",
+    "list_providers",
     "resolve_execution_model_id",
     "validate_model_settings",
     "validate_runtime_selection",
@@ -41,136 +64,41 @@ __all__ = [
 ]
 
 
-class VoiceProviderError(ValueError):
-    """Provider-agnostic failure; ``.code`` (== ``str(exc)``) is stable."""
-
-    def __init__(self, code: str) -> None:
-        super().__init__(code)
-        self.code = code
-
-
-@dataclass(frozen=True)
-class ProviderToolRef:
-    name: str
-    classification: str
-
-    def as_dict(self) -> dict[str, str]:
-        return {"name": self.name, "classification": self.classification}
-
-
-@dataclass(frozen=True)
-class ProviderAgentSnapshot:
-    provider: str
-    agent_ref: str
-    revision_ref: str | None
-    tools: tuple[ProviderToolRef, ...]
-    has_unsupported_client_tools: bool
-
-
-@dataclass(frozen=True)
-class ProviderVoiceSelection:
-    mode: str
-    provider: str
-    voice_id: str
-    settings: Mapping[str, Any] = field(default_factory=lambda: MappingProxyType({}))
-
-
-@dataclass(frozen=True)
-class ProviderAgentImport:
-    """Everything a provider-side agent contributes to a ServiGlobal draft.
-    Values are already sanitized by the provider adapter; no secrets."""
-
-    provider: str
-    provider_agent_id: str
-    provider_revision_id: str | None
-    name: str
-    language: str | None
-    system_prompt: str
-    model: str
-    voice_id: str | None
-    tools: tuple[ProviderToolRef, ...]
-    provider_settings: Mapping[str, Any] = field(default_factory=lambda: MappingProxyType({}))
-
-
-def _tool_refs(tools: Any) -> tuple[ProviderToolRef, ...]:
-    return tuple(ProviderToolRef(name=t.name, classification=t.classification) for t in tools)
-
-
-def _provider_error(exc: Exception) -> VoiceProviderError:
-    code = getattr(exc, "code", None)
-    return VoiceProviderError(code if isinstance(code, str) else str(exc))
+def is_known_provider(provider_key: str) -> bool:
+    return get_provider(provider_key) is not None
 
 
 class VoiceProviderFacade:
-    """Provider-agnostic operations, routed through the provider registry
-    (one adapter per active provider)."""
+    """Provider-agnostic operations, routed through the adapter registry."""
 
     def __init__(self, db: Session) -> None:
         self.db = db
 
-    def _adapter(self, provider: str):
-        from app.services.voice_provider_admin import get_provider_admin_service
+    def _service(self):
+        from app.modules.voice_providers.application.service import VoiceProviderService
 
-        return get_provider_admin_service(self.db, provider)
-
-    @staticmethod
-    def _errors() -> tuple[type[Exception], ...]:
-        from app.services.ultravox_provider_client import UltravoxProviderError
-
-        return (ValueError, UltravoxProviderError)
+        return VoiceProviderService(self.db)
 
     def supports_provider_managed(self, provider: str) -> bool:
-        from app.services.voice_provider_admin import VoiceProviderNotAvailableError
-
-        try:
-            self._adapter(provider)
-        except VoiceProviderNotAvailableError:
-            return False
-        return True
+        return self._service().supports_provider_managed(provider)
 
     def link_provider_agent(self, tenant_id: str, provider: str, agent_ref: str) -> ProviderAgentSnapshot:
-        """Raises the adapter's own errors unchanged: draft save has always
-        surfaced them as-is."""
-        remote = self._adapter(provider).validate_provider_agent_link(tenant_id, agent_ref)
-        return ProviderAgentSnapshot(
-            provider=provider,
-            agent_ref=remote.agent_id,
-            revision_ref=remote.published_revision_id,
-            tools=_tool_refs(remote.tools),
-            has_unsupported_client_tools=bool(remote.has_unsupported_client_tools),
-        )
+        return self._service().link_provider_agent(tenant_id, provider, agent_ref)
 
     def validate_provider_execution(self, tenant_id: str, provider: str, agent_ref: str) -> None:
-        try:
-            self._adapter(provider).validate_execution_preflight(tenant_id, agent_ref)
-        except self._errors() as exc:
-            raise _provider_error(exc) from exc
+        """Raises VoiceProviderError."""
+        self._service().validate_provider_execution(tenant_id, provider, agent_ref)
 
     def validate_voice(self, tenant_id: str, realtime_provider: str, voice: ProviderVoiceSelection) -> None:
-        try:
-            adapter = self._adapter(realtime_provider)
-            if voice.mode == "provider":
-                adapter.get_voice(tenant_id, voice.voice_id)
-            else:
-                adapter.validate_external_voice_credentials(tenant_id, voice.provider)
-        except self._errors() as exc:
-            error = _provider_error(exc)
-            if not isinstance(exc, ValueError) and error.code == "provider_resource_not_found":
-                error = VoiceProviderError("voice_not_accessible")
-            raise error from exc
+        """Raises VoiceProviderError (``voice_not_accessible`` when the
+        provider no longer has the voice)."""
+        self._service().validate_voice(tenant_id, realtime_provider, voice)
 
     def get_agent_import(self, tenant_id: str, provider: str, agent_ref: str) -> ProviderAgentImport:
-        """Raises the adapter's own errors unchanged (the HTTP adapter maps them)."""
-        remote = self._adapter(provider).get_agent_import(tenant_id, agent_ref)
-        return ProviderAgentImport(
-            provider=provider,
-            provider_agent_id=remote.provider_agent_id,
-            provider_revision_id=remote.provider_revision_id,
-            name=remote.name,
-            language=remote.language,
-            system_prompt=remote.system_prompt,
-            model=remote.model,
-            voice_id=remote.voice_id,
-            tools=_tool_refs(remote.tools),
-            provider_settings=MappingProxyType(dict(remote.provider_settings)),
-        )
+        """Raises VoiceProviderError (``remote`` for provider-side failures)."""
+        return self._service().get_agent_import(tenant_id, provider, agent_ref)
+
+    def resolve_runtime_credential(self, tenant_id: str, provider: str) -> ProviderCredential:
+        """For the runtime credential endpoint only, after Voice has bound the
+        request to a VoiceSession. Raises VoiceProviderError."""
+        return self._service().resolve_runtime_credential(tenant_id, provider)

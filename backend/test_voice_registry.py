@@ -7,7 +7,7 @@ from _integrations_2a_test_base import Integration2ATestCase
 
 class VoiceRegistryTests(Integration2ATestCase):
     def test_resolves_logical_ultravox_model_to_execution_id(self) -> None:
-        from app.domain.voice_registry import resolve_execution_model_id
+        from app.modules.voice_providers.domain.registry import resolve_execution_model_id
 
         self.assertEqual(
             resolve_execution_model_id("ultravox", "ultravox"),
@@ -21,7 +21,7 @@ class VoiceRegistryTests(Integration2ATestCase):
     def test_execution_model_resolution_fails_closed(self) -> None:
         from unittest.mock import patch
 
-        from app.domain import voice_registry
+        from app.modules.voice_providers.domain import registry as voice_registry
 
         with self.assertRaises(voice_registry.VoiceRegistryValidationError):
             voice_registry.resolve_execution_model_id("unknown", "ultravox")
@@ -92,7 +92,7 @@ class VoiceRegistryTests(Integration2ATestCase):
             self.assertNotIn("external_voice_providers", model["capabilities"])
 
     def test_capabilities_stay_boolean_only(self) -> None:
-        from app.domain import voice_registry
+        from app.modules.voice_providers.domain import registry as voice_registry
 
         for model in voice_registry.list_models(provider_key="ultravox"):
             self.assertTrue(all(isinstance(value, bool) for value in model.capabilities.values()))
@@ -100,7 +100,7 @@ class VoiceRegistryTests(Integration2ATestCase):
             self.assertTrue(all(isinstance(item, str) for item in model.external_voice_providers))
 
     def test_voice_compatibility_provider_mode_requires_matching_provider(self) -> None:
-        from app.domain import voice_registry
+        from app.modules.voice_providers.domain import registry as voice_registry
 
         for model_key in ("ultravox", "ultravox-v0.7"):
             voice_registry.validate_voice_compatibility("ultravox", model_key, "provider", "ultravox")
@@ -108,7 +108,7 @@ class VoiceRegistryTests(Integration2ATestCase):
                 voice_registry.validate_voice_compatibility("ultravox", model_key, "provider", "elevenlabs")
 
     def test_voice_compatibility_provider_external_requires_supported_provider(self) -> None:
-        from app.domain import voice_registry
+        from app.modules.voice_providers.domain import registry as voice_registry
 
         for model_key in ("ultravox", "ultravox-v0.7"):
             voice_registry.validate_voice_compatibility(
@@ -124,7 +124,7 @@ class VoiceRegistryTests(Integration2ATestCase):
                 )
 
     def test_temperature_is_supported_for_both_ultravox_models(self) -> None:
-        from app.domain import voice_registry
+        from app.modules.voice_providers.domain import registry as voice_registry
 
         for model_id in ("ultravox:ultravox", "ultravox:ultravox-v0.7"):
             spec = voice_registry.get_model(model_id).parameters["temperature"]
@@ -134,7 +134,7 @@ class VoiceRegistryTests(Integration2ATestCase):
             self.assertEqual(spec.max, 1.0)
 
     def test_max_duration_is_declared_but_not_supported(self) -> None:
-        from app.domain import voice_registry
+        from app.modules.voice_providers.domain import registry as voice_registry
 
         for model_id in ("ultravox:ultravox", "ultravox:ultravox-v0.7"):
             spec = voice_registry.get_model(model_id).parameters["max_duration"]
@@ -151,7 +151,7 @@ class VoiceRegistryTests(Integration2ATestCase):
         self.assertFalse(temperature["advanced"])
 
     def test_validate_model_settings_accepts_supported_in_range_value(self) -> None:
-        from app.domain import voice_registry
+        from app.modules.voice_providers.domain import registry as voice_registry
 
         voice_registry.validate_model_settings("ultravox", "ultravox", {"temperature": 0.5})
         voice_registry.validate_model_settings("ultravox", "ultravox", {"temperature": 0})
@@ -159,19 +159,19 @@ class VoiceRegistryTests(Integration2ATestCase):
         voice_registry.validate_model_settings("ultravox", "ultravox", {})
 
     def test_validate_model_settings_rejects_unknown_key(self) -> None:
-        from app.domain import voice_registry
+        from app.modules.voice_providers.domain import registry as voice_registry
 
         with self.assertRaises(voice_registry.VoiceRegistryValidationError):
             voice_registry.validate_model_settings("ultravox", "ultravox", {"reasoning_effort": "high"})
 
     def test_validate_model_settings_rejects_unsupported_known_key(self) -> None:
-        from app.domain import voice_registry
+        from app.modules.voice_providers.domain import registry as voice_registry
 
         with self.assertRaises(voice_registry.VoiceRegistryValidationError):
             voice_registry.validate_model_settings("ultravox", "ultravox", {"max_duration": 600})
 
     def test_validate_model_settings_rejects_wrong_type(self) -> None:
-        from app.domain import voice_registry
+        from app.modules.voice_providers.domain import registry as voice_registry
 
         with self.assertRaises(voice_registry.VoiceRegistryValidationError):
             voice_registry.validate_model_settings("ultravox", "ultravox", {"temperature": "hot"})
@@ -179,7 +179,7 @@ class VoiceRegistryTests(Integration2ATestCase):
             voice_registry.validate_model_settings("ultravox", "ultravox", {"temperature": True})
 
     def test_validate_model_settings_rejects_out_of_range(self) -> None:
-        from app.domain import voice_registry
+        from app.modules.voice_providers.domain import registry as voice_registry
 
         with self.assertRaises(voice_registry.VoiceRegistryValidationError):
             voice_registry.validate_model_settings("ultravox", "ultravox", {"temperature": -0.1})
@@ -187,13 +187,13 @@ class VoiceRegistryTests(Integration2ATestCase):
             voice_registry.validate_model_settings("ultravox", "ultravox", {"temperature": 1.1})
 
     def test_validate_model_settings_fails_closed_for_unknown_model(self) -> None:
-        from app.domain import voice_registry
+        from app.modules.voice_providers.domain import registry as voice_registry
 
         with self.assertRaises(voice_registry.VoiceRegistryValidationError):
             voice_registry.validate_model_settings("openai", "gpt-realtime", {"temperature": 0.5})
 
     def test_voice_compatibility_rejects_unknown_mode_and_model(self) -> None:
-        from app.domain import voice_registry
+        from app.modules.voice_providers.domain import registry as voice_registry
 
         with self.assertRaises(voice_registry.VoiceRegistryValidationError):
             voice_registry.validate_voice_compatibility("ultravox", "ultravox", "native", "ultravox")

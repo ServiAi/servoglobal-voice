@@ -21,7 +21,7 @@ _WHATSAPP_VARIABLE_SOURCES = frozenset({"llm", "context", "fixed"})
 _WHATSAPP_LLM_VARIABLE_TYPES = frozenset({"string", "number", "integer", "boolean"})
 
 # Explicit allowlist of SessionContextV1 paths a WhatsApp variable may read
-# with source=context -- mirrors app.schemas.session_context's shape
+# with source=context -- mirrors app.modules.voice.domain.session_context's shape
 # one-to-one, never arbitrary object traversal. Kept local to this service
 # (rather than on SessionContextV1 itself) since it is a Platform Tool
 # Contract concern, not a property of the context schema itself.

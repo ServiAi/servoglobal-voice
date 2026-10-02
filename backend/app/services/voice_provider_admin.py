@@ -4,7 +4,10 @@ from typing import TYPE_CHECKING, Protocol
 
 from sqlalchemy.orm import Session
 
-from app.domain.voice_registry import get_provider
+from app.modules.voice_providers.public import (
+    VoiceProviderNotAvailableError,
+    get_provider,
+)
 from app.schemas.ultravox_admin import (
     UltravoxAgentDetail,
     UltravoxAgentImport,
@@ -19,19 +22,11 @@ if TYPE_CHECKING:  # annotations only: no runtime path back into app.modules
     from app.modules.voice_providers.public import ProviderVoiceSelection
 
 
-class VoiceProviderNotAvailableError(ValueError):
-    """Raised when a provider is unknown or not yet wired with a real adapter."""
-
-    def __init__(self, provider_key: str) -> None:
-        self.provider_key = provider_key
-        super().__init__(f"Voice provider '{provider_key}' is not available.")
-
-
 class VoiceProviderAdminService(Protocol):
     """Contract a provider's admin catalog client must implement to plug into
     the /integrations/voice/providers/{provider} routes and the Ultravox
     Admin Workspace UI. Ultravox is the only implementation today; see
-    app.domain.voice_registry for the list of providers still pending a
+    app.modules.voice_providers.domain.registry for the list of providers still pending a
     real adapter."""
 
     def list_agents(self, tenant_id: str, **filters) -> UltravoxAgentPage: ...

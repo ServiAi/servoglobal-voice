@@ -1,17 +1,29 @@
-"""Project a real VoiceSession into analytics and, when linked, the CRM."""
+"""Project a real VoiceSession into analytics and, when linked, the CRM.
+
+Legacy projection adapter (owned by Analytics/CRM, not by Voice): it reads
+the session only as voice.public.SessionProjectionFacts and is reached by
+Voice through analytics.public.VoiceCallProjectionFacade.
+"""
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
-from app.modules.agents.public import AgentsFacade
 from app.models.analytics import Agent, Call
 from app.models.crm import CrmActivity, CrmContact, CrmLead, CrmVoiceCall
-from app.models.voice_sessions import VoiceSession, VoiceSessionEvent
+from app.modules.agents.public import AgentsFacade
+from app.modules.voice.public import (
+    SessionEventFact,
+    SessionProjectionFacts,
+    VoiceSessionFacade,
+)
+
+logger = logging.getLogger(__name__)
 
 
 REAL_EVENTS = {
@@ -30,17 +42,8 @@ class VoiceCallProjectionService:
         self.db = db
 
     def project_session(self, session_id: str, *, tenant_id: str | None = None, commit: bool = True) -> Call | None:
-        query = select(VoiceSession).where(VoiceSession.id == session_id).with_for_update()
-        if tenant_id is not None:
-            query = query.where(VoiceSession.tenant_id == tenant_id)
-        session = self.db.scalar(query)
-        if session is None:
-            raise ValueError("Voice session not found for tenant.")
-
-        events = list(self.db.scalars(select(VoiceSessionEvent).where(
-            VoiceSessionEvent.tenant_id == session.tenant_id,
-            VoiceSessionEvent.voice_session_id == session.id,
-        )).all())
+        session = VoiceSessionFacade(self.db).get_projection_facts(session_id, tenant_id)
+        events = list(session.events)
         crm_call = self.db.scalar(select(CrmVoiceCall).where(
             CrmVoiceCall.id == session.crm_voice_call_id,
             CrmVoiceCall.tenant_id == session.tenant_id,
@@ -101,15 +104,46 @@ class VoiceCallProjectionService:
             self.db.refresh(call)
         return call
 
-    def project_event(self, session_id: str, event: VoiceSessionEvent, *, commit: bool = True) -> Call | None:
-        if event.voice_session_id != session_id:
-            raise ValueError("Event does not belong to voice session.")
-        return self.project_session(session_id, tenant_id=event.tenant_id, commit=commit)
+    def apply_runtime_event(
+        self, session_id: str, tenant_id: str, event_type: str, occurred_at: datetime | None
+    ) -> Call | None:
+        """CRM call status for a runtime event, then the projection; inside
+        the caller's transaction (no commit)."""
+        session = VoiceSessionFacade(self.db).get_projection_facts(session_id, tenant_id)
+        if session.crm_voice_call_id:
+            call = self.db.get(CrmVoiceCall, session.crm_voice_call_id)
+            if call is not None and call.tenant_id == session.tenant_id:
+                now = occurred_at or datetime.now(UTC)
+                if event_type == "voice.session.connected" and call.status == "answered":
+                    call.status = "in_progress"
+                elif event_type == "voice.session.ended" and call.status not in {
+                    "busy", "rejected", "no_answer", "failed", "completed"
+                }:
+                    call.status = "completed" if call.answered_at else "no_answer"
+                    call.ended_at = now
+                    logger.info(
+                        "LiveKit SIP outbound completed | tenant_id=%s | crm_voice_call_id=%s | voice_session_id=%s | livekit_room_name=%s | livekit_dispatch_id=%s | livekit_sip_trunk_id=%s | sip_participant_identity=%s | sip_call_id=%s",
+                        session.tenant_id,
+                        call.id,
+                        session.id,
+                        session.livekit_room_name,
+                        session.livekit_dispatch_id,
+                        session.livekit_sip_trunk_id,
+                        session.livekit_sip_participant_identity,
+                        session.sip_call_id,
+                    )
+                elif event_type == "voice.session.failed" and call.status not in {
+                    "busy", "rejected", "no_answer", "failed", "completed"
+                }:
+                    call.status = "failed"
+                    call.ended_at = now
+        self.db.flush()
+        return self.project_session(session_id, tenant_id=tenant_id, commit=False)
 
     def reconcile_session(self, session_id: str, *, tenant_id: str | None = None) -> Call | None:
         return self.project_session(session_id, tenant_id=tenant_id)
 
-    def _agent(self, session: VoiceSession) -> Agent | None:
+    def _agent(self, session: SessionProjectionFacts) -> Agent | None:
         canonical_id = session.agent_id or session.deleted_agent_id
         if canonical_id is None:
             return None
@@ -146,13 +180,11 @@ class VoiceCallProjectionService:
             agent.status = status
         return agent
 
-    def _activity(self, session: VoiceSession, crm_call: CrmVoiceCall | None, call: Call,
-                  events: list[VoiceSessionEvent]) -> None:
-        context = session.session_context_json or {}
-        contact_data = context.get("contact") or {}
-        lead_data = context.get("lead") or {}
-        contact_id = (crm_call.contact_id if crm_call else None) or contact_data.get("id")
-        lead_id = (crm_call.lead_id if crm_call else None) or lead_data.get("id")
+    def _activity(self, session: SessionProjectionFacts, crm_call: CrmVoiceCall | None, call: Call,
+                  events: list[SessionEventFact]) -> None:
+        context = session.context
+        contact_id = (crm_call.contact_id if crm_call else None) or (context.contact.id if context.contact else None)
+        lead_id = (crm_call.lead_id if crm_call else None) or (context.lead.id if context.lead else None)
         lead = self.db.scalar(select(CrmLead).where(
             CrmLead.id == lead_id, CrmLead.tenant_id == session.tenant_id,
         )) if lead_id else None
@@ -171,14 +203,14 @@ class VoiceCallProjectionService:
 
         transcript = [
             {"event_id": event.event_id, "sequence": event.sequence,
-             "occurred_at": self._utc(event.occurred_at).isoformat(), "speaker": event.payload_json["speaker"],
-             "text": event.payload_json["text"]}
+             "occurred_at": self._utc(event.occurred_at).isoformat(), "speaker": event.payload["speaker"],
+             "text": event.payload["text"]}
             for event in sorted(events, key=lambda item: (item.sequence is None, item.sequence or 0,
                                                            item.occurred_at, item.event_id))
             if event.event_type == "voice.transcript.final"
-            and event.payload_json.get("speaker") in {"user", "assistant"}
-            and isinstance(event.payload_json.get("text"), str)
-            and event.payload_json["text"].strip()
+            and event.payload.get("speaker") in {"user", "assistant"}
+            and isinstance(event.payload.get("text"), str)
+            and event.payload["text"].strip()
         ]
         key = f"voice_session:{session.id}"
         activity = self.db.scalar(select(CrmActivity).where(
@@ -222,7 +254,7 @@ class VoiceCallProjectionService:
         return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
 
     @staticmethod
-    def _first(events: list[VoiceSessionEvent], *types: str) -> datetime | None:
+    def _first(events: list[SessionEventFact], *types: str) -> datetime | None:
         return min((VoiceCallProjectionService._utc(event.occurred_at) for event in events
                     if event.event_type in types), default=None)
 

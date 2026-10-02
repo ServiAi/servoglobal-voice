@@ -3,7 +3,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from app.services.livekit_runtime_backend import LiveKitRuntimeBackend
+from app.modules.voice.infrastructure.livekit_runtime import LiveKitRuntimeBackend
 
 
 class LiveKitRoomClosureTests(unittest.TestCase):
@@ -18,7 +18,7 @@ class LiveKitRoomClosureTests(unittest.TestCase):
         client.room = room
         client.__aenter__ = AsyncMock(return_value=client)
         client.__aexit__ = AsyncMock(return_value=None)
-        with patch("app.services.livekit_runtime_backend.settings") as settings, patch("livekit.api.LiveKitAPI", return_value=client):
+        with patch("app.modules.voice.infrastructure.livekit_runtime.settings") as settings, patch("livekit.api.LiveKitAPI", return_value=client):
             settings.LIVEKIT_URL = "wss://livekit.example"
             settings.LIVEKIT_API_KEY = "test-key"
             settings.LIVEKIT_API_SECRET = "test-secret"
@@ -38,7 +38,7 @@ class LiveKitRoomClosureTests(unittest.TestCase):
         client.room = room
         client.__aenter__ = AsyncMock(return_value=client)
         client.__aexit__ = AsyncMock(return_value=None)
-        with patch("app.services.livekit_runtime_backend.settings") as settings, patch("livekit.api.LiveKitAPI", return_value=client):
+        with patch("app.modules.voice.infrastructure.livekit_runtime.settings") as settings, patch("livekit.api.LiveKitAPI", return_value=client):
             settings.LIVEKIT_URL = "wss://livekit.example"
             settings.LIVEKIT_API_KEY = "test-key"
             settings.LIVEKIT_API_SECRET = "test-secret"
@@ -57,7 +57,7 @@ class LiveKitRoomClosureTests(unittest.TestCase):
         client.room = room
         client.__aenter__ = AsyncMock(return_value=client)
         client.__aexit__ = AsyncMock(return_value=None)
-        with patch("app.services.livekit_runtime_backend.settings") as settings, patch("livekit.api.LiveKitAPI", return_value=client):
+        with patch("app.modules.voice.infrastructure.livekit_runtime.settings") as settings, patch("livekit.api.LiveKitAPI", return_value=client):
             settings.LIVEKIT_URL = "wss://livekit.example"
             settings.LIVEKIT_API_KEY = "test-key"
             settings.LIVEKIT_API_SECRET = "test-secret"

@@ -30,7 +30,7 @@ from app.modules.tools.application.dispatcher import (
 )
 from app.modules.tools.infrastructure.http_safety import SafeHttpClient
 from app.services.tenant_feature_service import CUSTOM_HTTP_TOOLS, TenantFeatureService
-from app.services.voice_session_service import VoiceSessionService
+from app.modules.voice.application.session_service import VoiceSessionService
 
 
 def _addrinfo(ip: str) -> list[tuple]:

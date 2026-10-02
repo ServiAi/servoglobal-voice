@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from _integrations_2a_test_base import Integration2ATestCase, SessionLocal
 from app.models.crm import CrmContact, CrmLead, CrmPipelineStage
-from app.services.contact_resolution_service import (
+from app.modules.voice.application.context_resolution import (
     ContactResolutionService,
     CrossTenantResolutionError,
 )

@@ -40,8 +40,8 @@ from app.modules.agents.domain.views import (
 )
 
 if TYPE_CHECKING:
+    from app.modules.voice.public import RuntimeSessionSpecV1
     from app.modules.voice_providers.public import ProviderAgentImport
-    from app.schemas.runtime_session import RuntimeSessionSpecV1
 
 __all__ = [
     "AgentBehavior",

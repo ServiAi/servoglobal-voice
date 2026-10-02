@@ -125,11 +125,17 @@ Aplicadas por `backend/test_module_boundaries.py`:
 5. El dispatcher no importa CRM, Scheduling ni Integrations: sólo puertos.
 6. ~~Ningún archivo de producción usa las rutas legacy de tools~~ / 7. ~~Las rutas legacy son alias~~: retiradas junto con los 18 shims de Tool Platform (2026-10-01).
 8. No hay ciclos de import dentro de `app.modules.tools`.
-13. Agent Builder no importa código legacy de otros dominios salvo `AGENTS_LEGACY_ALLOWED` (`api.auth.deps`, `db.*`, `schemas.runtime_session`, `integration_event_service`).
+13. Agent Builder no importa código legacy de otros dominios salvo `AGENTS_LEGACY_ALLOWED` (`api.auth.deps`, `db.*`, `integration_event_service`); `RuntimeSessionSpecV1` llega desde `voice.public`.
 14. Ningún archivo de `app.modules.agents` importa (ni siquiera de forma perezosa) `app.services.ultravox_*` ni `app.services.voice_provider_admin`; esos adapters no importan Agent Builder, ni ningún `app.modules.*` en runtime.
 15. Ninguna componente fuertemente conexa del grafo de imports (incluidos los perezosos) contiene a la vez un módulo de Agent Builder y un adapter de proveedor.
 16. `app.modules.agents.domain` es puro (sólo dominio propio y `voice_providers.public` para el registro); `application` no importa `api` en runtime (los requests HTTP sólo bajo `TYPE_CHECKING`).
 17. Nadie navega las relaciones eliminadas `.agent_version` / `.voice_agent_config`.
+19. Voice Orchestration no importa código legacy salvo `VOICE_LEGACY_ALLOWED` (`api.auth.deps`, `core.config`, `db.*`, `security.voice_runtime_auth`): ni CRM/Analytics, ni Telephony/SIP, ni adapters de proveedor, ni Voice Legacy, ni `tenant_feature_service`.
+20. `app.modules.voice.domain` es puro: sólo dominio propio y `agents.public` (value objects del contrato de runtime), sin SQLAlchemy/FastAPI/LiveKit/httpx.
+21. El ORM de Voice (`app.modules.voice.infrastructure.models`) sólo lo importa Voice, el registro de modelos y los shims.
+22. `voice.public`, `voice_providers.public` y `agents.public` se importan sin cargar casos de uso, ORM, LiveKit, servicios CRM/Analytics ni adapters (verificado en un proceso limpio).
+23. Voice Providers sólo toca código legacy desde `infrastructure/ultravox.py` (adapter) e `infrastructure/credentials.py`; `public`/`application`/`domain` no conocen ningún proveedor concreto ni `UltravoxProviderError`.
+24. Ninguna componente fuertemente conexa contiene Voice y un adapter de proveedor; los adapters sólo pueden importar `voice_providers.public`.
 
 ## Reglas de datos vigentes
 
@@ -155,3 +161,23 @@ Medido con el mismo grafo AST (imports perezosos incluidos), `develop@32c624d` �
 | Ciclos de archivo que involucran Agent Builder | 1 directo (`agent_service ↔ ultravox_admin_service`) | **0** con adapters; queda una componente Agents ↔ Tools ↔ Voice sólo a través de `public.py` y wiring perezoso |
 | Shims de Tool Platform | 18 | **0** |
 | Shims de Agent Builder creados | — | **0** (sin consumidores en `develop` ni en ramas abiertas) |
+
+## Migración de Voice Orchestration (2026-10-01)
+
+Mismo grafo AST (imports perezosos incluidos), `develop@37b259c` → esta rama. "Voice" antes = `voice_session_service`, `contact_resolution_service`, `voice_runtime_dispatcher`, `livekit_runtime_backend`, `models/voice_sessions`, `schemas/{session_context,runtime_session,voice_sessions,voice_credentials}`, `api/endpoints/voice_runtime`, `modules/voice/public`.
+
+| Métrica | Antes | Después |
+| --- | --- | --- |
+| Imports Voice → internals de CRM | 3 | **0** |
+| Imports Voice → internals de Analytics (proyección) | 1 | **0** |
+| Imports Voice → internals de Agents | 0 | **0** |
+| Imports Voice → internals de Telephony | 2 (`voice_session_sip_service`, `voice_phone_service`) | **0** (`telephony.public`) |
+| Imports Voice → internals de proveedor | 2 (`voice_registry`, `voice_config_service`) | **0** (`voice_providers.public`) |
+| Imports Voice → `tenant_feature_service` | 1 | **0** (`identity.public`) |
+| Módulos fuera de Voice que importan el ORM de Voice | 4 | 3 (sólo vía shim: Telephony ×2 y `voice_call_service`; la proyección ya usa DTOs) |
+| Imports legacy `app.models.voice_sessions` | 8 app + 4 tests + 1 script | 3 app (legacy) + 1 script, 0 tests |
+| Imports legacy `voice_session_service` | 5 app + 6 tests | 2 app (Telephony), 0 tests |
+| Imports específicos de proveedor en `voice_providers.public` | 2 (`ultravox_provider_client`, `voice_provider_admin`) | **0** |
+| Componentes conexas con Voice | 1 (14 archivos) | 1 (20 archivos, sólo vía `public.py`/wiring; crece porque la proyección legacy pasa a consumir `voice.public`) |
+| Componentes conexas con Voice + adapter de proveedor | 0 | **0** (regla automática) |
+| Shims de Voice creados | — | **4** (con consumidores legacy reales) |

@@ -21,13 +21,13 @@ from unittest.mock import patch
 
 from _integrations_2a_test_base import Integration2ATestCase
 from app.db.session import SessionLocal
-from app.domain import voice_registry
 from app.models.integrations import TenantVoiceAgentConfig
 from app.modules.agents.api.schemas import AgentCreateRequest
 from app.modules.agents.application.ports import AgentPorts
 from app.modules.agents.application.service import AgentService
 from app.modules.agents.infrastructure.models import TenantAgent, TenantAgentVersion
 from app.modules.agents.public import AgentsFacade, AgentValidationError
+from app.modules.voice_providers.domain import registry as voice_registry
 from app.modules.voice_providers.public import (
     ProviderAgentImport,
     ProviderAgentSnapshot,
@@ -233,9 +233,13 @@ class UltravoxImportShapeTests(Integration2ATestCase):
             from app.modules.voice_providers.public import VoiceProviderFacade
 
             adapter = UltravoxAdminService(db, client=_FakeUltravoxClient())
+            from app.modules.voice_providers.infrastructure.ultravox import (
+                UltravoxProviderAdapter,
+            )
+
             with (
                 patch.object(UltravoxAdminService, "_api_key", return_value="key"),
-                patch.object(VoiceProviderFacade, "_adapter", return_value=adapter),
+                patch.object(UltravoxProviderAdapter, "_admin", return_value=adapter),
             ):
                 snapshot = VoiceProviderFacade(db).get_agent_import(self.tenant.id, "ultravox", "uv-agent-1")
             imported = AgentsFacade(db).import_provider_agent(self.tenant.id, self.user.id, snapshot)
@@ -322,24 +326,122 @@ class ToolBindingViewTests(unittest.TestCase):
 class VoiceProviderFacadeTests(unittest.TestCase):
     def test_provider_errors_become_provider_agnostic(self) -> None:
         from app.modules.voice_providers.public import VoiceProviderFacade
-        from app.services.ultravox_provider_client import UltravoxProviderError
 
         class Adapter:
-            def get_voice(self, tenant_id, voice_id):
-                raise UltravoxProviderError("provider_resource_not_found", 404)
+            def check_voice(self, tenant_id, voice):
+                raise VoiceProviderError("provider_resource_not_found", remote=True)
 
-            def validate_execution_preflight(self, tenant_id, agent_id):
+            def validate_agent_execution(self, tenant_id, agent_ref):
                 raise ValueError("provider_agent_has_unsupported_client_tools")
 
         facade = VoiceProviderFacade(db=None)
-        with patch.object(VoiceProviderFacade, "_adapter", return_value=Adapter()):
+        with patch("app.modules.voice_providers.application.service.get_adapter", return_value=Adapter()):
             with self.assertRaises(VoiceProviderError) as voice_ctx:
                 facade.validate_voice("t", "ultravox", ProviderVoiceSelection("provider", "ultravox", "Mark"))
             with self.assertRaises(VoiceProviderError) as exec_ctx:
                 facade.validate_provider_execution("t", "ultravox", "a")
         self.assertEqual(voice_ctx.exception.code, "voice_not_accessible")
         self.assertEqual(exec_ctx.exception.code, "provider_agent_has_unsupported_client_tools")
-        self.assertNotIsInstance(voice_ctx.exception, UltravoxProviderError)
+
+    def test_ultravox_adapter_translates_its_client_errors_before_returning(self) -> None:
+        from app.modules.voice_providers.infrastructure.ultravox import (
+            UltravoxProviderAdapter,
+        )
+        from app.services.ultravox_provider_client import UltravoxProviderError
+
+        class Admin:
+            def get_voice(self, tenant_id, voice_id):
+                raise UltravoxProviderError("voice_preview_rejected", 400, reason="quota")
+
+        adapter = UltravoxProviderAdapter(db=None)
+        with (
+            patch.object(UltravoxProviderAdapter, "_admin", return_value=Admin()),
+            self.assertRaises(VoiceProviderError) as ctx,
+        ):
+            adapter.check_voice("t", ProviderVoiceSelection("provider", "ultravox", "Mark"))
+        self.assertNotIsInstance(ctx.exception, UltravoxProviderError)
+        self.assertEqual((ctx.exception.code, ctx.exception.remote, ctx.exception.reason), ("voice_preview_rejected", True, "quota"))
+
+
+class FakeAcmeAdapter:
+    """A non-Ultravox VoiceProviderAdapter registered in Voice Providers."""
+
+    calls: ClassVar[list[tuple]] = []
+
+    def __init__(self, db) -> None:
+        self.db = db
+
+    def link_agent(self, tenant_id: str, agent_ref: str) -> ProviderAgentSnapshot:
+        FakeAcmeAdapter.calls.append(("link", agent_ref))
+        return ProviderAgentSnapshot("acme", agent_ref, "rev-1", (), False)
+
+    def validate_agent_execution(self, tenant_id: str, agent_ref: str) -> None:
+        FakeAcmeAdapter.calls.append(("execution", agent_ref))
+
+    def check_voice(self, tenant_id: str, voice: ProviderVoiceSelection) -> None:
+        FakeAcmeAdapter.calls.append(("voice", voice.voice_id))
+        if voice.voice_id == "gone":
+            raise VoiceProviderError("provider_resource_not_found", remote=True)
+
+    def get_agent_import(self, tenant_id: str, agent_ref: str) -> ProviderAgentImport:
+        return ProviderAgentImport("acme", agent_ref, None, "Acme", "es", "", "acme-rt", None, ())
+
+
+class AcmeVoiceProvidersTests(Integration2ATestCase):
+    """Voice Providers runs a non-Ultravox provider end to end -- validation,
+    model resolution and runtime credential resolution -- with only a
+    catalog entry, an adapter and a stored credential; Voice Orchestration
+    and Agent Builder are untouched."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        FakeAcmeAdapter.calls = []
+        self.stack = ExitStack()
+        self.addCleanup(self.stack.close)
+        _acme_catalog(self.stack)
+        from app.modules.voice_providers.infrastructure import adapters
+
+        self.stack.enter_context(patch.dict(adapters.ADAPTERS, {"acme": FakeAcmeAdapter}))
+
+    def test_provider_validation_through_the_registry(self) -> None:
+        from app.modules.voice_providers.public import VoiceProviderFacade
+
+        with SessionLocal() as db:
+            facade = VoiceProviderFacade(db)
+            self.assertTrue(facade.supports_provider_managed("acme"))
+            self.assertEqual(facade.link_provider_agent(self.tenant.id, "acme", "remote-1").agent_ref, "remote-1")
+            facade.validate_provider_execution(self.tenant.id, "acme", "remote-1")
+            facade.validate_voice(self.tenant.id, "acme", ProviderVoiceSelection("provider", "acme", "v-1"))
+            with self.assertRaisesRegex(VoiceProviderError, "voice_not_accessible"):
+                facade.validate_voice(self.tenant.id, "acme", ProviderVoiceSelection("provider", "acme", "gone"))
+        self.assertEqual(FakeAcmeAdapter.calls[:3], [("link", "remote-1"), ("execution", "remote-1"), ("voice", "v-1")])
+
+    def test_model_resolution_comes_from_the_provider_catalog(self) -> None:
+        from app.modules.voice_providers.public import (
+            resolve_execution_model_id,
+            validate_runtime_selection,
+        )
+
+        validate_runtime_selection("realtime", "acme", "acme-rt")
+        self.assertEqual(resolve_execution_model_id("acme", "acme-rt"), "acme/realtime-1")
+
+    def test_runtime_credential_resolution_is_provider_agnostic(self) -> None:
+        from app.models.integrations import TenantVoiceProviderConfig
+        from app.modules.voice_providers.public import VoiceProviderFacade
+        from app.services.secret_manager_service import SecretManager
+
+        with SessionLocal() as db:
+            facade = VoiceProviderFacade(db)
+            with self.assertRaisesRegex(VoiceProviderError, "provider_credentials_unavailable"):
+                facade.resolve_runtime_credential(self.tenant.id, "acme")
+            db.add(TenantVoiceProviderConfig(
+                tenant_id=self.tenant.id, provider="acme", status="active",
+                api_key_encrypted=SecretManager().encrypt_secret("acme-key-123"),
+            ))
+            db.commit()
+            credential = facade.resolve_runtime_credential(self.tenant.id, "acme")
+        self.assertEqual((credential.provider, credential.api_key), ("acme", "acme-key-123"))
+        self.assertNotIn("acme-key-123", repr(credential))
 
 
 class VoiceSessionsReleaseTests(unittest.TestCase):

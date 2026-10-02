@@ -15,11 +15,11 @@ from app.modules.agents.infrastructure.models import TenantAgent, TenantAgentVer
 from app.models.crm import CrmContact, CrmLead, CrmPipelineStage
 from app.schemas.integrations import VoiceProviderConfigRequest
 from app.security.voice_runtime_auth import create_runtime_token, require_voice_runtime
-from app.services.livekit_runtime_backend import RuntimeDispatchResult
+from app.modules.voice.infrastructure.livekit_runtime import RuntimeDispatchResult
 from app.services.voice_config_service import VoiceConfigService
-from app.services.voice_runtime_dispatcher import VoiceRuntimeDispatcher
+from app.modules.voice.application.runtime_dispatcher import VoiceRuntimeDispatcher
 from app.services.tenant_feature_service import TenantFeatureService, VOICE_RUNTIME_V2
-from app.services.voice_session_service import VoiceSessionService
+from app.modules.voice.application.session_service import VoiceSessionService
 
 
 class FakeBackend:
