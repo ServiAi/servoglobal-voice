@@ -10,7 +10,7 @@ os.environ.setdefault("ULTRAVOX_API_KEY", "test")
 
 from app.main import app
 from app.services import calcom_service
-from app.services.calcom_service import SlotUnavailableError, create_booking
+from app.modules.scheduling.infrastructure.calcom.availability import SlotUnavailableError, create_booking
 
 
 class FakeAsyncClient:

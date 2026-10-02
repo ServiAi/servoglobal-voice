@@ -259,7 +259,7 @@ class AdminTenantIntegrationTests(unittest.TestCase):
         )
 
         with patch(
-            "app.services.booking_config_service.CalComClient.get_available_slots",
+            "app.modules.scheduling.application.booking_config_service.CalComClient.get_available_slots",
             side_effect=Exception("Cal.com API error 401: invalid token cal_secret_test"),
         ):
             response = self.client.post(f"/api/v1/admin/tenants/{self.tenant.id}/integrations/calcom/test")
@@ -273,7 +273,7 @@ class AdminTenantIntegrationTests(unittest.TestCase):
             config = db.scalar(select(TenantBookingConfig).where(TenantBookingConfig.tenant_id == self.tenant.id))
         self.assertEqual(config.status, "active")
 
-        with patch("app.services.booking_config_service.CalComClient.get_available_slots", return_value={"available_slots": []}):
+        with patch("app.modules.scheduling.application.booking_config_service.CalComClient.get_available_slots", return_value={"available_slots": []}):
             retry = self.client.post(f"/api/v1/admin/tenants/{self.tenant.id}/integrations/calcom/test")
 
         self.assertEqual(retry.status_code, 200)
@@ -284,7 +284,7 @@ class AdminTenantIntegrationTests(unittest.TestCase):
             config.status = "error"
             db.commit()
 
-        with patch("app.services.booking_config_service.CalComClient.get_available_slots", return_value={"available_slots": []}):
+        with patch("app.modules.scheduling.application.booking_config_service.CalComClient.get_available_slots", return_value={"available_slots": []}):
             retry_from_error = self.client.post(f"/api/v1/admin/tenants/{self.tenant.id}/integrations/calcom/test")
 
         self.assertEqual(retry_from_error.status_code, 200)

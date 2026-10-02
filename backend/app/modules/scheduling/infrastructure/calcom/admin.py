@@ -13,10 +13,10 @@ from app.modules.scheduling.infrastructure.models import (
     TenantSchedulingEventType,
     TenantSchedulingSchedule,
 )
-from app.services.booking_config_service import BookingConfigService
-from app.services.calcom_client import CalComClient, CalComClientConfig
-from app.services.calcom_sync_service import CalComSyncService
-from app.services.scheduling_protocols import SchedulingAdminProvider, SchedulingProviderCapabilities
+from app.modules.scheduling.application.booking_config_service import BookingConfigService
+from app.modules.scheduling.infrastructure.calcom.client import CalComClient, CalComClientConfig
+from app.modules.scheduling.infrastructure.calcom.sync import CalComSyncService
+from app.modules.scheduling.application.ports import SchedulingAdminProvider, SchedulingProviderCapabilities
 
 logger = logging.getLogger(__name__)
 

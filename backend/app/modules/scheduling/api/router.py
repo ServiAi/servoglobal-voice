@@ -17,7 +17,7 @@ from app.modules.scheduling.infrastructure.models import (
     TenantSchedulingSchedule,
     TenantSchedulingTeam,
 )
-from app.schemas.scheduling import (
+from app.modules.scheduling.api.schemas import (
     AgentSchedulingConfigResponse,
     AgentSchedulingConfigUpsertRequest,
     CalComDiscoveryResponse,
@@ -44,12 +44,12 @@ from app.schemas.scheduling import (
     TenantSchedulingConfigResponse,
     TenantSchedulingConfigUpdateRequest,
 )
-from app.core.scheduling_exceptions import SchedulingNotFoundError
-from app.services.calcom_sync_service import CalComSyncService
-from app.services.scheduling_availability_service import SchedulingAvailabilityService
-from app.services.scheduling_config_service import SchedulingConfigService
-from app.services.scheduling_provider_resolver import SchedulingProviderResolver
-from app.services.scheduling_resource_service import SchedulingResourceService
+from app.modules.scheduling.domain.errors import SchedulingNotFoundError
+from app.modules.scheduling.infrastructure.calcom.sync import CalComSyncService
+from app.modules.scheduling.application.availability_service import SchedulingAvailabilityService
+from app.modules.scheduling.application.config_service import SchedulingConfigService
+from app.modules.scheduling.application.provider_resolver import SchedulingProviderResolver
+from app.modules.scheduling.application.resource_service import SchedulingResourceService
 
 logger = logging.getLogger(__name__)
 

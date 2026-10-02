@@ -14,7 +14,7 @@ from app.models.crm import CrmActivity
 from app.modules.scheduling.infrastructure.models import CrmBooking, CrmBookingEvent
 from app.models.integrations import TenantIntegrationEvent
 from app.modules.scheduling.infrastructure.models import TenantBookingConfig
-from app.services.calcom_client import CalComClient, CalComClientConfig
+from app.modules.scheduling.infrastructure.calcom.client import CalComClient, CalComClientConfig
 
 
 class CalComIntegrationTests(Integration2ATestCase):
@@ -47,7 +47,7 @@ class CalComIntegrationTests(Integration2ATestCase):
 
     def test_calcom_slots_use_authenticated_tenant_config(self):
         self.configure_calcom()
-        with patch("app.services.booking_service.CalComClient.get_available_slots") as get_slots:
+        with patch("app.modules.scheduling.application.booking_service.CalComClient.get_available_slots") as get_slots:
             get_slots.return_value = {
                 "date": "2026-07-02",
                 "jornada": "dia",
@@ -62,7 +62,7 @@ class CalComIntegrationTests(Integration2ATestCase):
         self.assertEqual(config_arg.api_key, "cal_secret_test")
 
     def test_calcom_slots_use_current_slots_api_version_header(self):
-        with patch("app.services.calcom_client.httpx.get") as get:
+        with patch("app.modules.scheduling.infrastructure.calcom.client.httpx.get") as get:
             get.return_value = httpx.Response(
                 200,
                 json={
@@ -88,7 +88,7 @@ class CalComIntegrationTests(Integration2ATestCase):
 
     def test_calcom_test_connection_marks_health_without_leaking_secret(self):
         self.configure_calcom()
-        with patch("app.services.booking_config_service.CalComClient.get_available_slots", return_value={"available_slots": []}):
+        with patch("app.modules.scheduling.application.booking_config_service.CalComClient.get_available_slots", return_value={"available_slots": []}):
             response = self.client.post("/api/v1/integrations/calcom/test")
 
         self.assertEqual(response.status_code, 200)

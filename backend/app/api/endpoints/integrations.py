@@ -67,16 +67,16 @@ from app.schemas.integrations import (
     VoiceCallResponse,
 )
 from app.core.config import settings
-from app.services.booking_config_service import BookingConfigService
-from app.services.booking_service import BookingService
+from app.modules.scheduling.application.booking_config_service import BookingConfigService
+from app.modules.scheduling.application.booking_service import BookingService
 from app.services.chatwoot_client import ChatwootClientError, sanitize_chatwoot_error
 from app.services.chatwoot_config_service import ChatwootAccountConflictError, ChatwootConfigService
 from app.services.email_config_service import EmailConfigService
 from app.services.email_send_service import EmailSendService
 from app.services.email_template_service import EmailTemplateService
-from app.services.google_calendar_oauth_service import GoogleCalendarOAuthService
-from app.services.google_calendar_service import GoogleCalendarService
-from app.services.scheduling_resource_service import SchedulingResourceService
+from app.modules.scheduling.infrastructure.google.oauth import GoogleCalendarOAuthService
+from app.modules.scheduling.infrastructure.google.calendar import GoogleCalendarService
+from app.modules.scheduling.application.resource_service import SchedulingResourceService
 from app.services.voice_config_service import VoiceConfigService
 from app.services.voice_agent_service import VoiceAgentService
 from app.services.integration_event_service import IntegrationEventService

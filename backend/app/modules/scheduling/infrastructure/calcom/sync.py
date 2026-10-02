@@ -15,8 +15,8 @@ from app.modules.scheduling.infrastructure.models import (
     TenantSchedulingSchedule,
     TenantSchedulingTeam,
 )
-from app.services.booking_config_service import BookingConfigService
-from app.services.calcom_client import CalComClient, CalComClientConfig, sanitize_calcom_error
+from app.modules.scheduling.application.booking_config_service import BookingConfigService
+from app.modules.scheduling.infrastructure.calcom.client import CalComClient, CalComClientConfig, sanitize_calcom_error
 
 logger = logging.getLogger(__name__)
 

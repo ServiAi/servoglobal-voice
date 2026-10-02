@@ -168,7 +168,7 @@ class VoiceHandoffToolsTests(Integration2ATestCase):
             db.commit()
 
         with (
-            patch("app.services.booking_service.CalComClient.get_available_slots") as get_slots,
+            patch("app.modules.scheduling.application.booking_service.CalComClient.get_available_slots") as get_slots,
             patch("app.services.voice_handoff_service.ChatwootClient.get_or_create_contact", new_callable=AsyncMock, return_value=555),
             patch("app.services.voice_handoff_service.ChatwootClient.get_or_create_conversation", new_callable=AsyncMock, return_value=321),
             patch("app.services.voice_handoff_service.ChatwootClient.assign_team", new_callable=AsyncMock, return_value=True),
@@ -202,7 +202,7 @@ class VoiceHandoffToolsTests(Integration2ATestCase):
             db.commit()
 
         with (
-            patch("app.services.booking_service.CalComClient.get_available_slots") as get_slots,
+            patch("app.modules.scheduling.application.booking_service.CalComClient.get_available_slots") as get_slots,
             patch("app.services.voice_handoff_service.ChatwootClient.get_or_create_contact", new_callable=AsyncMock) as get_contact,
         ):
             get_slots.return_value = {"date": "2026-07-02", "jornada": "all", "available_slots": [], "summary": ""}

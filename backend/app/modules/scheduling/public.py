@@ -1,6 +1,6 @@
 """Scheduling -- public API.
 
-Boundary only: implementation still lives in legacy app.services.booking_service
+Boundary only: implementation still lives in legacy app.modules.scheduling.application.booking_service
 (imported lazily: its import graph pulls in Cal.com, Google and notifications).
 """
 
@@ -26,7 +26,7 @@ class SchedulingFacade:
 
     def is_booking_configured(self, tenant_id: str) -> bool:
         """Same resolution the booking tools use at call time."""
-        from app.services.booking_service import BookingService
+        from app.modules.scheduling.application.booking_service import BookingService
 
         try:
             BookingService(self.db)._effective_config(tenant_id)
@@ -36,7 +36,7 @@ class SchedulingFacade:
 
     def get_available_slots(self, *, tenant_id: str, date_input: str) -> dict[str, Any]:
         """Raises ValueError on invalid dates or provider errors."""
-        from app.services.booking_service import BookingService
+        from app.modules.scheduling.application.booking_service import BookingService
 
         return BookingService(self.db).get_available_slots_for_tenant(tenant_id=tenant_id, date_input=date_input)
 
@@ -54,7 +54,7 @@ class SchedulingFacade:
         """Raises pydantic.ValidationError for a malformed request and
         ValueError for business/provider failures."""
         from app.schemas.crm import BookingCreateRequest
-        from app.services.booking_service import BookingService
+        from app.modules.scheduling.application.booking_service import BookingService
 
         body = BookingCreateRequest(
             start=start,

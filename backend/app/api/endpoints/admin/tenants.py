@@ -74,16 +74,16 @@ from app.schemas.integrations import (
 )
 from app.schemas.crm import BookingCreateRequest, BookingResponse
 from app.api.endpoints.integrations import _integration_catalog_statuses, _resend_response, _whatsapp_template_detail
-from app.services.booking_config_service import BookingConfigService
+from app.modules.scheduling.application.booking_config_service import BookingConfigService
 from app.services.chatwoot_client import ChatwootClientError, sanitize_chatwoot_error
 from app.services.chatwoot_config_service import ChatwootAccountConflictError, ChatwootConfigService
-from app.services.booking_service import BookingService
+from app.modules.scheduling.application.booking_service import BookingService
 from app.services.email_config_service import EmailConfigService
 from app.services.email_send_service import EmailSendService
 from app.services.email_template_service import EmailTemplateService
 from app.services.voice_config_service import VoiceConfigService
 from app.services.voice_agent_service import VoiceAgentService
-from app.services.google_calendar_oauth_service import GoogleCalendarOAuthService
+from app.modules.scheduling.infrastructure.google.oauth import GoogleCalendarOAuthService
 from app.services.integration_event_service import IntegrationEventService
 from app.services.integration_service import IntegrationService
 from app.services.whatsapp_config_service import WhatsAppConfigService

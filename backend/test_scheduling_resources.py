@@ -15,9 +15,9 @@ from app.modules.scheduling.infrastructure.models import (
     TenantSchedulingResourceCalendar,
 )
 from app.schemas.crm import BookingCreateRequest
-from app.services.booking_service import BookingService
-from app.services.google_calendar_oauth_service import GoogleCalendarOAuthService
-from app.services.scheduling_resource_service import SchedulingResourceService
+from app.modules.scheduling.application.booking_service import BookingService
+from app.modules.scheduling.infrastructure.google.oauth import GoogleCalendarOAuthService
+from app.modules.scheduling.application.resource_service import SchedulingResourceService
 
 
 class SchedulingResourcesTests(Integration2ATestCase):
@@ -141,10 +141,10 @@ class SchedulingResourcesTests(Integration2ATestCase):
             self.assertEqual(chosen3.id, r_alice.id)
 
     @patch(
-        "app.services.google_calendar_service.GoogleCalendarService.get_freebusy_intervals",
+        "app.modules.scheduling.infrastructure.google.calendar.GoogleCalendarService.get_freebusy_intervals",
         return_value=[],
     )
-    @patch("app.services.google_calendar_service.GoogleCalendarService.create_event")
+    @patch("app.modules.scheduling.infrastructure.google.calendar.GoogleCalendarService.create_event")
     def test_booking_service_uses_round_robin_resource(self, mock_create_event, mock_freebusy):
         # FreeBusy is patched: unpatched, this test made a real HTTPS call to
         # Google with a fake token and its outcome depended on network/latency.

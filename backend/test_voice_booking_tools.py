@@ -44,7 +44,7 @@ class VoiceBookingToolsTests(Integration2ATestCase):
         self.seed_lead(context_id="ctx-voice")
         self.seed_call_context(context_id="ctx-voice")
 
-        with patch("app.services.booking_service.CalComClient.get_available_slots") as get_slots:
+        with patch("app.modules.scheduling.application.booking_service.CalComClient.get_available_slots") as get_slots:
             get_slots.return_value = {"date": "2026-07-02", "jornada": "all", "available_slots": [], "summary": ""}
             response = self.client.post(
                 "/api/v1/voice/tools/availability",
@@ -60,7 +60,7 @@ class VoiceBookingToolsTests(Integration2ATestCase):
         self.seed_lead(context_id="ctx-voice")
         self.seed_call_context(context_id="ctx-voice")
 
-        with patch("app.services.booking_service.CalComClient.get_available_slots") as get_slots:
+        with patch("app.modules.scheduling.application.booking_service.CalComClient.get_available_slots") as get_slots:
             get_slots.return_value = {
                 "date": "2026-07-02",
                 "jornada": "dia",
@@ -100,7 +100,7 @@ class VoiceBookingToolsTests(Integration2ATestCase):
             )
             db.commit()
 
-        with patch("app.services.booking_service.CalComClient.get_available_slots") as get_slots:
+        with patch("app.modules.scheduling.application.booking_service.CalComClient.get_available_slots") as get_slots:
             get_slots.return_value = {"date": "2026-07-02", "jornada": "all", "available_slots": [], "summary": ""}
             response = self.client.post(
                 "/api/v1/voice/tools/availability",
@@ -122,7 +122,7 @@ class VoiceBookingToolsTests(Integration2ATestCase):
         lead_id, _ = self.seed_lead(context_id="ctx-voice")
         self.seed_call_context(context_id="ctx-voice")
 
-        with patch("app.services.booking_service.CalComClient.create_booking") as create_booking:
+        with patch("app.modules.scheduling.application.booking_service.CalComClient.create_booking") as create_booking:
             create_booking.return_value = {
                 "data": {"id": 789, "uid": "voice_uid_1", "status": "accepted"}
             }
@@ -161,7 +161,7 @@ class VoiceBookingToolsTests(Integration2ATestCase):
             )
             db.commit()
 
-        with patch("app.services.booking_service.CalComClient.create_booking") as create_booking:
+        with patch("app.modules.scheduling.application.booking_service.CalComClient.create_booking") as create_booking:
             create_booking.return_value = {"data": {"id": 789, "uid": "voice_uid_1", "status": "accepted"}}
             response = self.client.post(
                 "/api/v1/voice/tools/bookings",

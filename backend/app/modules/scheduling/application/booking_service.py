@@ -17,13 +17,14 @@ from app.modules.scheduling.infrastructure.models import (
     TenantVoiceBookingConfig,
 )
 from app.schemas.crm import BookingCreateRequest
-from app.services.booking_config_service import BookingConfigService
-from app.services.calcom_client import CalComClient, CalComClientConfig, parse_utc_start, sanitize_calcom_error
+from app.modules.scheduling.application.booking_config_service import BookingConfigService
+from app.modules.scheduling.infrastructure.calcom.client import CalComClient, CalComClientConfig, parse_utc_start, sanitize_calcom_error
 from app.services.crm_activity_service import CrmActivityService
-from app.services.google_calendar_service import sanitize_google_calendar_error
+from app.modules.scheduling.infrastructure.google.calendar import sanitize_google_calendar_error
 from app.services.integration_event_service import IntegrationEventService
 from app.services.notification_event_pipeline import NotificationEventPipeline
-from app.services.scheduling_provider import CalComProvider, GoogleCalendarProvider
+from app.modules.scheduling.infrastructure.calcom.adapter import CalComProvider
+from app.modules.scheduling.infrastructure.google.adapter import GoogleCalendarProvider
 
 logger = logging.getLogger(__name__)
 

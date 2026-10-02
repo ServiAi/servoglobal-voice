@@ -995,8 +995,8 @@ class BookingServiceIntegrationTests(Integration2ATestCase):
         self.configure_calcom()
         lead_id, _ = self.seed_lead()
 
-        with patch("app.services.booking_service.CalComClient.create_booking") as create_booking, patch(
-            "app.services.booking_service.NotificationEventPipeline.process_booking_event"
+        with patch("app.modules.scheduling.application.booking_service.CalComClient.create_booking") as create_booking, patch(
+            "app.modules.scheduling.application.booking_service.NotificationEventPipeline.process_booking_event"
         ) as process_event:
             create_booking.return_value = {"data": {"id": 1, "uid": "uid-1", "status": "accepted"}}
             response = self.client.post(
@@ -1016,14 +1016,14 @@ class BookingServiceIntegrationTests(Integration2ATestCase):
         self.assertEqual(kwargs["event_type"], "booking.created")
 
     def test_failed_booking_does_not_invoke_pipeline(self):
-        from app.services.booking_service import BookingService
+        from app.modules.scheduling.application.booking_service import BookingService
         from app.schemas.crm import BookingCreateRequest
 
         self.configure_calcom()
         lead_id, _ = self.seed_lead()
 
-        with patch("app.services.booking_service.CalComClient.create_booking") as create_booking, patch(
-            "app.services.booking_service.NotificationEventPipeline.process_booking_event"
+        with patch("app.modules.scheduling.application.booking_service.CalComClient.create_booking") as create_booking, patch(
+            "app.modules.scheduling.application.booking_service.NotificationEventPipeline.process_booking_event"
         ) as process_event:
             create_booking.side_effect = RuntimeError("cal.com is down")
             with SessionLocal() as db, self.assertRaises(RuntimeError):
@@ -1044,8 +1044,8 @@ class BookingServiceIntegrationTests(Integration2ATestCase):
         self.configure_calcom()
         lead_id, _ = self.seed_lead()
 
-        with patch("app.services.booking_service.CalComClient.create_booking") as create_booking, patch(
-            "app.services.booking_service.NotificationEventPipeline.process_booking_event"
+        with patch("app.modules.scheduling.application.booking_service.CalComClient.create_booking") as create_booking, patch(
+            "app.modules.scheduling.application.booking_service.NotificationEventPipeline.process_booking_event"
         ) as process_event:
             create_booking.return_value = {"data": {"id": 1, "uid": "uid-1", "status": "accepted"}}
             process_event.side_effect = RuntimeError("boom")
@@ -1064,7 +1064,7 @@ class BookingServiceIntegrationTests(Integration2ATestCase):
     def test_cancellation_invokes_booking_cancelled(self):
         self.configure_calcom()
         lead_id, contact_id = self.seed_lead()
-        from app.services.booking_service import BookingService
+        from app.modules.scheduling.application.booking_service import BookingService
 
         with SessionLocal() as db:
             from datetime import UTC, datetime as dt
@@ -1088,8 +1088,8 @@ class BookingServiceIntegrationTests(Integration2ATestCase):
             db.refresh(booking)
             booking_id = booking.id
 
-            with patch("app.services.booking_service.CalComClient.cancel_booking") as cancel_booking, patch(
-                "app.services.booking_service.NotificationEventPipeline.process_booking_event"
+            with patch("app.modules.scheduling.application.booking_service.CalComClient.cancel_booking") as cancel_booking, patch(
+                "app.modules.scheduling.application.booking_service.NotificationEventPipeline.process_booking_event"
             ) as process_event:
                 cancel_booking.return_value = {"data": {"status": "cancelled"}}
                 BookingService(db).cancel_lead_booking(tenant_id=self.tenant.id, booking_id=booking_id)
@@ -1100,7 +1100,7 @@ class BookingServiceIntegrationTests(Integration2ATestCase):
     def test_reschedule_invokes_booking_rescheduled_and_persists_new_dates(self):
         self.configure_calcom()
         lead_id, contact_id = self.seed_lead()
-        from app.services.booking_service import BookingService
+        from app.modules.scheduling.application.booking_service import BookingService
         from datetime import UTC, datetime as dt
 
         with SessionLocal() as db:
@@ -1124,8 +1124,8 @@ class BookingServiceIntegrationTests(Integration2ATestCase):
             db.refresh(booking)
             booking_id = booking.id
 
-            with patch("app.services.booking_service.CalComClient.reschedule_booking") as reschedule_booking, patch(
-                "app.services.booking_service.NotificationEventPipeline.process_booking_event"
+            with patch("app.modules.scheduling.application.booking_service.CalComClient.reschedule_booking") as reschedule_booking, patch(
+                "app.modules.scheduling.application.booking_service.NotificationEventPipeline.process_booking_event"
             ) as process_event:
                 reschedule_booking.return_value = {"data": {"status": "accepted"}}
                 BookingService(db).reschedule_lead_booking(

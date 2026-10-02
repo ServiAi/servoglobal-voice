@@ -9,12 +9,11 @@ import pytz
 import re
 from datetime import date, timedelta, datetime
 from app.core.config import settings
-from app.services.date_resolution_service import (
+from app.modules.scheduling.domain.dates import (
     is_iso_like_date,
     parse_reference_datetime,
     resolve_temporal_expression,
 )
-from app.services.notification_service import notification_service
 
 logger = logging.getLogger(__name__)
 

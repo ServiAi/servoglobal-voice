@@ -13,7 +13,7 @@ class CrmBookingTests(Integration2ATestCase):
         self.configure_calcom()
         lead_id, _ = self.seed_lead()
 
-        with patch("app.services.booking_service.CalComClient.create_booking") as create_booking:
+        with patch("app.modules.scheduling.application.booking_service.CalComClient.create_booking") as create_booking:
             create_booking.return_value = {
                 "data": {
                     "id": 456,
@@ -54,7 +54,7 @@ class CrmBookingTests(Integration2ATestCase):
         self.configure_calcom()
         lead_id, _ = self.seed_lead()
 
-        with patch("app.services.booking_service.CalComClient.create_booking") as create_booking:
+        with patch("app.modules.scheduling.application.booking_service.CalComClient.create_booking") as create_booking:
             create_booking.return_value = {"data": {"id": 456, "uid": "booking_uid_1", "status": "accepted"}}
             response = self.client.post(
                 f"/api/v1/crm/leads/{lead_id}/bookings",

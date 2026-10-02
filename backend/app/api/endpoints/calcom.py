@@ -10,7 +10,7 @@ from app.db.session import get_db
 from app.modules.scheduling.infrastructure.models import CrmBooking, CrmBookingEvent
 from app.services.crm_activity_service import CrmActivityService
 from app.services.notification_event_pipeline import run_booking_notification_pipeline_task
-from app.services.calcom_service import (
+from app.modules.scheduling.infrastructure.calcom.availability import (
     CalComConfigurationError,
     CalComInputError,
     CalComUpstreamError,

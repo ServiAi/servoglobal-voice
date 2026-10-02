@@ -51,7 +51,7 @@ from app.services.crm_query_service import CrmQueryService
 from app.services.crm_dashboard_metrics_service import CrmDashboardMetricsService
 from app.services.email_send_service import EmailSendService
 from app.services.call_summary_service import CallSummaryService
-from app.services.booking_service import BookingService
+from app.modules.scheduling.application.booking_service import BookingService
 
 router = APIRouter(prefix="/api/v1/crm", tags=["CRM"])
 

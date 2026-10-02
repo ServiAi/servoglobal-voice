@@ -1,6 +1,6 @@
 import unittest
 
-from app.services.date_resolution_service import resolve_temporal_expression
+from app.modules.scheduling.domain.dates import resolve_temporal_expression
 
 
 REFERENCE_DATETIME = "2026-04-08 13:44:07"

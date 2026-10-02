@@ -11,7 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.modules.scheduling.infrastructure.models import TenantGoogleCalendar, TenantGoogleCalendarConnection
-from app.services.google_calendar_oauth_service import GoogleCalendarOAuthService
+from app.modules.scheduling.infrastructure.google.oauth import GoogleCalendarOAuthService
 from app.services.secret_manager_service import SecretManager
 
 logger = logging.getLogger(__name__)

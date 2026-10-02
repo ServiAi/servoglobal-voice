@@ -689,7 +689,7 @@ class AgentToolInvokeEndpointTests(Integration2ATestCase):
         session_id = self._session_with_tools(
             [{"key": "calendar.create_booking", "enabled": True, "config": {}}], lead_id=lead_id
         )
-        with patch("app.services.booking_service.BookingService.create_lead_booking") as mocked:
+        with patch("app.modules.scheduling.application.booking_service.BookingService.create_lead_booking") as mocked:
             from app.modules.scheduling.infrastructure.models import CrmBooking
             from datetime import datetime, timezone
 
@@ -774,7 +774,7 @@ class AgentToolInvokeEndpointTests(Integration2ATestCase):
         real_lead_id = lead_response.json()["result"]["lead_id"]
         real_contact_id = lead_response.json()["result"]["contact_id"]
 
-        with patch("app.services.booking_service.BookingService.create_lead_booking") as mocked:
+        with patch("app.modules.scheduling.application.booking_service.BookingService.create_lead_booking") as mocked:
             from datetime import datetime, timezone
 
             from app.modules.scheduling.infrastructure.models import CrmBooking

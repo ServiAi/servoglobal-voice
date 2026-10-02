@@ -12,10 +12,10 @@ from app.modules.scheduling.infrastructure.models import (
     TenantSchedulingConfig,
     TenantSchedulingEventType,
 )
-from app.services.google_calendar_service import GoogleCalendarService
-from app.services.scheduling_config_service import SchedulingConfigService
-from app.services.scheduling_protocols import SchedulingAdminProvider, SchedulingProviderCapabilities
-from app.services.scheduling_resource_service import SchedulingResourceService
+from app.modules.scheduling.infrastructure.google.calendar import GoogleCalendarService
+from app.modules.scheduling.application.config_service import SchedulingConfigService
+from app.modules.scheduling.application.ports import SchedulingAdminProvider, SchedulingProviderCapabilities
+from app.modules.scheduling.application.resource_service import SchedulingResourceService
 
 logger = logging.getLogger(__name__)
 

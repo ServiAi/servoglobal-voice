@@ -18,7 +18,7 @@ from app.modules.scheduling.infrastructure.models import (
     TenantSchedulingTeam,
     TenantSchedulingTeamMember,
 )
-from app.services.google_calendar_service import GoogleCalendarService
+from app.modules.scheduling.infrastructure.google.calendar import GoogleCalendarService
 
 logger = logging.getLogger(__name__)
 

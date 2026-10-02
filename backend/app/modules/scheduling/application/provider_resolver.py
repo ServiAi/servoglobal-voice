@@ -12,12 +12,13 @@ from app.modules.scheduling.infrastructure.models import (
     TenantGoogleCalendarConnection,
     TenantSchedulingEventType,
 )
-from app.services.booking_config_service import BookingConfigService
-from app.services.calcom_client import CalComClient, CalComClientConfig
-from app.services.calcom_scheduling_admin_provider import CalComSchedulingAdminProvider
-from app.services.google_scheduling_admin_provider import GoogleSchedulingAdminProvider
-from app.services.scheduling_protocols import SchedulingAdminProvider, SchedulingProvider
-from app.services.scheduling_provider import CalComProvider, GoogleCalendarProvider
+from app.modules.scheduling.application.booking_config_service import BookingConfigService
+from app.modules.scheduling.infrastructure.calcom.client import CalComClient, CalComClientConfig
+from app.modules.scheduling.infrastructure.calcom.admin import CalComSchedulingAdminProvider
+from app.modules.scheduling.infrastructure.google.admin import GoogleSchedulingAdminProvider
+from app.modules.scheduling.application.ports import SchedulingAdminProvider, SchedulingProvider
+from app.modules.scheduling.infrastructure.calcom.adapter import CalComProvider
+from app.modules.scheduling.infrastructure.google.adapter import GoogleCalendarProvider
 
 logger = logging.getLogger(__name__)
 

@@ -21,7 +21,7 @@ from app.main import app
 from app.models.crm import CrmCallContext, CrmContact, CrmLead, CrmPipelineStage
 from app.models.identity import Tenant, TenantMembership, User
 from app.schemas.integrations import BookingConfigRequest
-from app.services.booking_config_service import BookingConfigService
+from app.modules.scheduling.application.booking_config_service import BookingConfigService
 
 
 class Integration2ATestCase(unittest.TestCase):

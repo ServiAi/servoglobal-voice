@@ -15,7 +15,7 @@ from app.models.crm import CrmLead
 from app.models.integrations import TenantVoiceAgentConfig
 from app.schemas.crm import BookingCreateRequest, VoiceAvailabilityRequest, VoiceBookingRequest, VoiceHandoffRequest
 from app.schemas.integrations import HANDOFF_TRIGGER_CUSTOMER_REQUEST
-from app.services.booking_service import BookingService
+from app.modules.scheduling.application.booking_service import BookingService
 from app.services.voice_booking_context_service import VoiceBookingContextService
 from app.services.voice_handoff_service import VoiceHandoffService
 
