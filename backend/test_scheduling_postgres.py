@@ -16,7 +16,7 @@ import threading
 import unittest
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
-from threading import Barrier, BrokenBarrierError
+from threading import Barrier, BrokenBarrierError, Event
 from unittest.mock import patch
 from uuid import uuid4
 
@@ -42,7 +42,10 @@ from app.modules.scheduling.infrastructure.models import (
     CrmBooking,
     CrmBookingEvent,
     TenantBookingConfig,
+    TenantGoogleCalendar,
+    TenantGoogleCalendarConnection,
     TenantSchedulingResource,
+    TenantSchedulingResourceCalendar,
 )
 
 _local = threading.local()
@@ -176,6 +179,121 @@ class SchedulingPostgresTests(unittest.TestCase):
     def test_no_resource_free_returns_none_and_releases_the_lock(self) -> None:
         tenant_id = self._tenant()  # no resources at all
         self.assertIsNone(self._select(tenant_id, gated=False))
+
+    # -- Google FreeBusy never runs under an allocation lock -----------------------------------
+    SLOT = datetime(2030, 1, 7, 15, 0, tzinfo=UTC)  # a Monday; resources have no working-hours limits
+
+    def _resources_with_blocking_calendars(self, tenant_id: str, count: int) -> list[str]:
+        ids = self._resources(tenant_id, count)
+        with self.SessionLocal() as db:
+            connection = TenantGoogleCalendarConnection(tenant_id=tenant_id, status="connected", calendar_id="primary")
+            db.add(connection)
+            db.flush()
+            for index, resource_id in enumerate(ids):
+                calendar = TenantGoogleCalendar(
+                    tenant_id=tenant_id, connection_id=connection.id, google_calendar_id=f"cal{index}@example.com",
+                    is_blocking=True, is_booking_destination=True,
+                )
+                db.add(calendar)
+                db.flush()
+                db.add(
+                    TenantSchedulingResourceCalendar(
+                        tenant_id=tenant_id, resource_id=resource_id, calendar_id=calendar.id,
+                        is_blocking=True, is_destination=True,
+                    )
+                )
+            db.commit()
+        return ids
+
+    def _allocate(self, tenant_id: str, google) -> str | None:
+        with self.SessionLocal() as db:
+            chosen, _ = SchedulingResourceService(db, google_service=google).select_resource_round_robin(
+                tenant_id=tenant_id, team_name="sales", slot_start=self.SLOT
+            )
+            return chosen.id if chosen else None
+
+    def test_freebusy_runs_while_no_allocation_row_lock_is_held(self) -> None:
+        from sqlalchemy import text
+
+        tenant_id = self._tenant()
+        ids = self._resources_with_blocking_calendars(tenant_id, 2)
+        observed: list[str] = []
+        engine = self.engine
+
+        class ProbingGoogle:
+            def get_freebusy_intervals(self, **kwargs):
+                # Another connection tries to lock the very same rows without
+                # waiting: it only succeeds if this request holds no row lock.
+                with engine.connect() as other:
+                    try:
+                        other.execute(
+                            text("SELECT id FROM tenant_scheduling_resources WHERE tenant_id = :t FOR UPDATE NOWAIT"),
+                            {"t": tenant_id},
+                        ).all()
+                        observed.append("free")
+                    except Exception:
+                        observed.append("LOCKED")
+                return []
+
+        chosen = self._allocate(tenant_id, ProbingGoogle())
+        self.assertIn(chosen, ids)
+        self.assertEqual(observed, ["free", "free"], "FreeBusy ran while resource rows were locked")
+
+    def test_slow_freebusy_does_not_block_another_allocation(self) -> None:
+        tenant_id = self._tenant()
+        ids = self._resources_with_blocking_calendars(tenant_id, 2)
+        in_freebusy, release = Event(), Event()
+
+        class SlowGoogle:
+            def __init__(self) -> None:
+                self.first = True
+
+            def get_freebusy_intervals(self, **kwargs):
+                if self.first:  # only request A is slow
+                    self.first = False
+                    in_freebusy.set()
+                    release.wait(timeout=30)
+                return []
+
+        class FastGoogle:
+            def get_freebusy_intervals(self, **kwargs):
+                return []
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            slow = pool.submit(self._allocate, tenant_id, SlowGoogle())
+            self.assertTrue(in_freebusy.wait(timeout=30), "request A never reached FreeBusy")
+            fast = pool.submit(self._allocate, tenant_id, FastGoogle())
+            try:
+                # B must finish while A is still stuck in the network call.
+                fast_choice = fast.result(timeout=15)
+            finally:
+                release.set()
+            slow_choice = slow.result(timeout=30)
+        self.assertFalse(slow.running())
+        self.assertEqual(sorted([fast_choice, slow_choice]), sorted(ids))
+        with self.SessionLocal() as db:
+            counts = sorted(db.scalars(select(TenantSchedulingResource.total_assigned_count)).all())
+        self.assertEqual(counts, [1, 1])
+
+    def test_both_requests_checked_the_same_candidates_but_the_post_lock_ranking_decides(self) -> None:
+        """Both requests see [A, B] as free (stale pre-lock view); the second one
+        must still pick the resource the first did not."""
+        tenant_id = self._tenant()
+        ids = self._resources_with_blocking_calendars(tenant_id, 2)
+        gate = Barrier(2)
+
+        class MeetingPointGoogle:
+            def get_freebusy_intervals(self, **kwargs):
+                try:
+                    gate.wait(timeout=5)
+                except BrokenBarrierError:
+                    pass
+                return []
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            futures = [pool.submit(self._allocate, tenant_id, MeetingPointGoogle()) for _ in range(2)]
+            chosen = [f.result(timeout=60) for f in futures]
+        self.assertEqual(sorted(chosen), sorted(ids))
 
     # -- Booking lifecycle (real FKs / JSON) -----------------------------------------
     def _lead(self, tenant_id: str) -> BookingCustomer:

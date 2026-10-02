@@ -196,3 +196,67 @@ class SchedulingResourcesTests(Integration2ATestCase):
             db.refresh(r_alice)
             self.assertEqual(r_alice.total_assigned_count, 1)
             self.assertIsNotNone(r_alice.last_assigned_at)
+
+    def test_round_robin_checks_freebusy_for_every_candidate_before_it_allocates(self):
+        """Phase 1 (availability, may call Google) strictly precedes phase 2 (the
+        allocation lock + counter update)."""
+        order: list[str] = []
+
+        class RecordingGoogle:
+            def get_freebusy_intervals(self, **kwargs):
+                order.append("freebusy")
+                return []
+
+        with SessionLocal() as db:
+            svc = SchedulingResourceService(db, RecordingGoogle())
+            r_alice = svc.create_resource(tenant_id=self.tenant.id, name="Alice", team="sales", priority=1)
+            r_bob = svc.create_resource(tenant_id=self.tenant.id, name="Bob", team="sales", priority=1)
+            svc.assign_calendar_to_resource(tenant_id=self.tenant.id, resource_id=r_alice.id, calendar_id=self.cal_alice.id)
+            svc.assign_calendar_to_resource(tenant_id=self.tenant.id, resource_id=r_bob.id, calendar_id=self.cal_bob.id)
+
+            original = SchedulingResourceService._allocate_candidate_atomically
+
+            def recording_allocate(service, *args, **kwargs):
+                order.append("allocate")
+                return original(service, *args, **kwargs)
+
+            with patch.object(SchedulingResourceService, "_allocate_candidate_atomically", recording_allocate):
+                chosen, calendar_id = svc.select_resource_round_robin(
+                    tenant_id=self.tenant.id, team_name="sales", slot_start=datetime(2030, 1, 7, 15, 0, tzinfo=UTC)
+                )
+
+        self.assertEqual(order, ["freebusy", "freebusy", "allocate"])
+        self.assertEqual(chosen.id, r_alice.id)  # first by the unchanged ranking
+        self.assertEqual(calendar_id, "alice@example.com")
+
+    def test_a_busy_candidate_is_never_allocated_even_if_it_ranks_first(self):
+        class BusyForAlice:
+            def get_freebusy_intervals(self, *, calendar_ids, **kwargs):
+                return [{"start": 1, "end": 2}] if "alice@example.com" in calendar_ids else []
+
+        with SessionLocal() as db:
+            svc = SchedulingResourceService(db, BusyForAlice())
+            r_alice = svc.create_resource(tenant_id=self.tenant.id, name="Alice", team="sales", priority=5)
+            r_bob = svc.create_resource(tenant_id=self.tenant.id, name="Bob", team="sales", priority=1)
+            svc.assign_calendar_to_resource(tenant_id=self.tenant.id, resource_id=r_alice.id, calendar_id=self.cal_alice.id)
+            svc.assign_calendar_to_resource(tenant_id=self.tenant.id, resource_id=r_bob.id, calendar_id=self.cal_bob.id)
+            chosen, _ = svc.select_resource_round_robin(
+                tenant_id=self.tenant.id, team_name="sales", slot_start=datetime(2030, 1, 7, 15, 0, tzinfo=UTC)
+            )
+            self.assertEqual(chosen.id, r_bob.id)
+            db.refresh(r_alice)
+            self.assertEqual(r_alice.total_assigned_count, 0)
+
+    def test_freebusy_failure_keeps_the_historic_behaviour_candidate_stays_available(self):
+        class BrokenGoogle:
+            def get_freebusy_intervals(self, **kwargs):
+                raise RuntimeError("google down")
+
+        with SessionLocal() as db:
+            svc = SchedulingResourceService(db, BrokenGoogle())
+            r_alice = svc.create_resource(tenant_id=self.tenant.id, name="Alice", team="sales")
+            svc.assign_calendar_to_resource(tenant_id=self.tenant.id, resource_id=r_alice.id, calendar_id=self.cal_alice.id)
+            chosen, _ = svc.select_resource_round_robin(
+                tenant_id=self.tenant.id, team_name="sales", slot_start=datetime(2030, 1, 7, 15, 0, tzinfo=UTC)
+            )
+            self.assertEqual(chosen.id, r_alice.id)

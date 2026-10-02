@@ -3,6 +3,7 @@ fact, providers faked, tenants isolated. Fakes + SQLite; no network."""
 
 from __future__ import annotations
 
+import inspect
 import unittest
 from unittest.mock import patch
 
@@ -247,6 +248,30 @@ class SchedulingBoundaryTests(Integration2ATestCase):
             self.assertIsNone(reconcile_calcom_webhook(db, "BOOKING_CANCELLED", {"metadata": {"source": "other"}}, ports))
             wrong_lead = {**payload, "metadata": {**payload["metadata"], "crm_lead_id": "other-lead"}}
             self.assertIsNone(reconcile_calcom_webhook(db, "BOOKING_CANCELLED", wrong_lead, ports))
+
+
+class RoundRobinLockDisciplineTests(unittest.TestCase):
+    """Guard against regressing to "row lock held across Google FreeBusy"."""
+
+    def _source(self, name: str) -> str:
+        from app.modules.scheduling.application.resource_service import SchedulingResourceService
+
+        return inspect.getsource(getattr(SchedulingResourceService, name))
+
+    def test_only_the_allocation_method_takes_the_lock_and_it_does_no_io(self) -> None:
+        for name in ("select_resource_round_robin", "_find_available_candidates", "_candidate_criteria"):
+            with self.subTest(method=name):
+                self.assertNotIn("with_for_update", self._source(name), f"{name} must not lock rows")
+        allocate = self._source("_allocate_candidate_atomically")
+        self.assertIn("with_for_update", allocate)
+        self.assertIn("populate_existing", allocate)
+        for io_marker in ("freebusy", "google_service", "httpx", "requests", "urlopen"):
+            self.assertNotIn(io_marker, allocate.lower().replace("freebusy ", ""), f"network I/O ({io_marker}) inside the lock")
+
+    def test_freebusy_is_only_called_from_the_availability_phase(self) -> None:
+        self.assertIn("get_freebusy_intervals", self._source("_find_available_candidates"))
+        self.assertNotIn("get_freebusy_intervals", self._source("select_resource_round_robin"))
+        self.assertNotIn("get_freebusy_intervals", self._source("_allocate_candidate_atomically"))
 
 
 if __name__ == "__main__":
