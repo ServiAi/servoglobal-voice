@@ -8,11 +8,12 @@ from sqlalchemy import select
 from _integrations_2a_test_base import Integration2ATestCase, SessionLocal
 from app.core.config import settings
 from app.models.analytics import Agent
-from app.models.crm import CrmBooking, CrmCallContext, CrmLead
-from app.models.integrations import TenantGoogleCalendar, TenantGoogleCalendarConnection
-from app.schemas.crm import BookingCreateRequest
-from app.services.booking_service import BookingService
-from app.services.google_calendar_oauth_service import GoogleCalendarOAuthService
+from app.models.crm import CrmCallContext, CrmLead
+from app.modules.scheduling.infrastructure.models import CrmBooking
+from app.modules.scheduling.infrastructure.models import TenantGoogleCalendar, TenantGoogleCalendarConnection
+from app.modules.scheduling.public import CreateBookingCommand
+from app.modules.scheduling.application.booking_service import BookingService
+from app.modules.scheduling.infrastructure.google.oauth import GoogleCalendarOAuthService
 
 
 class GoogleCalendarBookingTests(Integration2ATestCase):
@@ -47,7 +48,7 @@ class GoogleCalendarBookingTests(Integration2ATestCase):
 
         self.lead_id, self.contact_id = self.seed_lead(email="maria@example.com")
 
-    @patch("app.services.google_calendar_service.GoogleCalendarService.create_event")
+    @patch("app.modules.scheduling.infrastructure.google.calendar.GoogleCalendarService.create_event")
     def test_create_lead_booking_with_google_calendar(self, mock_create_event):
         mock_create_event.return_value = {
             "id": "g_event_12345",
@@ -60,7 +61,7 @@ class GoogleCalendarBookingTests(Integration2ATestCase):
             booking = service.create_lead_booking(
                 tenant_id=self.tenant.id,
                 lead_id=self.lead_id,
-                body=BookingCreateRequest(
+                command=CreateBookingCommand(
                     start="2026-09-15T15:00:00Z",
                     attendee_name="Maria Perez",
                     attendee_email="maria@example.com",
@@ -79,7 +80,7 @@ class GoogleCalendarBookingTests(Integration2ATestCase):
             self.assertIsNotNone(stored)
             self.assertEqual(stored.provider_booking_id, "g_event_12345")
 
-    @patch("app.services.google_calendar_service.GoogleCalendarService.create_event")
+    @patch("app.modules.scheduling.infrastructure.google.calendar.GoogleCalendarService.create_event")
     def test_voice_booking_tool_end_to_end_with_google_calendar(self, mock_create_event):
         mock_create_event.return_value = {
             "id": "g_voice_event_999",
@@ -102,7 +103,7 @@ class GoogleCalendarBookingTests(Integration2ATestCase):
             db.commit()
 
         # 1. Test voice availability endpoint
-        with patch("app.services.google_calendar_service.GoogleCalendarService.get_freebusy_intervals", return_value=[]):
+        with patch("app.modules.scheduling.infrastructure.google.calendar.GoogleCalendarService.get_freebusy_intervals", return_value=[]):
             avail_res = self.client.post(
                 "/api/v1/voice/tools/availability",
                 headers={"X-Voice-Tool-Secret": "test_voice_tool_secret"},
@@ -136,9 +137,9 @@ class GoogleCalendarBookingTests(Integration2ATestCase):
         self.assertEqual(book_payload["status"], "accepted")
         self.assertIn("booking_id", book_payload)
 
-    @patch("app.services.google_calendar_service.GoogleCalendarService.delete_event")
-    @patch("app.services.google_calendar_service.GoogleCalendarService.patch_event")
-    @patch("app.services.google_calendar_service.GoogleCalendarService.create_event")
+    @patch("app.modules.scheduling.infrastructure.google.calendar.GoogleCalendarService.delete_event")
+    @patch("app.modules.scheduling.infrastructure.google.calendar.GoogleCalendarService.patch_event")
+    @patch("app.modules.scheduling.infrastructure.google.calendar.GoogleCalendarService.create_event")
     def test_reschedule_and_cancel_google_booking(self, mock_create, mock_patch, mock_delete):
         mock_create.return_value = {"id": "g_evt_resched", "htmlLink": "https://calendar.google.com"}
         mock_patch.return_value = {"id": "g_evt_resched"}
@@ -149,7 +150,7 @@ class GoogleCalendarBookingTests(Integration2ATestCase):
             booking = service.create_lead_booking(
                 tenant_id=self.tenant.id,
                 lead_id=self.lead_id,
-                body=BookingCreateRequest(
+                command=CreateBookingCommand(
                     start="2026-09-15T15:00:00Z",
                     attendee_name="Maria Perez",
                     attendee_email="maria@example.com",

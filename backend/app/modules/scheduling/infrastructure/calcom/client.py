@@ -3,14 +3,14 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
 
-from app.core.calcom_constants import CALCOM_API_VERSIONS, DEFAULT_CALCOM_API_VERSION
 from app.core.config import settings
-from app.core.scheduling_exceptions import (
+from app.modules.scheduling.domain.dates import parse_reference_datetime
+from app.modules.scheduling.domain.errors import (
     SchedulingAuthenticationError,
     SchedulingConflictError,
     SchedulingNotFoundError,
@@ -18,7 +18,7 @@ from app.core.scheduling_exceptions import (
     SchedulingUpstreamError,
     SchedulingValidationError,
 )
-from app.services.calcom_service import (
+from app.modules.scheduling.infrastructure.calcom.availability import (
     CAL_HTTP_TIMEOUT_SECONDS,
     CalComConfigurationError,
     CalComInputError,
@@ -29,7 +29,10 @@ from app.services.calcom_service import (
     _is_booking_unavailable_response,
     _resolve_date_input,
 )
-from app.services.date_resolution_service import parse_reference_datetime
+from app.modules.scheduling.infrastructure.calcom.constants import (
+    CALCOM_API_VERSIONS,
+    DEFAULT_CALCOM_API_VERSION,
+)
 
 logger = logging.getLogger(__name__)
 CAL_SLOTS_API_VERSION = CALCOM_API_VERSIONS.get("slots", "2024-09-04")
@@ -60,7 +63,7 @@ class CalComClient:
         self.base_url = (base_url or settings.CALCOM_API_BASE_URL).rstrip("/")
 
     @classmethod
-    def legacy(cls) -> tuple["CalComClient", CalComClientConfig]:
+    def legacy(cls) -> tuple[CalComClient, CalComClientConfig]:
         if not settings.CAL_API_KEY:
             raise CalComConfigurationError("CAL_API_KEY no esta configurada en las variables de entorno.")
         event_type_id = int(settings.CAL_EVENT_TYPE_ID) if settings.CAL_EVENT_TYPE_ID else None

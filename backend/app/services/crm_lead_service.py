@@ -1,20 +1,24 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from sqlalchemy import select, func, update, delete, or_
-from sqlalchemy.orm import Session
-from app.models.crm import (
-    CrmLead,
-    CrmPipelineStage,
-    CrmContact,
-    CrmBooking,
-    CrmWhatsAppMessage,
-    CrmVoiceCall,
-)
-from app.models.integrations import TenantEmailSend, TenantFormSubmission, TenantFormToken
-from app.services.crm_pipeline_service import CrmPipelineService
-from app.services.crm_activity_service import CrmActivityService
 
+from sqlalchemy import delete, func, or_, select, update
+from sqlalchemy.orm import Session
+
+from app.models.crm import (
+    CrmContact,
+    CrmLead,
+    CrmVoiceCall,
+    CrmWhatsAppMessage,
+)
+from app.models.integrations import (
+    TenantEmailSend,
+    TenantFormSubmission,
+    TenantFormToken,
+)
+from app.modules.scheduling.public import SchedulingFacade
+from app.services.crm_activity_service import CrmActivityService
+from app.services.crm_pipeline_service import CrmPipelineService
 
 VALID_LEAD_STATUSES = {"open", "won", "lost", "unqualified", "paused"}
 
@@ -253,7 +257,10 @@ class CrmLeadService:
         # operational history outside the lead/contact lifecycle: keep the
         # rows but clear the now-dangling references instead of blocking the
         # delete on their foreign keys.
-        for model in (CrmBooking, CrmWhatsAppMessage, CrmVoiceCall, TenantEmailSend):
+        SchedulingFacade(self.db).detach_customers(
+            tenant_id=tenant_id, lead_ids=lead_ids, contact_ids=contact_ids
+        )
+        for model in (CrmWhatsAppMessage, CrmVoiceCall, TenantEmailSend):
             self.db.execute(
                 update(model)
                 .where(

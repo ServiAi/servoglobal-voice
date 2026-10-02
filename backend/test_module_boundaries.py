@@ -85,6 +85,49 @@ SIP_CREDENTIAL_CONSUMERS = {
     "app.services.voice_callback_service",
 }
 
+# Legacy/shared code Scheduling may import. ``integration_event_service`` +
+# ``models.integrations`` (TenantIntegrationEvent) are the shared provider
+# audit trail; ``secret_manager_service`` is shared encryption.
+SCHEDULING_LEGACY_ALLOWED = {
+    "app.api.auth.deps",
+    "app.core.config",
+    "app.db.base",
+    "app.db.mixins",
+    "app.db.session",
+    "app.models.integrations",
+    "app.services.integration_event_service",
+    "app.services.secret_manager_service",
+}
+# Composition-root exception: only ``wiring`` may reach the platform's existing
+# domain-event infrastructure. Retired when Notifications subscribes to
+# ``domain_events`` by itself (see MODULAR_MONOLITH_MIGRATION.md).
+SCHEDULING_WIRING_ALLOWED = {"app.services.notification_event_pipeline"}
+# Only these application modules may lazily default their ports via wiring.
+SCHEDULING_APPLICATION_MAY_IMPORT_WIRING = {
+    "app.modules.scheduling.application.booking_service",
+    "app.modules.scheduling.application.calcom_webhook",
+}
+# Never reachable from Scheduling code (outside wiring): CRM and Notifications.
+SCHEDULING_FORBIDDEN_PREFIXES = (
+    "app.models.crm",
+    "app.models.notifications",
+    "app.schemas.crm",
+    "app.services.crm_",
+    "app.services.notification_",
+    "app.services.domain_event_service",
+    "app.services.whatsapp_",
+    "app.modules.crm.application",
+    "app.modules.crm.infrastructure",
+    "app.modules.notifications",
+)
+# Imports that must never appear in the pure domain.
+SCHEDULING_DOMAIN_FORBIDDEN = (
+    "sqlalchemy", "fastapi", "starlette", "httpx", "google", "requests",
+    "app.models", "app.services", "app.db", "app.modules.crm", "app.modules.notifications",
+    "app.modules.scheduling.infrastructure", "app.modules.scheduling.application",
+    "app.modules.scheduling.api",
+)
+
 # Things Telephony must never touch, whatever the route: Voice and CRM
 # internals, and the projection/runtime implementations behind voice.public /
 # analytics.public.
@@ -475,6 +518,149 @@ class ModuleBoundaryTests(unittest.TestCase):
         for module in SIP_CREDENTIAL_CONSUMERS:
             self.assertIn(module, self.graph, "Stale allowlist entry: remove it")
 
+    # -- Scheduling ---------------------------------------------------------------
+
+    def test_scheduling_only_touches_allowlisted_legacy_code(self) -> None:
+        def violates(source: str, target: str) -> bool:
+            if _owner(source) != "scheduling" or _owner(target) is not None:
+                return False
+            if target in SCHEDULING_LEGACY_ALLOWED:
+                return False
+            if source == "app.modules.scheduling.wiring" and target in SCHEDULING_WIRING_ALLOWED:
+                return False
+            return True
+
+        self.assertEqual(self._violations(violates), [], "Scheduling reaches other domains via <module>.public or a port")
+
+    def test_scheduling_never_imports_crm_or_notifications_internals(self) -> None:
+        def violates(source: str, target: str) -> bool:
+            if _owner(source) != "scheduling" or not target.startswith(SCHEDULING_FORBIDDEN_PREFIXES):
+                return False
+            # the composition root names the pipeline once (SCHEDULING_WIRING_ALLOWED)
+            return not (source == "app.modules.scheduling.wiring" and target in SCHEDULING_WIRING_ALLOWED)
+
+        self.assertEqual(self._violations(violates), [])
+
+    def test_scheduling_uses_other_modules_only_through_public(self) -> None:
+        self.assertEqual(
+            self._violations(
+                lambda s, t: _owner(s) == "scheduling"
+                and _owner(t) not in (None, "scheduling")
+                and not t.endswith(".public")
+            ),
+            [],
+        )
+
+    def test_scheduling_domain_layer_is_pure(self) -> None:
+        offenders = []
+        for path in (APP / "modules" / "scheduling" / "domain").rglob("*.py"):
+            for target in _runtime_imports(ast.parse(_source(path))):
+                if target.startswith(SCHEDULING_DOMAIN_FORBIDDEN) and not target.startswith(
+                    "app.modules.scheduling.domain"
+                ):
+                    offenders.append(f"{path.name}: {target}")
+            for node in ast.walk(ast.parse(_source(path))):
+                names = (
+                    [node.module or ""] if isinstance(node, ast.ImportFrom)
+                    else [a.name for a in node.names] if isinstance(node, ast.Import) else []
+                )
+                offenders += [
+                    f"{path.name}: {n}" for n in names if n.startswith(("sqlalchemy", "fastapi", "httpx", "google"))
+                ]
+        self.assertEqual(sorted(set(offenders)), [])
+
+    def test_scheduling_layers_do_not_depend_upwards(self) -> None:
+        wiring_ok = SCHEDULING_APPLICATION_MAY_IMPORT_WIRING
+        self.assertEqual(
+            self._violations(
+                lambda s, t: s.startswith("app.modules.scheduling.application")
+                and (
+                    t.startswith("app.modules.scheduling.api")
+                    or (t == "app.modules.scheduling.wiring" and s not in wiring_ok)
+                )
+            ),
+            [],
+        )
+        self.assertEqual(
+            self._violations(
+                lambda s, t: s.startswith("app.modules.scheduling.infrastructure")
+                and t.startswith(("app.modules.scheduling.api", "app.modules.scheduling.application.booking_service"))
+            ),
+            [],
+        )
+
+    def test_scheduling_http_layer_never_navigates_orm(self) -> None:
+        self.assertEqual(
+            self._violations(
+                lambda s, t: s.startswith("app.modules.scheduling.api")
+                and t == "app.modules.scheduling.infrastructure.models"
+            ),
+            [],
+            "Routers return views/contracts built by the application layer",
+        )
+
+    def test_scheduling_orm_never_leaves_the_scheduling_module(self) -> None:
+        models = "app.modules.scheduling.infrastructure.models"
+        self.assertEqual(
+            self._violations(lambda s, t: t == models and _owner(s) != "scheduling" and s != "app.models"), []
+        )
+
+    def test_scheduling_is_only_reached_through_its_public_api_or_routers(self) -> None:
+        def violates(source: str, target: str) -> bool:
+            if _owner(target) != "scheduling" or _owner(source) == "scheduling":
+                return False
+            if target.endswith(".public"):
+                return False
+            # the app entrypoint mounts the module's routers; the registry loads the ORM
+            if source == "app.main" and target.startswith("app.modules.scheduling.api"):
+                return False
+            return source != "app.models"
+
+        self.assertEqual(self._violations(violates), [])
+
+    def test_nobody_imports_the_old_scheduling_paths(self) -> None:
+        gone = (
+            "app.services.booking_service",
+            "app.services.booking_config_service",
+            "app.services.scheduling_",
+            "app.services.calcom_",
+            "app.services.google_calendar_",
+            "app.services.google_scheduling_admin_provider",
+            "app.services.date_resolution_service",
+            "app.api.endpoints.scheduling",
+            "app.api.endpoints.calcom",
+            "app.schemas.scheduling",
+            "app.core.scheduling_exceptions",
+            "app.core.calcom_constants",
+        )
+        self.assertEqual(self._violations(lambda s, t: t.startswith(gone)), [])
+        for old in ("services/booking_service.py", "services/scheduling_provider.py", "api/endpoints/calcom.py"):
+            self.assertFalse((APP / old).exists(), old)
+
+    def test_scheduling_public_contracts_expose_no_secrets(self) -> None:
+        import dataclasses
+
+        from pydantic import BaseModel
+
+        from app.modules.scheduling import public
+
+        secret_words = ("token", "secret", "password", "encrypted", "api_key", "refresh")
+        problems = []
+        for name in public.__all__:
+            obj = getattr(public, name)
+            if name.endswith("Request"):  # inputs may carry a key
+                continue
+            if dataclasses.is_dataclass(obj):
+                fields = [f.name for f in dataclasses.fields(obj)]
+            elif isinstance(obj, type) and issubclass(obj, BaseModel):
+                fields = list(obj.model_fields)
+            else:
+                continue
+            problems += [f"{name}.{f}" for f in fields if any(w in f.lower() for w in secret_words)]
+        # has_tokens / has_secret are booleans, not values
+        problems = [p for p in problems if not p.split(".")[1].startswith("has_")]
+        self.assertEqual(problems, [])
+
     def test_nobody_imports_the_old_telephony_paths(self) -> None:
         gone = (
             "app.services.voice_phone_service",
@@ -521,6 +707,8 @@ class ModuleBoundaryTests(unittest.TestCase):
             "app.modules.voice.application", "app.modules.voice.infrastructure",
             "app.modules.agents.application", "app.modules.voice_providers.application",
             "app.modules.voice_providers.infrastructure",
+            "app.modules.scheduling.application", "app.modules.scheduling.infrastructure",
+            "app.modules.scheduling.api", "httpx", "google",
         )
         for module in (
             "app.modules.voice.public",
@@ -529,6 +717,7 @@ class ModuleBoundaryTests(unittest.TestCase):
             "app.modules.telephony.public",
             "app.modules.crm.public",
             "app.modules.analytics.public",
+            "app.modules.scheduling.public",
         ):
             code = (
                 f"import sys, {module}; "
@@ -679,10 +868,12 @@ PUBLIC_DTOS = {
     "app.modules.agents.public": ["AgentToolBindingView", "PublishedAgent", "AgentDisplay", "ImportedAgent"],
     "app.modules.voice_legacy.public": ["LegacyVoiceDefaults"],
     "app.modules.integrations.public": ["WhatsAppTemplateContract", "WhatsAppSendOutcome"],
-    "app.modules.scheduling.public": ["BookingSummary"],
+    "app.modules.scheduling.public": ["BookingSummary", "BookingView", "BookingCustomer", "CreateBookingCommand"],
 }
-# Genuinely dynamic payloads, not entities: free-text LLM argument.
-ANY_ALLOWED = {("create_lead_booking", "notes")}
+# Genuinely dynamic payloads, not entities: the raw LLM argument as the Tool
+# Platform hands it over. SchedulingFacade.create_lead_booking itself is typed
+# ``str | None`` and validates the value (pydantic) before using it.
+ANY_ALLOWED = {("SchedulingToolPort", "create_lead_booking", "notes")}
 
 
 def _orm_base() -> type:
@@ -737,7 +928,7 @@ class DataBoundaryTests(unittest.TestCase):
                         continue
                     hints = typing.get_type_hints(member, _type_namespace(module))
                     for param, annotation in hints.items():
-                        if (name, param) in ANY_ALLOWED:
+                        if (class_name, name, param) in ANY_ALLOWED:
                             continue
                         problems += _boundary_problems(annotation, f"{class_name}.{name}({param})", base)
         self.assertEqual(problems, [])

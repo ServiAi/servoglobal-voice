@@ -1,23 +1,34 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.integrations import (
+from app.modules.scheduling.application.booking_config_service import (
+    BookingConfigService,
+)
+from app.modules.scheduling.application.ports import (
+    SchedulingAdminProvider,
+    SchedulingProvider,
+)
+from app.modules.scheduling.infrastructure.calcom.adapter import CalComProvider
+from app.modules.scheduling.infrastructure.calcom.admin import (
+    CalComSchedulingAdminProvider,
+)
+from app.modules.scheduling.infrastructure.calcom.client import (
+    CalComClient,
+    CalComClientConfig,
+)
+from app.modules.scheduling.infrastructure.google.adapter import GoogleCalendarProvider
+from app.modules.scheduling.infrastructure.google.admin import (
+    GoogleSchedulingAdminProvider,
+)
+from app.modules.scheduling.infrastructure.models import (
     TenantAgentSchedulingConfig,
-    TenantBookingConfig,
     TenantGoogleCalendarConnection,
     TenantSchedulingEventType,
 )
-from app.services.booking_config_service import BookingConfigService
-from app.services.calcom_client import CalComClient, CalComClientConfig
-from app.services.calcom_scheduling_admin_provider import CalComSchedulingAdminProvider
-from app.services.google_scheduling_admin_provider import GoogleSchedulingAdminProvider
-from app.services.scheduling_protocols import SchedulingAdminProvider, SchedulingProvider
-from app.services.scheduling_provider import CalComProvider, GoogleCalendarProvider
 
 logger = logging.getLogger(__name__)
 

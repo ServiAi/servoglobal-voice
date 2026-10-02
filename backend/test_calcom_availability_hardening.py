@@ -9,8 +9,8 @@ from fastapi.testclient import TestClient
 os.environ.setdefault("ULTRAVOX_API_KEY", "test")
 
 from app.main import app
-from app.services import calcom_service
-from app.services.calcom_service import SlotUnavailableError, create_booking
+from app.modules.scheduling.infrastructure.calcom import availability as calcom_service
+from app.modules.scheduling.infrastructure.calcom.availability import SlotUnavailableError, create_booking
 
 
 class FakeAsyncClient:
@@ -90,7 +90,7 @@ class CalcomAvailabilityHardeningTests(unittest.TestCase):
     def test_booking_endpoint_returns_409_for_unavailable_slot(self):
         async_mock = AsyncMock(side_effect=SlotUnavailableError("Horario ocupado"))
 
-        with patch("app.api.endpoints.calcom.create_booking", async_mock):
+        with patch("app.modules.scheduling.api.calcom_router.create_booking", async_mock):
             client = TestClient(app)
             response = client.post(
                 "/api/v1/bookings",

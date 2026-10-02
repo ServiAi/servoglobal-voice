@@ -25,10 +25,10 @@ from app.models.crm import (
     CrmLead,
     CrmActivity,
     CrmTask,
-    CrmBooking,
     CrmWhatsAppMessage,
     CrmVoiceCall,
 )
+from app.modules.scheduling.infrastructure.models import CrmBooking
 from app.models.integrations import TenantEmailSend, TenantForm, TenantFormToken, TenantFormSubmission
 from app.services.crm_pipeline_service import CrmPipelineService
 from app.services.crm_contact_service import CrmContactService, normalize_phone

@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import logging
 from typing import Any
@@ -6,17 +6,16 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.integrations import (
+from app.modules.scheduling.infrastructure.models import (
+    CrmBooking,
     TenantAgentSchedulingConfig,
     TenantGoogleCalendar,
     TenantGoogleCalendarConnection,
-    TenantSchedulingAvailabilityException,
     TenantSchedulingConfig,
     TenantSchedulingResource,
     TenantSchedulingTeam,
     TenantSchedulingTeamMember,
 )
-from app.models.crm import CrmBooking
 
 logger = logging.getLogger(__name__)
 

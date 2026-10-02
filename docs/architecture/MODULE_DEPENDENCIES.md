@@ -85,8 +85,8 @@ Leyenda: ✅ permitida · ⚠️ cuestionable · ❌ eliminar · 🔁 circular.
 | Telephony → Voice Experiences / Legacy (`voice_callback_service`) | callbacks públicos Ultravox | ⚠️ | Queda con Voice Legacy hasta su retiro. |
 | CRM → Telephony | acción "llamar", métricas | ✅ | El adaptador CRM llama a `telephony.public`; el dashboard usa `voice_capacity_report_service`. |
 | CRM → Integrations (email, WhatsApp) | acciones del lead | ✅ si vía `integrations.public` | Commands. |
-| CRM ↔ Scheduling 🔁 | CRM endpoint → `booking_service`; booking → `CrmActivity`, `CrmLead` | ⚠️ | Scheduling valida lead vía `crm.public`; la actividad CRM se registra por evento `booking.*` (ya existe `NotificationEventPipeline`/`domain_events`). |
-| Scheduling → Notifications (`notification_event_pipeline`) | booking crea domain events | ✅ | Es exactamente el patrón de eventos deseado; exponer `notifications.public.publish(...)`. |
+| CRM ↔ Scheduling 🔁 | CRM endpoint → `SchedulingFacade`; Scheduling → `crm.public` (cliente, timeline) | ✅ | **Resuelto**: `BookingCustomerPort`/`CrmActivityPort`; CRM ya no gobierna el booking. |
+| Scheduling → Notifications | booking crea hechos `booking.*` | ✅ | **Resuelto**: puerto `BookingEventPublisherPort`; único puente temporal en `wiring.py` (allowlist) hasta que Notifications se suscriba a `domain_events`. |
 | Integrations ↔ Notifications 🔁 | `whatsapp_message_service` → `NotificationDeliveryStatusService`; notificaciones → WhatsApp | ⚠️ | Notifications → `integrations.public` (command send); el status de entrega vuelve como callback/evento, no import directo. |
 | Integrations → CRM (`crm_activity_service`, `models.crm`) | timeline de mensajes/emails | ⚠️ | Evento `message.sent` → CRM, o `crm.public.record_activity`. |
 | Identity → Integrations (`admin/tenants.py` → 10 servicios) | panel admin | ⚠️ | Es un BFF de administración: consumir `public.py` de cada módulo. |
@@ -135,6 +135,10 @@ Aplicadas por `backend/test_module_boundaries.py`:
 26. `app.modules.telephony.domain` es puro (sin SQLAlchemy/FastAPI/LiveKit/CRM/Voice/httpx) y `application` no importa `api`.
 27. El ORM de Telephony (`TenantSipRoute`) sólo lo importa Telephony y el registro de modelos; nadie importa las rutas viejas (`voice_phone_service`, `livekit_sip_service`, `voice_sip_route_service`, `voice_capacity_service`, `voice_session_sip_service`, `asterisk_provisioning_*`).
 28. No hay shims: `KNOWN_SHIMS` está vacío; un shim nuevo debe registrarse ahí. Los procesos de entrada (`app.workers.asterisk_provisioner`) pueden importar el agente directamente (raíz de composición).
+30. Scheduling sólo toca código legacy compartido (`SCHEDULING_LEGACY_ALLOWED`: `api.auth.deps`, `core.config`, `db.*`, `models.integrations` + `integration_event_service` como auditoría compartida, `secret_manager_service`) y a otros módulos sólo por `<módulo>.public`. Nunca `models.crm`, `schemas.crm`, `crm_*`, `notification_*`, `domain_event_service` ni WhatsApp; la única excepción es `wiring → notification_event_pipeline` (`SCHEDULING_WIRING_ALLOWED`).
+31. `app.modules.scheduling.domain` es puro (sin SQLAlchemy/FastAPI/httpx/Google/CRM/Notifications); `application` no importa `api` ni `wiring` (salvo `booking_service`/`calcom_webhook` para sus puertos por defecto); `infrastructure` no importa `api` ni `booking_service`.
+32. Los routers de Scheduling no importan el ORM; el ORM de Scheduling sólo lo importan el módulo y el registro `app.models`; el resto accede por `scheduling.public` (el entrypoint monta los routers).
+33. Las rutas antiguas (`services/booking_service`, `scheduling_*`, `calcom_*`, `google_calendar_*`, `api/endpoints/{scheduling,calcom}`, `schemas/scheduling`, `core/scheduling_exceptions`, …) no existen ni se importan; `scheduling.public` carga sólo contratos (import ligero) y ningún contrato público expone tokens/claves/secretos.
 29b. Excepción temporal (deuda de **Voice Legacy**, no de Telephony): sólo `voice_call_service` y `voice_callback_service` pueden leer la contraseña SIP descifrada vía `SipRouteFacade.get_connection`/`SipRouteConnection` (`SIP_CREDENTIAL_CONSUMERS`); cualquier otro consumidor rompe el test. Se retira al jubilar esos flujos Ultravox directos.
 29. Ninguna componente fuertemente conexa contiene Telephony y un adapter de proveedor; los adapters y `voice_provider_config_store` no importan ningún módulo salvo `voice_providers.public`.
 
@@ -199,3 +203,27 @@ Mismo grafo AST (imports perezosos incluidos), `develop@76176f4` → esta rama. 
 | Componente conexa (grafo de archivos, incluye `app.models`/`db`) con Voice/Telephony | 1 (20 archivos) | 1 (28 archivos; crece por el wiring perezoso Telephony ↔ Voice y la proyección, sólo vía `public.py`) |
 | Componentes conexas con Telephony + adapter de proveedor | 0 | **0** (regla automática; se evitó un ciclo separando `VoiceProviderConfigStore`) |
 | Tests backend (suite CI) | 1767 métodos `test_*` (develop) | 1788 métodos `test_*` (1662 ejecutados en la suite CI por módulo; +4 PostgreSQL y +4 de Voice Runtime se ejecutan aparte) |
+
+## Migración de Scheduling (2026-10-02)
+
+Mismo grafo AST (imports perezosos incluidos), `develop@90bf9d2` → esta rama. "Scheduling" antes = `booking_service`, `booking_config_service`, `scheduling_*`, `calcom_*`, `google_calendar_*`, `google_scheduling_admin_provider`, `date_resolution_service`, `api/endpoints/{scheduling,calcom}`, `schemas/scheduling`, `core/{scheduling_exceptions,calcom_constants}` y el `public.py` mínimo.
+
+| Métrica | Antes | Después |
+| --- | --- | --- |
+| Scheduling → internals de CRM | 12 | **0** (`crm.public` vía puertos) |
+| Scheduling → internals de Notifications | 3 | **1** (sólo `wiring → notification_event_pipeline`, allowlist temporal) |
+| Scheduling → internals de Integrations | 16 | 4 (auditoría compartida: `integration_event_service` ×2, `models.integrations` ×2 para `TenantIntegrationEvent`) |
+| Scheduling → internals de Agents/Voice/Telephony | 0 | **0** |
+| ORM de CRM cruzando Scheduling (`→ app.models.crm`) | 6 | **0** |
+| ORM de Scheduling cruzando `scheduling.public` | 5 archivos de app fuera de Scheduling (+ 16 tests) | **0** en app (sólo el registro `app.models`); tests importan el ORM del módulo directamente |
+| Imports `app.services.booking_service` | 5 | **0** |
+| Imports `app.services.scheduling_*` | 5 | **0** |
+| Imports `app.services.calcom_*` / `google_calendar_*` | 7 / 7 | **0 / 0** |
+| Imports legacy del ORM de Scheduling desde `app.models.integrations`/`app.models.crm` | app 20 · tests 16 · scripts 0 | **app 0 · tests 0 · scripts 0** |
+| Imports de `CrmBooking` desde `app.models.crm` | app 9 · tests 9 | **app 0 · tests 0** |
+| `BookingService → CrmActivityService` | 1 | **0** |
+| `BookingService → NotificationEventPipeline` | 1 | **0** |
+| Componentes conexas con Scheduling | 0 | 1 (6 archivos, 3 de Scheduling: `public`, `wiring`, `booking_service` ↔ `crm.public`, `crm_lead_service`, `notification_event_pipeline`; sólo por `public.py`/wiring perezoso). La componente grande (28) no incluye Scheduling |
+| Shims/reexports temporales | 4→0 (Voice) | **0** (ninguno creado) |
+| Tests backend (métodos `test_*`) | 1789 | 1828 |
+| Tests PostgreSQL (métodos en `test_*postgres.py`) | 23 | 28 (+5 de Scheduling: Round Robin ×3, ciclo de vida, doble cancelación) |

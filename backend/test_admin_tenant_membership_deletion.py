@@ -19,7 +19,7 @@ from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.main import app
 from app.models.identity import Tenant, TenantMembership, User
-from app.services.google_calendar_oauth_service import GoogleCalendarOAuthService
+from app.modules.scheduling.infrastructure.google.oauth import GoogleCalendarOAuthService
 from app.services.onboarding_service import OnboardingService
 
 

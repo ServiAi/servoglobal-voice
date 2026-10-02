@@ -3,18 +3,19 @@ calcom_service.py
 Handles all communication with the Cal.com v2 API to fetch available slots.
 """
 
-import httpx
 import logging
-import pytz
 import re
-from datetime import date, timedelta, datetime
+from datetime import date, datetime, timedelta
+
+import httpx
+import pytz
+
 from app.core.config import settings
-from app.services.date_resolution_service import (
+from app.modules.scheduling.domain.dates import (
     is_iso_like_date,
     parse_reference_datetime,
     resolve_temporal_expression,
 )
-from app.services.notification_service import notification_service
 
 logger = logging.getLogger(__name__)
 
@@ -220,7 +221,6 @@ async def get_available_slots(
 
     summary = _build_summary(slots_raw, start_date, jornada)
 
-    import locale
 
     # Obtener el timestamp actual con zona horaria de Bogotá
     ahora = parse_reference_datetime(reference_datetime)

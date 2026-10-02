@@ -41,14 +41,14 @@ Orden validado contra el grafo real: primero módulos con pocos consumidores ent
 | 2 | Agent Builder | Media | **Hecho** |
 | 3 | Voice Orchestration | Alta | **Hecho** |
 | 4 | Telephony | Media-alta | **Hecho** |
-| 5 | Scheduling | Alta | **Siguiente** |
-| 6 | CRM | Alta | |
+| 5 | Scheduling | Alta | **Hecho** |
+| 6 | CRM | Alta | **Siguiente** |
 | 7 | Notifications | Media | |
 | 8 | Integrations / Messaging | Alta | |
 | 9 | Identity / Tenancy | Media (muchos consumidores, poca lógica) | |
 | 10 | Billing | Baja | |
 | 11 | Analytics | Media | |
-| — | Voice Experiences | Media | Tras Scheduling |
+| — | Voice Experiences | Media | Tras CRM |
 | — | Voice Providers | Media | **Frontera consolidada** (registro, adapters, credenciales) |
 | — | Voice Legacy | — | **No migrar**: aislado tras `voice_legacy.public` (mínimo); retirar cuando `voice_runtime_v2` sea el único camino |
 
@@ -147,19 +147,26 @@ Estructura: `app/modules/telephony/{domain/{errors,phone_numbers,routes,capacity
 - **Corrección de concurrencia** (hallada con PostgreSQL real): `VoiceSessionService.create` capturaba `IntegrityError` sólo en `commit`, pero el índice único `(tenant_id, idempotency_key)` también dispara en `flush`; y `lock_session` leía una fila obsoleta del identity map tras esperar el lock (doble marcación posible). Ambas corregidas (`populate_existing`).
 - **Pruebas**: unitarias de dominio (`test_telephony_domain.py`), integración con fakes/SQLite (`test_outbound_voice_call_service.py`, `test_livekit_sip_service.py`, `test_asterisk_provisioning.py`, …), arquitectura (`test_module_boundaries.py`) y **PostgreSQL real** (`test_telephony_postgres.py`: misma idempotency key en paralelo, `max_concurrent_calls`, lock de la ruta). **No existe E2E SIP real** (requiere LiveKit + PBX + ruta + credenciales del proveedor): sigue pendiente de verificación manual en staging.
 
-### 5. Scheduling
+### 5. Scheduling — hecho
 
-- **Ownership**: tablas `tenant_scheduling_*`, `tenant_booking_configs`, `tenant_google_*`, `tenant_voice_booking_configs`, `tenant_agent_scheduling_configs`, `crm_bookings`/`crm_booking_events` (lógico).
-- **Entrantes**: CRM (endpoint), Tools (`scheduling.public`), Agents (preflight), Voice booking tools legacy.
-- **Salientes**: CRM (`CrmLead`, `CrmActivity`), Notifications (`NotificationEventPipeline`), Integrations (eventos, config).
-- **API pública**: `SchedulingFacade` (existe: `get_available_slots`, `create_lead_booking`), `is_configured`, `cancel/reschedule`.
-- **Imports a eliminar**: `booking_service → crm_activity_service` (evento `booking.created`), `booking_service → models.crm.CrmLead` (→ `crm.public.get_lead`).
-- **Riesgos**: no romper Cal.com (webhook de reconciliación), Google Calendar foundation ni voice booking tools. Partir `models/integrations.py` requiere que la clase se reexporte desde el archivo viejo hasta migrar los importadores.
+Estructura: `app/modules/scheduling/{domain/{booking,contracts,errors,dates}.py, application/{booking_service,availability_service,config_service,resource_service,booking_config_service,provider_resolver,ports,views,google_admin,integration_admin,calcom_webhook,voice_booking,booking_history}.py, infrastructure/{models.py,google/{calendar,oauth,admin,adapter}.py,calcom/{client,availability,sync,admin,adapter,constants}.py}, api/{router,integrations_router,calcom_router,schemas}.py, public.py, wiring.py}`.
+
+- **Ownership** (ORM en `infrastructure/models.py`, mismas tablas/FKs/índices/constraints; DDL de las 78 tablas verificado idéntico a `develop`, una sola head de Alembic): `tenant_booking_configs`, `tenant_voice_booking_configs`, `tenant_google_calendar_connections`, `tenant_google_calendars`, `tenant_scheduling_{configs,resources,resource_calendars,teams,team_members,exceptions,schedules,event_types,provider_objects}`, `tenant_agent_scheduling_configs` y **`crm_bookings`/`crm_booking_events`** (el nombre físico no determina el bounded context; `CrmBooking` ya no declara relaciones ORM a `CrmLead`/`CrmContact`, las FKs a nivel DB se mantienen).
+- **Sin shims ni reexports**: se midieron los consumidores y se reescribieron todos (app, tests, scripts); `KNOWN_SHIMS` sigue vacío.
+- **Frontera con CRM**: `BookingCustomerPort` (lead → `BookingCustomer`) y `CrmActivityPort` (timeline) se enlazan en `wiring.py` a `crm.public` (`CrmFacade.get_lead/get_contact/record_activity`, ahora con `record_activity`); el comando de reserva es `CreateBookingCommand` (dataclass propio) y el endpoint CRM `POST /crm/leads/{id}/bookings` quedó como adaptador HTTP de `SchedulingFacade.create_booking`. Scheduling ya no importa `CrmLead`, `CrmContact`, `CrmActivityService` ni `app.schemas.crm`.
+- **Frontera con Notifications**: `BookingEventPublisherPort.publish_booking_event` anuncia `booking.created|cancelled|rescheduled` y nunca propaga errores al flujo. El adaptador (`wiring.NotificationBookingEvents`) usa la infraestructura existente de eventos de dominio (`NotificationEventPipeline` → `domain_events`, con las mismas claves de idempotencia `booking:{id}:created|cancelled|rescheduled:{digest}`). **Es el único puente temporal**: `scheduling.wiring → services.notification_event_pipeline` (allowlist explícita); se retira cuando Notifications se suscriba a `domain_events` por sí misma. El pipeline, a su vez, ya no lee `CrmBooking`: obtiene un `BookingView` de `scheduling.public` (sólo la clave `notification_custom` de la metadata).
+- **API pública** (`scheduling.public`; carga sólo contratos y errores, casos de uso perezosos): `SchedulingFacade` — `is_booking_configured`, `get_available_slots`, `create_lead_booking` (variante Tool Platform: `notes: str | None`, valida con pydantic), `create_booking`, `list_lead_bookings`, `get_booking`, `cancel_booking`, `reschedule_booking`, `detach_customers`, `find_voice_booking_config_id`, `get_booking_config`, `configure_calcom`, `test_calcom`, `list_google_connections`, `delete_google_connection`, `catalog_status_inputs`. DTOs: `BookingView`, `BookingSummary`, `BookingCustomer`, `CreateBookingCommand` + contratos HTTP (`BookingConfig*`, `GoogleCalendarConnectionResponse`, …). Ninguno devuelve ORM, tokens OAuth ni claves de Cal.com. Errores neutros (`SchedulingError`, `BookingNotFoundError`, `BookingCustomerNotFoundError`, …) subclases de `ValueError` para conservar mensajes y status HTTP.
+- **Routers** (mismas URLs/roles/payloads; OpenAPI de las 257 rutas verificado idéntico a `develop` con refs expandidos): `/api/v1/scheduling/*` (`api/router.py`), `/api/v1/integrations/{booking,calcom,google-calendar,scheduling}/*` (`api/integrations_router.py`, antes dentro de `integrations.py`) y `/api/v1/{availability,bookings,calcom/webhook}` (`api/calcom_router.py`). Ningún router importa el ORM: serialización en `application/views.py` y `google_admin.py`. El webhook de Cal.com solo autentica y delega la reconciliación a `reconcile_calcom_webhook`.
+- **Adapters internos**: Google Calendar (`infrastructure/google/`) y Cal.com (`infrastructure/calcom/`) viven dentro del módulo (no hay `scheduling_providers`). `domain/` es puro (reglas de proveedor, payload de Cal.com, mapeo de estados, fechas).
+- **Transacciones**: sin cambios (el booking `pending` se confirma *antes* de llamar al proveedor; ninguna llamada externa mantiene locks). Sin reintentos nuevos.
+- **Corrección de concurrencia** (probada primero sobre PostgreSQL real, 3/3 fallos): `select_resource_round_robin` entregaba el **mismo recurso a dos reservas simultáneas** y podía perder incrementos de `total_assigned_count`. Se resolvió en dos fases para **no mantener locks de fila durante I/O de red**: (1) *disponibilidad* (`_find_available_candidates`: horario, excepciones y Google FreeBusy) sin ningún `FOR UPDATE`, que produce los ids disponibles; (2) *asignación atómica* (`_allocate_candidate_atomically`): `SELECT … FOR UPDATE` sólo de los candidatos disponibles en orden de id (sin deadlocks), relectura fresca con `populate_existing`, re-ranking post-lock (`priority DESC, last_assigned_at ASC NULLS FIRST, total_assigned_count ASC, created_at, id`), incremento de contador y `COMMIT` — milisegundos, sin red. Se revalidan tenant/activo/pertenencia al equipo localmente tras el lock. Contrapartida asumida: FreeBusy se evalúa para todos los candidatos (antes se detenía en el primero libre), porque el ganador final lo decide el ranking post-lock. No se usa `SKIP LOCKED` (alteraría la justicia del reparto). Pruebas: `test_scheduling_postgres` (FreeBusy sin locks vía `FOR UPDATE NOWAIT`, FreeBusy lento que no bloquea otra asignación, ranking post-lock con vista previa obsoleta) y guarda estructural en `test_scheduling_boundaries`.
+- **Deuda conocida (no introducida ni corregida aquí)**: no hay idempotencia de creación de reservas ni restricción local contra doble reserva del mismo recurso/slot (sólo FreeBusy de Google); cancelar dos veces llama dos veces al proveedor.
+- **Pruebas**: `test_scheduling_domain.py`, `test_scheduling_boundaries.py` (fakes + SQLite), `test_scheduling_postgres.py` (PostgreSQL real: Round Robin, ciclo de vida, doble cancelación) y reglas AST en `test_module_boundaries.py` (mutation-checked). **No existe E2E real de Google Calendar ni de Cal.com** (requieren cuentas/credenciales): pendiente de smoke manual en staging.
 
 ### 6. CRM
 
 - **Ownership**: `crm_contacts`, `crm_leads`, `crm_pipeline_stages`, `crm_activities`, `crm_tasks`, `crm_call_contexts`, `crm_voice_calls*`.
-- **Entrantes**: casi todos (Voice, Voice Legacy, Scheduling, Integrations, Telephony, Tools).
+- **Entrantes**: casi todos (Voice, Voice Legacy, Scheduling, Integrations, Telephony, Tools). Scheduling ya consume `crm.public` (cliente de la reserva y timeline).
 - **Salientes**: Integrations (email, WhatsApp), Scheduling, Telephony, Voice Legacy, Billing/Analytics.
 - **API pública**: `CrmFacade` (existe: `get_or_create_open_lead -> (ContactRef, LeadRef)`), `find_contact_by_phone`, `get_lead`, `record_activity`, handlers de eventos (`voice.session.completed`, `booking.*`, `message.sent`).
 - **Imports a eliminar**: todos los accesos directos a `models.crm` desde otros dominios (~40).

@@ -20,7 +20,7 @@ Estado: ✅ ya respetado · 🟡 propietario claro, pero otros módulos acceden 
 | --- | --- | --- |
 | `tenant_agents` | `TenantAgent` (`app/modules/agents/infrastructure/models.py`) | ✅ Voice lo lee sólo vía `agents.public` (`PublishedAgent`, `AgentDisplay`, estado, nombres); la importación de agentes de proveedor la escribe Agent Builder |
 | `tenant_agent_versions` | `TenantAgentVersion` (idem) | ✅ Agent Builder es el único que interpreta `runtime_binding_json` (Voice recibe `AgentToolBindingView`, el runtime recibe `RuntimeSessionSpecV1` compilado); Tool Platform pregunta vía `AgentsFacade`. FK legacy `voice_agent_config_id` → `tenant_voice_agent_configs` sin relación ORM: el valor se lee vía `voice_legacy.public` |
-| `tenant_agent_scheduling_configs` | `TenantAgentSchedulingConfig` (`models/integrations.py`) | 🟡 propietario Scheduling (configuración de agenda por agente) |
+| `tenant_agent_scheduling_configs` | `TenantAgentSchedulingConfig` (`modules/scheduling/infrastructure/models.py`) | ✅ propietario Scheduling (configuración de agenda por agente) |
 
 ## Voice Orchestration
 
@@ -57,18 +57,28 @@ Datos de otros módulos que Tool Platform usa, siempre vía API pública y como 
 | `crm_activities` | `CrmActivity` | 🔴 escrita por Scheduling, Integrations, Voice, Voice Legacy → objetivo: evento o `crm.public.record_activity` |
 | `crm_voice_calls`, `crm_voice_call_events` | `CrmVoiceCall`, `CrmVoiceCallEvent` | 🟡 CRM (propietario); Telephony ya sólo vía `OutboundCallLedger`/`CallLoadPort`; Voice (projection) y Voice Legacy aún escriben |
 | `crm_whatsapp_messages` | `CrmWhatsAppMessage` | 🔴 propietario objetivo: Messaging (el mensaje es del canal; CRM lo muestra en timeline) |
-| `crm_bookings`, `crm_booking_events` | `CrmBooking`, `CrmBookingEvent` | 🔴 propietario objetivo: **Scheduling** (`BookingService` gobierna su ciclo de vida) |
+| `crm_bookings`, `crm_booking_events` | `CrmBooking`, `CrmBookingEvent` | ✅ propietario: **Scheduling** (ORM en `modules/scheduling/infrastructure/models.py`; CRM sólo ve `BookingView`; FKs a `crm_leads`/`crm_contacts` a nivel DB, sin relaciones ORM) |
 
 ## Scheduling
 
-Tablas en `models/integrations.py`: `tenant_booking_configs`, `tenant_google_calendar_connections`, `tenant_google_calendars`, `tenant_scheduling_resources`, `tenant_scheduling_resource_calendars`, `tenant_scheduling_configs`, `tenant_scheduling_teams`, `tenant_scheduling_team_members`, `tenant_scheduling_exceptions`, `tenant_scheduling_schedules`, `tenant_scheduling_event_types`, `tenant_scheduling_provider_objects`, `tenant_agent_scheduling_configs`, `tenant_voice_booking_configs`. Estado 🟡; al migrar, extraer a `app/modules/scheduling/infrastructure/models.py`.
+Ahora en `app/modules/scheduling/infrastructure/models.py` (mismas tablas, FKs, índices y constraints; sin migración).
+
+| Tabla | Modelo | Estado |
+| --- | --- | --- |
+| `tenant_booking_configs`, `tenant_voice_booking_configs` | `TenantBookingConfig`, `TenantVoiceBookingConfig` | ✅ Scheduling. La clave de Cal.com sólo existe cifrada (`cal_api_key_encrypted`) y nunca sale en vistas/DTOs; la config de voz solo se pide por id (`find_voice_booking_config_id`) |
+| `tenant_google_calendar_connections`, `tenant_google_calendars` | `TenantGoogleCalendarConnection`, `TenantGoogleCalendar` | ✅ Scheduling. Tokens OAuth cifrados, sólo dentro de `infrastructure/google/` |
+| `tenant_scheduling_configs`, `…_resources`, `…_resource_calendars`, `…_teams`, `…_team_members`, `…_exceptions`, `…_schedules`, `…_event_types`, `…_provider_objects` | `TenantScheduling*` | ✅ Scheduling (relaciones ORM internas permitidas) |
+| `tenant_agent_scheduling_configs` | `TenantAgentSchedulingConfig` | ✅ Scheduling; Agent Builder sólo pregunta `is_booking_configured` |
+| `crm_bookings`, `crm_booking_events` | `CrmBooking`, `CrmBookingEvent` | ✅ Scheduling. Historia propia del booking (≠ eventos de dominio) |
+| `tenant_integration_events` (`calcom_sync`, `booking_create`, `availability_lookup`, …) | `TenantIntegrationEvent` | 🟡 auditoría compartida de integraciones (temporal, allowlist `SCHEDULING_LEGACY_ALLOWED`) |
+| `domain_events` (`booking.*`) | `DomainEvent` | 🟡 los crea la infraestructura existente al anunciarse el hecho (`wiring.NotificationBookingEvents`); Scheduling no importa Notifications |
 
 ## Notifications
 
 | Tabla | Modelo | Estado |
 | --- | --- | --- |
 | `tenant_capabilities`, `tenant_notification_rules`, `tenant_notification_recipients` | … | ✅ |
-| `domain_events` | `DomainEvent` | 🟡 escrita por Scheduling y Voice vía `NotificationEventPipeline` (patrón correcto; exponer como `notifications.public`) |
+| `domain_events` | `DomainEvent` | 🟡 escrita por Voice y, para `booking.*`, por la infraestructura de eventos vía el puerto de Scheduling (patrón correcto; exponer como `notifications.public`) |
 | `notification_deliveries` | `NotificationDelivery` | 🔴 `whatsapp_message_service` actualiza su estado directamente |
 
 ## Integrations / Messaging

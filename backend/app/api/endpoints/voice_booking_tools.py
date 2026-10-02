@@ -1,9 +1,8 @@
 from __future__ import annotations
 
+import hmac
 import logging
 from typing import Any
-
-import hmac
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from sqlalchemy import select
@@ -13,9 +12,13 @@ from app.core.config import settings
 from app.db.session import get_db
 from app.models.crm import CrmLead
 from app.models.integrations import TenantVoiceAgentConfig
-from app.schemas.crm import BookingCreateRequest, VoiceAvailabilityRequest, VoiceBookingRequest, VoiceHandoffRequest
+from app.modules.scheduling.public import CreateBookingCommand, SchedulingFacade
+from app.schemas.crm import (
+    VoiceAvailabilityRequest,
+    VoiceBookingRequest,
+    VoiceHandoffRequest,
+)
 from app.schemas.integrations import HANDOFF_TRIGGER_CUSTOMER_REQUEST
-from app.services.booking_service import BookingService
 from app.services.voice_booking_context_service import VoiceBookingContextService
 from app.services.voice_handoff_service import VoiceHandoffService
 
@@ -73,7 +76,7 @@ async def voice_availability(
             agent_id=body.agent_id,
             did=body.did,
         )
-        result = BookingService(db).get_available_slots_for_tenant(
+        result = SchedulingFacade(db).get_available_slots(
             tenant_id=context.tenant_id,
             date_input=body.date,
             jornada=body.jornada,
@@ -101,10 +104,10 @@ async def voice_booking(
         )
         if not context.lead_id:
             raise ValueError("Unable to resolve lead for voice booking tool.")
-        booking = BookingService(db).create_lead_booking(
+        booking = SchedulingFacade(db).create_booking(
             tenant_id=context.tenant_id,
             lead_id=context.lead_id,
-            body=BookingCreateRequest(
+            command=CreateBookingCommand.validated(
                 start=body.start,
                 attendee_name=body.attendee_name,
                 attendee_email=body.attendee_email,

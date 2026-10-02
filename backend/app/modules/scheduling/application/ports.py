@@ -4,8 +4,11 @@ from dataclasses import asdict, dataclass
 from datetime import datetime
 from typing import Any, Protocol
 
-from app.models.crm import CrmBooking, CrmLead
-from app.schemas.crm import BookingCreateRequest
+from app.modules.scheduling.domain.contracts import (
+    BookingCustomer,
+    CreateBookingCommand,
+)
+from app.modules.scheduling.infrastructure.models import CrmBooking
 
 
 @dataclass(frozen=True)
@@ -46,8 +49,8 @@ class SchedulingProvider(Protocol):
         self,
         *,
         booking: CrmBooking,
-        lead: CrmLead,
-        body: BookingCreateRequest,
+        customer: BookingCustomer,
+        command: CreateBookingCommand,
         payload: dict[str, Any] | None = None,
     ) -> CrmBooking: ...
 
@@ -92,3 +95,47 @@ class SchedulingAdminProvider(Protocol):
     def list_team_members(self, team_id: str) -> list[dict[str, Any]]: ...
 
     def sync(self) -> dict[str, Any]: ...
+
+
+# --------------------------------------------------------------------------
+# Ports to the rest of the platform (bound in scheduling/wiring.py)
+# --------------------------------------------------------------------------
+class BookingCustomerPort(Protocol):
+    """Who is the lead booking for? CRM answers with a DTO, never ORM rows."""
+
+    def get_booking_customer(self, tenant_id: str, lead_id: str) -> BookingCustomer:
+        """Raises BookingCustomerNotFoundError for an unknown/foreign lead."""
+        ...
+
+
+class CrmActivityPort(Protocol):
+    """Timeline entries on the customer's CRM record."""
+
+    def record_activity(
+        self,
+        *,
+        tenant_id: str,
+        lead_id: str | None,
+        contact_id: str,
+        activity_type: str,
+        title: str,
+        description: str | None,
+        payload: dict[str, Any],
+    ) -> None: ...
+
+
+class BookingEventPublisherPort(Protocol):
+    """Announce a booking fact (``booking.created|cancelled|rescheduled``).
+
+    Delivery to Notifications is the adapter's business and must never raise
+    into the booking flow.
+    """
+
+    def publish_booking_event(self, *, tenant_id: str, booking_id: str, event_type: str) -> None: ...
+
+
+@dataclass(frozen=True)
+class SchedulingPorts:
+    customer: BookingCustomerPort
+    activity: CrmActivityPort
+    events: BookingEventPublisherPort

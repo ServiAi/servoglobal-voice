@@ -110,6 +110,31 @@ class CrmFacade:
         row = self.db.get(CrmLead, lead_id)
         return _lead_snapshot(row) if row is not None else None
 
+    def record_activity(
+        self,
+        *,
+        tenant_id: str,
+        lead_id: str | None,
+        contact_id: str,
+        activity_type: str,
+        title: str,
+        description: str | None = None,
+        payload: dict | None = None,
+    ) -> None:
+        """Append an entry to the customer's CRM timeline (commits, like the
+        activity service always did)."""
+        from app.services.crm_activity_service import CrmActivityService
+
+        CrmActivityService(self.db).create_activity(
+            tenant_id=tenant_id,
+            lead_id=lead_id,
+            contact_id=contact_id,
+            activity_type=activity_type,
+            title=title,
+            description=description,
+            payload_json=payload,
+        )
+
     def find_contact_by_normalized_phone(self, tenant_id: str, phone_normalized: str) -> ContactSnapshot | None:
         from sqlalchemy import select
 

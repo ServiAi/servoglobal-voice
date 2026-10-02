@@ -7,32 +7,24 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.auth.deps import AuthContext, get_current_auth_context
+from app.api.endpoints.integrations import (
+    _integration_catalog_statuses,
+    _resend_response,
+    _whatsapp_template_detail,
+)
 from app.db.session import get_db
 from app.models.identity import User
-from app.schemas.billing import TenantPlanRequest
-from app.schemas.onboarding import (
-    AgentCreateRequest,
-    AgentResponse,
-    MembershipCreateRequest,
-    MembershipResponse,
-    TenantCreateRequest,
-    TenantResponse,
-    TenantUpdateRequest,
-)
-from app.services.auth0_provisioning_service import (
-    Auth0ProvisioningError,
-    Auth0ProvisioningService,
-)
-from app.services.onboarding_service import (
-    OnboardingConsistencyError,
-    OnboardingService,
-    TenantDeletionBlockedError,
-)
-from app.services.tenant_usage_service import TenantUsageService
-from app.schemas.integrations import (
+from app.modules.scheduling.public import (
     BookingConfigRequest,
     BookingConfigResponse,
     CalComTestResponse,
+    CreateBookingCommand,
+    GoogleCalendarConnectionResponse,
+    SchedulingFacade,
+)
+from app.schemas.billing import TenantPlanRequest
+from app.schemas.crm import BookingCreateRequest, BookingResponse
+from app.schemas.integrations import (
     ChatwootAgentInviteRequest,
     ChatwootAgentSummary,
     ChatwootAgentUpdateRequest,
@@ -46,14 +38,17 @@ from app.schemas.integrations import (
     ChatwootTeamSummary,
     ChatwootTeamUpdateRequest,
     ChatwootTestResponse,
-    GoogleCalendarConnectionResponse,
     IntegrationAvailabilityResponse,
-    IntegrationCatalogStatusResponse,
     IntegrationAvailabilityUpdateRequest,
+    IntegrationCatalogStatusResponse,
     ResendIntegrationConfigRequest,
     ResendIntegrationConfigResponse,
     ResendTestEmailRequest,
     ResendTestEmailResponse,
+    VoiceAgentConfigRequest,
+    VoiceAgentConfigResponse,
+    VoiceProviderConfigRequest,
+    VoiceProviderConfigResponse,
     WhatsAppConfigRequest,
     WhatsAppConfigResponse,
     WhatsAppTemplateCreateRequest,
@@ -67,31 +62,38 @@ from app.schemas.integrations import (
     WhatsAppTestMessageResponse,
     WhatsAppTestRequest,
     WhatsAppTestResponse,
-    VoiceProviderConfigRequest,
-    VoiceProviderConfigResponse,
-    VoiceAgentConfigRequest,
-    VoiceAgentConfigResponse,
 )
-from app.schemas.crm import BookingCreateRequest, BookingResponse
-from app.api.endpoints.integrations import _integration_catalog_statuses, _resend_response, _whatsapp_template_detail
-from app.services.booking_config_service import BookingConfigService
+from app.schemas.onboarding import (
+    AgentCreateRequest,
+    MembershipCreateRequest,
+    TenantCreateRequest,
+    TenantUpdateRequest,
+)
+from app.services.auth0_provisioning_service import (
+    Auth0ProvisioningError,
+    Auth0ProvisioningService,
+)
 from app.services.chatwoot_client import ChatwootClientError, sanitize_chatwoot_error
-from app.services.chatwoot_config_service import ChatwootAccountConflictError, ChatwootConfigService
-from app.services.booking_service import BookingService
+from app.services.chatwoot_config_service import (
+    ChatwootAccountConflictError,
+    ChatwootConfigService,
+)
 from app.services.email_config_service import EmailConfigService
 from app.services.email_send_service import EmailSendService
 from app.services.email_template_service import EmailTemplateService
-from app.services.voice_config_service import VoiceConfigService
-from app.services.voice_agent_service import VoiceAgentService
-from app.services.google_calendar_oauth_service import GoogleCalendarOAuthService
 from app.services.integration_event_service import IntegrationEventService
 from app.services.integration_service import IntegrationService
+from app.services.onboarding_service import (
+    OnboardingConsistencyError,
+    OnboardingService,
+    TenantDeletionBlockedError,
+)
+from app.services.tenant_usage_service import TenantUsageService
+from app.services.voice_agent_service import VoiceAgentService
+from app.services.voice_config_service import VoiceConfigService
 from app.services.whatsapp_config_service import WhatsAppConfigService
 from app.services.whatsapp_message_service import WhatsAppMessageService
 from app.services.whatsapp_template_service import WhatsAppTemplateService
-from app.services.voice_config_service import VoiceConfigService
-from app.services.voice_agent_service import VoiceAgentService
-
 
 logger = logging.getLogger(__name__)
 
@@ -947,7 +949,7 @@ def get_tenant_booking_config_admin(
         OnboardingService(db).get_tenant(tenant_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    return BookingConfigService(db).get_config_response(tenant_id)
+    return SchedulingFacade(db).get_booking_config(tenant_id)
 
 
 @router.post("/tenants/{tenant_id}/integrations/calcom/config", response_model=BookingConfigResponse)
@@ -958,19 +960,9 @@ def configure_tenant_calcom_admin(
 ) -> Any:
     try:
         OnboardingService(db).get_tenant(tenant_id)
-        config = BookingConfigService(db).upsert_calcom_config(tenant_id, body)
-        IntegrationEventService(db).record_event(
-            tenant_id=tenant_id,
-            provider="calcom",
-            event_type="config_updated",
-            status="success",
-            resource_type="config",
-            resource_id=config.id,
-            metadata={"has_secret": bool(config.cal_api_key_encrypted), "calendar_mode": config.calendar_mode},
-        )
+        return SchedulingFacade(db).configure_calcom(tenant_id, body)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
-    return BookingConfigService(db).get_config_response(tenant_id)
 
 
 @router.post("/tenants/{tenant_id}/integrations/calcom/test", response_model=CalComTestResponse)
@@ -983,7 +975,7 @@ def test_tenant_calcom_admin(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     try:
-        result, error = BookingConfigService(db).test_connection(tenant_id)
+        result, error = SchedulingFacade(db).test_calcom(tenant_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
     if result != "active":
@@ -1001,7 +993,7 @@ def get_tenant_calcom_slots_admin(
 ) -> Any:
     try:
         OnboardingService(db).get_tenant(tenant_id)
-        return BookingService(db).get_available_slots_for_tenant(
+        return SchedulingFacade(db).get_available_slots(
             tenant_id=tenant_id,
             date_input=date,
             jornada=jornada,
@@ -1020,8 +1012,7 @@ def list_tenant_google_calendar_connections_admin(
         OnboardingService(db).get_tenant(tenant_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    service = GoogleCalendarOAuthService(db)
-    return [service.response(connection) for connection in service.list_connections(tenant_id)]
+    return SchedulingFacade(db).list_google_connections(tenant_id)
 
 
 @router.delete("/tenants/{tenant_id}/integrations/google-calendar/connections/{connection_id}", response_model=dict[str, Any])
@@ -1034,9 +1025,8 @@ def delete_tenant_google_calendar_connection_admin(
         OnboardingService(db).get_tenant(tenant_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    service = GoogleCalendarOAuthService(db)
     try:
-        service.delete_connection(tenant_id, connection_id)
+        SchedulingFacade(db).delete_google_connection(tenant_id, connection_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return {"deleted": True, "connection_id": connection_id, "tenant_id": tenant_id}
@@ -1051,7 +1041,9 @@ def create_tenant_lead_booking_admin(
 ) -> Any:
     try:
         OnboardingService(db).get_tenant(tenant_id)
-        return BookingService(db).create_lead_booking(tenant_id=tenant_id, lead_id=lead_id, body=body)
+        return SchedulingFacade(db).create_booking(
+            tenant_id=tenant_id, lead_id=lead_id, command=CreateBookingCommand(**body.model_dump())
+        )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
 
@@ -1064,7 +1056,7 @@ def list_tenant_lead_bookings_admin(
 ) -> Any:
     try:
         OnboardingService(db).get_tenant(tenant_id)
-        return BookingService(db).list_lead_bookings(tenant_id=tenant_id, lead_id=lead_id)
+        return SchedulingFacade(db).list_lead_bookings(tenant_id=tenant_id, lead_id=lead_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 

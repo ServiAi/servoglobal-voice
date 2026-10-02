@@ -7,18 +7,17 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
-from app.models.integrations import (
+from app.modules.scheduling.infrastructure.google.calendar import GoogleCalendarService
+from app.modules.scheduling.infrastructure.models import (
     TenantAgentSchedulingConfig,
     TenantGoogleCalendar,
     TenantGoogleCalendarConnection,
     TenantSchedulingAvailabilityException,
-    TenantSchedulingConfig,
     TenantSchedulingResource,
     TenantSchedulingResourceCalendar,
     TenantSchedulingTeam,
     TenantSchedulingTeamMember,
 )
-from app.services.google_calendar_service import GoogleCalendarService
 
 logger = logging.getLogger(__name__)
 
@@ -401,6 +400,67 @@ class SchedulingResourceService:
     # -------------------------------------------------------------------------
     # Selección de Recurso (Single & Round Robin Estricto)
     # -------------------------------------------------------------------------
+    # Rank used both before and after the allocation lock.
+    @staticmethod
+    def _round_robin_order() -> tuple:
+        return (
+            TenantSchedulingResource.priority.desc(),
+            TenantSchedulingResource.last_assigned_at.asc().nullsfirst(),
+            TenantSchedulingResource.total_assigned_count.asc(),
+            TenantSchedulingResource.created_at.asc(),
+            TenantSchedulingResource.id.asc(),
+        )
+
+    def _candidate_criteria(self, tenant_id: str, team_id: str | None, team_name: str | None) -> list:
+        """Filters selecting the pool of resources a request may draw from."""
+        candidate_ids: list[str] = []
+        if team_id:
+            candidate_ids = list(
+                self.db.scalars(
+                    select(TenantSchedulingTeamMember.resource_id).where(
+                        TenantSchedulingTeamMember.tenant_id == tenant_id,
+                        TenantSchedulingTeamMember.team_id == team_id,
+                        TenantSchedulingTeamMember.is_active == True,  # noqa: E712
+                    ).order_by(TenantSchedulingTeamMember.priority.desc())
+                ).all()
+            )
+        elif team_name:
+            team = self.db.scalar(
+                select(TenantSchedulingTeam).where(
+                    TenantSchedulingTeam.tenant_id == tenant_id,
+                    TenantSchedulingTeam.name == team_name,
+                    TenantSchedulingTeam.is_active == True,  # noqa: E712
+                )
+            )
+            if team:
+                candidate_ids = list(
+                    self.db.scalars(
+                        select(TenantSchedulingTeamMember.resource_id).where(
+                            TenantSchedulingTeamMember.tenant_id == tenant_id,
+                            TenantSchedulingTeamMember.team_id == team.id,
+                            TenantSchedulingTeamMember.is_active == True,  # noqa: E712
+                        ).order_by(TenantSchedulingTeamMember.priority.desc())
+                    ).all()
+                )
+
+        criteria = [
+            TenantSchedulingResource.tenant_id == tenant_id,
+            TenantSchedulingResource.is_active == True,  # noqa: E712
+        ]
+        if candidate_ids:
+            criteria.append(TenantSchedulingResource.id.in_(candidate_ids))
+        elif team_name:
+            # Fallback backward-compatible: match string team column
+            criteria.append(TenantSchedulingResource.team == team_name)
+        return criteria
+
+    @staticmethod
+    def _destination_calendar_id(resource: TenantSchedulingResource) -> str | None:
+        return next(
+            (rc.calendar.google_calendar_id for rc in resource.resource_calendars if rc.is_destination and rc.calendar),
+            None,
+        )
+
     def select_resource_round_robin(
         self,
         *,
@@ -416,79 +476,57 @@ class SchedulingResourceService:
         Selecciona un recurso bajo estrategia Round Robin.
         IMPORTANTE: NUNCA retorna un recurso ocupado ni hace fallback a uno ocupado.
         Si ninguno está disponible, retorna (None, None).
+
+        Two phases, so no row lock is ever held across network I/O:
+          1. availability (working hours, exceptions, Google FreeBusy) -- no
+             allocation lock; yields the ids of the resources that can take the slot;
+          2. allocation -- lock only those rows, re-read them fresh, rank them again
+             and take the first one (milliseconds, no I/O).
         """
-        # 1. Fetch team members if team_id or team_name is given
-        candidate_ids: list[str] = []
-        if team_id:
-            members = list(
-                self.db.scalars(
-                    select(TenantSchedulingTeamMember.resource_id).where(
-                        TenantSchedulingTeamMember.tenant_id == tenant_id,
-                        TenantSchedulingTeamMember.team_id == team_id,
-                        TenantSchedulingTeamMember.is_active == True,  # noqa: E712
-                    ).order_by(TenantSchedulingTeamMember.priority.desc())
-                ).all()
-            )
-            candidate_ids = members
-        elif team_name:
-            team = self.db.scalar(
-                select(TenantSchedulingTeam).where(
-                    TenantSchedulingTeam.tenant_id == tenant_id,
-                    TenantSchedulingTeam.name == team_name,
-                    TenantSchedulingTeam.is_active == True,  # noqa: E712
-                )
-            )
-            if team:
-                members = list(
-                    self.db.scalars(
-                        select(TenantSchedulingTeamMember.resource_id).where(
-                            TenantSchedulingTeamMember.tenant_id == tenant_id,
-                            TenantSchedulingTeamMember.team_id == team.id,
-                            TenantSchedulingTeamMember.is_active == True,  # noqa: E712
-                        ).order_by(TenantSchedulingTeamMember.priority.desc())
-                    ).all()
-                )
-                candidate_ids = members
-
-        stmt = (
-            select(TenantSchedulingResource)
-            .options(joinedload(TenantSchedulingResource.resource_calendars).joinedload(TenantSchedulingResourceCalendar.calendar))
-            .where(
-                TenantSchedulingResource.tenant_id == tenant_id,
-                TenantSchedulingResource.is_active == True,  # noqa: E712
-            )
-        )
-        if candidate_ids:
-            stmt = stmt.where(TenantSchedulingResource.id.in_(candidate_ids))
-        elif team_name:
-            # Fallback backward-compatible: match string team column
-            stmt = stmt.where(TenantSchedulingResource.team == team_name)
-
-        # Order by priority, least recently assigned first, lowest count, then created_at
+        # Phase 1 -- no FOR UPDATE anywhere in this phase.
+        criteria = self._candidate_criteria(tenant_id, team_id, team_name)
         candidates = list(
             self.db.scalars(
-                stmt.order_by(
-                    TenantSchedulingResource.priority.desc(),
-                    TenantSchedulingResource.last_assigned_at.asc().nullsfirst(),
-                    TenantSchedulingResource.total_assigned_count.asc(),
-                    TenantSchedulingResource.created_at.asc(),
-                    TenantSchedulingResource.id.asc(),
+                select(TenantSchedulingResource)
+                .options(
+                    joinedload(TenantSchedulingResource.resource_calendars).joinedload(
+                        TenantSchedulingResourceCalendar.calendar
+                    )
                 )
+                .where(*criteria)
+                .order_by(*self._round_robin_order())
             ).unique().all()
         )
+        available_ids = self._find_available_candidates(
+            tenant_id,
+            candidates,
+            slot_start=slot_start,
+            duration_minutes=duration_minutes,
+            buffer_before_minutes=buffer_before_minutes,
+            buffer_after_minutes=buffer_after_minutes,
+        )
 
-        if not candidates:
+        # STRICT: If no resource is free, return None (NO fallback to a busy resource)
+        if not available_ids:
             return None, None
 
-        chosen_resource: TenantSchedulingResource | None = None
-        chosen_calendar_id: str | None = None
+        # Phase 2 -- the only place that takes the allocation lock.
+        return self._allocate_candidate_atomically(tenant_id, team_id, team_name, available_ids)
 
+    def _find_available_candidates(
+        self,
+        tenant_id: str,
+        candidates: list[TenantSchedulingResource],
+        *,
+        slot_start: datetime | None,
+        duration_minutes: int,
+        buffer_before_minutes: int,
+        buffer_after_minutes: int,
+    ) -> list[str]:
+        """Ids of the candidates that can take the slot. May call Google FreeBusy;
+        therefore it must never run while an allocation lock is held."""
+        available: list[str] = []
         for resource in candidates:
-            destination_cal = next(
-                (rc.calendar.google_calendar_id for rc in resource.resource_calendars if rc.is_destination and rc.calendar),
-                None,
-            )
-
             # Check working hours of resource if slot_start is given
             if slot_start and resource.working_hours_json:
                 day_name = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"][slot_start.weekday()]
@@ -554,14 +592,50 @@ class SchedulingResourceService:
                         except Exception as exc:
                             logger.warning("Error checking freebusy for resource %s: %s", resource.name, exc)
 
-            # If all checks pass, we select this resource
-            chosen_resource = resource
-            chosen_calendar_id = destination_cal
-            break
+            available.append(resource.id)
+        return available
 
-        # STRICT: If no resource is free, return None (NO fallback to a busy resource)
-        if not chosen_resource:
+    def _allocate_candidate_atomically(
+        self,
+        tenant_id: str,
+        team_id: str | None,
+        team_name: str | None,
+        available_ids: list[str],
+    ) -> tuple[TenantSchedulingResource, str | None] | tuple[None, None]:
+        """Critical section: lock the available rows (id order, so concurrent
+        allocations cannot deadlock), re-read them fresh, rank them again and take
+        the first. Without the lock two simultaneous bookings read the same
+        "least recently assigned" resource and both got it. The re-read is a *new*
+        statement with ``populate_existing``, so under READ COMMITTED it sees what
+        the previous holder committed; the ranking that decides is the post-lock
+        one. The lock is released by the commit below on every path. No network
+        call may be added here."""
+        # Membership/active/tenant are re-validated post-lock, cheaply and locally.
+        fresh_criteria = self._candidate_criteria(tenant_id, team_id, team_name)
+        pool = [*fresh_criteria, TenantSchedulingResource.id.in_(available_ids)]
+
+        self.db.execute(
+            select(TenantSchedulingResource.id).where(*pool).order_by(TenantSchedulingResource.id).with_for_update()
+        )
+        ranked = list(
+            self.db.scalars(
+                select(TenantSchedulingResource)
+                .options(
+                    joinedload(TenantSchedulingResource.resource_calendars).joinedload(
+                        TenantSchedulingResourceCalendar.calendar
+                    )
+                )
+                .where(*pool)
+                .order_by(*self._round_robin_order())
+                .execution_options(populate_existing=True)
+            ).unique().all()
+        )
+        if not ranked:  # deactivated / removed from the team since phase 1
+            self.db.commit()  # release the allocation lock
             return None, None
+
+        chosen_resource = ranked[0]
+        chosen_calendar_id = self._destination_calendar_id(chosen_resource)
 
         # Update assignment counters
         chosen_resource.last_assigned_at = datetime.now(UTC)

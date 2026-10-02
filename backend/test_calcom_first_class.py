@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 from sqlalchemy import select
 
 from _integrations_2a_test_base import Integration2ATestCase, SessionLocal
-from app.core.scheduling_exceptions import (
+from app.modules.scheduling.domain.errors import (
     SchedulingAuthenticationError,
     SchedulingConflictError,
     SchedulingNotFoundError,
@@ -17,17 +17,17 @@ from app.core.scheduling_exceptions import (
     SchedulingValidationError,
 )
 from app.models.identity import Tenant, TenantMembership, User
-from app.models.integrations import (
+from app.models.integrations import TenantIntegrationEvent
+from app.modules.scheduling.infrastructure.models import (
     TenantAgentSchedulingConfig,
     TenantBookingConfig,
-    TenantIntegrationEvent,
     TenantSchedulingEventType,
     TenantSchedulingProviderObject,
     TenantSchedulingSchedule,
 )
-from app.services.calcom_client import CalComClient, CalComClientConfig, sanitize_calcom_error
-from app.services.calcom_sync_service import CalComSyncService
-from app.services.scheduling_provider_resolver import SchedulingProviderResolver
+from app.modules.scheduling.infrastructure.calcom.client import CalComClient, CalComClientConfig, sanitize_calcom_error
+from app.modules.scheduling.infrastructure.calcom.sync import CalComSyncService
+from app.modules.scheduling.application.provider_resolver import SchedulingProviderResolver
 
 
 class CalComClientV2UnitTests(unittest.TestCase):
@@ -35,7 +35,7 @@ class CalComClientV2UnitTests(unittest.TestCase):
         self.client = CalComClient(base_url="https://api.cal.com/v2")
         self.config = CalComClientConfig(api_key="cal_live_secret123")
 
-    @patch("app.services.calcom_client.httpx.request")
+    @patch("app.modules.scheduling.infrastructure.calcom.client.httpx.request")
     def test_get_current_user_and_discovery(self, mock_request):
         # 1. /me
         mock_request.side_effect = [
@@ -51,7 +51,7 @@ class CalComClientV2UnitTests(unittest.TestCase):
         self.assertEqual(discovery["counts"]["event_types"], 1)
         self.assertEqual(discovery["counts"]["teams"], 1)
 
-    @patch("app.services.calcom_client.httpx.request")
+    @patch("app.modules.scheduling.infrastructure.calcom.client.httpx.request")
     def test_schedule_crud(self, mock_request):
         mock_request.side_effect = [
             httpx.Response(200, json={"status": "success", "data": [{"id": 1, "name": "Horario comercial"}]}),
@@ -76,7 +76,7 @@ class CalComClientV2UnitTests(unittest.TestCase):
         deleted = self.client.delete_schedule(self.config, 2)
         self.assertTrue(deleted)
 
-    @patch("app.services.calcom_client.httpx.request")
+    @patch("app.modules.scheduling.infrastructure.calcom.client.httpx.request")
     def test_event_type_crud(self, mock_request):
         mock_request.side_effect = [
             httpx.Response(200, json={"status": "success", "data": [{"id": 50, "title": "Demo", "slug": "demo"}]}),
@@ -101,7 +101,7 @@ class CalComClientV2UnitTests(unittest.TestCase):
         deleted = self.client.delete_event_type(self.config, 51)
         self.assertTrue(deleted)
 
-    @patch("app.services.calcom_client.httpx.request")
+    @patch("app.modules.scheduling.infrastructure.calcom.client.httpx.request")
     def test_error_mapping_and_secret_sanitization(self, mock_request):
         # 401
         mock_request.return_value = httpx.Response(401, text="Bearer cal_live_secret123 is invalid")
@@ -166,7 +166,7 @@ class CalComSyncServiceIntegrationTests(Integration2ATestCase):
             ],
         }
 
-        with patch("app.services.calcom_sync_service.CalComClient.discover_account", return_value=mock_discovery):
+        with patch("app.modules.scheduling.infrastructure.calcom.sync.CalComClient.discover_account", return_value=mock_discovery):
             with SessionLocal() as db:
                 sync_service = CalComSyncService(db)
                 result = sync_service.sync(self.tenant.id)
@@ -205,7 +205,7 @@ class CalComSyncServiceIntegrationTests(Integration2ATestCase):
             "event_types": [],  # Event type removed remotely
             "teams": [],
         }
-        with patch("app.services.calcom_sync_service.CalComClient.discover_account", return_value=mock_discovery_deleted):
+        with patch("app.modules.scheduling.infrastructure.calcom.sync.CalComClient.discover_account", return_value=mock_discovery_deleted):
             with SessionLocal() as db:
                 sync_service = CalComSyncService(db)
                 sync_service.sync(self.tenant.id)

@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.models.analytics import Agent
 from app.models.crm import CrmCallContext, CrmLead
-from app.models.integrations import TenantVoiceBookingConfig
+from app.modules.scheduling.public import SchedulingFacade
 
 
 @dataclass(frozen=True)
@@ -65,13 +65,4 @@ class VoiceBookingContextService:
         raise ValueError("Unable to resolve tenant for voice booking tool.")
 
     def _voice_config_id(self, tenant_id: str, agent_id: str | None) -> str | None:
-        if not agent_id:
-            return None
-        config = self.db.scalar(
-            select(TenantVoiceBookingConfig).where(
-                TenantVoiceBookingConfig.tenant_id == tenant_id,
-                TenantVoiceBookingConfig.provider_agent_id == agent_id,
-                TenantVoiceBookingConfig.status == "active",
-            )
-        )
-        return config.id if config else None
+        return SchedulingFacade(self.db).find_voice_booking_config_id(tenant_id, agent_id)

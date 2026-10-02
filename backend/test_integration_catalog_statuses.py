@@ -19,12 +19,8 @@ from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.main import app
 from app.models.identity import Tenant, TenantMembership, User
-from app.models.integrations import (
-    TenantGoogleCalendarConnection,
-    TenantIntegration,
-    TenantVoiceProviderConfig,
-    TenantWhatsAppConfig,
-)
+from app.models.integrations import TenantIntegration, TenantVoiceProviderConfig, TenantWhatsAppConfig
+from app.modules.scheduling.infrastructure.models import TenantGoogleCalendarConnection
 
 
 class IntegrationCatalogStatusesTests(unittest.TestCase):

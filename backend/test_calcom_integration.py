@@ -10,9 +10,11 @@ from unittest.mock import patch
 from sqlalchemy import select
 
 from _integrations_2a_test_base import Integration2ATestCase, SessionLocal
-from app.models.crm import CrmActivity, CrmBooking, CrmBookingEvent
-from app.models.integrations import TenantBookingConfig, TenantIntegrationEvent
-from app.services.calcom_client import CalComClient, CalComClientConfig
+from app.models.crm import CrmActivity
+from app.modules.scheduling.infrastructure.models import CrmBooking, CrmBookingEvent
+from app.models.integrations import TenantIntegrationEvent
+from app.modules.scheduling.infrastructure.models import TenantBookingConfig
+from app.modules.scheduling.infrastructure.calcom.client import CalComClient, CalComClientConfig
 
 
 class CalComIntegrationTests(Integration2ATestCase):
@@ -45,7 +47,7 @@ class CalComIntegrationTests(Integration2ATestCase):
 
     def test_calcom_slots_use_authenticated_tenant_config(self):
         self.configure_calcom()
-        with patch("app.services.booking_service.CalComClient.get_available_slots") as get_slots:
+        with patch("app.modules.scheduling.application.booking_service.CalComClient.get_available_slots") as get_slots:
             get_slots.return_value = {
                 "date": "2026-07-02",
                 "jornada": "dia",
@@ -60,7 +62,7 @@ class CalComIntegrationTests(Integration2ATestCase):
         self.assertEqual(config_arg.api_key, "cal_secret_test")
 
     def test_calcom_slots_use_current_slots_api_version_header(self):
-        with patch("app.services.calcom_client.httpx.get") as get:
+        with patch("app.modules.scheduling.infrastructure.calcom.client.httpx.get") as get:
             get.return_value = httpx.Response(
                 200,
                 json={
@@ -86,7 +88,7 @@ class CalComIntegrationTests(Integration2ATestCase):
 
     def test_calcom_test_connection_marks_health_without_leaking_secret(self):
         self.configure_calcom()
-        with patch("app.services.booking_config_service.CalComClient.get_available_slots", return_value={"available_slots": []}):
+        with patch("app.modules.scheduling.application.booking_config_service.CalComClient.get_available_slots", return_value={"available_slots": []}):
             response = self.client.post("/api/v1/integrations/calcom/test")
 
         self.assertEqual(response.status_code, 200)
@@ -173,9 +175,9 @@ class CalComIntegrationTests(Integration2ATestCase):
 
         with patch.dict(os.environ, {"CALCOM_WEBHOOK_SECRET": ""}), patch(
             "app.services.notification_service.notification_service.notify_new_booking"
-        ), patch("app.api.endpoints.calcom.logger.debug") as debug_log, patch(
-            "app.api.endpoints.calcom.logger.info"
-        ) as info_log, patch("app.api.endpoints.calcom.logger.warning") as warning_log:
+        ), patch("app.modules.scheduling.api.calcom_router.logger.debug") as debug_log, patch(
+            "app.modules.scheduling.api.calcom_router.logger.info"
+        ) as info_log, patch("app.modules.scheduling.api.calcom_router.logger.warning") as warning_log:
             response = self.client.post("/api/v1/calcom/webhook", json=payload)
 
         self.assertEqual(response.status_code, 200)
