@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.modules.telephony.api.schemas import (
+from app.modules.telephony.application.provisioning_schemas import (
     AsteriskApplyResult,
     AsteriskApplyResultsResponse,
     AsteriskDesiredRoute,

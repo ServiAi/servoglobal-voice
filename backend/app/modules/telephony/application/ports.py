@@ -11,7 +11,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Protocol
 
-from app.modules.telephony.infrastructure.livekit_sip import LiveKitSipDialResult
+from app.modules.telephony.domain.views import LiveKitSipDialResult
 from app.modules.voice.public import TelephonySessionView
 
 

@@ -85,3 +85,11 @@ class OutboundCallResult:
     sip_call_id: str | None
     provider_call_id: str | None
     provider_session_id: str | None
+
+
+@dataclass(frozen=True)
+class LiveKitSipDialResult:
+    participant_id: str
+    participant_identity: str
+    room_name: str
+    sip_call_id: str

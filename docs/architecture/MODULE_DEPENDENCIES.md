@@ -135,6 +135,7 @@ Aplicadas por `backend/test_module_boundaries.py`:
 26. `app.modules.telephony.domain` es puro (sin SQLAlchemy/FastAPI/LiveKit/CRM/Voice/httpx) y `application` no importa `api`.
 27. El ORM de Telephony (`TenantSipRoute`) sólo lo importa Telephony y el registro de modelos; nadie importa las rutas viejas (`voice_phone_service`, `livekit_sip_service`, `voice_sip_route_service`, `voice_capacity_service`, `voice_session_sip_service`, `asterisk_provisioning_*`).
 28. No hay shims: `KNOWN_SHIMS` está vacío; un shim nuevo debe registrarse ahí. Los procesos de entrada (`app.workers.asterisk_provisioner`) pueden importar el agente directamente (raíz de composición).
+29b. Excepción temporal (deuda de **Voice Legacy**, no de Telephony): sólo `voice_call_service` y `voice_callback_service` pueden leer la contraseña SIP descifrada vía `SipRouteFacade.get_connection`/`SipRouteConnection` (`SIP_CREDENTIAL_CONSUMERS`); cualquier otro consumidor rompe el test. Se retira al jubilar esos flujos Ultravox directos.
 29. Ninguna componente fuertemente conexa contiene Telephony y un adapter de proveedor; los adapters y `voice_provider_config_store` no importan ningún módulo salvo `voice_providers.public`.
 
 ## Reglas de datos vigentes

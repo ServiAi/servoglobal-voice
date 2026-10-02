@@ -75,6 +75,16 @@ TELEPHONY_LEGACY_ALLOWED = {
     "app.services.secret_manager_service",  # shared encryption (Fernet)
 }
 
+# TEMPORARY: the only code allowed to read the decrypted SIP password through
+# ``SipRouteFacade.get_connection`` / ``SipRouteConnection``. Both are Voice
+# Legacy debt (the Ultravox direct-call and callback flows place the provider
+# call with the route credentials), not Telephony's: remove each entry when
+# that flow retires or moves behind ``telephony.public.place_outbound_call``.
+SIP_CREDENTIAL_CONSUMERS = {
+    "app.services.voice_call_service",
+    "app.services.voice_callback_service",
+}
+
 # Things Telephony must never touch, whatever the route: Voice and CRM
 # internals, and the projection/runtime implementations behind voice.public /
 # analytics.public.
@@ -445,7 +455,6 @@ class ModuleBoundaryTests(unittest.TestCase):
         violations = self._violations(
             lambda s, t: s.startswith("app.modules.telephony.application")
             and t.startswith("app.modules.telephony.api")
-            and s != "app.modules.telephony.application.provisioning_service"  # api schemas are its contract
         )
         self.assertEqual(violations, [])
 
@@ -453,6 +462,18 @@ class ModuleBoundaryTests(unittest.TestCase):
         models = "app.modules.telephony.infrastructure.models"
         violations = self._violations(lambda s, t: t == models and _owner(s) != "telephony" and s != "app.models")
         self.assertEqual(violations, [])
+
+    def test_sip_credentials_are_read_only_by_the_allowlisted_legacy_flows(self) -> None:
+        offenders = []
+        for module, (path, _) in self.graph.items():
+            if _owner(module) == "telephony" or module.endswith("test_module_boundaries"):
+                continue
+            source = _source(path)
+            if ("get_connection" in source or "SipRouteConnection" in source) and module not in SIP_CREDENTIAL_CONSUMERS:
+                offenders.append(module)
+        self.assertEqual(offenders, [], "New SIP-credential consumers need review (SIP_CREDENTIAL_CONSUMERS)")
+        for module in SIP_CREDENTIAL_CONSUMERS:
+            self.assertIn(module, self.graph, "Stale allowlist entry: remove it")
 
     def test_nobody_imports_the_old_telephony_paths(self) -> None:
         gone = (
