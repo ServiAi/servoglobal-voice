@@ -4,19 +4,10 @@ import logging
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.auth.deps import AuthContext, require_roles
 from app.db.session import get_db
-from app.modules.scheduling.infrastructure.models import (
-    TenantAgentSchedulingConfig,
-    TenantSchedulingAvailabilityException,
-    TenantSchedulingEventType,
-    TenantSchedulingResource,
-    TenantSchedulingSchedule,
-    TenantSchedulingTeam,
-)
 from app.modules.scheduling.api.schemas import (
     AgentSchedulingConfigResponse,
     AgentSchedulingConfigUpsertRequest,
@@ -45,6 +36,8 @@ from app.modules.scheduling.api.schemas import (
     TenantSchedulingConfigUpdateRequest,
 )
 from app.modules.scheduling.application.views import (
+    list_local_event_types,
+    list_local_schedules,
     serialize_agent_config,
     serialize_exception,
     serialize_resource,
@@ -491,31 +484,9 @@ def list_schedules(
     db: Session = Depends(get_db),
 ) -> Any:
     # First query local projections
-    stmt = select(TenantSchedulingSchedule).where(
-        TenantSchedulingSchedule.tenant_id == auth.tenant_id,
-        TenantSchedulingSchedule.sync_status != "remote_deleted",
-    )
-    if provider:
-        stmt = stmt.where(TenantSchedulingSchedule.provider == provider)
-    local_schedules = list(db.scalars(stmt))
+    local_schedules = list_local_schedules(db, auth.tenant_id, provider)
     if local_schedules:
-        return [
-            {
-                "id": s.id,
-                "tenant_id": s.tenant_id,
-                "provider": s.provider,
-                "name": s.name,
-                "timezone": s.timezone,
-                "working_hours": s.working_hours_json,
-                "overrides": s.overrides_json,
-                "provider_schedule_id": s.provider_schedule_id,
-                "is_default": s.is_default,
-                "is_active": s.is_active,
-                "sync_status": s.sync_status,
-                "last_synced_at": s.last_synced_at,
-            }
-            for s in local_schedules
-        ]
+        return local_schedules
 
     admin = SchedulingProviderResolver(db).resolve_admin_provider(auth.tenant_id, provider)
     schedules = admin.list_schedules()
@@ -616,39 +587,9 @@ def list_event_types(
     auth: AuthContext = Depends(require_roles(READ_ROLES)),
     db: Session = Depends(get_db),
 ) -> Any:
-    stmt = select(TenantSchedulingEventType).where(
-        TenantSchedulingEventType.tenant_id == auth.tenant_id,
-        TenantSchedulingEventType.sync_status != "remote_deleted",
-    )
-    if provider:
-        stmt = stmt.where(TenantSchedulingEventType.provider == provider)
-    local_ets = list(db.scalars(stmt))
-
+    local_ets = list_local_event_types(db, auth.tenant_id, provider)
     if local_ets:
-        return [
-            {
-                "id": et.id,
-                "tenant_id": et.tenant_id,
-                "provider": et.provider,
-                "name": et.name,
-                "slug": et.slug,
-                "description": et.description,
-                "duration_minutes": et.duration_minutes,
-                "slot_interval_minutes": et.slot_interval_minutes,
-                "buffer_before_minutes": et.buffer_before_minutes,
-                "buffer_after_minutes": et.buffer_after_minutes,
-                "minimum_notice_minutes": et.minimum_notice_minutes,
-                "timezone": et.timezone,
-                "local_schedule_id": et.local_schedule_id,
-                "local_team_id": et.local_team_id,
-                "provider_event_type_id": et.provider_event_type_id,
-                "provider_event_type_slug": et.provider_event_type_slug,
-                "is_active": et.is_active,
-                "sync_status": et.sync_status,
-                "last_synced_at": et.last_synced_at,
-            }
-            for et in local_ets
-        ]
+        return local_ets
 
     admin = SchedulingProviderResolver(db).resolve_admin_provider(auth.tenant_id, provider)
     ets = admin.list_event_types()

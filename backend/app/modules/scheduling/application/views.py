@@ -5,11 +5,16 @@ from __future__ import annotations
 
 from typing import Any
 
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
 from app.modules.scheduling.domain.contracts import BookingView
 from app.modules.scheduling.infrastructure.models import (
     CrmBooking,
     TenantAgentSchedulingConfig,
     TenantSchedulingAvailabilityException,
+    TenantSchedulingEventType,
+    TenantSchedulingSchedule,
     TenantSchedulingResource,
     TenantSchedulingTeam,
 )
@@ -148,3 +153,62 @@ def serialize_agent_config(cfg: TenantAgentSchedulingConfig) -> dict[str, Any]:
         "team_name": cfg.team.name if cfg.team else None,
         "event_type_name": cfg.event_type.name if cfg.event_type else None,
     }
+
+
+def list_local_schedules(db: Session, tenant_id: str, provider: str | None) -> list[dict[str, Any]]:
+    stmt = select(TenantSchedulingSchedule).where(
+        TenantSchedulingSchedule.tenant_id == tenant_id,
+        TenantSchedulingSchedule.sync_status != "remote_deleted",
+    )
+    if provider:
+        stmt = stmt.where(TenantSchedulingSchedule.provider == provider)
+    return [
+        {
+            "id": s.id,
+            "tenant_id": s.tenant_id,
+            "provider": s.provider,
+            "name": s.name,
+            "timezone": s.timezone,
+            "working_hours": s.working_hours_json,
+            "overrides": s.overrides_json,
+            "provider_schedule_id": s.provider_schedule_id,
+            "is_default": s.is_default,
+            "is_active": s.is_active,
+            "sync_status": s.sync_status,
+            "last_synced_at": s.last_synced_at,
+        }
+        for s in db.scalars(stmt)
+    ]
+
+
+def list_local_event_types(db: Session, tenant_id: str, provider: str | None) -> list[dict[str, Any]]:
+    stmt = select(TenantSchedulingEventType).where(
+        TenantSchedulingEventType.tenant_id == tenant_id,
+        TenantSchedulingEventType.sync_status != "remote_deleted",
+    )
+    if provider:
+        stmt = stmt.where(TenantSchedulingEventType.provider == provider)
+    return [
+        {
+            "id": et.id,
+            "tenant_id": et.tenant_id,
+            "provider": et.provider,
+            "name": et.name,
+            "slug": et.slug,
+            "description": et.description,
+            "duration_minutes": et.duration_minutes,
+            "slot_interval_minutes": et.slot_interval_minutes,
+            "buffer_before_minutes": et.buffer_before_minutes,
+            "buffer_after_minutes": et.buffer_after_minutes,
+            "minimum_notice_minutes": et.minimum_notice_minutes,
+            "timezone": et.timezone,
+            "local_schedule_id": et.local_schedule_id,
+            "local_team_id": et.local_team_id,
+            "provider_event_type_id": et.provider_event_type_id,
+            "provider_event_type_slug": et.provider_event_type_slug,
+            "is_active": et.is_active,
+            "sync_status": et.sync_status,
+            "last_synced_at": et.last_synced_at,
+        }
+        for et in db.scalars(stmt)
+    ]

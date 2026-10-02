@@ -450,19 +450,32 @@ class SchedulingResourceService:
                 )
                 candidate_ids = members
 
+        criteria = [
+            TenantSchedulingResource.tenant_id == tenant_id,
+            TenantSchedulingResource.is_active == True,  # noqa: E712
+        ]
+        if candidate_ids:
+            criteria.append(TenantSchedulingResource.id.in_(candidate_ids))
+        elif team_name:
+            # Fallback backward-compatible: match string team column
+            criteria.append(TenantSchedulingResource.team == team_name)
+
+        # Serialize concurrent allocations over the same candidates. Without the
+        # lock two simultaneous bookings read the same "least recently assigned"
+        # resource and both got it (and one counter increment was lost). Locking
+        # in id order avoids deadlocks; the ordered read below is a *new*
+        # statement, so under READ COMMITTED it sees what the previous holder
+        # committed. The lock is released by the commit at the end of this call.
+        self.db.execute(
+            select(TenantSchedulingResource.id).where(*criteria).order_by(TenantSchedulingResource.id).with_for_update()
+        )
+
         stmt = (
             select(TenantSchedulingResource)
             .options(joinedload(TenantSchedulingResource.resource_calendars).joinedload(TenantSchedulingResourceCalendar.calendar))
-            .where(
-                TenantSchedulingResource.tenant_id == tenant_id,
-                TenantSchedulingResource.is_active == True,  # noqa: E712
-            )
+            .where(*criteria)
+            .execution_options(populate_existing=True)
         )
-        if candidate_ids:
-            stmt = stmt.where(TenantSchedulingResource.id.in_(candidate_ids))
-        elif team_name:
-            # Fallback backward-compatible: match string team column
-            stmt = stmt.where(TenantSchedulingResource.team == team_name)
 
         # Order by priority, least recently assigned first, lowest count, then created_at
         candidates = list(
@@ -476,8 +489,8 @@ class SchedulingResourceService:
                 )
             ).unique().all()
         )
-
         if not candidates:
+            self.db.commit()  # release the allocation lock
             return None, None
 
         chosen_resource: TenantSchedulingResource | None = None
@@ -561,6 +574,7 @@ class SchedulingResourceService:
 
         # STRICT: If no resource is free, return None (NO fallback to a busy resource)
         if not chosen_resource:
+            self.db.commit()  # release the allocation lock
             return None, None
 
         # Update assignment counters
