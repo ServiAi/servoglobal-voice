@@ -7,10 +7,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.crm import CrmLead, CrmVoiceCall, CrmVoiceCallEvent
+from app.modules.telephony.public import SipRouteFacade
 from app.schemas.integrations import VoiceCallActionRequest, VoiceCallActionResponse, VoiceCallResponse
 from app.services.voice_client import VoiceClient, VoiceClientConfig, VoiceSipRouteConfig
 from app.services.voice_config_service import VoiceConfigService
-from app.services.voice_sip_route_service import VoiceSipRouteService
 from app.services.voice_agent_service import VoiceAgentService
 from app.services.crm_activity_service import CrmActivityService
 from app.services.integration_event_service import IntegrationEventService
@@ -22,7 +22,7 @@ class VoiceCallService:
     def __init__(self, db: Session) -> None:
         self.db = db
         self.config_service = VoiceConfigService(db)
-        self.route_service = VoiceSipRouteService(db, self.config_service.secret_manager)
+        self.route_service = SipRouteFacade(db, self.config_service.secret_manager)
         self.agent_service = VoiceAgentService(db)
         self.activity_service = CrmActivityService(db)
         self.integration_event_service = IntegrationEventService(db)
@@ -100,15 +100,7 @@ class VoiceCallService:
                 base_url=provider_config.base_url,
                 default_language=provider_config.default_language,
                 default_timezone=provider_config.default_timezone,
-                sip_route=VoiceSipRouteConfig(
-                    host=sip_route.pbx_host,
-                    port=sip_route.pbx_port,
-                    username=sip_route.sip_username,
-                    password=self.route_service.decrypt_password(sip_route),
-                    caller_id=sip_route.caller_id,
-                    default_country=sip_route.default_country,
-                    allowed_countries=tuple(sip_route.allowed_countries_json),
-                ),
+                sip_route=self._sip_route_config(tenant_id),
             )
             response = client.start_outbound_call(
                 client_config,
@@ -299,18 +291,29 @@ class VoiceCallService:
                 sanitized[k] = v
         return sanitized
 
+    def _sip_route_config(self, tenant_id: str) -> VoiceSipRouteConfig:
+        """Route + decrypted SIP password for the provider call (the one
+        trusted place that needs it); decrypt failures surface here, inside
+        the call attempt, exactly where they always did."""
+        connection = self.route_service.get_connection(tenant_id)
+        return VoiceSipRouteConfig(
+            host=connection.host,
+            port=connection.port,
+            username=connection.username,
+            password=connection.password,
+            caller_id=connection.caller_id,
+            default_country=connection.default_country,
+            allowed_countries=connection.allowed_countries,
+        )
+
     def responses_for_lead(self, tenant_id: str, lead_id: str) -> list[VoiceCallResponse]:
-        from app.models.voice_sessions import VoiceSession
         from app.modules.agents.public import AgentsFacade
+        from app.modules.voice.public import VoiceSessionFacade
 
         calls = self.list_lead_calls(tenant_id, lead_id)
         if not calls:
             return []
-        agent_by_call = dict(self.db.execute(
-            select(VoiceSession.crm_voice_call_id, VoiceSession.agent_id)
-            .where(VoiceSession.tenant_id == tenant_id,
-                   VoiceSession.crm_voice_call_id.in_([call.id for call in calls]))
-        ).all())
+        agent_by_call = VoiceSessionFacade(self.db).agent_ids_by_crm_call(tenant_id, [call.id for call in calls])
         agent_names = AgentsFacade(self.db).agent_names(tenant_id, agent_by_call.values())
         names = {call_id: agent_names.get(agent_id) for call_id, agent_id in agent_by_call.items()}
         return [self.response(call, agent_name=names.get(call.id)) for call in calls]

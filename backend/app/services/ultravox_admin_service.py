@@ -17,7 +17,7 @@ from app.services.ultravox_provider_client import (
     UltravoxProviderClient,
     VoicePreviewAudio,
 )
-from app.services.voice_config_service import VoiceConfigService
+from app.services.voice_provider_config_store import VoiceProviderConfigStore
 
 if TYPE_CHECKING:  # annotations only: the adapter never imports app.modules at runtime
     from app.modules.voice_providers.public import ProviderVoiceSelection
@@ -65,7 +65,7 @@ FORBIDDEN_KEY_PARTS = (
 class UltravoxAdminService:
     def __init__(self, db: Session, client: UltravoxProviderClient | None = None) -> None:
         self.db = db
-        self.config_service = VoiceConfigService(db)
+        self.config_service = VoiceProviderConfigStore(db)
         self.client = client or UltravoxProviderClient()
 
     def _api_key(self, tenant_id: str) -> str:

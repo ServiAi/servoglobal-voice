@@ -5,7 +5,8 @@ from cryptography.fernet import Fernet
 from _integrations_2a_test_base import Integration2ATestCase
 from app.core.config import settings
 from app.db.session import SessionLocal
-from app.models.integrations import TenantSipRoute, TenantVoiceProviderConfig
+from app.modules.telephony.infrastructure.models import TenantSipRoute
+from app.models.integrations import TenantVoiceProviderConfig
 from app.services.secret_manager_service import SecretManager
 
 

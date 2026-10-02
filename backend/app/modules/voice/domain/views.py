@@ -75,3 +75,30 @@ class SessionProjectionFacts:
     livekit_sip_participant_identity: str | None
     sip_call_id: str | None
     events: tuple[SessionEventFact, ...]
+
+
+@dataclass(frozen=True)
+class TelephonySessionView:
+    """What Telephony may know about a VoiceSession it is dialing. Only the
+    fields the dial/outbound flows read; ``crm_voice_call_id`` is an opaque
+    correlation id owned by the caller's ledger."""
+
+    id: str
+    tenant_id: str
+    status: str
+    channel: str
+    direction: str
+    agent_id: str | None
+    agent_version_id: str | None
+    runtime_ready_at: datetime | None
+    livekit_room_name: str | None
+    livekit_sip_trunk_id: str | None
+    livekit_sip_participant_identity: str | None
+    sip_route_id: str | None
+    sip_call_id: str | None
+    provider_session_id: str | None
+    crm_voice_call_id: str | None
+
+    @property
+    def is_terminal(self) -> bool:
+        return self.status in TERMINAL_STATUSES

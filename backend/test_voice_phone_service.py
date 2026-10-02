@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from app.services.voice_phone_service import VoicePhoneValidationError, normalize_outbound_phone
+from app.modules.telephony.domain.phone_numbers import VoicePhoneValidationError, normalize_outbound_phone
 
 
 class VoicePhoneServiceTests(unittest.TestCase):

@@ -25,6 +25,34 @@ class IntegrationEventService:
         message: str | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> TenantIntegrationEvent:
+        event = self.add_event(
+            tenant_id=tenant_id,
+            provider=provider,
+            event_type=event_type,
+            status=status,
+            resource_type=resource_type,
+            resource_id=resource_id,
+            message=message,
+            metadata=metadata,
+        )
+        self.db.commit()
+        self.db.refresh(event)
+        return event
+
+    def add_event(
+        self,
+        *,
+        tenant_id: str,
+        provider: str,
+        event_type: str,
+        status: str,
+        resource_type: str | None = None,
+        resource_id: str | None = None,
+        message: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> TenantIntegrationEvent:
+        """Same event as record_event but part of the caller's transaction
+        (added, not committed)."""
         event = TenantIntegrationEvent(
             tenant_id=tenant_id,
             provider=provider,
@@ -36,8 +64,6 @@ class IntegrationEventService:
             metadata_json=self._sanitize_metadata(metadata or {}),
         )
         self.db.add(event)
-        self.db.commit()
-        self.db.refresh(event)
         return event
 
     def _sanitize_metadata(self, metadata: dict[str, Any]) -> dict[str, Any]:

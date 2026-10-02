@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 from app.modules.voice_providers.domain.contracts import (
     ProviderAgentImport,
     ProviderAgentSnapshot,
+    ProviderConfigRef,
     ProviderCredential,
     ProviderToolRef,
     ProviderVoiceSelection,
@@ -43,6 +44,7 @@ from app.modules.voice_providers.domain.registry import (
 __all__ = [
     "ProviderAgentImport",
     "ProviderAgentSnapshot",
+    "ProviderConfigRef",
     "ProviderCredential",
     "ProviderToolRef",
     "ProviderVoiceSelection",

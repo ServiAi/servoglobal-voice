@@ -10,7 +10,7 @@ from app.models.analytics import Agent
 from app.models.crm import CrmVoiceCall, CrmVoiceCallEvent, CrmActivity
 from app.models.integrations import TenantVoiceProviderConfig, TenantVoiceAgentConfig, TenantIntegrationEvent
 from app.services.voice_client import VoiceClient
-from app.services.voice_sip_route_service import VoiceSipRouteService
+from app.modules.telephony.application.route_service import SipRouteService
 
 
 class CrmVoiceActionTests(Integration2ATestCase):
@@ -46,7 +46,7 @@ class CrmVoiceActionTests(Integration2ATestCase):
         self.assertEqual(response.status_code, 200)
         if provisioned:
             with SessionLocal() as db:
-                route = VoiceSipRouteService(db).get_route(self.tenant.id)
+                route = SipRouteService(db).get_route(self.tenant.id)
                 self.assertIsNotNone(route)
                 route.applied_revision = route.desired_revision
                 route.provision_status = "active"
@@ -194,7 +194,7 @@ class CrmVoiceActionTests(Integration2ATestCase):
             ))
             self.assertIsNotNone(activity)
 
-    @patch.object(VoiceSipRouteService, "decrypt_password")
+    @patch.object(SipRouteService, "decrypt_password")
     def test_outbound_call_marks_failed_when_sip_password_decrypt_fails(self, mock_decrypt):
         mock_decrypt.side_effect = RuntimeError("kms unavailable")
 

@@ -40,15 +40,15 @@ Orden validado contra el grafo real: primero módulos con pocos consumidores ent
 | 1 | Tool Platform | Baja | **Hecho** |
 | 2 | Agent Builder | Media | **Hecho** |
 | 3 | Voice Orchestration | Alta | **Hecho** |
-| 4 | Telephony | Media-alta | **Siguiente** |
-| 5 | Scheduling | Alta | |
+| 4 | Telephony | Media-alta | **Hecho** |
+| 5 | Scheduling | Alta | **Siguiente** |
 | 6 | CRM | Alta | |
 | 7 | Notifications | Media | |
 | 8 | Integrations / Messaging | Alta | |
 | 9 | Identity / Tenancy | Media (muchos consumidores, poca lógica) | |
 | 10 | Billing | Baja | |
 | 11 | Analytics | Media | |
-| — | Voice Experiences | Media | Tras Telephony |
+| — | Voice Experiences | Media | Tras Scheduling |
 | — | Voice Providers | Media | **Frontera consolidada** (registro, adapters, credenciales) |
 | — | Voice Legacy | — | **No migrar**: aislado tras `voice_legacy.public` (mínimo); retirar cuando `voice_runtime_v2` sea el único camino |
 
@@ -117,8 +117,8 @@ Estructura: `app/modules/voice/{domain/{errors,lifecycle,session_context,runtime
 - **Salientes** (sólo `public.py`): `agents` (agente publicado, estado, bindings, compilación), `crm` (snapshots), `tools` (invocación), `voice_providers` (registro, credenciales), `telephony` (normalización de teléfono, dial SIP QA), `analytics` (proyección), `identity` (`VOICE_RUNTIME_V2`). Shared: `api.auth.deps`, `core.config`, `db.*`, `security.voice_runtime_auth`.
 - **Router `voice_runtime`** (`api/router.py`, mismas URLs): sesiones, preview de contexto, eventos de QA, token WebRTC, spec y eventos del runtime son de Voice; la credencial la resuelve `voice_providers.public` (tenant derivado de la sesión, provider validado contra la sesión); la invocación de tools delega en `tools.public`; el dial SIP QA en `telephony.public`; la proyección y el estado de `CrmVoiceCall` en `analytics.public`.
 - **Proyección**: `VoiceCallProjectionService` (legacy, Analytics/CRM) consume `SessionProjectionFacts` en lugar del ORM de Voice y absorbe la actualización de estado de `CrmVoiceCall` que vivía en el endpoint. Voice no importa `app.models.crm` ni `app.models.analytics`.
-- **No migrado a propósito**: Telephony (`voice_session_sip_service`, `voice_sip_route_service`, `livekit_sip_service`, `outbound_voice_call_service`, `voice_capacity_service`), Voice Experiences, Voice Legacy y sus webhooks (`/webhook/{provider}`, `/events` de Ultravox, `voice_runtime_webhook_service` → `TenantVoiceRuntimeCall`: son del flujo Ultravox directo/Voice Experiences, no de `VoiceSession`).
-- **Shims** (4, con consumidores reales): `app.models.voice_sessions`, `app.services.voice_session_service`, `app.services.livekit_runtime_backend`, `app.services.voice_runtime_dispatcher`. Consumidores: Telephony (`outbound_voice_call_service`, `voice_session_sip_service`), llamadas legacy (`voice_call_service`) y `scripts/backfill_voice_session_calls.py`. Se retiran al migrar Telephony (y el script).
+- **No migrado a propósito**: Voice Experiences, Voice Legacy y sus webhooks (`/webhook/{provider}`, `/events` de Ultravox, `voice_runtime_webhook_service` → `TenantVoiceRuntimeCall`: son del flujo Ultravox directo/Voice Experiences, no de `VoiceSession`). Telephony se migró después (ver §4).
+- **Shims**: los 4 (`app.models.voice_sessions`, `app.services.voice_session_service`, `app.services.livekit_runtime_backend`, `app.services.voice_runtime_dispatcher`) se **eliminaron** al migrar Telephony (cero consumidores). `KNOWN_SHIMS` en `test_module_boundaries.py` está vacío; un shim nuevo debe registrarse ahí y en esta hoja de ruta.
 - **Pendiente**: la componente conexa Agents ↔ Tools ↔ Voice ↔ Analytics (sólo vía `public.py`/wiring) creció al pasar la proyección detrás de `analytics.public`; se reducirá cuando la proyección se dispare por eventos (`voice.session.*`) al migrar CRM/Analytics.
 
 ### Voice Providers — frontera consolidada
@@ -131,15 +131,21 @@ Estructura: `app/modules/voice_providers/{domain/{registry,contracts,errors}.py,
 - El workspace de administración Ultravox (`/integrations/voice/providers/{provider}/...`) sigue usando `UltravoxAdminService` vía `voice_provider_admin`; su `_error` mapea igual `UltravoxProviderError` y `VoiceProviderError(remote=True)`.
 - Pendiente: mover físicamente `UltravoxAdminService`/`ultravox_provider_client`/`voice_config_service` bajo `voice_providers/infrastructure` cuando se retire Voice Legacy (hoy también los usa el flujo legacy).
 
-### 4. Telephony
+### 4. Telephony — hecho
 
-- **Ownership**: `tenant_sip_routes`; caso de uso outbound.
-- **Entrantes**: CRM (`crm_voice` endpoint, métricas de capacidad), Voice (SIP QA), Voice Experiences (rutas, teléfonos).
-- **Salientes**: Voice (session, dispatcher, projection, LiveKit backend), CRM (`CrmLead`, `CrmVoiceCall`), Voice Legacy/Experiences (callbacks).
-- **API pública**: existe mínima (`telephony.public`: `normalize_caller_id`, `VoicePhoneValidationError`, `SipQaFacade.dial_session`, `SipDialError`). Propuesta: `place_outbound_call(...) -> voice_session_id`, `capacity_snapshot(tenant_id)`, `get_route(tenant_id)`.
-- **Al migrar**: dejar de usar los 4 shims de Voice (consumir `voice.public`: crear/dispatch de sesión SIP, eventos) y retirarlos.
-- **Imports a eliminar**: `outbound_voice_call_service → models.crm` (CRM crea `CrmVoiceCall`), `voice_capacity_service → models.crm`.
-- **Riesgos**: `outbound_voice_call_service` depende del orden estricto dispatch → `voice.agent.ready` → participante SIP; mover sin tocar la secuencia. Pruebas actuales son con fakes: no hay E2E real.
+Estructura: `app/modules/telephony/{domain/{errors,phone_numbers,routes,capacity,views}.py, application/{ports,route_service,capacity_service,dial_service,outbound_service,provisioning_service}.py, infrastructure/{models,livekit_sip,asterisk_agent}.py, api/{router,schemas}.py, public.py, wiring.py}`.
+
+- **Ownership**: `tenant_sip_routes` (`TenantSipRoute`, misma tabla/constraints, sin migración); configuración, credenciales (cifradas), PBX, caller id, países y `max_concurrent_calls` de la ruta; provisioning Asterisk (endpoints internos del agente, mismas URLs) y trunk SIP de LiveKit; marcación del participante SIP; mapeo de estados SIP (486→`busy`; 603/607/608→`rejected`; 408/480/487→`no_answer`; otro→`failed`); normalización de teléfonos (`normalize_caller_id`, `normalize_outbound_phone`, `SUPPORTED_OUTBOUND_COUNTRIES`, `VoicePhoneValidationError`); política de capacidad. **No** es dueño de `VoiceSession`, Agent Builder, `CrmLead`, `CrmVoiceCall`, `Call` de Analytics, Voice Legacy ni Voice Experiences.
+- **Descomposición de `OutboundVoiceCallService`**: pasó a ser un adaptador CRM delgado (traduce `VoiceCallActionRequest/Response`). El registro CRM vive en `crm.public.OutboundCallLedger` (valida lead/contacto, abre/actualiza `CrmVoiceCall`, DTOs `OutboundContactRef`/`CallState`); el caso de uso es `telephony.public.TelephonyFacade.place_outbound_call(command, ledger)`; el ciclo de vida de la sesión y el dispatch al runtime los ejecuta Voice (`voice.public.VoiceTelephonyFacade`).
+- **Orden preservado**: validar sesión SIP → resolver y bloquear ruta (`SELECT … FOR UPDATE`) → capacidad → vincular ruta/trunk → `voice.outbound.requested` → dispatch del runtime (vía Voice) → esperar `runtime_ready` (`LIVEKIT_SIP_RUNTIME_READY_TIMEOUT_SECONDS`; terminales failed/ended/cancelled) → crear participante SIP → `voice.sip.dial.started` → answered/error → limpieza del room en fallo. Idempotencia: mismo tenant + `idempotency_key` ⇒ una `VoiceSession`, un `CrmVoiceCall`, una llamada SIP.
+- **Puertos** (`application/ports.py`, enlazados en `wiring.py`): `VoiceTelephonyPort` (→ `voice.public`), `SipTransportPort` (→ `LiveKitSipService`), `CallLoadPort` (→ `crm.public`, conteo de llamadas legacy en vuelo), `CallProjectionPort` (→ `analytics.public`), `OutboundCallLedger` (→ `crm.public`). La configuración del proveedor entra como DTO (`voice_providers.public.ProviderConfigRef`), nunca ORM; los flags vienen de `identity.public`.
+- **Capacidad**: dos fuentes preservadas (sesiones SIP activas de Voice vía `count_active_telephony_sessions`, y llamadas legacy `starting,queued,ringing,in_progress` vía `CallLoadPort`). La aplicación (`CapacityService`) está separada del reporte del dashboard (`services/voice_capacity_report_service.py`).
+- **API pública** (`telephony.public`): `TelephonyFacade` (`place_outbound_call`, `dial_qa_session`), `SipRouteFacade` (`get_route`, `get_active_route`, `lock_route`, `get_connection`, `upsert`, `sync_livekit_trunk`), `CapacityFacade` (`callbacks_in_flight`, `record_capacity_reached`, `record_release`), `run_asterisk_provisioner_agent`; DTOs `SipRouteView`, `SipRouteConnection`, `SipRouteSettings`, `PlaceOutboundCallCommand`, `OutboundCallResult`; reexporta normalización de teléfonos y errores. Al importarse sólo carga contratos (test `test_public_apis_import_light`).
+- **Agente del PBX**: `python -m app.workers.asterisk_provisioner` se conserva como lanzador de una línea hacia `infrastructure/asterisk_agent.py`; sigue usando sólo la librería estándar. El unit systemd no cambia.
+- **Dependencias**: Telephony no importa internals de Voice/CRM/Analytics/Voice Providers/Integrations/Identity (sólo `<módulo>.public`) ni `app.models.voice_sessions`/`app.models.crm`; `domain/` es puro (sin SQLAlchemy/FastAPI/LiveKit/httpx). `VoiceProviderConfigStore` (`services/voice_provider_config_store.py`) se separó de `VoiceConfigService` para que el adapter de proveedor no arrastre a Telephony (evita un ciclo).
+- **Retirado**: los 4 shims de Voice, `voice_phone_service`, `livekit_sip_service`, `voice_sip_route_service`, `voice_capacity_service`, `voice_session_sip_service`, `asterisk_provisioning_service`, `schemas/asterisk_provisioning`, `api/endpoints/asterisk_provisioning`. `voice_call_service` (legacy) y `scripts/backfill_voice_session_calls.py` ya no importan el ORM de Voice.
+- **Corrección de concurrencia** (hallada con PostgreSQL real): `VoiceSessionService.create` capturaba `IntegrityError` sólo en `commit`, pero el índice único `(tenant_id, idempotency_key)` también dispara en `flush`; y `lock_session` leía una fila obsoleta del identity map tras esperar el lock (doble marcación posible). Ambas corregidas (`populate_existing`).
+- **Pruebas**: unitarias de dominio (`test_telephony_domain.py`), integración con fakes/SQLite (`test_outbound_voice_call_service.py`, `test_livekit_sip_service.py`, `test_asterisk_provisioning.py`, …), arquitectura (`test_module_boundaries.py`) y **PostgreSQL real** (`test_telephony_postgres.py`: misma idempotency key en paralelo, `max_concurrent_calls`, lock de la ruta). **No existe E2E SIP real** (requiere LiveKit + PBX + ruta + credenciales del proveedor): sigue pendiente de verificación manual en staging.
 
 ### 5. Scheduling
 

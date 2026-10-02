@@ -91,7 +91,7 @@ class VoiceClient:
         metadata: dict[str, Any],
         context: dict[str, Any],
     ) -> dict[str, Any]:
-        from app.services.voice_phone_service import normalize_outbound_phone
+        from app.modules.telephony.public import normalize_outbound_phone
 
         route = config.sip_route
         if route is None:

@@ -17,7 +17,7 @@ from app.modules.identity.public import (
     FeatureDisabledError,
     FeatureFlags,
 )
-from app.modules.telephony.public import SipDialError, SipQaFacade
+from app.modules.telephony.public import SipDialError, TelephonyFacade
 from app.modules.tools.public import (
     ToolArgumentError,
     ToolDispatchService,
@@ -115,7 +115,7 @@ async def create_voice_session(
         if body.channel == "sip":
             # SIP belongs to Telephony: it dials this session through the
             # tenant's route and updates it in this same DB session.
-            await SipQaFacade(db).dial_session(session.id, body.to_phone)
+            await TelephonyFacade(db).dial_qa_session(session.id, context.tenant_id, body.to_phone)
         else:
             session = await VoiceRuntimeDispatcher(db).dispatch(session)
         return VoiceSessionResponse.model_validate(session)

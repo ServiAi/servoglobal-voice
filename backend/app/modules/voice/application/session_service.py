@@ -85,10 +85,12 @@ class VoiceSessionService:
             idempotency_key=idempotency_key, session_context_json=context.model_dump(mode="json"),
         )
         self.db.add(session)
-        self.db.flush()
-        self._record_context_events(session, context)
-        self.record_event(session, "voice.session.requested", source="control-plane", commit=False)
         try:
+            # The unique (tenant_id, idempotency_key) constraint can fire at
+            # flush as well as at commit when two requests race.
+            self.db.flush()
+            self._record_context_events(session, context)
+            self.record_event(session, "voice.session.requested", source="control-plane", commit=False)
             self.db.commit()
         except IntegrityError:
             self.db.rollback()

@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.models.crm import CrmActivity, CrmVoiceCall
 from app.models.identity import Tenant
-from app.models.integrations import TenantSipRoute, TenantVoiceAgentConfig
+from app.models.integrations import TenantVoiceAgentConfig
 from app.models.voice_context import TenantVoiceContextField
 from app.models.voice_experiences import TenantVoiceExperience, TenantVoiceExperienceVersion
 from app.models.voice_submissions import (
@@ -20,16 +20,19 @@ from app.models.voice_submissions import (
     TenantVoiceExperienceSubmission,
     TenantVoiceExperienceSubmissionValue,
 )
+from app.modules.telephony.public import (
+    CapacityFacade,
+    SipRouteFacade,
+    VoicePhoneValidationError,
+    normalize_outbound_phone,
+)
 from app.schemas.public_voice_calls import PublicVoiceCallbackResponse
 from app.services.public_voice_call_service import PublicCallFailure
 from app.services.tenant_feature_service import TenantFeatureService
 from app.services.tenant_usage_service import TenantUsageService
 from app.services.voice_call_service import VoiceCallService
-from app.services.voice_capacity_service import VoiceCapacityService
 from app.services.voice_client import VoiceClient, VoiceClientConfig, VoiceSipRouteConfig
 from app.services.voice_config_service import VoiceConfigService
-from app.services.voice_phone_service import VoicePhoneValidationError, normalize_outbound_phone
-from app.services.voice_sip_route_service import VoiceSipRouteService
 from app.services.voice_webhook_service import VoiceWebhookService
 
 
@@ -142,7 +145,7 @@ class PublicVoiceCallbackService:
                         provider_config = config_service.get_active_provider_config(
                             context_session.tenant_id, agent.provider
                         )
-                        route = VoiceSipRouteService(
+                        route = SipRouteFacade(
                             db, config_service.secret_manager
                         ).get_active_route(context_session.tenant_id, for_update=True)
                     except (HTTPException, ValueError):
@@ -170,12 +173,12 @@ class PublicVoiceCallbackService:
                         phone = normalize_outbound_phone(
                             value,
                             default_country=version.call_settings_json.get("default_country"),
-                            allowed_countries=set(route.allowed_countries_json),
+                            allowed_countries=set(route.allowed_countries),
                         )
                     except VoicePhoneValidationError:
                         raise PublicCallFailure(422, "destination_not_allowed") from None
 
-                    active_count = VoiceCapacityService(db).active_calls(
+                    active_count = CapacityFacade(db).callbacks_in_flight(
                         tenant_id=context_session.tenant_id,
                         route_id=route.id,
                     )
@@ -223,7 +226,7 @@ class PublicVoiceCallbackService:
                     if not context_session.mark_consumed(db, now=now, commit=False):
                         raise PublicCallFailure(409, "context_session_unavailable")
             except _CapacityReached as exc:
-                VoiceCapacityService(db).record_capacity_reached(
+                CapacityFacade(db).record_capacity_reached(
                     tenant_id=exc.tenant_id,
                     route_id=exc.route_id,
                     active_calls=exc.active_calls,
@@ -342,7 +345,7 @@ class VoiceCallbackWorker:
                 },
             )
             if ended and result.get("status") == "processed":
-                VoiceCapacityService(db).record_release(
+                CapacityFacade(db).record_release(
                     tenant_id=call.tenant_id,
                     call_id=call.id,
                     prior_status=prior_status,
@@ -396,16 +399,12 @@ class VoiceCallbackWorker:
                 ).all()
 
                 for call in candidates:
-                    route = db.scalar(
-                        select(TenantSipRoute)
-                        .where(TenantSipRoute.id == call.sip_route_id)
-                        .with_for_update()
-                    )
+                    route = SipRouteFacade(db).lock_route(call.sip_route_id)
                     if route is None or route.status != "active":
                         call.status = "failed"
                         call.error_message = "Outbound SIP route is unavailable."
                         return call.id
-                    active_count = VoiceCapacityService(db).active_calls(
+                    active_count = CapacityFacade(db).callbacks_in_flight(
                         tenant_id=call.tenant_id,
                         route_id=route.id,
                     )
@@ -425,14 +424,14 @@ class VoiceCallbackWorker:
             if call is None or call.status != "starting":
                 return
             config_service = VoiceConfigService(db)
-            route_service = VoiceSipRouteService(db, config_service.secret_manager)
+            route_service = SipRouteFacade(db, config_service.secret_manager)
             client = VoiceClient()
             try:
                 provider_config = config_service.get_active_provider_config(
                     call.tenant_id, call.provider
                 )
-                route = route_service.get_active_route(call.tenant_id)
-                if route.id != call.sip_route_id or route.provider_config_id != provider_config.id:
+                route = route_service.get_connection(call.tenant_id)
+                if route.route_id != call.sip_route_id or route.provider_config_id != provider_config.id:
                     raise ValueError("Outbound SIP route mismatch.")
                 values = db.scalars(
                     select(TenantVoiceExperienceSubmissionValue).where(
@@ -456,13 +455,13 @@ class VoiceCallbackWorker:
                         default_language=provider_config.default_language,
                         default_timezone=provider_config.default_timezone,
                         sip_route=VoiceSipRouteConfig(
-                            host=route.pbx_host,
-                            port=route.pbx_port,
-                            username=route.sip_username,
-                            password=route_service.decrypt_password(route),
+                            host=route.host,
+                            port=route.port,
+                            username=route.username,
+                            password=route.password,
                             caller_id=route.caller_id,
                             default_country=route.default_country,
-                            allowed_countries=tuple(route.allowed_countries_json),
+                            allowed_countries=route.allowed_countries,
                         ),
                     ),
                     to_phone=call.to_phone or "",

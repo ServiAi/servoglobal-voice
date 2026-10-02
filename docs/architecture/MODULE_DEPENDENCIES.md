@@ -78,12 +78,12 @@ Leyenda: ✅ permitida · ⚠️ cuestionable · ❌ eliminar · 🔁 circular.
 | Agents → Scheduling / WhatsApp config | preflight `required_integration` | ⚠️ | Query `is_configured(tenant_id)` en cada `public.py`. |
 | Voice → Agents (`agent_compiler_service`, `models.agents`) | spec del runtime | ✅ | `agents.public.compile_runtime_spec`. |
 | Voice → CRM (`crm_contact/lead/call_context` services, `models.crm`) | resolución de contexto, proyección | ⚠️ | Query service `crm.public` (resolver por teléfono/id); la proyección a `CrmActivity` debería ser evento `voice.session.completed`. |
-| Voice → Telephony (`voice_session_sip_service`) desde `voice_runtime` endpoint 🔁 | QA SIP | ⚠️ | `telephony.public`. |
+| Voice → Telephony 🔁 | QA SIP (`voice_runtime` endpoint) | ✅ | Sólo `telephony.public.TelephonyFacade.dial_qa_session`; Telephony consume `voice.public` (ciclo de módulo bidireccional, sólo vía `public.py` y wiring perezoso). |
 | Voice → Voice Legacy (`voice_config_service`) | credenciales del runtime | ❌ | Mover `TenantVoiceProviderConfig` + `VoiceConfigService` a Voice Orchestration. |
-| Telephony → Voice (`voice_session_service`, dispatcher, projection) 🔁 | outbound y SIP QA | ✅ si vía `voice.public` | Telephony es dueño del caso de uso outbound y consume Voice. |
-| Telephony → CRM (`CrmLead`, `CrmVoiceCall`) | outbound | ❌ | CRM llama a `telephony.public.place_call(...)` con identidad validada; `CrmVoiceCall` lo crea CRM (o reacciona a `voice.session.*`). |
+| Telephony → Voice 🔁 | outbound y SIP QA | ✅ | **Resuelto**: `VoiceTelephonyPort` → `voice.public.VoiceTelephonyFacade`; `TelephonySessionView`, nunca el ORM. |
+| Telephony → CRM | outbound, capacidad legacy | ✅ | **Resuelto**: `OutboundCallLedger` y `CallLoadPort` (`crm.public`); `CrmVoiceCall` lo crea CRM. |
 | Telephony → Voice Experiences / Legacy (`voice_callback_service`) | callbacks públicos Ultravox | ⚠️ | Queda con Voice Legacy hasta su retiro. |
-| CRM → Telephony (`outbound_voice_call_service`, `voice_capacity_service`) | acción "llamar" y métricas | ✅ si vía `telephony.public` | |
+| CRM → Telephony | acción "llamar", métricas | ✅ | El adaptador CRM llama a `telephony.public`; el dashboard usa `voice_capacity_report_service`. |
 | CRM → Integrations (email, WhatsApp) | acciones del lead | ✅ si vía `integrations.public` | Commands. |
 | CRM ↔ Scheduling 🔁 | CRM endpoint → `booking_service`; booking → `CrmActivity`, `CrmLead` | ⚠️ | Scheduling valida lead vía `crm.public`; la actividad CRM se registra por evento `booking.*` (ya existe `NotificationEventPipeline`/`domain_events`). |
 | Scheduling → Notifications (`notification_event_pipeline`) | booking crea domain events | ✅ | Es exactamente el patrón de eventos deseado; exponer `notifications.public.publish(...)`. |
@@ -105,14 +105,9 @@ Leyenda: ✅ permitida · ⚠️ cuestionable · ❌ eliminar · 🔁 circular.
 
 Por qué puertos y no eventos: los cuatro casos requieren respuesta síncrona para la LLM dentro de la llamada. `wiring.default_tool_ports(db)` es el único punto que conoce las implementaciones.
 
-## Caso `outbound_voice_call_service` (pendiente)
+## Caso `outbound_voice_call_service` (resuelto, 2026-10-02)
 
-Depende de CRM (`CrmLead`, `CrmVoiceCall`), Voice (`VoiceSession`, `VoiceSessionService`, `VoiceCallProjectionService`, `LiveKitRuntimeBackend`) y Telephony (`LiveKitSipService`, `VoiceCapacityService`, `VoiceSipRouteService`, `VoiceSessionSipService`, `normalize_outbound_phone`).
-
-Propietario: **Telephony**. El caso de uso es "originar una llamada SIP para un agente publicado", y 5 de sus 9 dependencias ya son Telephony. Propuesta:
-1. `telephony.public.place_outbound_call(tenant_id, to_phone, agent_id, context)` devuelve `voice_session_id`.
-2. CRM (endpoint `crm_voice`) resuelve y valida el lead, crea `CrmVoiceCall` y llama al punto 1; la correlación `CrmVoiceCall ↔ VoiceSession` queda en CRM.
-3. La proyección a CRM se dispara por evento de sesión (`voice.session.completed`), no por import.
+Propietario: **Telephony**. `OutboundVoiceCallService` quedó como adaptador CRM (HTTP ↔ comando). El caso de uso `telephony.public.TelephonyFacade.place_outbound_call(command, ledger)` conserva el orden exacto (sesión → ruta bloqueada → capacidad → vínculo → `voice.outbound.requested` → dispatch → `runtime_ready` → participante SIP → `voice.sip.dial.started` → answered/error → limpieza), con CRM como `OutboundCallLedger` y Voice como `VoiceTelephonyPort`. La proyección sigue síncrona vía `CallProjectionPort` (aún no por eventos).
 
 ## Reglas de importación vigentes
 
@@ -136,12 +131,18 @@ Aplicadas por `backend/test_module_boundaries.py`:
 22. `voice.public`, `voice_providers.public` y `agents.public` se importan sin cargar casos de uso, ORM, LiveKit, servicios CRM/Analytics ni adapters (verificado en un proceso limpio).
 23. Voice Providers sólo toca código legacy desde `infrastructure/ultravox.py` (adapter) e `infrastructure/credentials.py`; `public`/`application`/`domain` no conocen ningún proveedor concreto ni `UltravoxProviderError`.
 24. Ninguna componente fuertemente conexa contiene Voice y un adapter de proveedor; los adapters sólo pueden importar `voice_providers.public`.
+25. Telephony sólo toca código legacy compartido (`TELEPHONY_LEGACY_ALLOWED`: `core.config`, `db.*`, `integration_event_service`, `secret_manager_service`); nunca `app.models.voice_sessions`, `app.models.crm`, internals de Voice/Voice Providers, `VoiceCallProjectionService`, dispatcher ni backend de runtime (`TELEPHONY_FORBIDDEN_PREFIXES`).
+26. `app.modules.telephony.domain` es puro (sin SQLAlchemy/FastAPI/LiveKit/CRM/Voice/httpx) y `application` no importa `api`.
+27. El ORM de Telephony (`TenantSipRoute`) sólo lo importa Telephony y el registro de modelos; nadie importa las rutas viejas (`voice_phone_service`, `livekit_sip_service`, `voice_sip_route_service`, `voice_capacity_service`, `voice_session_sip_service`, `asterisk_provisioning_*`).
+28. No hay shims: `KNOWN_SHIMS` está vacío; un shim nuevo debe registrarse ahí. Los procesos de entrada (`app.workers.asterisk_provisioner`) pueden importar el agente directamente (raíz de composición).
+29b. Excepción temporal (deuda de **Voice Legacy**, no de Telephony): sólo `voice_call_service` y `voice_callback_service` pueden leer la contraseña SIP descifrada vía `SipRouteFacade.get_connection`/`SipRouteConnection` (`SIP_CREDENTIAL_CONSUMERS`); cualquier otro consumidor rompe el test. Se retira al jubilar esos flujos Ultravox directos.
+29. Ninguna componente fuertemente conexa contiene Telephony y un adapter de proveedor; los adapters y `voice_provider_config_store` no importan ningún módulo salvo `voice_providers.public`.
 
 ## Reglas de datos vigentes
 
 Aplicadas por `DataBoundaryTests` en `backend/test_module_boundaries.py`:
 
-9. Las APIs críticas (`VoiceSessionFacade`, `CrmFacade`, `WhatsAppFacade`, `SchedulingFacade`, `AgentsFacade`, `FeatureFlags` y los cuatro `Protocol` de `ToolPorts`) no declaran en parámetros ni retorno ninguna clase ORM ni `Any` directo. `Any` sólo se permite como tipo de valor de un `dict`/`Mapping` de payload, más la excepción explícita `create_lead_booking(notes)`.
+9. Las APIs críticas (`VoiceSessionFacade`, `VoiceTelephonyFacade`, `TelephonyFacade`, `SipRouteFacade`, `CapacityFacade`, los puertos de Telephony, `CrmFacade`, `WhatsAppFacade`, `SchedulingFacade`, `AgentsFacade`, `FeatureFlags` y los cuatro `Protocol` de `ToolPorts`) no declaran en parámetros ni retorno ninguna clase ORM ni `Any` directo. `Any` sólo se permite como tipo de valor de un `dict`/`Mapping` de payload, más la excepción explícita `create_lead_booking(notes)`.
 10. Los DTOs públicos son `@dataclass(frozen=True)` y sus campos no contienen ORM ni `Any` directo.
 11. Ningún archivo de `app.modules.tools` navega atributos de filas ORM ajenas (`agent_version`, `session_context_json`, `runtime_binding_json`, `_row`).
 12. Las mutaciones sobre datos de otro módulo se piden por id y DTO; el propietario recarga sus filas y valida tenant (`VoiceSessionFacade.enrich_context`, `VoiceSessionFacade.release_sessions_of_deleted_agent`).
@@ -181,3 +182,20 @@ Mismo grafo AST (imports perezosos incluidos), `develop@37b259c` → esta rama. 
 | Componentes conexas con Voice | 1 (14 archivos) | 1 (20 archivos, sólo vía `public.py`/wiring; crece porque la proyección legacy pasa a consumir `voice.public`) |
 | Componentes conexas con Voice + adapter de proveedor | 0 | **0** (regla automática) |
 | Shims de Voice creados | — | **4** (con consumidores legacy reales) |
+
+## Migración de Telephony (2026-10-02)
+
+Mismo grafo AST (imports perezosos incluidos), `develop@76176f4` → esta rama. "Telephony" antes = `voice_phone_service`, `livekit_sip_service`, `voice_sip_route_service`, `voice_capacity_service`, `voice_session_sip_service`, `asterisk_provisioning_service`, `schemas/asterisk_provisioning`, `api/endpoints/asterisk_provisioning`, `workers/asterisk_provisioner` y `outbound_voice_call_service`.
+
+| Métrica | Antes | Después |
+| --- | --- | --- |
+| Imports Telephony → internals de Voice | 8 | **0** (`voice.public`) |
+| Imports Telephony → internals de CRM | 2 (`models.crm`) | **0** (`crm.public`) |
+| Imports Telephony → internals de proveedor / Analytics | 0 / 0 | **0 / 0** |
+| ORM de Voice / CRM cruzando Telephony | 2 / 2 | **0 / 0** |
+| Imports legacy `models.voice_sessions` · `voice_session_service` · `livekit_runtime_backend` · `voice_runtime_dispatcher` | 3 · 2 · 2 · 1 (app) | **0 · 0 · 0 · 0** |
+| Shims de Voice | 4 | **0** (eliminados) |
+| Importadores de las rutas SIP/Asterisk antiguas fuera de Telephony | 15 | **0** (queda `crm_voice → outbound_voice_call_service`, el adaptador CRM) |
+| Componente conexa (grafo de archivos, incluye `app.models`/`db`) con Voice/Telephony | 1 (20 archivos) | 1 (28 archivos; crece por el wiring perezoso Telephony ↔ Voice y la proyección, sólo vía `public.py`) |
+| Componentes conexas con Telephony + adapter de proveedor | 0 | **0** (regla automática; se evitó un ciclo separando `VoiceProviderConfigStore`) |
+| Tests backend (suite CI) | 1767 métodos `test_*` (develop) | 1788 métodos `test_*` (1662 ejecutados en la suite CI por módulo; +4 PostgreSQL y +4 de Voice Runtime se ejecutan aparte) |

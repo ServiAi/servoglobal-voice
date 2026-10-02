@@ -60,10 +60,15 @@ class VoiceSessionOperations:
     async def release_sessions_of_deleted_agent(self, tenant_id: str, agent_id: str) -> None:
         await self.sessions.release_sessions_of_deleted_agent(tenant_id, agent_id)
 
-    def get_projection_facts(self, session_id: str, tenant_id: str | None) -> SessionProjectionFacts:
+    def get_projection_facts(
+        self, session_id: str, tenant_id: str | None, *, lock: bool = True
+    ) -> SessionProjectionFacts:
         """Locks the session row (SELECT ... FOR UPDATE) for the caller's
-        transaction, like the projection always did."""
-        query = select(VoiceSession).where(VoiceSession.id == session_id).with_for_update()
+        transaction, like the projection always did; ``lock=False`` is for
+        read-only previews (dry runs) that must not hold row locks."""
+        query = select(VoiceSession).where(VoiceSession.id == session_id)
+        if lock:
+            query = query.with_for_update()
         if tenant_id is not None:
             query = query.where(VoiceSession.tenant_id == tenant_id)
         session = self.db.scalar(query)
@@ -106,3 +111,31 @@ class VoiceSessionOperations:
                 for event in events
             ),
         )
+
+    def list_projection_candidates(
+        self, *, after_id: str, limit: int, tenant_id: str | None = None
+    ) -> list[tuple[str, str]]:
+        """Next page of (session_id, tenant_id) of real-channel (sip/webrtc)
+        sessions ordered by id, for projection reconciliation."""
+        query = (
+            select(VoiceSession.id, VoiceSession.tenant_id)
+            .where(VoiceSession.id > after_id, VoiceSession.channel.in_(("sip", "webrtc")))
+            .order_by(VoiceSession.id)
+            .limit(limit)
+        )
+        if tenant_id:
+            query = query.where(VoiceSession.tenant_id == tenant_id)
+        return [(row[0], row[1]) for row in self.db.execute(query).all()]
+
+    def agent_ids_by_crm_call(self, tenant_id: str, crm_voice_call_ids: list[str]) -> dict[str, str | None]:
+        """crm_voice_call_id -> agent_id for the sessions correlated to those
+        CRM calls (call-history view)."""
+        if not crm_voice_call_ids:
+            return {}
+        rows = self.db.execute(
+            select(VoiceSession.crm_voice_call_id, VoiceSession.agent_id).where(
+                VoiceSession.tenant_id == tenant_id,
+                VoiceSession.crm_voice_call_id.in_(crm_voice_call_ids),
+            )
+        ).all()
+        return {row[0]: row[1] for row in rows}

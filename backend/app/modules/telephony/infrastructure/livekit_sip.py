@@ -1,17 +1,11 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Callable
 
 from app.core.config import settings
-
-
-@dataclass(frozen=True)
-class LiveKitSipDialResult:
-    participant_id: str
-    participant_identity: str
-    room_name: str
-    sip_call_id: str
+from app.modules.telephony.domain.views import (
+    LiveKitSipDialResult,  # noqa: F401  (re-exported)
+)
 
 
 class LiveKitSipError(RuntimeError):

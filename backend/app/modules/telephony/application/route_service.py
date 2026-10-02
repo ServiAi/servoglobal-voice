@@ -1,41 +1,51 @@
 from __future__ import annotations
 
-import re
 from datetime import UTC, datetime
 from uuid import uuid4
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.integrations import TenantSipRoute, TenantVoiceProviderConfig
-from app.schemas.integrations import VoiceSipRouteRequest, VoiceSipRouteResponse
-from app.services.secret_manager_service import SecretManager
-from app.services.voice_phone_service import (
-    SUPPORTED_OUTBOUND_COUNTRIES,
-    normalize_caller_id,
+from app.modules.telephony.domain.phone_numbers import normalize_caller_id
+from app.modules.telephony.domain.routes import (
+    normalize_allowed_countries,
+    normalize_route_host,
+    sip_username_for_route,
+    validate_sip_password,
 )
+from app.modules.telephony.domain.views import (
+    SipRouteConnection,
+    SipRouteSettings,
+    SipRouteView,
+)
+from app.modules.telephony.infrastructure.livekit_sip import (
+    LiveKitSipError,
+    LiveKitSipService,
+)
+from app.modules.telephony.infrastructure.models import TenantSipRoute
+from app.modules.voice_providers.public import ProviderConfigRef
+from app.services.secret_manager_service import SecretManager
 
 
-HOST_RE = re.compile(r"^[A-Za-z0-9.-]+$")
-SIP_PASSWORD_FORBIDDEN = frozenset("\r\n;#[]")
+class SipRouteService:
+    """A tenant's SIP route: configuration, activation checks, secret
+    handling and LiveKit trunk provisioning. Works on TenantSipRoute rows
+    internally; other modules get SipRouteView / SipRouteConnection."""
 
-
-def sip_username_for_route(route_id: str) -> str:
-    compact = route_id.replace("-", "").lower()
-    if len(compact) != 32 or any(
-        char not in "0123456789abcdef" for char in compact
-    ):
-        raise ValueError("invalid_route_id")
-    return f"route-{compact}"
-
-
-class VoiceSipRouteService:
     def __init__(self, db: Session, secret_manager: SecretManager | None = None) -> None:
         self.db = db
         self.secret_manager = secret_manager or SecretManager()
 
+    # -- queries (ORM, inside Telephony) -------------------------------------
+
     def get_route(self, tenant_id: str, *, for_update: bool = False) -> TenantSipRoute | None:
         query = select(TenantSipRoute).where(TenantSipRoute.tenant_id == tenant_id)
+        if for_update:
+            query = query.with_for_update()
+        return self.db.scalar(query)
+
+    def get_route_by_id(self, route_id: str, *, for_update: bool = False) -> TenantSipRoute | None:
+        query = select(TenantSipRoute).where(TenantSipRoute.id == route_id)
         if for_update:
             query = query.with_for_update()
         return self.db.scalar(query)
@@ -78,26 +88,19 @@ class VoiceSipRouteService:
             raise ValueError("La ruta SIP todavía no está aprovisionada en LiveKit.")
         return route
 
+    # -- configuration -------------------------------------------------------
+
     def upsert(
         self,
         tenant_id: str,
-        provider_config: TenantVoiceProviderConfig,
-        body: VoiceSipRouteRequest,
+        provider_config: ProviderConfigRef,
+        settings: SipRouteSettings,
     ) -> TenantSipRoute:
-        host = body.pbx_host.strip().lower()
-        countries = sorted(set(body.allowed_countries))
-        if not HOST_RE.fullmatch(host):
-            raise ValueError("PBX host must be a hostname or IP address without protocol or port.")
-        if body.sip_password and (
-            any(char in SIP_PASSWORD_FORBIDDEN for char in body.sip_password)
-            or not body.sip_password.isascii()
-            or not body.sip_password.isprintable()
-        ):
-            raise ValueError("SIP password contains unsupported characters.")
-        if not countries or any(code not in SUPPORTED_OUTBOUND_COUNTRIES for code in countries):
-            raise ValueError("At least one supported outbound country is required.")
-        if body.default_country not in countries:
-            raise ValueError("Default country must be enabled for the SIP route.")
+        if provider_config.tenant_id != tenant_id:
+            raise ValueError("SIP route does not belong to the selected voice provider.")
+        host = normalize_route_host(settings.pbx_host)
+        validate_sip_password(settings.sip_password)
+        countries = normalize_allowed_countries(settings.allowed_countries, settings.default_country)
 
         route = self.get_route(tenant_id)
         is_new = route is None
@@ -123,28 +126,28 @@ class VoiceSipRouteService:
         elif route.provider_config_id != provider_config.id:
             raise ValueError("SIP route does not belong to the selected voice provider.")
 
-        if body.sip_password:
-            route.sip_password_encrypted = self.secret_manager.encrypt_secret(body.sip_password)
-        elif is_new and body.status == "active":
+        if settings.sip_password:
+            route.sip_password_encrypted = self.secret_manager.encrypt_secret(settings.sip_password)
+        elif is_new and settings.status == "active":
             raise ValueError("SIP password is required when activating a new route.")
 
-        route.status = body.status
+        route.status = settings.status
         route.pbx_host = host
-        route.pbx_port = body.pbx_port
+        route.pbx_port = settings.pbx_port
         route.sip_username = sip_username_for_route(route.id)
         route.caller_id = normalize_caller_id(
-            body.caller_id, default_country=body.default_country
+            settings.caller_id, default_country=settings.default_country
         )
-        route.default_country = body.default_country
+        route.default_country = settings.default_country
         route.allowed_countries_json = countries
-        route.max_concurrent_calls = body.max_concurrent_calls
+        route.max_concurrent_calls = settings.max_concurrent_calls
         if route.status == "active" and not route.sip_password_encrypted:
             raise ValueError("SIP password is required before activating the route.")
         current_pjsip_state = (
             route.status,
             route.sip_username,
             route.caller_id,
-            bool(body.sip_password),
+            bool(settings.sip_password),
         )
         if is_new:
             if route.status == "active":
@@ -162,9 +165,9 @@ class VoiceSipRouteService:
             raise ValueError("SIP password is not configured.")
         return self.secret_manager.decrypt_secret(route.sip_password_encrypted)
 
-    async def provision_livekit_outbound(self, route: TenantSipRoute, sip_service=None) -> TenantSipRoute:
-        from app.services.livekit_sip_service import LiveKitSipError, LiveKitSipService
+    # -- LiveKit trunk -------------------------------------------------------
 
+    async def provision_livekit_outbound(self, route: TenantSipRoute, sip_service=None) -> TenantSipRoute:
         route.livekit_provision_status = "pending"
         route.livekit_provision_error_code = None
         self.db.commit()
@@ -193,8 +196,6 @@ class VoiceSipRouteService:
         return route
 
     async def deprovision_livekit_outbound(self, route: TenantSipRoute, sip_service=None) -> TenantSipRoute:
-        from app.services.livekit_sip_service import LiveKitSipService
-
         if route.livekit_outbound_trunk_id:
             try:
                 await (sip_service or LiveKitSipService()).delete_outbound_trunk(
@@ -213,19 +214,32 @@ class VoiceSipRouteService:
         self.db.refresh(route)
         return route
 
+    async def sync_livekit_trunk(self, tenant_id: str, sip_service=None) -> None:
+        """Provision the tenant's LiveKit trunk when the route is active,
+        remove a stale one when it is not. No route: nothing to do."""
+        route = self.get_route(tenant_id)
+        if route is not None and route.status == "active":
+            await self.provision_livekit_outbound(route, sip_service)
+        elif route is not None and route.livekit_outbound_trunk_id:
+            await self.deprovision_livekit_outbound(route, sip_service)
+
+    # -- views (DTOs for other modules) --------------------------------------
+
     @staticmethod
-    def response(route: TenantSipRoute | None) -> VoiceSipRouteResponse | None:
+    def view(route: TenantSipRoute | None) -> SipRouteView | None:
         if route is None:
             return None
-        return VoiceSipRouteResponse(
+        return SipRouteView(
             id=route.id,
+            tenant_id=route.tenant_id,
+            provider_config_id=route.provider_config_id,
             status=route.status,
             pbx_host=route.pbx_host,
             pbx_port=route.pbx_port,
             sip_username=route.sip_username,
             caller_id=route.caller_id,
             default_country=route.default_country,
-            allowed_countries=list(route.allowed_countries_json),
+            allowed_countries=tuple(route.allowed_countries_json),
             max_concurrent_calls=route.max_concurrent_calls,
             has_sip_password=bool(route.sip_password_encrypted),
             provision_status=route.provision_status,
@@ -238,4 +252,17 @@ class VoiceSipRouteService:
             livekit_provision_status=route.livekit_provision_status,
             livekit_provision_error_code=route.livekit_provision_error_code,
             livekit_provisioned_at=route.livekit_provisioned_at,
+        )
+
+    def connection(self, route: TenantSipRoute) -> SipRouteConnection:
+        return SipRouteConnection(
+            route_id=route.id,
+            provider_config_id=route.provider_config_id,
+            host=route.pbx_host,
+            port=route.pbx_port,
+            username=route.sip_username,
+            password=self.decrypt_password(route),
+            caller_id=route.caller_id,
+            default_country=route.default_country,
+            allowed_countries=tuple(route.allowed_countries_json),
         )

@@ -19,7 +19,7 @@ from app.schemas.public_voice_experiences import (
     PublicVoiceCallSettings,
     PublicVoiceTheme,
 )
-from app.services.voice_sip_route_service import VoiceSipRouteService
+from app.modules.telephony.public import SipRouteFacade
 from app.services.tenant_feature_service import VOICE_EXPERIENCES, TenantFeatureService
 
 
@@ -56,10 +56,10 @@ class PublicVoiceExperienceService:
         raw_mode = call_settings.get("mode", "webrtc")
         if raw_mode in ("callback", "both"):
             try:
-                route = VoiceSipRouteService(self.db).get_active_route(
+                route = SipRouteFacade(self.db).get_active_route(
                     snapshot.experience.tenant_id
                 )
-                call_settings["allowed_countries"] = list(route.allowed_countries_json)
+                call_settings["allowed_countries"] = list(route.allowed_countries)
             except Exception:
                 call_settings["allowed_countries"] = []
                 if raw_mode == "callback":
