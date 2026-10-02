@@ -12,7 +12,8 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.db.session import SessionLocal
 from app.domain.events import _check_json_safe
-from app.models.crm import CrmBooking, CrmContact, CrmLead, CrmVoiceCall
+from app.models.crm import CrmContact, CrmLead, CrmVoiceCall
+from app.modules.scheduling.infrastructure.models import CrmBooking
 from app.models.notifications import DomainEvent
 from app.services.domain_event_service import DomainEventIdempotencyConflictError, DomainEventService
 from app.services.notification_orchestrator import NotificationOrchestrator

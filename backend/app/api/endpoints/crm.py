@@ -8,7 +8,8 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.api.auth.deps import AuthContext, get_current_auth_context, require_roles
 from app.db.session import get_db
-from app.models.crm import CrmContact, CrmPipelineStage, CrmLead, CrmActivity, CrmTask, CrmBooking, CrmBookingEvent
+from app.models.crm import CrmContact, CrmPipelineStage, CrmLead, CrmActivity, CrmTask
+from app.modules.scheduling.infrastructure.models import CrmBooking, CrmBookingEvent
 
 from app.schemas.crm import (
     ActivitySchema,

@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.models.analytics import Agent
 from app.models.crm import CrmCallContext, CrmLead
-from app.models.integrations import TenantVoiceBookingConfig
+from app.modules.scheduling.infrastructure.models import TenantVoiceBookingConfig
 
 
 @dataclass(frozen=True)

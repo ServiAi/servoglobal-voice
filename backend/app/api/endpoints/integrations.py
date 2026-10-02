@@ -9,7 +9,8 @@ from sqlalchemy.orm import Session
 
 from app.api.auth.deps import AuthContext, require_roles
 from app.db.session import get_db
-from app.models.integrations import TenantEmailTemplate, TenantGoogleCalendarConnection, TenantWhatsAppTemplate
+from app.models.integrations import TenantEmailTemplate, TenantWhatsAppTemplate
+from app.modules.scheduling.infrastructure.models import TenantGoogleCalendarConnection
 from app.schemas.integrations import (
     BookingConfigRequest,
     BookingConfigResponse,

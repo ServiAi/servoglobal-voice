@@ -1,4 +1,22 @@
 from app.modules.agents.infrastructure.models import TenantAgent, TenantAgentVersion
+from app.modules.scheduling.infrastructure.models import (  # noqa: F401  (registers the tables)
+    CrmBooking,
+    CrmBookingEvent,
+    TenantAgentSchedulingConfig,
+    TenantBookingConfig,
+    TenantGoogleCalendar,
+    TenantGoogleCalendarConnection,
+    TenantSchedulingAvailabilityException,
+    TenantSchedulingConfig,
+    TenantSchedulingEventType,
+    TenantSchedulingProviderObject,
+    TenantSchedulingResource,
+    TenantSchedulingResourceCalendar,
+    TenantSchedulingSchedule,
+    TenantSchedulingTeam,
+    TenantSchedulingTeamMember,
+    TenantVoiceBookingConfig,
+)
 from app.modules.telephony.infrastructure.models import TenantSipRoute
 from app.models.analytics import Agent, Call, CallEvent, MetricSnapshotDaily
 from app.models.billing import ExternalProviderPricing, TenantBillingPlan, TenantUsageAlert

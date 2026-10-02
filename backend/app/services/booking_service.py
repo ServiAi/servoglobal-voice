@@ -8,8 +8,9 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
-from app.models.crm import CrmBooking, CrmBookingEvent, CrmLead
-from app.models.integrations import (
+from app.models.crm import CrmLead
+from app.modules.scheduling.infrastructure.models import CrmBooking, CrmBookingEvent
+from app.modules.scheduling.infrastructure.models import (
     TenantBookingConfig,
     TenantGoogleCalendarConnection,
     TenantSchedulingEventType,

@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
@@ -7,8 +7,8 @@ from sqlalchemy import select
 
 from _integrations_2a_test_base import Integration2ATestCase, SessionLocal
 from app.core.config import settings
-from app.models.crm import CrmBooking
-from app.models.integrations import (
+from app.modules.scheduling.infrastructure.models import CrmBooking
+from app.modules.scheduling.infrastructure.models import (
     TenantGoogleCalendar,
     TenantGoogleCalendarConnection,
     TenantSchedulingResource,

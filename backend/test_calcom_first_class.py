@@ -17,10 +17,10 @@ from app.core.scheduling_exceptions import (
     SchedulingValidationError,
 )
 from app.models.identity import Tenant, TenantMembership, User
-from app.models.integrations import (
+from app.models.integrations import TenantIntegrationEvent
+from app.modules.scheduling.infrastructure.models import (
     TenantAgentSchedulingConfig,
     TenantBookingConfig,
-    TenantIntegrationEvent,
     TenantSchedulingEventType,
     TenantSchedulingProviderObject,
     TenantSchedulingSchedule,

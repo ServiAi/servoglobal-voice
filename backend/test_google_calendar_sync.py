@@ -7,7 +7,7 @@ from sqlalchemy import select
 
 from _integrations_2a_test_base import Integration2ATestCase, SessionLocal
 from app.core.config import settings
-from app.models.integrations import TenantGoogleCalendar, TenantGoogleCalendarConnection
+from app.modules.scheduling.infrastructure.models import TenantGoogleCalendar, TenantGoogleCalendarConnection
 from app.services.google_calendar_oauth_service import GoogleCalendarOAuthService
 from app.services.google_calendar_service import GoogleCalendarService
 

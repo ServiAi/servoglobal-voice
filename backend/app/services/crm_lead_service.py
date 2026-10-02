@@ -3,14 +3,8 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from sqlalchemy import select, func, update, delete, or_
 from sqlalchemy.orm import Session
-from app.models.crm import (
-    CrmLead,
-    CrmPipelineStage,
-    CrmContact,
-    CrmBooking,
-    CrmWhatsAppMessage,
-    CrmVoiceCall,
-)
+from app.models.crm import CrmLead, CrmPipelineStage, CrmContact, CrmWhatsAppMessage, CrmVoiceCall
+from app.modules.scheduling.infrastructure.models import CrmBooking
 from app.models.integrations import TenantEmailSend, TenantFormSubmission, TenantFormToken
 from app.services.crm_pipeline_service import CrmPipelineService
 from app.services.crm_activity_service import CrmActivityService

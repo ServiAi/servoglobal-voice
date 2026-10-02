@@ -690,7 +690,7 @@ class AgentToolInvokeEndpointTests(Integration2ATestCase):
             [{"key": "calendar.create_booking", "enabled": True, "config": {}}], lead_id=lead_id
         )
         with patch("app.services.booking_service.BookingService.create_lead_booking") as mocked:
-            from app.models.crm import CrmBooking
+            from app.modules.scheduling.infrastructure.models import CrmBooking
             from datetime import datetime, timezone
 
             mocked.return_value = CrmBooking(
@@ -777,7 +777,7 @@ class AgentToolInvokeEndpointTests(Integration2ATestCase):
         with patch("app.services.booking_service.BookingService.create_lead_booking") as mocked:
             from datetime import datetime, timezone
 
-            from app.models.crm import CrmBooking
+            from app.modules.scheduling.infrastructure.models import CrmBooking
 
             mocked.return_value = CrmBooking(
                 id="booking-chained", tenant_id=self.tenant.id, lead_id=real_lead_id, contact_id=real_contact_id,

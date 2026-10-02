@@ -5,7 +5,7 @@ from unittest.mock import patch
 from sqlalchemy import select
 
 from _integrations_2a_test_base import Integration2ATestCase, SessionLocal
-from app.models.crm import CrmBooking, CrmBookingEvent
+from app.modules.scheduling.infrastructure.models import CrmBooking, CrmBookingEvent
 
 
 class CrmBookingTests(Integration2ATestCase):

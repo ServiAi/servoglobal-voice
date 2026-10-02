@@ -7,8 +7,13 @@ from typing import Any, Protocol
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.crm import CrmBooking, CrmLead
-from app.models.integrations import TenantBookingConfig, TenantGoogleCalendar, TenantGoogleCalendarConnection
+from app.models.crm import CrmLead
+from app.modules.scheduling.infrastructure.models import CrmBooking
+from app.modules.scheduling.infrastructure.models import (
+    TenantBookingConfig,
+    TenantGoogleCalendar,
+    TenantGoogleCalendarConnection,
+)
 from app.schemas.crm import BookingCreateRequest
 from app.services.calcom_client import CalComClient, CalComClientConfig, sanitize_calcom_error
 from app.services.google_calendar_service import GoogleCalendarService, sanitize_google_calendar_error

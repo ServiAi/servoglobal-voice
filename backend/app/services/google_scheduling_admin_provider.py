@@ -7,7 +7,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.integrations import (
+from app.modules.scheduling.infrastructure.models import (
     TenantGoogleCalendarConnection,
     TenantSchedulingConfig,
     TenantSchedulingEventType,

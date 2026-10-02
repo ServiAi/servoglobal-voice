@@ -16,7 +16,8 @@ os.environ["DATABASE_URL"] = f"sqlite:///./{TEST_DB_PATH.as_posix()}"
 
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
-from app.models.crm import CrmBooking, CrmBookingEvent, CrmContact, CrmLead, CrmPipelineStage, CrmVoiceCall
+from app.models.crm import CrmContact, CrmLead, CrmPipelineStage, CrmVoiceCall
+from app.modules.scheduling.infrastructure.models import CrmBooking, CrmBookingEvent
 from app.models.identity import Tenant
 from app.models.integrations import TenantIntegrationEvent, TenantWhatsAppConfig, TenantWhatsAppTemplate
 from app.models.notifications import (

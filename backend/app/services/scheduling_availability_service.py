@@ -8,8 +8,8 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
-from app.models.crm import CrmBooking
-from app.models.integrations import (
+from app.modules.scheduling.infrastructure.models import CrmBooking
+from app.modules.scheduling.infrastructure.models import (
     TenantAgentSchedulingConfig,
     TenantGoogleCalendar,
     TenantGoogleCalendarConnection,

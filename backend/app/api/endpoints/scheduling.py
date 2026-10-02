@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.api.auth.deps import AuthContext, require_roles
 from app.db.session import get_db
-from app.models.integrations import (
+from app.modules.scheduling.infrastructure.models import (
     TenantAgentSchedulingConfig,
     TenantSchedulingAvailabilityException,
     TenantSchedulingEventType,

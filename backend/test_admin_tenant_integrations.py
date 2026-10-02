@@ -21,7 +21,8 @@ from app.db.session import SessionLocal, engine
 from app.main import app
 from app.models.identity import Tenant, TenantMembership, User
 from app.models.crm import CrmWhatsAppMessage
-from app.models.integrations import TenantBookingConfig, TenantIntegration, TenantWhatsAppConfig, TenantWhatsAppTemplate
+from app.models.integrations import TenantIntegration, TenantWhatsAppConfig, TenantWhatsAppTemplate
+from app.modules.scheduling.infrastructure.models import TenantBookingConfig
 from app.services.resend_service import ResendService
 
 

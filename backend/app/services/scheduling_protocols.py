@@ -4,7 +4,8 @@ from dataclasses import asdict, dataclass
 from datetime import datetime
 from typing import Any, Protocol
 
-from app.models.crm import CrmBooking, CrmLead
+from app.models.crm import CrmLead
+from app.modules.scheduling.infrastructure.models import CrmBooking
 from app.schemas.crm import BookingCreateRequest
 
 

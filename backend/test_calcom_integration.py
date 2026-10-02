@@ -10,8 +10,10 @@ from unittest.mock import patch
 from sqlalchemy import select
 
 from _integrations_2a_test_base import Integration2ATestCase, SessionLocal
-from app.models.crm import CrmActivity, CrmBooking, CrmBookingEvent
-from app.models.integrations import TenantBookingConfig, TenantIntegrationEvent
+from app.models.crm import CrmActivity
+from app.modules.scheduling.infrastructure.models import CrmBooking, CrmBookingEvent
+from app.models.integrations import TenantIntegrationEvent
+from app.modules.scheduling.infrastructure.models import TenantBookingConfig
 from app.services.calcom_client import CalComClient, CalComClientConfig
 
 

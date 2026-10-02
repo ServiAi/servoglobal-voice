@@ -8,8 +8,9 @@ from sqlalchemy import select
 from _integrations_2a_test_base import Integration2ATestCase, SessionLocal
 from app.core.config import settings
 from app.models.analytics import Agent
-from app.models.crm import CrmBooking, CrmCallContext, CrmLead
-from app.models.integrations import TenantGoogleCalendar, TenantGoogleCalendarConnection
+from app.models.crm import CrmCallContext, CrmLead
+from app.modules.scheduling.infrastructure.models import CrmBooking
+from app.modules.scheduling.infrastructure.models import TenantGoogleCalendar, TenantGoogleCalendarConnection
 from app.schemas.crm import BookingCreateRequest
 from app.services.booking_service import BookingService
 from app.services.google_calendar_oauth_service import GoogleCalendarOAuthService

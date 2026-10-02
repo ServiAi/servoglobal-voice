@@ -14,7 +14,10 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.models.integrations import TenantGoogleCalendarConnection, TenantSchedulingResourceCalendar
+from app.modules.scheduling.infrastructure.models import (
+    TenantGoogleCalendarConnection,
+    TenantSchedulingResourceCalendar,
+)
 from app.schemas.integrations import GoogleCalendarConnectionResponse
 from app.services.secret_manager_service import SecretManager
 

@@ -4,8 +4,8 @@ from datetime import UTC, datetime
 from unittest.mock import MagicMock
 
 from _integrations_2a_test_base import Integration2ATestCase, SessionLocal
-from app.models.crm import CrmBooking
-from app.models.integrations import TenantGoogleCalendar, TenantGoogleCalendarConnection
+from app.modules.scheduling.infrastructure.models import CrmBooking
+from app.modules.scheduling.infrastructure.models import TenantGoogleCalendar, TenantGoogleCalendarConnection
 from app.services.google_calendar_oauth_service import GoogleCalendarOAuthService
 from app.services.scheduling_availability_service import SchedulingAvailabilityService
 
