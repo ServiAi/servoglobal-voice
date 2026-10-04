@@ -226,4 +226,4 @@ Mismo grafo AST (imports perezosos incluidos), `develop@90bf9d2` → esta rama. 
 | Componentes conexas con Scheduling | 0 | 1 (6 archivos, 3 de Scheduling: `public`, `wiring`, `booking_service` ↔ `crm.public`, `crm_lead_service`, `notification_event_pipeline`; sólo por `public.py`/wiring perezoso). La componente grande (28) no incluye Scheduling |
 | Shims/reexports temporales | 4→0 (Voice) | **0** (ninguno creado) |
 | Tests backend (métodos `test_*`) | 1789 | 1828 |
-| Tests PostgreSQL (métodos en `test_*postgres.py`) | 23 | 28 (+5 de Scheduling: Round Robin ×3, ciclo de vida, doble cancelación) |
+| Tests PostgreSQL (métodos en `test_*postgres.py`) | 23 | 28 (+5 de Scheduling: Round Robin ×3, ciclo de vida, doble cancelación; cifra al cierre de la migración: el PR #121 llevó `test_scheduling_postgres` a 24 tests) |

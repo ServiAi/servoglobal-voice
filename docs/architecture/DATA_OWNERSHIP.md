@@ -61,7 +61,7 @@ Datos de otros módulos que Tool Platform usa, siempre vía API pública y como 
 
 ## Scheduling
 
-Ahora en `app/modules/scheduling/infrastructure/models.py` (mismas tablas, FKs, índices y constraints; sin migración).
+Ahora en `app/modules/scheduling/infrastructure/models.py` (en la migración de código original: mismas tablas, FKs, índices y constraints, sin migración; el PR #121 añadió después `tenant_booking_operations` y `crm_bookings.scheduling_resource_id` con la migración `202609240001`).
 
 | Tabla | Modelo | Estado |
 | --- | --- | --- |
