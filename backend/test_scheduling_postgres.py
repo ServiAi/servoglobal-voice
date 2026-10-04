@@ -13,6 +13,7 @@ Run only against a dedicated disposable database:
 
 import os
 import threading
+import time
 import unittest
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
@@ -37,8 +38,16 @@ from app.models.identity import Tenant
 from app.modules.scheduling.application.booking_service import BookingService
 from app.modules.scheduling.application.ports import SchedulingPorts
 from app.modules.scheduling.application.resource_service import SchedulingResourceService
+from app.modules.scheduling.domain.booking import SLOT_BLOCKING_STATUSES
 from app.modules.scheduling.domain.contracts import BookingCustomer, CreateBookingCommand
+from app.modules.scheduling.domain.errors import (
+    BookingOperationInProgressError,
+    IdempotencyConflictError,
+    SlotConflictError,
+)
+from app.modules.scheduling.infrastructure.google.calendar import GoogleCalendarService
 from app.modules.scheduling.infrastructure.models import (
+    BookingOperation,
     CrmBooking,
     CrmBookingEvent,
     TenantBookingConfig,
@@ -407,6 +416,316 @@ class SchedulingPostgresTests(unittest.TestCase):
         with self.SessionLocal() as db:
             self.assertEqual(db.get(CrmBooking, booking_id).status, "cancelled")
             self.assertEqual(db.scalar(select(func.count()).select_from(CrmBooking)), 1)
+
+
+    # =====================================================================
+    # Booking consistency: idempotency, slot guard, idempotent cancel/reschedule
+    # (Google provider replaced by a counting fake; every DB call is real)
+    # =====================================================================
+    START = datetime(2030, 3, 4, 15, 0, tzinfo=UTC)  # default length 30 min -> [15:00, 15:30)
+
+    def _google_tenant(self) -> tuple[str, BookingCustomer, str]:
+        tenant_id = self._tenant()
+        customer = self._lead(tenant_id)
+        with self.SessionLocal() as db:
+            db.add(TenantGoogleCalendarConnection(tenant_id=tenant_id, status="connected", calendar_id="primary"))
+            resource = TenantSchedulingResource(tenant_id=tenant_id, name="Agent R1", team="sales")
+            db.add(resource)
+            db.commit()
+            return tenant_id, customer, resource.id
+
+    @staticmethod
+    def _fake_google():
+        class FakeGoogle:
+            def __init__(self) -> None:
+                self.create_calls = self.delete_calls = self.patch_calls = 0
+                self.create_error: Exception | None = None
+                self.lock = threading.Lock()
+
+        fake = FakeGoogle()
+
+        def create_event(_svc, connection, payload, calendar_id=None):
+            with fake.lock:
+                fake.create_calls += 1
+                n = fake.create_calls
+            if fake.create_error:
+                raise fake.create_error
+            time.sleep(0.2)  # keep the race window open
+            return {"id": f"ev-{n}", "htmlLink": "https://example.test/ev"}
+
+        def delete_event(_svc, connection, event_id, calendar_id=None):
+            with fake.lock:
+                fake.delete_calls += 1
+            time.sleep(0.2)
+
+        def patch_event(_svc, connection, event_id, payload, calendar_id=None):
+            with fake.lock:
+                fake.patch_calls += 1
+            time.sleep(0.2)
+
+        patches = [
+            patch.object(GoogleCalendarService, "create_event", create_event),
+            patch.object(GoogleCalendarService, "delete_event", delete_event),
+            patch.object(GoogleCalendarService, "patch_event", patch_event),
+        ]
+        return fake, patches
+
+    def _create(self, tenant_id, customer, resource_id, *, start=None, key=None, events=None, name="Pedro"):
+        command = CreateBookingCommand(
+            start=(start or self.START).isoformat().replace("+00:00", "Z"),
+            attendee_name=name,
+            attendee_email="p@example.com",
+            scheduling_resource_id=resource_id,
+        )
+        with self.SessionLocal() as db:
+            booking = self._service(db, customer, events=events).create_lead_booking(
+                tenant_id=tenant_id, lead_id=customer.lead_id, command=command, idempotency_key=key
+            )
+            return booking.id
+
+    def _in_threads(self, *calls):
+        barrier = Barrier(len(calls))
+
+        def run(call):
+            barrier.wait(timeout=30)
+            try:
+                return call()
+            except Exception as exc:  # noqa: BLE001 - the outcome is what the test asserts on
+                return exc
+
+        with ThreadPoolExecutor(max_workers=len(calls)) as pool:
+            return [f.result(timeout=90) for f in [pool.submit(run, c) for c in calls]]
+
+    def _active(self, tenant_id: str) -> int:
+        with self.SessionLocal() as db:
+            return db.scalar(
+                select(func.count()).select_from(CrmBooking).where(
+                    CrmBooking.tenant_id == tenant_id, CrmBooking.status.in_(SLOT_BLOCKING_STATUSES)
+                )
+            )
+
+    def _with_google(self, fake_patches):
+        from contextlib import ExitStack
+
+        stack = ExitStack()
+        for p in fake_patches:
+            stack.enter_context(p)
+        return stack
+
+    # 1
+    def test_same_create_key_concurrently_yields_one_booking_and_one_provider_call(self) -> None:
+        tenant_id, customer, resource_id = self._google_tenant()
+        fake, patches = self._fake_google()
+        events = RecordingEventPort()
+        with self._with_google(patches):
+            results = self._in_threads(
+                *[lambda: self._create(tenant_id, customer, resource_id, key="abc123", events=events)] * 2
+            )
+        self.assertFalse([r for r in results if isinstance(r, Exception)], results)
+        self.assertEqual(results[0], results[1], "both callers must get the same booking")
+        self.assertEqual(fake.create_calls, 1)
+        with self.SessionLocal() as db:
+            self.assertEqual(db.scalar(select(func.count()).select_from(CrmBooking)), 1)
+            self.assertEqual(db.scalar(select(func.count()).select_from(BookingOperation)), 1)
+        self.assertEqual([e for _, e in events.events], ["booking.created"])
+
+    # 2
+    def test_same_key_with_a_different_payload_is_an_idempotency_conflict(self) -> None:
+        tenant_id, customer, resource_id = self._google_tenant()
+        fake, patches = self._fake_google()
+        with self._with_google(patches):
+            self._create(tenant_id, customer, resource_id, key="k-1")
+            with self.assertRaises(IdempotencyConflictError):
+                self._create(tenant_id, customer, resource_id, key="k-1", start=self.START + timedelta(hours=2))
+        self.assertEqual(fake.create_calls, 1)
+
+    def test_sequential_retry_replays_without_calling_the_provider(self) -> None:
+        tenant_id, customer, resource_id = self._google_tenant()
+        fake, patches = self._fake_google()
+        events = RecordingEventPort()
+        with self._with_google(patches):
+            first = self._create(tenant_id, customer, resource_id, key="k-2", events=events)
+            second = self._create(tenant_id, customer, resource_id, key="k-2", events=events)
+        self.assertEqual(first, second)
+        self.assertEqual(fake.create_calls, 1)
+        self.assertEqual(len(events.events), 1)
+
+    # 3
+    def test_different_keys_same_slot_one_wins_and_one_gets_a_slot_conflict(self) -> None:
+        tenant_id, customer, resource_id = self._google_tenant()
+        fake, patches = self._fake_google()
+        with self._with_google(patches):
+            results = self._in_threads(
+                lambda: self._create(tenant_id, customer, resource_id, key="a"),
+                lambda: self._create(tenant_id, customer, resource_id, key="b"),
+            )
+        errors = [r for r in results if isinstance(r, Exception)]
+        self.assertEqual(len(errors), 1, results)
+        self.assertIsInstance(errors[0], SlotConflictError)
+        self.assertEqual(fake.create_calls, 1)
+        self.assertEqual(self._active(tenant_id), 1)
+
+    # 4 / 5
+    def test_overlapping_interval_is_rejected_and_adjacent_is_allowed(self) -> None:
+        tenant_id, customer, resource_id = self._google_tenant()
+        fake, patches = self._fake_google()
+        with self._with_google(patches):
+            self._create(tenant_id, customer, resource_id, key="a")  # [15:00, 15:30)
+            with self.assertRaises(SlotConflictError):
+                self._create(tenant_id, customer, resource_id, key="b", start=self.START + timedelta(minutes=15))
+            self._create(tenant_id, customer, resource_id, key="c", start=self.START + timedelta(minutes=30))
+        self.assertEqual(self._active(tenant_id), 2)
+        self.assertEqual(fake.create_calls, 2)
+
+    # 6
+    def test_failed_booking_releases_the_slot(self) -> None:
+        tenant_id, customer, resource_id = self._google_tenant()
+        fake, patches = self._fake_google()
+        with self._with_google(patches):
+            fake.create_error = ValueError("Google Calendar event creation failed: boom")
+            with self.assertRaises(ValueError):
+                self._create(tenant_id, customer, resource_id, key="a")
+            self.assertEqual(self._active(tenant_id), 0)
+            fake.create_error = None
+            self._create(tenant_id, customer, resource_id, key="b")
+        self.assertEqual(self._active(tenant_id), 1)
+
+    def test_known_failure_allows_retry_with_the_same_key(self) -> None:
+        tenant_id, customer, resource_id = self._google_tenant()
+        fake, patches = self._fake_google()
+        with self._with_google(patches):
+            fake.create_error = ValueError("Google Calendar event creation failed: 400")
+            with self.assertRaises(ValueError):
+                self._create(tenant_id, customer, resource_id, key="retry")
+            fake.create_error = None
+            booking_id = self._create(tenant_id, customer, resource_id, key="retry")
+        with self.SessionLocal() as db:
+            self.assertEqual(db.get(CrmBooking, booking_id).status, "accepted")
+
+    # 7
+    def test_double_cancel_calls_the_provider_once(self) -> None:
+        tenant_id, customer, resource_id = self._google_tenant()
+        fake, patches = self._fake_google()
+        events = RecordingEventPort()
+        with self._with_google(patches):
+            booking_id = self._create(tenant_id, customer, resource_id, key="a", events=events)
+
+            def cancel():
+                with self.SessionLocal() as db:
+                    return self._service(db, customer, events=events).cancel_lead_booking(
+                        tenant_id=tenant_id, booking_id=booking_id
+                    )
+
+            results = self._in_threads(cancel, cancel)
+        self.assertTrue(all(isinstance(r, dict) and r["status"] == "success" for r in results), results)
+        self.assertEqual(fake.delete_calls, 1)
+        self.assertEqual([e for _, e in events.events].count("booking.cancelled"), 1)
+        with self.SessionLocal() as db:
+            self.assertEqual(db.get(CrmBooking, booking_id).status, "cancelled")
+            cancelled = db.scalar(
+                select(func.count()).select_from(CrmBookingEvent).where(CrmBookingEvent.event_type == "booking_cancelled")
+            )
+        self.assertEqual(cancelled, 1)
+        # a later repeat is still a no-op
+        with self.SessionLocal() as db:
+            self._service(db, customer).cancel_lead_booking(tenant_id=tenant_id, booking_id=booking_id)
+        self.assertEqual(fake.delete_calls, 1)
+
+    # 8
+    def test_double_reschedule_to_the_same_target_calls_the_provider_once(self) -> None:
+        tenant_id, customer, resource_id = self._google_tenant()
+        fake, patches = self._fake_google()
+        events = RecordingEventPort()
+        target = self.START + timedelta(hours=1)
+        with self._with_google(patches):
+            booking_id = self._create(tenant_id, customer, resource_id, key="a", events=events)
+
+            def reschedule():
+                with self.SessionLocal() as db:
+                    return self._service(db, customer, events=events).reschedule_lead_booking(
+                        tenant_id=tenant_id, booking_id=booking_id, new_start_time=target.isoformat().replace("+00:00", "Z")
+                    )
+
+            results = self._in_threads(reschedule, reschedule)
+            reschedule()  # and once more, sequentially
+        self.assertTrue(all(isinstance(r, dict) and r["status"] == "success" for r in results), results)
+        self.assertEqual(fake.patch_calls, 1)
+        self.assertEqual([e for _, e in events.events].count("booking.rescheduled"), 1)
+        with self.SessionLocal() as db:
+            row = db.get(CrmBooking, booking_id)
+            self.assertEqual(row.start_at, target)
+            self.assertEqual(row.end_at, target + timedelta(minutes=30))
+
+    # 9
+    def test_reschedule_into_an_occupied_slot_is_rejected(self) -> None:
+        tenant_id, customer, resource_id = self._google_tenant()
+        fake, patches = self._fake_google()
+        with self._with_google(patches):
+            a = self._create(tenant_id, customer, resource_id, key="a")
+            self._create(tenant_id, customer, resource_id, key="b", start=self.START + timedelta(hours=1))
+            with self.SessionLocal() as db:
+                with self.assertRaises(SlotConflictError):
+                    self._service(db, customer).reschedule_lead_booking(
+                        tenant_id=tenant_id,
+                        booking_id=a,
+                        new_start_time=(self.START + timedelta(hours=1)).isoformat().replace("+00:00", "Z"),
+                    )
+        self.assertEqual(fake.patch_calls, 0)
+        with self.SessionLocal() as db:
+            self.assertEqual(db.get(CrmBooking, a).start_at, self.START)
+
+    # 10
+    def test_same_key_and_slot_in_two_tenants_do_not_collide(self) -> None:
+        fake, patches = self._fake_google()
+        t1, c1, r1 = self._google_tenant()
+        t2, c2, r2 = self._google_tenant()
+        with self._with_google(patches):
+            b1 = self._create(t1, c1, r1, key="same-key")
+            b2 = self._create(t2, c2, r2, key="same-key")
+        self.assertNotEqual(b1, b2)
+        self.assertEqual(fake.create_calls, 2)
+
+    # timeout: outcome unknown
+    def test_provider_timeout_leaves_an_unknown_outcome_that_is_not_retried(self) -> None:
+        tenant_id, customer, resource_id = self._google_tenant()
+        fake, patches = self._fake_google()
+        with self._with_google(patches):
+            fake.create_error = TimeoutError("read timed out")
+            with self.assertRaises(ValueError):  # the adapter wraps it; the cause chain says "timeout"
+                self._create(tenant_id, customer, resource_id, key="slow")
+            fake.create_error = None
+            # same key: NOT executed again, reported as in progress / uncertain
+            with self.assertRaises(BookingOperationInProgressError):
+                self._create(tenant_id, customer, resource_id, key="slow")
+            # the uncertain booking keeps the slot blocked for others
+            with self.assertRaises(SlotConflictError):
+                self._create(tenant_id, customer, resource_id, key="other")
+        self.assertEqual(fake.create_calls, 1)
+        with self.SessionLocal() as db:
+            op = db.scalar(select(BookingOperation))
+            self.assertEqual(op.status, "provider_unknown")
+            self.assertEqual(db.get(CrmBooking, op.booking_id).status, "pending")
+
+    def test_invalid_idempotency_key_is_rejected(self) -> None:
+        tenant_id, customer, resource_id = self._google_tenant()
+        fake, patches = self._fake_google()
+        with self._with_google(patches):
+            with self.assertRaises(ValueError):
+                self._create(tenant_id, customer, resource_id, key="bad key with spaces")
+        self.assertEqual(fake.create_calls, 0)
+
+    def test_repeated_same_key_races_are_stable(self) -> None:
+        """Soak: 20 rounds of the create race (no deadlocks, always one booking)."""
+        fake, patches = self._fake_google()
+        with self._with_google(patches):
+            for round_no in range(20):
+                tenant_id, customer, resource_id = self._google_tenant()
+                results = self._in_threads(
+                    *[lambda: self._create(tenant_id, customer, resource_id, key=f"r{round_no}")] * 3
+                )
+                self.assertFalse([r for r in results if isinstance(r, Exception)], results)
+                self.assertEqual(len(set(results)), 1)
+        self.assertEqual(fake.create_calls, 20)
 
 
 if __name__ == "__main__":

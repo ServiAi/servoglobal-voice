@@ -134,5 +134,63 @@ class CommandAndErrorTests(unittest.TestCase):
         self.assertTrue(issubclass(SchedulingConfigurationError, ValueError))
 
 
+class BookingConsistencyDomainTests(unittest.TestCase):
+    def test_half_open_overlap(self) -> None:
+        from datetime import timedelta
+
+        from app.modules.scheduling.domain.booking import SLOT_BLOCKING_STATUSES, intervals_overlap
+
+        t = datetime(2030, 1, 1, 15, tzinfo=UTC)
+        h = timedelta(minutes=30)
+        self.assertTrue(intervals_overlap(t, t + 2 * h, t + h, t + 3 * h))
+        self.assertFalse(intervals_overlap(t, t + h, t + h, t + 2 * h))  # adjacent
+        self.assertTrue({"pending", "accepted", "scheduled"} <= SLOT_BLOCKING_STATUSES)
+        self.assertFalse({"failed", "cancelled"} & SLOT_BLOCKING_STATUSES)
+
+    def test_key_normalisation(self) -> None:
+        from app.modules.scheduling.domain.operations import normalize_idempotency_key
+
+        self.assertIsNone(normalize_idempotency_key(None))
+        self.assertIsNone(normalize_idempotency_key("  "))
+        self.assertEqual(normalize_idempotency_key(" voice:s1:abc-1 "), "voice:s1:abc-1")
+        for bad in ("a b", "x" * 129, "ñ", "a/b"):
+            with self.assertRaises(ValueError):
+                normalize_idempotency_key(bad)
+
+    def test_fingerprints_are_deterministic_and_discriminating(self) -> None:
+        from app.modules.scheduling.domain.operations import create_fingerprint, reschedule_fingerprint
+
+        t = datetime(2030, 1, 1, 15, tzinfo=UTC)
+        base = dict(tenant_id="t", lead_id="l", start_at=t, timezone="UTC", resource_id="r")
+        self.assertEqual(create_fingerprint(**base), create_fingerprint(**base))
+        self.assertNotEqual(create_fingerprint(**base), create_fingerprint(**{**base, "start_at": t.replace(hour=16)}))
+        self.assertNotEqual(create_fingerprint(**base), create_fingerprint(**{**base, "tenant_id": "t2"}))
+        self.assertNotEqual(
+            reschedule_fingerprint(booking_id="b", new_start_at=t), reschedule_fingerprint(booking_id="b", new_start_at=t.replace(hour=16))
+        )
+
+    def test_outcome_unknown_classification(self) -> None:
+        from app.modules.scheduling.domain.operations import is_outcome_unknown
+
+        class ReadTimeout(Exception):
+            pass
+
+        wrapped = ValueError("Google failed")
+        wrapped.__cause__ = ReadTimeout("slow")
+        self.assertTrue(is_outcome_unknown(wrapped))
+        self.assertTrue(is_outcome_unknown(TimeoutError()))
+        self.assertFalse(is_outcome_unknown(ValueError("400 bad request")))
+
+    def test_new_errors_stay_business_errors(self) -> None:
+        from app.modules.scheduling.domain.errors import (
+            BookingOperationInProgressError,
+            IdempotencyConflictError,
+            SlotConflictError,
+        )
+
+        for cls in (SlotConflictError, IdempotencyConflictError, BookingOperationInProgressError):
+            self.assertTrue(issubclass(cls, SchedulingError) and issubclass(cls, ValueError))
+
+
 if __name__ == "__main__":
     unittest.main()
