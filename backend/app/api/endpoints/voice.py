@@ -6,14 +6,14 @@ from pydantic import BaseModel, ConfigDict, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api.deps import verify_turnstile
 from app.core.config import settings
 from app.db.session import get_db
 from app.models.identity import Tenant
 from app.modules.crm.public import CrmFacade
-from app.services.voice_service import create_call_session, create_sip_call_via_pbx
 from app.services.notification_service import run_demo_start_notification_task
 from app.services.tenant_usage_service import TenantUsageService
-from app.api.deps import verify_turnstile
+from app.services.voice_service import create_call_session, create_sip_call_via_pbx
 
 router = APIRouter(prefix="/api/v1", tags=["Voice"])
 
@@ -217,6 +217,7 @@ async def create_call(
         ) from None
 
     from datetime import datetime
+
     import pytz
     
     bogota_tz = pytz.timezone('America/Bogota')
@@ -287,6 +288,7 @@ async def create_outbound_call(
 
     try:
         from datetime import datetime
+
         import pytz
         
         bogota_tz = pytz.timezone('America/Bogota')

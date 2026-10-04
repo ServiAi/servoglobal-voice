@@ -8,7 +8,6 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.config import settings
-from app.modules.crm.public import CrmFacade, LeadProfile
 from app.models.integrations import (
     TenantForm,
     TenantFormField,
@@ -16,9 +15,9 @@ from app.models.integrations import (
     TenantFormSubmissionAnswer,
     TenantFormToken,
 )
+from app.modules.crm.public import CrmFacade, LeadProfile
 from app.schemas.forms import FormCreateRequest
 from app.services.integration_event_service import IntegrationEventService
-
 
 FIELD_TYPES = {"text", "email", "phone", "textarea", "select", "checkbox"}
 DEFAULT_FIELDS = [

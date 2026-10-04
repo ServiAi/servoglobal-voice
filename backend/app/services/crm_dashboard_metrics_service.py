@@ -1,13 +1,14 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta, time
-from sqlalchemy import select
-from sqlalchemy.orm import Session
+from datetime import UTC, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
-from app.modules.crm.public import CrmFacade
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
 from app.models.analytics import Call
 from app.models.identity import Tenant
+from app.modules.crm.public import CrmFacade
 from app.services.voice_capacity_report_service import VoiceCapacityReportService
 
 

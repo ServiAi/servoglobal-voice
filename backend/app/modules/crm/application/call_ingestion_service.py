@@ -7,16 +7,18 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.modules.crm.infrastructure.models import CrmActivity, CrmContact, CrmLead
 from app.db.mixins import _utcnow
 from app.modules.crm.application.call_context_service import CrmCallContextService
 from app.modules.crm.application.contact_service import CrmContactService
-from app.modules.crm.domain.contacts import normalize_phone
 from app.modules.crm.application.lead_resolver_service import CrmLeadResolverService
 from app.modules.crm.application.pipeline_service import CrmPipelineService
 from app.modules.crm.application.ports import CrmPorts
+from app.modules.crm.application.stage_transition_service import (
+    CrmStageTransitionService,
+)
 from app.modules.crm.domain.calls import BookingDetection, CallRef
-from app.modules.crm.application.stage_transition_service import CrmStageTransitionService
+from app.modules.crm.domain.contacts import normalize_phone
+from app.modules.crm.infrastructure.models import CrmActivity, CrmContact, CrmLead
 
 logger = logging.getLogger(__name__)
 

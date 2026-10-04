@@ -10,7 +10,12 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from app.modules.crm.public import BookingDetection, CallClassification, CallRef, ContextLookup
+from app.modules.crm.public import (
+    BookingDetection,
+    CallClassification,
+    CallRef,
+    ContextLookup,
+)
 from app.services.legacy_call_booking_detector import CrmBookingDetectorService
 from app.services.legacy_call_classifier import CrmClassifierService
 from app.services.legacy_call_context_extractor import CrmContextExtractorService

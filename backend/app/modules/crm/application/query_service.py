@@ -1,10 +1,17 @@
 from __future__ import annotations
 
 from datetime import datetime
+
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, joinedload
 
-from app.modules.crm.infrastructure.models import CrmActivity, CrmCallContext, CrmContact, CrmLead, CrmPipelineStage
+from app.modules.crm.infrastructure.models import (
+    CrmActivity,
+    CrmCallContext,
+    CrmContact,
+    CrmLead,
+    CrmPipelineStage,
+)
 
 ALLOWED_SORT_FIELDS = {"created_at", "updated_at", "last_activity_at", "stage", "contact_name", "lead_score"}
 

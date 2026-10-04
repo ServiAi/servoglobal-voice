@@ -6,14 +6,13 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.db.session import SessionLocal
 from app.domain.events import _check_json_safe
-from app.modules.crm.public import CrmFacade, CrmVoiceCalls, VoiceCallView
 from app.models.notifications import DomainEvent
+from app.modules.crm.public import CrmFacade, CrmVoiceCalls, VoiceCallView
 from app.modules.scheduling.public import (
     BookingNotFoundError,
     BookingView,

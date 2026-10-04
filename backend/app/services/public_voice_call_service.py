@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import hashlib
 import logging
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
-from typing import Callable
 from uuid import uuid4
 
 from sqlalchemy import select, update
@@ -11,23 +11,25 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
 
-from app.modules.crm.public import CrmVoiceCalls
 from app.models.identity import Tenant
 from app.models.integrations import TenantVoiceAgentConfig
-from app.models.voice_experiences import TenantVoiceExperience, TenantVoiceExperienceVersion
+from app.models.voice_experiences import (
+    TenantVoiceExperience,
+    TenantVoiceExperienceVersion,
+)
 from app.models.voice_submissions import (
     TenantVoiceContextSession,
     TenantVoiceExperienceSubmission,
     TenantVoiceExperienceSubmissionValue,
     TenantVoiceRuntimeCall,
 )
+from app.modules.crm.public import CrmVoiceCalls
 from app.schemas.public_voice_calls import PublicVoiceCallResponse
-from app.services.tenant_feature_service import TenantFeatureService, VOICE_EXPERIENCES
+from app.services.tenant_feature_service import VOICE_EXPERIENCES, TenantFeatureService
 from app.services.tenant_usage_service import TenantUsageService
 from app.services.voice_config_service import VoiceConfigService
 from app.services.voice_experience_runtime_provider import (
     ProviderAmbiguousFailure,
-    ProviderCallResult,
     ProviderDefiniteFailure,
     VoiceExperienceRuntimeProvider,
 )

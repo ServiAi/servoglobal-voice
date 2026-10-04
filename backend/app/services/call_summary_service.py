@@ -10,9 +10,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.analytics import Call
-from app.modules.crm.public import CrmFacade, LeadProfile
 from app.models.identity import Tenant
 from app.models.integrations import TenantEmailAsset
+from app.modules.crm.public import CrmFacade, LeadProfile
 from app.services.storage_service import StorageService
 
 

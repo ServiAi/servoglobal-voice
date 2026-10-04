@@ -16,8 +16,8 @@ import logging
 
 from sqlalchemy.orm import Session
 
-from app.modules.crm.public import CrmFacade, LeadProfile
 from app.models.integrations import TenantVoiceAgentConfig
+from app.modules.crm.public import CrmFacade, LeadProfile
 from app.schemas.integrations import HANDOFF_TRIGGER_LEAD_SCORE
 from app.services.chatwoot_client import ChatwootClient
 from app.services.chatwoot_config_service import ChatwootConfigService

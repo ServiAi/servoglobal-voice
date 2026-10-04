@@ -2,24 +2,27 @@ from __future__ import annotations
 
 import hashlib
 import logging
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
-from typing import Callable
 
 from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.modules.crm.public import CrmFacade, CrmVoiceCalls
 from app.models.identity import Tenant
 from app.models.integrations import TenantVoiceAgentConfig
 from app.models.voice_context import TenantVoiceContextField
-from app.models.voice_experiences import TenantVoiceExperience, TenantVoiceExperienceVersion
+from app.models.voice_experiences import (
+    TenantVoiceExperience,
+    TenantVoiceExperienceVersion,
+)
 from app.models.voice_submissions import (
     TenantVoiceContextSession,
     TenantVoiceExperienceSubmission,
     TenantVoiceExperienceSubmissionValue,
 )
+from app.modules.crm.public import CrmFacade, CrmVoiceCalls
 from app.modules.telephony.public import (
     CapacityFacade,
     SipRouteFacade,
@@ -31,10 +34,13 @@ from app.services.public_voice_call_service import PublicCallFailure
 from app.services.tenant_feature_service import TenantFeatureService
 from app.services.tenant_usage_service import TenantUsageService
 from app.services.voice_call_service import VoiceCallService
-from app.services.voice_client import VoiceClient, VoiceClientConfig, VoiceSipRouteConfig
+from app.services.voice_client import (
+    VoiceClient,
+    VoiceClientConfig,
+    VoiceSipRouteConfig,
+)
 from app.services.voice_config_service import VoiceConfigService
 from app.services.voice_webhook_service import VoiceWebhookService
-
 
 logger = logging.getLogger(__name__)
 CLAIM_BATCH_SIZE = 25
@@ -334,10 +340,9 @@ class VoiceCallbackWorker:
                     resulting_status=result["call_status"],
                     forced=timed_out,
                 )
-            if timed_out:
-                if CrmVoiceCalls(db).get(call_id) is not None:
-                    CrmVoiceCalls(db).update(call_id, error_message="Provider completion timeout.")
-                    db.commit()
+            if timed_out and CrmVoiceCalls(db).get(call_id) is not None:
+                CrmVoiceCalls(db).update(call_id, error_message="Provider completion timeout.")
+                db.commit()
             return True
 
     @staticmethod

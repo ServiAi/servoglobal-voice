@@ -1,13 +1,18 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.modules.crm.infrastructure.models import CrmActivity, CrmContact, CrmLead, CrmTask
-from app.modules.crm.application.ports import TaskAssigneePort
 from app.modules.crm.application.activity_service import CrmActivityService
+from app.modules.crm.application.ports import TaskAssigneePort
 from app.modules.crm.domain.tasks import VALID_TASK_PRIORITIES, VALID_TASK_STATUSES
+from app.modules.crm.infrastructure.models import (
+    CrmContact,
+    CrmLead,
+    CrmTask,
+)
 
 
 class CrmTaskService:
@@ -51,9 +56,8 @@ class CrmTaskService:
             if not contact:
                 raise ValueError("Contact not found in this tenant")
 
-        if assigned_to_user_id:
-            if not self.assignees.is_active_member(tenant_id, assigned_to_user_id):
-                raise ValueError("Assigned user is not an active member of this tenant")
+        if assigned_to_user_id and not self.assignees.is_active_member(tenant_id, assigned_to_user_id):
+            raise ValueError("Assigned user is not an active member of this tenant")
 
     def create_task(
         self,

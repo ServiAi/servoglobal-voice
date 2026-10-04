@@ -6,11 +6,12 @@ from datetime import UTC, datetime
 from sqlalchemy import func, or_, select, update
 from sqlalchemy.orm import Session
 
-from app.modules.crm.infrastructure.models import CrmContact, CrmLead, CrmVoiceCall
-from app.modules.crm.application.ports import LeadHistoryPort, SchedulingPort
 from app.modules.crm.application.activity_service import CrmActivityService
 from app.modules.crm.application.pipeline_service import CrmPipelineService
+from app.modules.crm.application.ports import LeadHistoryPort, SchedulingPort
 from app.modules.crm.domain.pipeline import VALID_LEAD_STATUSES
+from app.modules.crm.infrastructure.models import CrmContact, CrmLead, CrmVoiceCall
+
 
 @dataclass(frozen=True)
 class _LeadPorts:

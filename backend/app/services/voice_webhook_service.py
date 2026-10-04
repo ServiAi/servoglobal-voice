@@ -1,18 +1,17 @@
 from __future__ import annotations
 
-import hmac
 import hashlib
-import json
+import hmac
 import logging
 from datetime import UTC, datetime
 from typing import Any
+
 from fastapi import HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from app.modules.crm.public import CrmFacade, CrmVoiceCalls, VoiceCallView
-from app.models.integrations import TenantVoiceProviderConfig
-from app.services.voice_config_service import VoiceConfigService
 from app.services.integration_event_service import IntegrationEventService
+from app.services.voice_config_service import VoiceConfigService
 
 _PLATFORM_TENANT_ID = "platform"
 

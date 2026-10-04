@@ -3,8 +3,10 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+
 from app.modules.crm.domain.pipeline import DEFAULT_STAGE_KEYS, DEFAULT_STAGES
 from app.modules.crm.infrastructure.models import CrmLead, CrmPipelineStage
+
 
 class CrmPipelineService:
     def __init__(self, db: Session) -> None:

@@ -6,12 +6,11 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.modules.crm.infrastructure.models import CrmCallContext, CrmContact, CrmLead
-from app.modules.crm.domain.contacts import normalize_phone
 from app.modules.crm.application.pipeline_service import CrmPipelineService
 from app.modules.crm.application.ports import AnalyticsPort
 from app.modules.crm.domain.calls import CallRef
-
+from app.modules.crm.domain.contacts import normalize_phone
+from app.modules.crm.infrastructure.models import CrmCallContext, CrmContact, CrmLead
 
 logger = logging.getLogger(__name__)
 

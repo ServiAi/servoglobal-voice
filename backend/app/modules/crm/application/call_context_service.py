@@ -8,9 +8,8 @@ from sqlalchemy.orm import Session
 
 from app.db.mixins import _uuid
 from app.modules.crm.domain.calls import ContextLookup
-from app.modules.crm.infrastructure.models import CrmCallContext
 from app.modules.crm.domain.contacts import normalize_phone
-
+from app.modules.crm.infrastructure.models import CrmCallContext
 
 CONTEXT_PHONE_LOOKBACK_MINUTES = 30
 

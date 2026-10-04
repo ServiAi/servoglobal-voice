@@ -18,7 +18,12 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.modules.crm.domain.calls import BookingDetection, CallClassification, CallRef, ContextLookup
+from app.modules.crm.domain.calls import (
+    BookingDetection,
+    CallClassification,
+    CallRef,
+    ContextLookup,
+)
 from app.modules.crm.domain.views import (
     ActivityView,
     CallContextView,
@@ -248,7 +253,9 @@ class CrmFacade:
         self, tenant_id: str, *, external_provider: str, context: Mapping[str, Any]
     ) -> CallContextView:
         """Persist the context a landing/voice flow collected before the call."""
-        from app.modules.crm.application.call_context_service import CrmCallContextService
+        from app.modules.crm.application.call_context_service import (
+            CrmCallContextService,
+        )
         from app.modules.crm.application.directory import call_context_view_of
 
         row = CrmCallContextService(self.db).create_context(
@@ -259,7 +266,9 @@ class CrmFacade:
     def attach_external_call_id(
         self, tenant_id: str, call_context_id: str, external_call_id: str, *, external_provider: str
     ) -> CallContextView | None:
-        from app.modules.crm.application.call_context_service import CrmCallContextService
+        from app.modules.crm.application.call_context_service import (
+            CrmCallContextService,
+        )
         from app.modules.crm.application.directory import call_context_view_of
 
         row = CrmCallContextService(self.db).attach_external_call_id(
@@ -274,7 +283,9 @@ class CrmFacade:
         per ``context_id`` / ``form_submission_id``)."""
         from sqlalchemy import select
 
-        from app.modules.crm.application.lead_resolver_service import CrmLeadResolverService
+        from app.modules.crm.application.lead_resolver_service import (
+            CrmLeadResolverService,
+        )
         from app.modules.crm.infrastructure.models import CrmContact
 
         contact = self.db.scalar(
@@ -315,7 +326,9 @@ class CrmFacade:
     def process_call_event(self, payload: dict[str, Any], call: CallRef) -> None:
         """Apply one provider call event to the lead pipeline and timeline.
         Errors are logged and swallowed, as ingestion always did."""
-        from app.modules.crm.application.call_ingestion_service import CrmIngestionService
+        from app.modules.crm.application.call_ingestion_service import (
+            CrmIngestionService,
+        )
 
         CrmIngestionService(self.db).process_call_event(payload, call)
 

@@ -10,7 +10,12 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Protocol
 
-from app.modules.crm.domain.calls import BookingDetection, CallClassification, CallRef, ContextLookup
+from app.modules.crm.domain.calls import (
+    BookingDetection,
+    CallClassification,
+    CallRef,
+    ContextLookup,
+)
 
 
 class TaskAssigneePort(Protocol):

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import re
 import logging
+import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
@@ -9,18 +9,26 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.modules.crm.public import ContactProfile, CrmFacade, LeadProfile
 from app.models.crm import CrmWhatsAppMessage
 from app.models.integrations import TenantWhatsAppConfig
 from app.models.notifications import NotificationDelivery
+from app.modules.crm.public import ContactProfile, CrmFacade, LeadProfile
 from app.schemas.crm import WhatsAppActionRequest, WhatsAppActionResponse
-from app.schemas.integrations import WhatsAppTestMessageRequest, WhatsAppTestMessageResponse
+from app.schemas.integrations import (
+    WhatsAppTestMessageRequest,
+    WhatsAppTestMessageResponse,
+)
 from app.services.integration_event_service import IntegrationEventService
-from app.services.notification_delivery_status_service import NotificationDeliveryStatusService
-from app.services.whatsapp_client import WhatsAppCloudClient, WhatsAppCloudClientError, sanitize_whatsapp_error
+from app.services.notification_delivery_status_service import (
+    NotificationDeliveryStatusService,
+)
+from app.services.whatsapp_client import (
+    WhatsAppCloudClient,
+    WhatsAppCloudClientError,
+    sanitize_whatsapp_error,
+)
 from app.services.whatsapp_config_service import WhatsAppConfigService
 from app.services.whatsapp_template_service import WhatsAppTemplateService
-
 
 logger = logging.getLogger(__name__)
 

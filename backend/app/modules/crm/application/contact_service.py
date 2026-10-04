@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from datetime import datetime
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+
+from app.db.mixins import _utcnow
 from app.modules.crm.domain.contacts import normalize_phone
 from app.modules.crm.infrastructure.models import CrmContact
-from app.db.mixins import _utcnow
+
 
 class CrmContactService:
     def __init__(self, db: Session) -> None:

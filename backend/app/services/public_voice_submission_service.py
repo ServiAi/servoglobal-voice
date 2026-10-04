@@ -3,9 +3,9 @@ from __future__ import annotations
 import hashlib
 import re
 import secrets
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Callable
 
 from sqlalchemy.orm import Session
 
@@ -15,24 +15,23 @@ from app.models.voice_submissions import (
     TenantVoiceExperienceSubmission,
     TenantVoiceExperienceSubmissionValue,
 )
-from app.schemas.public_voice_submissions import (
-    PublicFieldError,
-    PublicVoiceExperienceSubmissionRequest,
-    PublicVoiceExperienceSubmissionResponse,
-)
 from app.modules.crm.public import CrmFacade
-from app.services.integration_event_service import IntegrationEventService
-from app.services.public_voice_experience_service import (
-    PublicVoiceExperienceService,
-    PublicVoiceSnapshot,
-)
 from app.modules.telephony.public import (
     SipRouteFacade,
     VoicePhoneValidationError,
     normalize_caller_id,
     normalize_outbound_phone,
 )
-
+from app.schemas.public_voice_submissions import (
+    PublicFieldError,
+    PublicVoiceExperienceSubmissionRequest,
+    PublicVoiceExperienceSubmissionResponse,
+)
+from app.services.integration_event_service import IntegrationEventService
+from app.services.public_voice_experience_service import (
+    PublicVoiceExperienceService,
+    PublicVoiceSnapshot,
+)
 
 EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
 PHONE_RE = re.compile(r"^\+?[0-9() .-]{7,32}$")

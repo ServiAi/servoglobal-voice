@@ -1,11 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
-from collections.abc import Mapping
-
 from app.modules.crm.public import CallRef
-
 
 NORMALIZED_CONTEXT_FIELDS = (
     "name",

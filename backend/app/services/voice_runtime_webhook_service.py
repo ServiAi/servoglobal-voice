@@ -9,8 +9,8 @@ from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.models.analytics import Call, CallEvent
-from app.modules.crm.public import CrmFacade, CrmVoiceCalls, VoiceCallView
 from app.models.voice_submissions import TenantVoiceRuntimeCall
+from app.modules.crm.public import CrmFacade, CrmVoiceCalls, VoiceCallView
 from app.services.voice_config_service import VoiceConfigService
 
 OFFICIAL_EVENTS = {"call.started", "call.joined", "call.ended", "call.billed"}

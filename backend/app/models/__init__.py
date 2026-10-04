@@ -1,4 +1,55 @@
+from app.models.analytics import Agent, Call, CallEvent, MetricSnapshotDaily
+from app.models.billing import (
+    ExternalProviderPricing,
+    TenantBillingPlan,
+    TenantUsageAlert,
+)
+from app.models.crm import CrmWhatsAppMessage
+from app.models.identity import AccessAuditLog, Tenant, TenantMembership, User
+from app.models.integrations import (
+    TenantEmailAsset,
+    TenantEmailConfig,
+    TenantEmailSend,
+    TenantEmailTemplate,
+    TenantIntegration,
+    TenantIntegrationEvent,
+    TenantVoiceAgentConfig,
+    TenantVoiceProviderConfig,
+    TenantWhatsAppConfig,
+    TenantWhatsAppFlow,
+    TenantWhatsAppTemplate,
+)
+from app.models.notifications import (
+    DomainEvent,
+    NotificationDelivery,
+    TenantCapability,
+    TenantNotificationRecipient,
+    TenantNotificationRule,
+)
+from app.models.tenant_features import TenantFeatureGrant
+from app.models.voice_context import TenantVoiceContextField, TenantVoiceContextSchema
+from app.models.voice_experiences import (
+    TenantVoiceExperience,
+    TenantVoiceExperienceVersion,
+)
+from app.models.voice_submissions import (
+    TenantVoiceContextSession,
+    TenantVoiceExperienceSubmission,
+    TenantVoiceExperienceSubmissionValue,
+    TenantVoiceRuntimeCall,
+    VoicePublicRateLimitWindow,
+)
 from app.modules.agents.infrastructure.models import TenantAgent, TenantAgentVersion
+from app.modules.crm.infrastructure.models import (
+    CrmActivity,
+    CrmCallContext,
+    CrmContact,
+    CrmLead,
+    CrmPipelineStage,
+    CrmTask,
+    CrmVoiceCall,
+    CrmVoiceCallEvent,
+)
 from app.modules.scheduling.infrastructure.models import (  # noqa: F401  (registers the tables)
     CrmBooking,
     CrmBookingEvent,
@@ -18,50 +69,10 @@ from app.modules.scheduling.infrastructure.models import (  # noqa: F401  (regis
     TenantVoiceBookingConfig,
 )
 from app.modules.telephony.infrastructure.models import TenantSipRoute
-from app.models.analytics import Agent, Call, CallEvent, MetricSnapshotDaily
-from app.models.billing import ExternalProviderPricing, TenantBillingPlan, TenantUsageAlert
-from app.models.identity import AccessAuditLog, Tenant, TenantMembership, User
-from app.models.integrations import (
-    TenantEmailAsset,
-    TenantEmailConfig,
-    TenantEmailSend,
-    TenantEmailTemplate,
-    TenantIntegration,
-    TenantIntegrationEvent,
-    TenantVoiceProviderConfig,
-    TenantVoiceAgentConfig,
-    TenantWhatsAppConfig,
-    TenantWhatsAppFlow,
-    TenantWhatsAppTemplate,
-)
-from app.modules.crm.infrastructure.models import (  # noqa: F401  (registers the tables)
-    CrmActivity,
-    CrmCallContext,
-    CrmContact,
-    CrmLead,
-    CrmPipelineStage,
-    CrmTask,
-    CrmVoiceCall,
-    CrmVoiceCallEvent,
-)
-from app.models.crm import CrmWhatsAppMessage
-from app.models.notifications import (
-    DomainEvent,
-    NotificationDelivery,
-    TenantCapability,
-    TenantNotificationRecipient,
-    TenantNotificationRule,
-)
-from app.models.tenant_features import TenantFeatureGrant
-from app.modules.tools.infrastructure.models import TenantHttpToolConfig, TenantTool, TenantToolCredential
-from app.models.voice_context import TenantVoiceContextField, TenantVoiceContextSchema
-from app.models.voice_experiences import TenantVoiceExperience, TenantVoiceExperienceVersion
-from app.models.voice_submissions import (
-    TenantVoiceContextSession,
-    TenantVoiceRuntimeCall,
-    TenantVoiceExperienceSubmission,
-    TenantVoiceExperienceSubmissionValue,
-    VoicePublicRateLimitWindow,
+from app.modules.tools.infrastructure.models import (
+    TenantHttpToolConfig,
+    TenantTool,
+    TenantToolCredential,
 )
 from app.modules.voice.infrastructure.models import VoiceSession, VoiceSessionEvent
 

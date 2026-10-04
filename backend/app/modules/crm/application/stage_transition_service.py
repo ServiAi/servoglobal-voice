@@ -4,10 +4,10 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.modules.crm.infrastructure.models import CrmActivity, CrmLead, CrmPipelineStage
 from app.db.mixins import _utcnow
 from app.modules.crm.application.pipeline_service import CrmPipelineService
 from app.modules.crm.domain.pipeline import AUTOMATIC_TRANSITIONS, TERMINAL_STAGES
+from app.modules.crm.infrastructure.models import CrmActivity, CrmLead, CrmPipelineStage
 
 
 class CrmStageTransitionService:

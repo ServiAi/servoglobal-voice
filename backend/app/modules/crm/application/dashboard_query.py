@@ -11,8 +11,17 @@ from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.modules.crm.application.pipeline_service import CrmPipelineService
-from app.modules.crm.domain.views import CrmFunnelSnapshot, FunnelBreakdown, PendingActionCandidate
-from app.modules.crm.infrastructure.models import CrmActivity, CrmCallContext, CrmLead, CrmTask
+from app.modules.crm.domain.views import (
+    CrmFunnelSnapshot,
+    FunnelBreakdown,
+    PendingActionCandidate,
+)
+from app.modules.crm.infrastructure.models import (
+    CrmActivity,
+    CrmCallContext,
+    CrmLead,
+    CrmTask,
+)
 
 
 class CrmDashboardQuery:
@@ -42,7 +51,6 @@ class CrmDashboardQuery:
     ) -> CrmFunnelSnapshot:
         stages = CrmPipelineService(self.db).ensure_default_pipeline(tenant_id)
         stage_key_to_id = {s.key: s.id for s in stages}
-        stage_id_to_key = {s.id: s.key for s in stages}
         lead_filters = self._lead_filters(tenant_id, date_from, date_to, source, campaign)
 
         counts_res = self.db.execute(

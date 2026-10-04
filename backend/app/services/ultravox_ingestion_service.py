@@ -17,7 +17,6 @@ from app.services.call_persistence_service import (
     PersistEventInput,
 )
 
-
 ULTRAVOX_PROVIDER = "ultravox"
 OFFICIAL_ULTRAVOX_EVENTS = {
     "call.started",
@@ -57,6 +56,7 @@ class UltravoxIngestionService:
         # Ingest into CRM base
         try:
             import logging
+
             from app.modules.crm.public import CrmFacade
             from app.services.legacy_call_payload_adapter import call_ref_from_call
             CrmFacade(self.db).process_call_event(payload, call_ref_from_call(call))

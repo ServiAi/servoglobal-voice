@@ -1,10 +1,15 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from sqlalchemy import func, select, case
+
+from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
-from app.modules.crm.infrastructure.models import CrmContact, CrmLead, CrmActivity, CrmTask
+from app.modules.crm.infrastructure.models import (
+    CrmContact,
+    CrmLead,
+    CrmTask,
+)
 
 
 class CrmMetricsService:

@@ -3,15 +3,24 @@ from __future__ import annotations
 import logging
 from datetime import UTC, datetime
 from typing import Any
+
 from sqlalchemy.orm import Session
 
 from app.modules.crm.public import CrmFacade, CrmVoiceCalls, VoiceCallView
 from app.modules.telephony.public import SipRouteFacade
-from app.schemas.integrations import VoiceCallActionRequest, VoiceCallActionResponse, VoiceCallResponse
-from app.services.voice_client import VoiceClient, VoiceClientConfig, VoiceSipRouteConfig
-from app.services.voice_config_service import VoiceConfigService
-from app.services.voice_agent_service import VoiceAgentService
+from app.schemas.integrations import (
+    VoiceCallActionRequest,
+    VoiceCallActionResponse,
+    VoiceCallResponse,
+)
 from app.services.integration_event_service import IntegrationEventService
+from app.services.voice_agent_service import VoiceAgentService
+from app.services.voice_client import (
+    VoiceClient,
+    VoiceClientConfig,
+    VoiceSipRouteConfig,
+)
+from app.services.voice_config_service import VoiceConfigService
 
 logger = logging.getLogger(__name__)
 
