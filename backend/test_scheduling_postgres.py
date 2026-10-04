@@ -440,6 +440,7 @@ class SchedulingPostgresTests(unittest.TestCase):
             def __init__(self) -> None:
                 self.create_calls = self.delete_calls = self.patch_calls = 0
                 self.create_error: Exception | None = None
+                self.delete_error: Exception | None = None
                 self.lock = threading.Lock()
 
         fake = FakeGoogle()
@@ -456,6 +457,8 @@ class SchedulingPostgresTests(unittest.TestCase):
         def delete_event(_svc, connection, event_id, calendar_id=None):
             with fake.lock:
                 fake.delete_calls += 1
+            if fake.delete_error:
+                raise fake.delete_error
             time.sleep(0.2)
 
         def patch_event(_svc, connection, event_id, payload, calendar_id=None):
@@ -630,6 +633,58 @@ class SchedulingPostgresTests(unittest.TestCase):
         with self.SessionLocal() as db:
             self._service(db, customer).cancel_lead_booking(tenant_id=tenant_id, booking_id=booking_id)
         self.assertEqual(fake.delete_calls, 1)
+
+    def test_google_cancel_timeout_is_unknown_not_a_false_cancellation(self) -> None:
+        tenant_id, customer, resource_id = self._google_tenant()
+        fake, patches = self._fake_google()
+        events = RecordingEventPort()
+        activity = RecordingActivityPort()
+        with self._with_google(patches):
+            booking_id = self._create(tenant_id, customer, resource_id, key="a", events=events)
+            events.events.clear()
+            fake.delete_error = TimeoutError("read timed out")
+
+            def cancel():
+                with self.SessionLocal() as db:
+                    return self._service(db, customer, activity=activity, events=events).cancel_lead_booking(
+                        tenant_id=tenant_id, booking_id=booking_id
+                    )
+
+            with self.assertRaises(ValueError) as raised:
+                cancel()
+            self.assertIsInstance(raised.exception.__cause__, TimeoutError)  # cause chain preserved
+            fake.delete_error = None
+            with self.assertRaises(BookingOperationInProgressError):  # same natural key: not repeated
+                cancel()
+        self.assertEqual(fake.delete_calls, 1)
+        with self.SessionLocal() as db:
+            op = db.scalar(select(BookingOperation).where(BookingOperation.operation_type == "booking.cancel"))
+            self.assertEqual(op.status, "provider_unknown")
+            row = db.get(CrmBooking, booking_id)
+            self.assertNotEqual(row.status, "cancelled")
+            self.assertIsNone(row.cancelled_at)
+            final = db.scalar(
+                select(func.count()).select_from(CrmBookingEvent).where(CrmBookingEvent.event_type == "booking_cancelled")
+            )
+        self.assertEqual(final, 0)
+        self.assertEqual(events.events, [])  # no booking.cancelled announced
+        self.assertNotIn("booking_cancelled", activity.activities)
+
+    def test_google_cancel_definitive_error_stays_retryable(self) -> None:
+        tenant_id, customer, resource_id = self._google_tenant()
+        fake, patches = self._fake_google()
+        with self._with_google(patches):
+            booking_id = self._create(tenant_id, customer, resource_id, key="a")
+            fake.delete_error = ValueError("403 forbidden")
+            with self.SessionLocal() as db:
+                with self.assertRaises(ValueError):
+                    self._service(db, customer).cancel_lead_booking(tenant_id=tenant_id, booking_id=booking_id)
+            fake.delete_error = None
+            with self.SessionLocal() as db:
+                self._service(db, customer).cancel_lead_booking(tenant_id=tenant_id, booking_id=booking_id)
+        self.assertEqual(fake.delete_calls, 2)
+        with self.SessionLocal() as db:
+            self.assertEqual(db.get(CrmBooking, booking_id).status, "cancelled")
 
     # 8
     def test_double_reschedule_to_the_same_target_calls_the_provider_once(self) -> None:

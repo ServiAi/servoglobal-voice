@@ -212,7 +212,11 @@ class GoogleCalendarProvider:
             try:
                 self.google_service.delete_event(connection, event_id, calendar_id=target_cal_id)
             except Exception as exc:
-                logger.warning("Google Calendar delete_event error: %s", exc)
+                # Never swallowed: a timeout may mean Google did or did not delete the
+                # event. Propagating (with the cause chain) lets BookingService classify
+                # the outcome instead of declaring a cancellation nobody confirmed.
+                message = sanitize_google_calendar_error(str(exc))
+                raise ValueError(f"Google Calendar event deletion failed: {message}") from exc
 
         booking.status = "cancelled"
         booking.cancelled_at = datetime.now(UTC)
