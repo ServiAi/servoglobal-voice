@@ -109,6 +109,13 @@ class CrmLeadService:
         if not lead.campaign and metadata.get("campaign"):
             lead.campaign = metadata.get("campaign")
 
+    def set_last_call(self, tenant_id: str, lead_id: str, call_id: str) -> None:
+        """Point the lead at its most recent call (no commit: the caller's
+        transaction decides)."""
+        lead = self.get_lead_by_id(tenant_id, lead_id)
+        if lead is not None:
+            lead.last_call_id = call_id
+
     def get_lead_by_id(self, tenant_id: str, lead_id: str) -> CrmLead | None:
         return self.db.scalar(
             select(CrmLead)

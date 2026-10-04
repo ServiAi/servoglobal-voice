@@ -14,15 +14,13 @@ from __future__ import annotations
 
 import logging
 
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.modules.crm.infrastructure.models import CrmActivity, CrmContact, CrmLead
+from app.modules.crm.public import CrmFacade, LeadProfile
 from app.models.integrations import TenantVoiceAgentConfig
 from app.schemas.integrations import HANDOFF_TRIGGER_LEAD_SCORE
 from app.services.chatwoot_client import ChatwootClient
 from app.services.chatwoot_config_service import ChatwootConfigService
-from app.modules.crm.application.activity_service import CrmActivityService
 from app.services.integration_event_service import IntegrationEventService
 
 logger = logging.getLogger(__name__)
@@ -36,11 +34,11 @@ _TRIGGER_LABELS = {
 class VoiceHandoffService:
     def __init__(self, db: Session) -> None:
         self.db = db
-        self.activities = CrmActivityService(db)
+        self.crm = CrmFacade(db)
         self.events = IntegrationEventService(db)
 
     async def maybe_handoff_for_lead_score(
-        self, tenant_id: str, *, agent: TenantVoiceAgentConfig, lead: CrmLead
+        self, tenant_id: str, *, agent: TenantVoiceAgentConfig, lead: LeadProfile
     ) -> dict:
         """Se llama desde cualquier voice tool que ya resolvio el lead; no hay
         analisis en vivo de la llamada fuera de esos puntos de invocacion."""
@@ -49,7 +47,7 @@ class VoiceHandoffService:
         return await self.trigger_handoff(tenant_id, agent=agent, lead=lead, trigger=HANDOFF_TRIGGER_LEAD_SCORE)
 
     async def trigger_handoff(
-        self, tenant_id: str, *, agent: TenantVoiceAgentConfig, lead: CrmLead, trigger: str
+        self, tenant_id: str, *, agent: TenantVoiceAgentConfig, lead: LeadProfile, trigger: str
     ) -> dict:
         if trigger not in (agent.handoff_triggers or []):
             return {"status": "skipped", "reason": "trigger_not_enabled"}
@@ -57,17 +55,10 @@ class VoiceHandoffService:
             return {"status": "skipped", "reason": "handoff_not_configured"}
 
         dedup_key = f"handoff:{trigger}:{lead.id}"
-        already_handed_off = self.db.scalar(
-            select(CrmActivity.id).where(
-                CrmActivity.tenant_id == tenant_id,
-                CrmActivity.lead_id == lead.id,
-                CrmActivity.deduplication_key == dedup_key,
-            )
-        )
-        if already_handed_off is not None:
+        if self.crm.has_activity(tenant_id, lead.id, dedup_key):
             return {"status": "skipped", "reason": "already_handed_off"}
 
-        contact = self.db.get(CrmContact, lead.contact_id)
+        contact = self.crm.get_contact_profile(tenant_id, lead.contact_id)
         if contact is None or not contact.phone:
             return {"status": "skipped", "reason": "contact_without_phone"}
 
@@ -110,7 +101,7 @@ class VoiceHandoffService:
             )
             return {"status": "failed", "reason": "chatwoot_error"}
 
-        self.activities.create_activity(
+        self.crm.record_activity(
             tenant_id=tenant_id,
             lead_id=lead.id,
             contact_id=contact.id,

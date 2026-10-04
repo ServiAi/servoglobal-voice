@@ -20,9 +20,7 @@ from app.schemas.public_voice_submissions import (
     PublicVoiceExperienceSubmissionRequest,
     PublicVoiceExperienceSubmissionResponse,
 )
-from app.modules.crm.application.contact_service import CrmContactService
-from app.modules.crm.application.activity_service import CrmActivityService
-from app.modules.crm.application.lead_resolver_service import CrmLeadResolverService
+from app.modules.crm.public import CrmFacade
 from app.services.integration_event_service import IntegrationEventService
 from app.services.public_voice_experience_service import (
     PublicVoiceExperienceService,
@@ -226,26 +224,27 @@ class PublicVoiceSubmissionService:
         with self.session_factory() as db:
             try:
                 if email or phone:
-                    contact = CrmContactService(db).get_or_create_contact(
+                    crm = CrmFacade(db)
+                    contact = crm.get_or_create_contact(
                         tenant_id=persisted.tenant_id,
                         phone=phone,
                         email=email,
                         name=name,
                         metadata={"company": company, "source": "voice_experience"},
                     )
-                    lead = CrmLeadResolverService(db).resolve_or_create_lead_for_new_context(
+                    lead = crm.resolve_lead_for_new_context(
                         persisted.tenant_id,
-                        contact,
+                        contact.id,
                         {"context_id": persisted.submission_id, "source": "voice_experience"},
                     )
-                    CrmActivityService(db).create_activity(
+                    crm.record_activity(
                         tenant_id=persisted.tenant_id,
                         lead_id=lead.id,
                         contact_id=contact.id,
                         activity_type="voice_experience_submitted",
                         title="Voice experience submitted",
                         deduplication_key=f"voice_experience_submission:{persisted.submission_id}",
-                        payload_json={
+                        payload={
                             "context_id": persisted.submission_id,
                             **event_metadata,
                         },

@@ -46,6 +46,77 @@ class CrmActivityService:
         self.db.refresh(activity)
         return activity
 
+    def stage_activity(
+        self,
+        tenant_id: str,
+        lead_id: str | None,
+        contact_id: str,
+        activity_type: str,
+        title: str,
+        description: str | None = None,
+        deduplication_key: str = "",
+        payload_json: dict | None = None,
+        occurred_at: datetime | None = None,
+    ) -> CrmActivity:
+        """Like ``create_activity`` but only ``add``s the row: the caller's
+        transaction decides when it is flushed and committed."""
+        activity = CrmActivity(
+            tenant_id=tenant_id,
+            lead_id=lead_id,
+            contact_id=contact_id,
+            activity_type=activity_type,
+            title=title,
+            description=description,
+            occurred_at=occurred_at or datetime.now(UTC),
+            deduplication_key=deduplication_key,
+            payload_json=payload_json or {},
+        )
+        self.db.add(activity)
+        return activity
+
+    def upsert_call_activity(
+        self,
+        *,
+        tenant_id: str,
+        call_id: str,
+        activity_type: str,
+        deduplication_key: str,
+        contact_id: str,
+        lead_id: str | None,
+        title: str,
+        occurred_at: datetime | None,
+        outcome: str | None,
+        payload_json: dict,
+    ) -> CrmActivity:
+        """One timeline entry per ``(tenant, call, type, dedup key)``: created on
+        the first projection, refreshed on later ones. Row-locked; runs in the
+        caller's transaction (no commit)."""
+        activity = self.db.scalar(
+            select(CrmActivity)
+            .where(
+                CrmActivity.tenant_id == tenant_id,
+                CrmActivity.call_id == call_id,
+                CrmActivity.activity_type == activity_type,
+                CrmActivity.deduplication_key == deduplication_key,
+            )
+            .with_for_update()
+        )
+        if activity is None:
+            activity = CrmActivity(
+                tenant_id=tenant_id,
+                contact_id=contact_id,
+                activity_type=activity_type,
+                call_id=call_id,
+                deduplication_key=deduplication_key,
+                title=title,
+            )
+            self.db.add(activity)
+        activity.lead_id = lead_id
+        activity.occurred_at = occurred_at
+        activity.outcome = outcome
+        activity.payload_json = payload_json
+        return activity
+
     def get_activities(
         self,
         tenant_id: str,

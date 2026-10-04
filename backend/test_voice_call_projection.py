@@ -12,7 +12,7 @@ from app.modules.agents.infrastructure.models import TenantAgent
 from app.models.analytics import Agent, Call
 from app.modules.crm.infrastructure.models import CrmActivity, CrmLead, CrmVoiceCall
 from app.modules.voice.infrastructure.models import VoiceSession, VoiceSessionEvent
-from app.schemas.crm import ActivitySchema
+from app.modules.crm.api.schemas import ActivitySchema
 from app.services.voice_call_projection_service import VoiceCallProjectionService
 from scripts.backfill_voice_session_calls import run as backfill
 

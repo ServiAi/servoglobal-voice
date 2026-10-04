@@ -10,10 +10,10 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from app.modules.crm.domain.calls import BookingDetection, CallClassification, CallRef, ContextLookup
-from app.services.ultravox_booking_detector import CrmBookingDetectorService
-from app.services.ultravox_call_classifier import CrmClassifierService
-from app.services.ultravox_call_context_extractor import CrmContextExtractorService
+from app.modules.crm.public import BookingDetection, CallClassification, CallRef, ContextLookup
+from app.services.legacy_call_booking_detector import CrmBookingDetectorService
+from app.services.legacy_call_classifier import CrmClassifierService
+from app.services.legacy_call_context_extractor import CrmContextExtractorService
 
 
 def _call_obj(payload: Mapping[str, Any]) -> Mapping[str, Any]:

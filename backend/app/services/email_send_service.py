@@ -5,11 +5,10 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session
 
-from app.modules.crm.infrastructure.models import CrmLead
+from app.modules.crm.public import CrmFacade, LeadProfile
 from app.models.integrations import TenantEmailSend, TenantEmailSendAsset, TenantFormToken
-from app.modules.crm.application.activity_service import CrmActivityService
 from app.services.call_summary_service import CallSummaryService
 from app.services.email_asset_service import EmailAssetService
 from app.services.email_config_service import EmailConfigService, validate_email
@@ -43,7 +42,7 @@ class EmailSendService:
         self.render_service = EmailRenderService()
         self.asset_service = EmailAssetService(db)
         self.event_service = IntegrationEventService(db)
-        self.activity_service = CrmActivityService(db)
+        self.crm = CrmFacade(db)
 
     def preview_lead_email(
         self,
@@ -90,7 +89,7 @@ class EmailSendService:
     ) -> EmailActionResult:
         lead = self._get_lead(tenant_id, lead_id)
         self._require_contact_email(lead)
-        self.activity_service.create_activity(
+        self.crm.record_activity(
             tenant_id=tenant_id,
             lead_id=lead.id,
             contact_id=lead.contact_id,
@@ -225,24 +224,20 @@ class EmailSendService:
         )
         return EmailActionResult(status="sent", provider_email_id=provider_email_id)
 
-    def _get_lead(self, tenant_id: str, lead_id: str) -> CrmLead:
-        lead = self.db.scalar(
-            select(CrmLead)
-            .options(joinedload(CrmLead.contact))
-            .where(CrmLead.tenant_id == tenant_id, CrmLead.id == lead_id)
-        )
+    def _get_lead(self, tenant_id: str, lead_id: str) -> LeadProfile:
+        lead = self.crm.get_lead_profile(tenant_id, lead_id)
         if lead is None:
             raise ValueError("Lead not found")
         return lead
 
-    def _require_contact_email(self, lead: CrmLead) -> None:
+    def _require_contact_email(self, lead: LeadProfile) -> None:
         if not lead.contact or not (lead.contact.email or "").strip():
             raise ValueError("Lead does not have an email address.")
 
     def _render(
         self,
         tenant_id: str,
-        lead: CrmLead,
+        lead: LeadProfile,
         template_key: str,
         subject: str | None,
         message: str | None,
@@ -289,21 +284,21 @@ class EmailSendService:
 
     def _record_activity(
         self,
-        lead: CrmLead,
+        lead: LeadProfile,
         activity_type: str,
         title: str,
         email_send_id: str,
         description: str | None = None,
         form_token_id: str | None = None,
     ) -> None:
-        self.activity_service.create_activity(
+        self.crm.record_activity(
             tenant_id=lead.tenant_id,
             lead_id=lead.id,
             contact_id=lead.contact_id,
             activity_type=activity_type,
             title=title,
             description=description,
-            payload_json={"email_send_id": email_send_id, "provider": "resend", "form_token_id": form_token_id},
+            payload={"email_send_id": email_send_id, "provider": "resend", "form_token_id": form_token_id},
         )
 
     def _format_sender(self, sender_name: str | None, sender_email: str) -> str:

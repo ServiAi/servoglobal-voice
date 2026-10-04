@@ -2,7 +2,7 @@
 the Voice Legacy ingestion adapter does (row -> ``CallRef`` -> CRM)."""
 
 from app.modules.crm.application.call_ingestion_service import CrmIngestionService as _CrmIngestionService
-from app.services.ultravox_crm_payload_adapter import call_ref_from_call
+from app.services.legacy_call_payload_adapter import call_ref_from_call
 
 
 class CrmIngestionService:

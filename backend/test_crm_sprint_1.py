@@ -27,7 +27,7 @@ from app.modules.crm.application.pipeline_service import CrmPipelineService
 from app.modules.crm.application.contact_service import CrmContactService
 from app.modules.crm.domain.contacts import normalize_phone
 from app.modules.crm.application.lead_service import CrmLeadService
-from app.services.ultravox_call_classifier import CrmClassifierService
+from app.services.legacy_call_classifier import CrmClassifierService
 from crm_test_support import CrmIngestionService
 from app.services.ultravox_ingestion_service import UltravoxIngestionService
 

@@ -12,8 +12,8 @@ from app.domain.notification_variables import (
     NotificationVariableConfigurationError,
     NotificationVariableMappingError,
 )
-from app.modules.crm.infrastructure.models import CrmLead
 from app.models.crm import CrmWhatsAppMessage
+from app.modules.crm.public import CrmFacade
 from app.models.notifications import DomainEvent, NotificationDelivery, TenantNotificationRule
 from app.services.notification_delivery_claim_service import NotificationDeliveryClaimService
 from app.services.notification_variable_mapper import NotificationVariableMapper
@@ -512,7 +512,7 @@ class WhatsAppNotificationExecutor:
         lead_id = lead_ref.get("id") if isinstance(lead_ref, dict) else None
         if not lead_id:
             return None, None
-        lead = self.db.scalar(select(CrmLead).where(CrmLead.tenant_id == tenant_id, CrmLead.id == lead_id))
+        lead = CrmFacade(self.db).get_lead_profile(tenant_id, lead_id)
         if lead is None:
             return None, None
         return lead.id, lead.contact_id

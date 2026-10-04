@@ -626,7 +626,7 @@ class PublicVoiceExperienceSubmissionTests(Integration2ATestCase):
 
     def test_crm_failure_isolated_after_primary_commit(self) -> None:
         with patch(
-            "app.services.public_voice_submission_service.CrmContactService.get_or_create_contact",
+            "app.modules.crm.public.CrmFacade.get_or_create_contact",
             side_effect=RuntimeError("database unavailable"),
         ):
             response = self._post()

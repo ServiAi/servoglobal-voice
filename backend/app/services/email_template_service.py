@@ -7,7 +7,7 @@ from string import Template
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.modules.crm.infrastructure.models import CrmLead
+from app.modules.crm.public import LeadProfile
 from app.models.integrations import TenantEmailTemplate
 
 ALLOWED_VARIABLES = [
@@ -115,7 +115,7 @@ class EmailTemplateService:
         *,
         tenant_id: str,
         template_key: str,
-        lead: CrmLead,
+        lead: LeadProfile,
         variables: dict | None = None,
         subject_override: str | None = None,
         message_override: str | None = None,
@@ -134,7 +134,7 @@ class EmailTemplateService:
             text=Template(template.text_body).safe_substitute(context),
         )
 
-    def _lead_context(self, lead: CrmLead) -> dict[str, str]:
+    def _lead_context(self, lead: LeadProfile) -> dict[str, str]:
         contact = lead.contact
         return {
             "contact_name": (contact.name if contact else "") or "",

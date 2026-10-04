@@ -16,7 +16,7 @@ from app.models.analytics import Agent, Call
 from app.modules.crm.infrastructure.models import CrmCallContext, CrmContact, CrmLead, CrmPipelineStage
 from app.models.identity import Tenant
 from app.modules.crm.application.call_context_service import CrmCallContextService
-from app.services.ultravox_call_classifier import CrmClassifierService
+from app.services.legacy_call_classifier import CrmClassifierService
 from crm_test_support import CrmIngestionService
 from app.modules.crm.application.lead_resolver_service import CrmLeadResolverService
 from app.modules.crm.application.lead_service import CrmLeadService

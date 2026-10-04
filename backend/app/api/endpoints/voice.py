@@ -9,9 +9,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.db.session import get_db
 from app.models.identity import Tenant
-from app.modules.crm.application.call_context_service import CrmCallContextService
-from app.modules.crm.application.contact_service import CrmContactService
-from app.modules.crm.application.lead_resolver_service import CrmLeadResolverService
+from app.modules.crm.public import CrmFacade
 from app.services.voice_service import create_call_session, create_sip_call_via_pbx
 from app.services.notification_service import run_demo_start_notification_task
 from app.services.tenant_usage_service import TenantUsageService
@@ -170,11 +168,8 @@ def _create_form_context_and_lead(db: Session, tenant: Tenant, context: dict):
     context.setdefault("source", "landing")
     context.setdefault("campaign", "demo-crm")
 
-    call_context = CrmCallContextService(db).create_context(
-        tenant.id,
-        external_provider="ultravox",
-        context=context,
-    )
+    crm = CrmFacade(db)
+    call_context = crm.create_call_context(tenant.id, external_provider="ultravox", context=context)
     context["form_submission_id"] = call_context.form_submission_id
     context["context_id"] = call_context.context_id or call_context.id
     context["crm_context_id"] = call_context.context_id or call_context.id
@@ -182,7 +177,7 @@ def _create_form_context_and_lead(db: Session, tenant: Tenant, context: dict):
     if not _has_commercial_context(context):
         return call_context
 
-    contact = CrmContactService(db).get_or_create_contact(
+    contact = crm.get_or_create_contact(
         tenant_id=tenant.id,
         phone=_context_value(context, "phone", "user_phone", "customer_phone", "lead_phone"),
         email=_context_value(context, "email", "user_email", "customer_email", "lead_email"),
@@ -194,11 +189,7 @@ def _create_form_context_and_lead(db: Session, tenant: Tenant, context: dict):
             "context_id": call_context.context_id,
         },
     )
-    CrmLeadResolverService(db).resolve_or_create_lead_for_new_context(
-        tenant.id,
-        contact,
-        _lead_metadata_from_context(context),
-    )
+    crm.resolve_lead_for_new_context(tenant.id, contact.id, _lead_metadata_from_context(context))
     return call_context
 
 @router.post("/calls")
@@ -346,7 +337,7 @@ async def create_outbound_call(
 
         external_call_id = _external_call_id_from_result(result)
         if external_call_id:
-            CrmCallContextService(db).attach_external_call_id(
+            CrmFacade(db).attach_external_call_id(
                 tenant.id,
                 call_context.id,
                 external_call_id,

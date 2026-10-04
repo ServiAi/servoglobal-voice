@@ -157,7 +157,14 @@ FRAMEWORK_PREFIXES = ("sqlalchemy", "fastapi", "starlette", "livekit", "httpx")
 # Provider implementations (Voice Legacy / Ultravox). Agent Builder must
 # reach them only through VoiceProviderPort -> voice.public, and they must
 # never reach back into Agent Builder.
-PROVIDER_IMPLEMENTATIONS = ("app.services.ultravox_", "app.services.voice_provider_admin")
+# ``ultravox_ingestion_service`` is deliberately NOT here: it persists provider events into
+# Analytics and hands CRM its normalised call (``crm.public``), i.e. a Voice Legacy ingestion
+# adapter, not a provider API client.
+PROVIDER_IMPLEMENTATIONS = (
+    "app.services.ultravox_admin_service",
+    "app.services.ultravox_provider_client",
+    "app.services.voice_provider_admin",
+)
 
 
 def _module_name(path: Path) -> str:

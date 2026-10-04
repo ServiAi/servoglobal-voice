@@ -11,7 +11,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
 
-from app.modules.crm.infrastructure.models import CrmVoiceCall
+from app.modules.crm.public import CrmVoiceCalls
 from app.models.identity import Tenant
 from app.models.integrations import TenantVoiceAgentConfig
 from app.models.voice_experiences import TenantVoiceExperience, TenantVoiceExperienceVersion
@@ -150,8 +150,7 @@ class PublicVoiceCallService:
                     if agent is None or agent.tenant_id != context_session.tenant_id:
                         raise PublicCallFailure(503, "call_unavailable")
                     crm_id, runtime_id = str(uuid4()), str(uuid4())
-                    db.add(CrmVoiceCall(id=crm_id, tenant_id=context_session.tenant_id, lead_id=submission.crm_lead_id, contact_id=submission.crm_contact_id, provider="ultravox", provider_agent_id=agent.provider_agent_id, direction="webrtc", status="requested"))
-                    db.flush()
+                    CrmVoiceCalls(db).create(flush=True, id=crm_id, tenant_id=context_session.tenant_id, lead_id=submission.crm_lead_id, contact_id=submission.crm_contact_id, provider="ultravox", provider_agent_id=agent.provider_agent_id, direction="webrtc", status="requested")
                     insert = sqlite_insert if db.get_bind().dialect.name == "sqlite" else pg_insert
                     result = db.execute(insert(TenantVoiceRuntimeCall).values(id=runtime_id, tenant_id=context_session.tenant_id, context_session_id=context_session.id, submission_id=submission.id, experience_id=experience.id, experience_version_id=version.id, agent_config_id=version.agent_config_id, crm_voice_call_id=crm_id, provider="ultravox", status="reserved", created_at=now).on_conflict_do_nothing(index_elements=["context_session_id"]).returning(TenantVoiceRuntimeCall.id)).scalar_one_or_none()
                     if result is None:
@@ -235,17 +234,15 @@ class PublicVoiceCallService:
             runtime.status = state
             runtime.provider_call_id = provider_call_id or runtime.provider_call_id
             runtime.failure_code = failure_code
-            crm = db.get(CrmVoiceCall, runtime.crm_voice_call_id)
+            calls = CrmVoiceCalls(db)
+            crm = calls.get(runtime.crm_voice_call_id)
             if crm and state == "ready":
-                crm.provider_call_id = runtime.provider_call_id
-                crm.status = "queued"
+                calls.update(crm.id, provider_call_id=runtime.provider_call_id, status="queued")
             elif crm and state == "connected":
-                crm.provider_call_id = runtime.provider_call_id
-                crm.status = "in_progress"
+                calls.update(crm.id, provider_call_id=runtime.provider_call_id, status="in_progress")
                 runtime.connected_at = runtime.connected_at or datetime.now(UTC)
             elif crm and state == "ended":
-                crm.provider_call_id = runtime.provider_call_id
-                crm.status = "completed"
+                calls.update(crm.id, provider_call_id=runtime.provider_call_id, status="completed")
                 runtime.ended_at = runtime.ended_at or datetime.now(UTC)
             db.commit()
 

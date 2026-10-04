@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.db.session import get_db
-from app.modules.crm.infrastructure.models import CrmLead
+from app.modules.crm.public import CrmFacade
 from app.models.integrations import TenantVoiceAgentConfig
 from app.modules.scheduling.public import CreateBookingCommand, SchedulingFacade
 from app.schemas.crm import (
@@ -51,7 +51,7 @@ async def _check_lead_score_handoff(db: Session, tenant_id: str, agent_id: str |
         )
         if agent is None or not agent.handoff_enabled:
             return
-        lead = db.get(CrmLead, lead_id)
+        lead = CrmFacade(db).get_lead_profile(tenant_id, lead_id)
         if lead is None:
             return
         await VoiceHandoffService(db).maybe_handoff_for_lead_score(tenant_id, agent=agent, lead=lead)
@@ -156,7 +156,7 @@ async def voice_request_human_handoff(
         )
         if agent is None:
             raise ValueError("Voice agent config not found for handoff tool.")
-        lead = db.get(CrmLead, context.lead_id)
+        lead = CrmFacade(db).get_lead_profile(context.tenant_id, context.lead_id)
         if lead is None:
             raise ValueError("Lead not found for handoff tool.")
     except ValueError as exc:

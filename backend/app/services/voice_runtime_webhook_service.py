@@ -6,21 +6,18 @@ from typing import Any
 
 from fastapi import HTTPException, status
 from sqlalchemy import select, update
-from sqlalchemy.dialects.postgresql import insert as pg_insert
-from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
 
 from app.models.analytics import Call, CallEvent
-from app.modules.crm.infrastructure.models import CrmVoiceCall, CrmVoiceCallEvent
+from app.modules.crm.public import CrmFacade, CrmVoiceCalls, VoiceCallView
 from app.models.voice_submissions import TenantVoiceRuntimeCall
-from app.modules.crm.application.activity_service import CrmActivityService
 from app.services.voice_config_service import VoiceConfigService
 
 OFFICIAL_EVENTS = {"call.started", "call.joined", "call.ended", "call.billed"}
 
 
 class RuntimeWebhookTarget:
-    def __init__(self, call: CrmVoiceCall, runtime: TenantVoiceRuntimeCall) -> None:
+    def __init__(self, call: VoiceCallView, runtime: TenantVoiceRuntimeCall) -> None:
         self.call = call
         self.runtime = runtime
 
@@ -34,11 +31,12 @@ class VoiceRuntimeWebhookService:
         call_obj = payload.get("call") or payload
         metadata = payload.get("metadata") or call_obj.get("metadata") or {}
         voice_call_id = metadata.get("voice_call_id")
-        call = self.db.get(CrmVoiceCall, str(voice_call_id)) if voice_call_id else None
+        calls = CrmVoiceCalls(self.db)
+        call = calls.get(str(voice_call_id)) if voice_call_id else None
         if call is None:
             provider_call_id = call_obj.get("callId") or call_obj.get("id")
             if provider_call_id:
-                call = self.db.scalar(select(CrmVoiceCall).where(CrmVoiceCall.provider_call_id == str(provider_call_id)))
+                call = calls.find_by_provider_call_id(str(provider_call_id))
         if call is None:
             return None
         runtime = self.db.scalar(select(TenantVoiceRuntimeCall).where(TenantVoiceRuntimeCall.crm_voice_call_id == call.id))
@@ -74,27 +72,22 @@ class VoiceRuntimeWebhookService:
         lead_id = target.call.lead_id
         self.db.rollback()
         with self.db.begin():
-            call = self.db.get(CrmVoiceCall, call_id)
+            calls = CrmVoiceCalls(self.db)
+            call = calls.get(call_id)
             runtime = self.db.get(TenantVoiceRuntimeCall, runtime_id)
             if call is None or runtime is None or call.tenant_id != runtime.tenant_id:
                 raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Webhook validation failed")
-            insert = sqlite_insert if self.db.get_bind().dialect.name == "sqlite" else pg_insert
-            claimed = self.db.execute(
-                insert(CrmVoiceCallEvent)
-                .values(
-                    tenant_id=runtime.tenant_id,
-                    voice_call_id=call.id,
-                    provider=provider,
-                    event_type=event_type,
-                    status="success",
-                    dedup_key=dedup_key,
-                    payload_summary_json={"event_type": event_type},
-                    created_at=now,
-                )
-                .on_conflict_do_nothing(index_elements=["dedup_key"])
-                .returning(CrmVoiceCallEvent.id)
-            ).scalar_one_or_none()
-            if claimed is None:
+            claimed = calls.claim_event(
+                tenant_id=runtime.tenant_id,
+                voice_call_id=call.id,
+                provider=provider,
+                event_type=event_type,
+                status="success",
+                dedup_key=dedup_key,
+                payload_summary={"event_type": event_type},
+                created_at=now,
+            )
+            if not claimed:
                 return {"status": "processed", "processed": False, "voice_call_id": call.id, "call_status": call.status}
 
             analytics = self.db.scalar(select(Call).where(Call.tenant_id == runtime.tenant_id, Call.external_provider == provider, Call.external_call_id == provider_call_id))
@@ -120,24 +113,25 @@ class VoiceRuntimeWebhookService:
                     analytics.normalized_status = "answered" if runtime.connected_at else "unanswered"
             self.db.add(CallEvent(tenant_id=runtime.tenant_id, call_id=analytics.id, event_type=event_type, provider_event_id=None, dedup_key=dedup_key, payload_json={"event_type": event_type}, received_at=now))
 
-            call.provider_call_id = provider_call_id
+            changes: dict[str, Any] = {"provider_call_id": provider_call_id}
             crm_terminal = call.status in {"completed", "failed", "cancelled", "no_answer", "busy"}
             if event_type == "call.started":
                 if not crm_terminal:
-                    call.status = "queued"
+                    changes["status"] = "queued"
                 origins, target_status = {"starting", "unknown"}, "ready"
             elif event_type == "call.joined":
                 if not crm_terminal:
-                    call.status = "in_progress"
-                    call.answered_at = call.answered_at or now
+                    changes["status"] = "in_progress"
+                    changes["answered_at"] = call.answered_at or now
                 origins, target_status = {"starting", "unknown", "ready"}, "connected"
             elif event_type == "call.ended":
                 if not crm_terminal:
-                    call.status = "completed"
-                call.ended_at = call.ended_at or now
+                    changes["status"] = "completed"
+                changes["ended_at"] = call.ended_at or now
                 origins, target_status = {"starting", "unknown", "ready", "connected"}, "ended"
             else:
                 origins, target_status = set(), runtime.status
+            call = calls.update(call.id, **changes)
             if origins:
                 values: dict[str, Any] = {"status": target_status, "provider_call_id": provider_call_id}
                 if target_status == "connected":
@@ -148,7 +142,7 @@ class VoiceRuntimeWebhookService:
 
         if contact_id:
             try:
-                CrmActivityService(self.db).create_activity(
+                CrmFacade(self.db).record_activity(
                     tenant_id=tenant_id,
                     lead_id=lead_id,
                     contact_id=contact_id,
@@ -156,7 +150,7 @@ class VoiceRuntimeWebhookService:
                     title="Voice experience call updated",
                     call_id=call_id,
                     deduplication_key=f"voice_runtime:{dedup_key}",
-                    payload_json={"voice_call_id": call_id, "event_type": event_type},
+                    payload={"voice_call_id": call_id, "event_type": event_type},
                 )
             except Exception:
                 self.db.rollback()

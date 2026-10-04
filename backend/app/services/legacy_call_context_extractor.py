@@ -4,7 +4,7 @@ from typing import Any
 
 from collections.abc import Mapping
 
-from app.modules.crm.domain.calls import CallRef
+from app.modules.crm.public import CallRef
 
 
 NORMALIZED_CONTEXT_FIELDS = (

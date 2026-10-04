@@ -6,14 +6,13 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import or_, select
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from app.models.analytics import Call
-from app.modules.crm.infrastructure.models import CrmActivity, CrmCallContext, CrmLead
+from app.modules.crm.public import CrmFacade, LeadProfile
 from app.models.identity import Tenant
 from app.models.integrations import TenantEmailAsset
-from app.modules.crm.application.activity_service import CrmActivityService
 from app.services.storage_service import StorageService
 
 
@@ -36,12 +35,8 @@ class CallSummaryService:
         self.db = db
         self.storage = storage or StorageService()
 
-    def get_lead(self, tenant_id: str, lead_id: str) -> CrmLead:
-        lead = self.db.scalar(
-            select(CrmLead)
-            .options(joinedload(CrmLead.contact))
-            .where(CrmLead.tenant_id == tenant_id, CrmLead.id == lead_id)
-        )
+    def get_lead(self, tenant_id: str, lead_id: str) -> LeadProfile:
+        lead = CrmFacade(self.db).get_lead_profile(tenant_id, lead_id)
         if lead is None:
             raise ValueError("Lead not found")
         return lead
@@ -111,35 +106,30 @@ class CallSummaryService:
         asset.storage_key = storage_key
         self.db.commit()
         self.db.refresh(asset)
-        CrmActivityService(self.db).create_activity(
+        CrmFacade(self.db).record_activity(
             tenant_id=tenant_id,
             lead_id=lead.id,
             contact_id=lead.contact_id,
             activity_type="call_summary_attached_to_email",
             title="Resumen de llamada adjuntado",
-            payload_json={"email_asset_id": asset.id, "format": fmt},
+            payload={"email_asset_id": asset.id, "format": fmt},
         )
         return asset
 
     def record_inserted(self, tenant_id: str, lead_id: str, variant: str) -> None:
         lead = self.get_lead(tenant_id, lead_id)
-        CrmActivityService(self.db).create_activity(
+        CrmFacade(self.db).record_activity(
             tenant_id=tenant_id,
             lead_id=lead.id,
             contact_id=lead.contact_id,
             activity_type="call_summary_inserted_in_email",
             title="Resumen de llamada insertado",
-            payload_json={"variant": variant if variant in {"full", "short"} else "full"},
+            payload={"variant": variant if variant in {"full", "short"} else "full"},
         )
 
     def _from_latest_activity(self, tenant_id: str, lead_id: str) -> CallSummaryResult | None:
-        activities = self.db.scalars(
-            select(CrmActivity)
-            .where(CrmActivity.tenant_id == tenant_id, CrmActivity.lead_id == lead_id)
-            .order_by(CrmActivity.occurred_at.desc())
-        ).all()
-        for activity in activities:
-            payload = activity.payload_json or {}
+        for activity in CrmFacade(self.db).list_lead_activities(tenant_id, lead_id):
+            payload = activity.payload or {}
             call = payload.get("call") if isinstance(payload.get("call"), dict) else {}
             summary = self._string(call.get("summary") or payload.get("summary"))
             short_summary = self._string(
@@ -161,7 +151,7 @@ class CallSummaryService:
                 )
         return None
 
-    def _from_last_call(self, tenant_id: str, lead: CrmLead) -> CallSummaryResult | None:
+    def _from_last_call(self, tenant_id: str, lead: LeadProfile) -> CallSummaryResult | None:
         call_ids = [value for value in (lead.last_call_id, lead.created_from_call_id) if value]
         if not call_ids:
             return None
@@ -182,21 +172,13 @@ class CallSummaryService:
             source="call",
         )
 
-    def _from_call_context(self, tenant_id: str, lead: CrmLead) -> CallSummaryResult | None:
+    def _from_call_context(self, tenant_id: str, lead: LeadProfile) -> CallSummaryResult | None:
         if not lead.context_id:
             return None
-        context = self.db.scalar(
-            select(CrmCallContext)
-            .where(
-                CrmCallContext.tenant_id == tenant_id,
-                or_(CrmCallContext.id == lead.context_id, CrmCallContext.context_id == lead.context_id),
-            )
-            .order_by(CrmCallContext.created_at.desc())
-            .limit(1)
-        )
+        context = CrmFacade(self.db).find_call_context_for_lead(tenant_id, lead.context_id)
         if context is None:
             return None
-        raw = context.raw_context_json or {}
+        raw = context.raw_context or {}
         summary = self._string(raw.get("summary") or raw.get("call_summary"))
         short_summary = self._string(raw.get("short_summary") or raw.get("shortSummary") or raw.get("call_summary_short"))
         if not (summary or short_summary):
@@ -210,7 +192,7 @@ class CallSummaryService:
             source="crm_call_context",
         )
 
-    def _from_lead(self, lead: CrmLead) -> CallSummaryResult | None:
+    def _from_lead(self, lead: LeadProfile) -> CallSummaryResult | None:
         if not (lead.summary or lead.short_summary):
             return None
         return CallSummaryResult(
@@ -222,7 +204,7 @@ class CallSummaryService:
             source="crm_lead",
         )
 
-    def _render_asset_content(self, lead: CrmLead, result: CallSummaryResult, fmt: str) -> str:
+    def _render_asset_content(self, lead: LeadProfile, result: CallSummaryResult, fmt: str) -> str:
         contact = lead.contact
         values = {
             "Lead": contact.name if contact else "",

@@ -74,7 +74,7 @@ class SchedulingDetach:
 def default_crm_ports(db: Session) -> CrmPorts:
     from app.modules.analytics.public import CallLookup
     from app.modules.identity.public import MembershipDirectory
-    from app.services.ultravox_crm_payload_adapter import UltravoxCallPayloadAdapter
+    from app.services.legacy_call_payload_adapter import UltravoxCallPayloadAdapter
 
     return CrmPorts(
         assignees=MembershipDirectory(db),

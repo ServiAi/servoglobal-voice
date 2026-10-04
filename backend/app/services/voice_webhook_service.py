@@ -7,13 +7,11 @@ import logging
 from datetime import UTC, datetime
 from typing import Any
 from fastapi import HTTPException, Request, status
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.modules.crm.infrastructure.models import CrmVoiceCall, CrmVoiceCallEvent
+from app.modules.crm.public import CrmFacade, CrmVoiceCalls, VoiceCallView
 from app.models.integrations import TenantVoiceProviderConfig
 from app.services.voice_config_service import VoiceConfigService
-from app.modules.crm.application.activity_service import CrmActivityService
 from app.services.integration_event_service import IntegrationEventService
 
 _PLATFORM_TENANT_ID = "platform"
@@ -25,7 +23,8 @@ class VoiceWebhookService:
     def __init__(self, db: Session) -> None:
         self.db = db
         self.config_service = VoiceConfigService(db)
-        self.activity_service = CrmActivityService(db)
+        self.crm = CrmFacade(db)
+        self.calls = CrmVoiceCalls(db)
         self.integration_event_service = IntegrationEventService(db)
 
     def verify_webhook_signature(
@@ -98,19 +97,19 @@ class VoiceWebhookService:
         if call.status in terminal_statuses:
             mapped_status = call.status
 
-        call.status = mapped_status
+        changes: dict[str, Any] = {"status": mapped_status}
         if ended_at:
-            call.ended_at = ended_at
+            changes["ended_at"] = ended_at
         if duration is not None:
-            call.duration_seconds = duration
+            changes["duration_seconds"] = duration
         if recording_url:
-            call.recording_url = recording_url
+            changes["recording_url"] = recording_url
         if transcript_url:
-            call.transcript_url = transcript_url
+            changes["transcript_url"] = transcript_url
         if summary:
-            call.summary = summary
-        
-        call.updated_at = datetime.now(UTC)
+            changes["summary"] = summary
+        changes["updated_at"] = datetime.now(UTC)
+        call = self.calls.update(call.id, **changes)
         self.db.commit()
 
         self.record_call_event(
@@ -132,14 +131,14 @@ class VoiceWebhookService:
             title = self._activity_title_from_status(mapped_status)
             description = self._activity_desc_from_status(mapped_status, duration, summary)
             
-            self.activity_service.create_activity(
+            self.crm.record_activity(
                 tenant_id=tenant_id,
                 lead_id=call.lead_id,
                 contact_id=call.contact_id,
                 activity_type=activity_type,
                 title=title,
                 description=description,
-                payload_json={
+                payload={
                     "voice_call_id": call.id,
                     "provider": provider,
                     "provider_call_id": call.provider_call_id,
@@ -164,29 +163,25 @@ class VoiceWebhookService:
             "call_status": call.status,
         }
 
-    def resolve_call_by_metadata_or_provider_id(self, payload: dict[str, Any]) -> CrmVoiceCall | None:
+    def resolve_call_by_metadata_or_provider_id(self, payload: dict[str, Any]) -> VoiceCallView | None:
         call_obj = payload.get("call") or payload
         metadata = payload.get("metadata") or call_obj.get("metadata") or {}
 
         voice_call_id = metadata.get("voice_call_id")
         if voice_call_id:
-            call = self.db.get(CrmVoiceCall, voice_call_id)
+            call = self.calls.get(voice_call_id)
             if call:
                 return call
 
         provider_call_id = call_obj.get("callId") or call_obj.get("id")
         if provider_call_id:
-            call = self.db.scalar(
-                select(CrmVoiceCall).where(CrmVoiceCall.provider_call_id == provider_call_id)
-            )
+            call = self.calls.find_by_provider_call_id(provider_call_id)
             if call:
                 return call
 
         provider_session_id = call_obj.get("sessionId") or call_obj.get("session_id")
         if provider_session_id:
-            call = self.db.scalar(
-                select(CrmVoiceCall).where(CrmVoiceCall.provider_session_id == provider_session_id)
-            )
+            call = self.calls.find_by_provider_session_id(provider_session_id)
             if call:
                 return call
 
@@ -200,19 +195,16 @@ class VoiceWebhookService:
         event_type: str,
         status: str,
         payload_summary: dict[str, Any],
-    ) -> CrmVoiceCallEvent:
-        event = CrmVoiceCallEvent(
+    ) -> None:
+        self.calls.add_event(
             tenant_id=tenant_id,
             voice_call_id=voice_call_id,
             provider=provider,
             event_type=event_type,
             status=status,
-            payload_summary_json=payload_summary,
+            payload_summary=payload_summary,
         )
-        self.db.add(event)
         self.db.commit()
-        self.db.refresh(event)
-        return event
 
     def _parse_ultravox_event(self, payload: dict[str, Any]) -> tuple[str, datetime | None, int | None, str | None, str | None, str | None]:
         event_type = payload.get("event") or payload.get("event_type") or payload.get("type") or "call.updated"

@@ -57,12 +57,12 @@ class UltravoxIngestionService:
         # Ingest into CRM base
         try:
             import logging
-            from app.modules.crm.application.call_ingestion_service import CrmIngestionService
-            from app.services.ultravox_crm_payload_adapter import call_ref_from_call
-            CrmIngestionService(self.db).process_call_event(payload, call_ref_from_call(call))
+            from app.modules.crm.public import CrmFacade
+            from app.services.legacy_call_payload_adapter import call_ref_from_call
+            CrmFacade(self.db).process_call_event(payload, call_ref_from_call(call))
         except Exception:
             import logging
-            logging.getLogger(__name__).exception("Error calling CrmIngestionService from UltravoxIngestionService")
+            logging.getLogger(__name__).exception("Error applying CRM call ingestion from UltravoxIngestionService")
 
         return IngestionResult(call=call, event=event)
 

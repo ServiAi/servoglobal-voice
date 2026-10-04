@@ -3,16 +3,14 @@ from __future__ import annotations
 import logging
 from datetime import UTC, datetime
 from typing import Any
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.modules.crm.infrastructure.models import CrmLead, CrmVoiceCall, CrmVoiceCallEvent
+from app.modules.crm.public import CrmFacade, CrmVoiceCalls, VoiceCallView
 from app.modules.telephony.public import SipRouteFacade
 from app.schemas.integrations import VoiceCallActionRequest, VoiceCallActionResponse, VoiceCallResponse
 from app.services.voice_client import VoiceClient, VoiceClientConfig, VoiceSipRouteConfig
 from app.services.voice_config_service import VoiceConfigService
 from app.services.voice_agent_service import VoiceAgentService
-from app.modules.crm.application.activity_service import CrmActivityService
 from app.services.integration_event_service import IntegrationEventService
 
 logger = logging.getLogger(__name__)
@@ -24,7 +22,8 @@ class VoiceCallService:
         self.config_service = VoiceConfigService(db)
         self.route_service = SipRouteFacade(db, self.config_service.secret_manager)
         self.agent_service = VoiceAgentService(db)
-        self.activity_service = CrmActivityService(db)
+        self.crm = CrmFacade(db)
+        self.calls = CrmVoiceCalls(db)
         self.integration_event_service = IntegrationEventService(db)
 
     def start_lead_call(
@@ -33,8 +32,8 @@ class VoiceCallService:
         lead_id: str,
         body: VoiceCallActionRequest,
     ) -> VoiceCallActionResponse:
-        lead = self.db.get(CrmLead, lead_id)
-        if not lead or lead.tenant_id != tenant_id:
+        lead = self.crm.get_lead_profile(tenant_id, lead_id)
+        if not lead:
             raise ValueError("Lead does not exist or does not belong to this tenant.")
 
         contact = lead.contact
@@ -58,7 +57,7 @@ class VoiceCallService:
             if not agent_config:
                 raise ValueError("No active voice agent config found for this tenant.")
 
-        voice_call = CrmVoiceCall(
+        voice_call = self.calls.create(
             tenant_id=tenant_id,
             lead_id=lead_id,
             contact_id=contact.id,
@@ -69,9 +68,7 @@ class VoiceCallService:
             to_phone=to_phone,
             from_number=sip_route.caller_id,
         )
-        self.db.add(voice_call)
         self.db.commit()
-        self.db.refresh(voice_call)
 
         metadata = {
             "tenant_id": tenant_id,
@@ -111,10 +108,13 @@ class VoiceCallService:
             )
 
             norm = client.normalize_provider_response(provider_config.provider, response)
-            voice_call.provider_call_id = norm.get("provider_call_id")
-            voice_call.provider_session_id = norm.get("provider_session_id")
-            voice_call.status = "queued"
-            voice_call.started_at = datetime.now(UTC)
+            voice_call = self.calls.update(
+                voice_call.id,
+                provider_call_id=norm.get("provider_call_id"),
+                provider_session_id=norm.get("provider_session_id"),
+                status="queued",
+                started_at=datetime.now(UTC),
+            )
             self.db.commit()
 
             self.record_call_event(
@@ -152,8 +152,9 @@ class VoiceCallService:
             )
 
         except Exception as e:
-            voice_call.status = "failed"
-            voice_call.error_message = client.sanitize_voice_error(e)
+            voice_call = self.calls.update(
+                voice_call.id, status="failed", error_message=client.sanitize_voice_error(e)
+            )
             self.db.commit()
 
             self.record_call_event(
@@ -186,21 +187,8 @@ class VoiceCallService:
 
             raise ValueError(f"Failed to initiate voice call: {voice_call.error_message}")
 
-    def list_lead_calls(self, tenant_id: str, lead_id: str) -> list[CrmVoiceCall]:
-        lead = self.db.get(CrmLead, lead_id)
-        if not lead or lead.tenant_id != tenant_id:
-            return []
-
-        return list(
-            self.db.scalars(
-                select(CrmVoiceCall)
-                .where(
-                    CrmVoiceCall.tenant_id == tenant_id,
-                    CrmVoiceCall.lead_id == lead_id,
-                )
-                .order_by(CrmVoiceCall.created_at.desc())
-            ).all()
-        )
+    def list_lead_calls(self, tenant_id: str, lead_id: str) -> list[VoiceCallView]:
+        return self.calls.list_for_lead(tenant_id, lead_id)
 
     def record_call_event(
         self,
@@ -210,19 +198,16 @@ class VoiceCallService:
         event_type: str,
         status: str,
         payload_summary: dict[str, Any],
-    ) -> CrmVoiceCallEvent:
-        event = CrmVoiceCallEvent(
+    ) -> None:
+        self.calls.add_event(
             tenant_id=tenant_id,
             voice_call_id=voice_call_id,
             provider=provider,
             event_type=event_type,
             status=status,
-            payload_summary_json=self._sanitize_payload(payload_summary),
+            payload_summary=self._sanitize_payload(payload_summary),
         )
-        self.db.add(event)
         self.db.commit()
-        self.db.refresh(event)
-        return event
 
     def record_crm_activity(
         self,
@@ -234,14 +219,14 @@ class VoiceCallService:
         description: str | None = None,
         payload: dict[str, Any] | None = None,
     ) -> None:
-        self.activity_service.create_activity(
+        self.crm.record_activity(
             tenant_id=tenant_id,
             lead_id=lead_id,
             contact_id=contact_id,
             activity_type=activity_type,
             title=title,
             description=description,
-            payload_json=self._sanitize_payload(payload or {}),
+            payload=self._sanitize_payload(payload or {}),
         )
 
     def record_integration_event(
@@ -318,7 +303,7 @@ class VoiceCallService:
         names = {call_id: agent_names.get(agent_id) for call_id, agent_id in agent_by_call.items()}
         return [self.response(call, agent_name=names.get(call.id)) for call in calls]
 
-    def response(self, call: CrmVoiceCall, *, agent_name: str | None = None) -> VoiceCallResponse:
+    def response(self, call: VoiceCallView, *, agent_name: str | None = None) -> VoiceCallResponse:
         return VoiceCallResponse(
             id=call.id,
             provider=call.provider,

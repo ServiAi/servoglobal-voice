@@ -15,7 +15,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from app.models.analytics import Agent, Call
-from app.modules.crm.infrastructure.models import CrmActivity, CrmContact, CrmLead, CrmVoiceCall
+from app.modules.crm.public import CrmFacade, CrmVoiceCalls, LeadProfile, VoiceCallView
 from app.modules.agents.public import AgentsFacade
 from app.modules.voice.public import (
     SessionEventFact,
@@ -41,14 +41,14 @@ class VoiceCallProjectionService:
     def __init__(self, db: Session) -> None:
         self.db = db
 
-    def _crm_call(self, session: SessionProjectionFacts) -> CrmVoiceCall | None:
-        return self.db.scalar(select(CrmVoiceCall).where(
-            CrmVoiceCall.id == session.crm_voice_call_id,
-            CrmVoiceCall.tenant_id == session.tenant_id,
-        )) if session.crm_voice_call_id else None
+    def _crm_call(self, session: SessionProjectionFacts) -> VoiceCallView | None:
+        if not session.crm_voice_call_id:
+            return None
+        call = CrmVoiceCalls(self.db).get(session.crm_voice_call_id)
+        return call if call is not None and call.tenant_id == session.tenant_id else None
 
     @staticmethod
-    def _is_real(session: SessionProjectionFacts, crm_call: CrmVoiceCall | None) -> bool:
+    def _is_real(session: SessionProjectionFacts, crm_call: VoiceCallView | None) -> bool:
         crm_operational = bool(crm_call and (crm_call.started_at or crm_call.provider_attempt_started_at
                                              or crm_call.answered_at or session.sip_call_id))
         return crm_operational or any(event.event_type in REAL_EVENTS for event in session.events)
@@ -109,12 +109,13 @@ class VoiceCallProjectionService:
         self.db.flush()
 
         if crm_call is not None:
-            crm_call.provider_session_id = session.provider_session_id or crm_call.provider_session_id
+            changes: dict = {"provider_session_id": session.provider_session_id or crm_call.provider_session_id}
             if terminal and crm_call.status == "completed" and not connected_at:
-                crm_call.status = "no_answer"
-            crm_call.duration_seconds = duration
+                changes["status"] = "no_answer"
+            changes["duration_seconds"] = duration
             if terminal and crm_call.ended_at is None:
-                crm_call.ended_at = ended_at
+                changes["ended_at"] = ended_at
+            crm_call = CrmVoiceCalls(self.db).update(crm_call.id, **changes)
 
         self._activity(session, crm_call, call, events)
         if commit:
@@ -129,16 +130,16 @@ class VoiceCallProjectionService:
         the caller's transaction (no commit)."""
         session = VoiceSessionFacade(self.db).get_projection_facts(session_id, tenant_id)
         if session.crm_voice_call_id:
-            call = self.db.get(CrmVoiceCall, session.crm_voice_call_id)
+            calls = CrmVoiceCalls(self.db)
+            call = calls.get(session.crm_voice_call_id)
             if call is not None and call.tenant_id == session.tenant_id:
                 now = occurred_at or datetime.now(UTC)
                 if event_type == "voice.session.connected" and call.status == "answered":
-                    call.status = "in_progress"
+                    calls.update(call.id, status="in_progress")
                 elif event_type == "voice.session.ended" and call.status not in {
                     "busy", "rejected", "no_answer", "failed", "completed"
                 }:
-                    call.status = "completed" if call.answered_at else "no_answer"
-                    call.ended_at = now
+                    calls.update(call.id, status="completed" if call.answered_at else "no_answer", ended_at=now)
                     logger.info(
                         "LiveKit SIP outbound completed | tenant_id=%s | crm_voice_call_id=%s | voice_session_id=%s | livekit_room_name=%s | livekit_dispatch_id=%s | livekit_sip_trunk_id=%s | sip_participant_identity=%s | sip_call_id=%s",
                         session.tenant_id,
@@ -153,8 +154,7 @@ class VoiceCallProjectionService:
                 elif event_type == "voice.session.failed" and call.status not in {
                     "busy", "rejected", "no_answer", "failed", "completed"
                 }:
-                    call.status = "failed"
-                    call.ended_at = now
+                    calls.update(call.id, status="failed", ended_at=now)
         self.db.flush()
         return self.project_session(session_id, tenant_id=tenant_id, commit=False)
 
@@ -198,22 +198,20 @@ class VoiceCallProjectionService:
             agent.status = status
         return agent
 
-    def _activity(self, session: SessionProjectionFacts, crm_call: CrmVoiceCall | None, call: Call,
+    def _activity(self, session: SessionProjectionFacts, crm_call: VoiceCallView | None, call: Call,
                   events: list[SessionEventFact]) -> None:
         context = session.context
         contact_id = (crm_call.contact_id if crm_call else None) or (context.contact.id if context.contact else None)
         lead_id = (crm_call.lead_id if crm_call else None) or (context.lead.id if context.lead else None)
-        lead = self.db.scalar(select(CrmLead).where(
-            CrmLead.id == lead_id, CrmLead.tenant_id == session.tenant_id,
-        )) if lead_id else None
+        crm = CrmFacade(self.db)
+        lead = crm.get_lead_profile(session.tenant_id, lead_id) if lead_id else None
         if lead_id and lead is None:
             return
         if lead and not contact_id:
             contact_id = lead.contact_id
         if not contact_id:
             return
-        contact = self.db.scalar(select(CrmContact).where(CrmContact.id == contact_id,
-                                                          CrmContact.tenant_id == session.tenant_id))
+        contact = crm.get_contact_profile(session.tenant_id, contact_id)
         if contact is None:
             return
         if lead and lead.contact_id != contact.id:
@@ -231,36 +229,33 @@ class VoiceCallProjectionService:
             and event.payload["text"].strip()
         ]
         key = f"voice_session:{session.id}"
-        activity = self.db.scalar(select(CrmActivity).where(
-            CrmActivity.tenant_id == session.tenant_id,
-            CrmActivity.call_id == call.id,
-            CrmActivity.activity_type == "voice_call",
-            CrmActivity.deduplication_key == key,
-        ).with_for_update())
-        if activity is None:
-            activity = CrmActivity(tenant_id=session.tenant_id, contact_id=contact.id,
-                                   activity_type="voice_call", call_id=call.id,
-                                   deduplication_key=key, title="Llamada de voz IA")
-            self.db.add(activity)
-        activity.lead_id = lead.id if lead else None
-        activity.occurred_at = call.started_at
-        activity.outcome = call.normalized_status
-        activity.payload_json = {
-            "voice_session_id": session.id,
-            "crm_voice_call_id": crm_call.id if crm_call else None,
-            "provider": call.external_provider,
-            "channel": session.channel,
-            "direction": session.direction,
-            "status": call.normalized_status,
-            "duration_seconds": call.duration_seconds,
-            "summary": call.summary,
-            "recording_url": call.recording_url,
-            "transcript": transcript,
-        }
+        crm.upsert_call_activity(
+            tenant_id=session.tenant_id,
+            call_id=call.id,
+            activity_type="voice_call",
+            deduplication_key=key,
+            contact_id=contact.id,
+            lead_id=lead.id if lead else None,
+            title="Llamada de voz IA",
+            occurred_at=call.started_at,
+            outcome=call.normalized_status,
+            payload={
+                "voice_session_id": session.id,
+                "crm_voice_call_id": crm_call.id if crm_call else None,
+                "provider": call.external_provider,
+                "channel": session.channel,
+                "direction": session.direction,
+                "status": call.normalized_status,
+                "duration_seconds": call.duration_seconds,
+                "summary": call.summary,
+                "recording_url": call.recording_url,
+                "transcript": transcript,
+            },
+        )
         if lead and (lead.last_call_id is None or self._newer_call(lead, call)):
-            lead.last_call_id = call.id
+            crm.set_lead_last_call(session.tenant_id, lead.id, call.id)
 
-    def _newer_call(self, lead: CrmLead, call: Call) -> bool:
+    def _newer_call(self, lead: LeadProfile, call: Call) -> bool:
         previous = self.db.scalar(select(Call).where(Call.id == lead.last_call_id,
                                                      Call.tenant_id == call.tenant_id))
         return previous is None or (self._utc(call.started_at), call.id) >= (self._utc(previous.started_at), previous.id)
