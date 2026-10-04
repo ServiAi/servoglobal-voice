@@ -18,6 +18,11 @@ BOOKING_EVENT_CREATED = "booking.created"
 BOOKING_EVENT_CANCELLED = "booking.cancelled"
 BOOKING_EVENT_RESCHEDULED = "booking.rescheduled"
 
+# A booking in one of these states occupies its resource's time. ``failed``,
+# ``cancelled`` and ``rejected`` release it. Single source of truth: the slot
+# guard and the availability query both use it.
+SLOT_BLOCKING_STATUSES = frozenset({"pending", "accepted", "scheduled", "confirmed"})
+
 ACTIVITY_TITLES = {
     "booking_requested": "Reserva solicitada",
     "booking_created": "Reserva creada",
@@ -37,6 +42,11 @@ def booking_is_google(provider: str | None, google_calendar_event_id: str | None
     """An existing booking is cancelled/rescheduled through Google when it was
     created there (or already carries a Google event id)."""
     return provider == GOOGLE_PROVIDER or bool(google_calendar_event_id)
+
+
+def intervals_overlap(start_a: datetime, end_a: datetime, start_b: datetime, end_b: datetime) -> bool:
+    """Half-open ``[start, end)``: back-to-back intervals do not overlap."""
+    return start_a < end_b and start_b < end_a
 
 
 def activity_title(activity_type: str) -> str:

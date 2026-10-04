@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.modules.scheduling.application.availability_service import (
     SchedulingAvailabilityService,
 )
+from app.modules.scheduling.application.slot_guard import claim_slot
 from app.modules.scheduling.domain.contracts import (
     BookingCustomer,
     CreateBookingCommand,
@@ -144,6 +145,15 @@ class GoogleCalendarProvider:
             )
 
         if assigned_resource:
+            # Local slot guard: lock the resource, re-check overlaps and stamp the
+            # booking with it. Commits (lock released) before the Google call.
+            claim_slot(
+                self.db,
+                booking=booking,
+                resource_id=assigned_resource.id,
+                start_at=booking.start_at,
+                end_at=end_at,
+            )
             if assigned_cal_id:
                 target_cal_id = assigned_cal_id
             booking.host_name = assigned_resource.name
@@ -202,7 +212,11 @@ class GoogleCalendarProvider:
             try:
                 self.google_service.delete_event(connection, event_id, calendar_id=target_cal_id)
             except Exception as exc:
-                logger.warning("Google Calendar delete_event error: %s", exc)
+                # Never swallowed: a timeout may mean Google did or did not delete the
+                # event. Propagating (with the cause chain) lets BookingService classify
+                # the outcome instead of declaring a cancellation nobody confirmed.
+                message = sanitize_google_calendar_error(str(exc))
+                raise ValueError(f"Google Calendar event deletion failed: {message}") from exc
 
         booking.status = "cancelled"
         booking.cancelled_at = datetime.now(UTC)

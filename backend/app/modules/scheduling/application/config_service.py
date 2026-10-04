@@ -4,6 +4,7 @@ import logging
 from typing import Any
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.modules.scheduling.infrastructure.models import (
@@ -42,7 +43,14 @@ class SchedulingConfigService:
                 is_active=True,
             )
             self.db.add(config)
-            self.db.commit()
+            try:
+                self.db.commit()
+            except IntegrityError:
+                # A concurrent first booking created it (unique per tenant): use theirs.
+                self.db.rollback()
+                return self.db.scalar(
+                    select(TenantSchedulingConfig).where(TenantSchedulingConfig.tenant_id == tenant_id)
+                )
             self.db.refresh(config)
         return config
 

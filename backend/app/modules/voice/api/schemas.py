@@ -163,6 +163,9 @@ class ToolInvokeRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
     arguments: dict = Field(default_factory=dict)
+    # Minted by the authenticated voice runtime, one per tool call. Kept apart
+    # from `arguments` so the LLM can never choose it.
+    invocation_id: str | None = Field(default=None, min_length=1, max_length=64, pattern=r"^[A-Za-z0-9._-]+$")
 
 
 class ToolInvokeResponse(BaseModel):

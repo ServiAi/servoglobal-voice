@@ -61,7 +61,7 @@ Datos de otros módulos que Tool Platform usa, siempre vía API pública y como 
 
 ## Scheduling
 
-Ahora en `app/modules/scheduling/infrastructure/models.py` (mismas tablas, FKs, índices y constraints; sin migración).
+Ahora en `app/modules/scheduling/infrastructure/models.py` (en la migración de código original: mismas tablas, FKs, índices y constraints, sin migración; el PR #121 añadió después `tenant_booking_operations` y `crm_bookings.scheduling_resource_id` con la migración `202609240001`).
 
 | Tabla | Modelo | Estado |
 | --- | --- | --- |
@@ -69,7 +69,8 @@ Ahora en `app/modules/scheduling/infrastructure/models.py` (mismas tablas, FKs, 
 | `tenant_google_calendar_connections`, `tenant_google_calendars` | `TenantGoogleCalendarConnection`, `TenantGoogleCalendar` | ✅ Scheduling. Tokens OAuth cifrados, sólo dentro de `infrastructure/google/` |
 | `tenant_scheduling_configs`, `…_resources`, `…_resource_calendars`, `…_teams`, `…_team_members`, `…_exceptions`, `…_schedules`, `…_event_types`, `…_provider_objects` | `TenantScheduling*` | ✅ Scheduling (relaciones ORM internas permitidas) |
 | `tenant_agent_scheduling_configs` | `TenantAgentSchedulingConfig` | ✅ Scheduling; Agent Builder sólo pregunta `is_booking_configured` |
-| `crm_bookings`, `crm_booking_events` | `CrmBooking`, `CrmBookingEvent` | ✅ Scheduling. Historia propia del booking (≠ eventos de dominio) |
+| `crm_bookings`, `crm_booking_events` | `CrmBooking`, `CrmBookingEvent` | ✅ Scheduling. Historia propia del booking (≠ eventos de dominio). `scheduling_resource_id` (FK a `tenant_scheduling_resources`) es el recurso canónico y base de la guarda de solapes |
+| `tenant_booking_operations` | `BookingOperation` | ✅ Scheduling. Operaciones idempotentes de booking (create/cancel/reschedule): unique `(tenant_id, operation_type, idempotency_key)`; `result_json` sólo ids/estado, nunca tokens ni PII |
 | `tenant_integration_events` (`calcom_sync`, `booking_create`, `availability_lookup`, …) | `TenantIntegrationEvent` | 🟡 auditoría compartida de integraciones (temporal, allowlist `SCHEDULING_LEGACY_ALLOWED`) |
 | `domain_events` (`booking.*`) | `DomainEvent` | 🟡 los crea la infraestructura existente al anunciarse el hecho (`wiring.NotificationBookingEvents`); Scheduling no importa Notifications |
 

@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
 from app.modules.scheduling.application.config_service import SchedulingConfigService
+from app.modules.scheduling.domain.booking import SLOT_BLOCKING_STATUSES
 from app.modules.scheduling.domain.dates import parse_reference_datetime
 from app.modules.scheduling.infrastructure.calcom.availability import (
     _build_summary,
@@ -546,7 +547,7 @@ class SchedulingAvailabilityService:
         # 2. Existing CrmBookings
         b_stmt = select(CrmBooking).where(
             CrmBooking.tenant_id == tenant_id,
-            CrmBooking.status.in_(["pending", "confirmed", "scheduled", "accepted"]),
+            CrmBooking.status.in_(SLOT_BLOCKING_STATUSES),
             CrmBooking.start_at < time_max_utc,
             CrmBooking.end_at > time_min_utc,
         )
@@ -560,10 +561,14 @@ class SchedulingAvailabilityService:
             if res and res.email:
                 b_stmt = b_stmt.where(
                     (CrmBooking.host_email == res.email)
+                    | (CrmBooking.scheduling_resource_id == resource_id)
                     | (CrmBooking.metadata_json["scheduling_resource_id"].as_string() == resource_id)
                 )
             else:
-                b_stmt = b_stmt.where(CrmBooking.metadata_json["scheduling_resource_id"].as_string() == resource_id)
+                b_stmt = b_stmt.where(
+                    (CrmBooking.scheduling_resource_id == resource_id)
+                    | (CrmBooking.metadata_json["scheduling_resource_id"].as_string() == resource_id)
+                )
 
         crm_bookings = list(self.db.scalars(b_stmt).all())
         for b in crm_bookings:

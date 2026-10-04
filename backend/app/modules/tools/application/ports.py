@@ -49,6 +49,7 @@ class SchedulingToolPort(Protocol):
         attendee_email: str,
         attendee_phone: str | None,
         notes: Any,
+        idempotency_key: str | None = None,
     ) -> BookingResult: ...
 
 

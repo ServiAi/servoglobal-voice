@@ -387,6 +387,8 @@ class CrmBooking(Base, TimestampMixin):
         Index("ix_crm_bookings_tenant_status", "tenant_id", "status"),
         Index("ix_crm_bookings_tenant_start", "tenant_id", "start_at"),
         Index("ix_crm_bookings_tenant_google_event", "tenant_id", "google_calendar_event_id"),
+        # Overlap query of the slot guard: tenant + resource + interval.
+        Index("ix_crm_bookings_resource_interval", "tenant_id", "scheduling_resource_id", "start_at", "end_at"),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
@@ -413,6 +415,12 @@ class CrmBooking(Base, TimestampMixin):
     host_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     host_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     google_calendar_event_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Canonical resource of the booking (NULL when the provider owns assignment,
+    # e.g. Cal.com). ``metadata_json["scheduling_resource_id"]`` is kept as a
+    # legacy mirror; new code reads this column.
+    scheduling_resource_id: Mapped[str | None] = mapped_column(
+        ForeignKey("tenant_scheduling_resources.id", ondelete="SET NULL"), nullable=True
+    )
     calendar_mode: Mapped[str] = mapped_column(String(40), nullable=False, default="cal_managed")
     metadata_json: Mapped[dict] = mapped_column(sa.JSON, nullable=False, default=dict)
     cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -440,3 +448,31 @@ class CrmBookingEvent(Base):
 
     tenant = relationship("Tenant")
     booking = relationship("CrmBooking")
+
+
+class BookingOperation(Base, TimestampMixin):
+    """One logical booking operation (create / cancel / reschedule), keyed by
+    ``(tenant_id, operation_type, idempotency_key)``. The unique constraint is
+    the final arbiter of concurrent retries; the row also records whether the
+    provider outcome is known. ``result_json`` holds ids only, never tokens."""
+
+    __tablename__ = "tenant_booking_operations"
+    __table_args__ = (
+        UniqueConstraint(
+            "tenant_id", "operation_type", "idempotency_key", name="uq_tenant_booking_operations_key"
+        ),
+        Index("ix_tenant_booking_operations_booking", "tenant_id", "booking_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False)
+    operation_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    idempotency_key: Mapped[str] = mapped_column(String(128), nullable=False)
+    booking_id: Mapped[str | None] = mapped_column(ForeignKey("crm_bookings.id", ondelete="SET NULL"), nullable=True)
+    request_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default="pending")
+    provider: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    provider_operation_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    result_json: Mapped[dict | None] = mapped_column(sa.JSON, nullable=True)
+    error_code: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

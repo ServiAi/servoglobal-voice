@@ -25,3 +25,6 @@ class PlatformToolInvocation:
     llm_args: dict[str, Any]
     context: SessionContextV1
     config: dict[str, Any]
+    # Trusted, runtime-minted (never LLM-supplied): lets side-effecting tools
+    # such as calendar.create_booking be retried safely. None = no idempotency.
+    idempotency_key: str | None = None
