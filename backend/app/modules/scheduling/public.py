@@ -27,8 +27,11 @@ from app.modules.scheduling.domain.errors import (
     AvailabilityError,
     BookingCustomerNotFoundError,
     BookingNotFoundError,
+    BookingOperationInProgressError,
+    IdempotencyConflictError,
     SchedulingConfigurationError,
     SchedulingError,
+    SlotConflictError,
 )
 
 __all__ = [
@@ -38,14 +41,17 @@ __all__ = [
     "BookingCustomer",
     "BookingCustomerNotFoundError",
     "BookingNotFoundError",
+    "BookingOperationInProgressError",
     "BookingSummary",
     "BookingView",
     "CalComTestResponse",
     "CreateBookingCommand",
     "GoogleCalendarConnectionResponse",
+    "IdempotencyConflictError",
     "SchedulingConfigurationError",
     "SchedulingError",
     "SchedulingFacade",
+    "SlotConflictError",
 ]
 
 
@@ -108,6 +114,7 @@ class SchedulingFacade:
         attendee_email: str,
         attendee_phone: str | None,
         notes: str | None,
+        idempotency_key: str | None = None,
     ) -> BookingSummary:
         """Tool Platform flavour. Raises pydantic.ValidationError for a
         malformed request and ValueError for business/provider failures."""
@@ -118,7 +125,9 @@ class SchedulingFacade:
             attendee_phone=attendee_phone,
             notes=notes,
         )
-        booking = self._bookings().create_lead_booking(tenant_id=tenant_id, lead_id=lead_id, command=command)
+        booking = self._bookings().create_lead_booking(
+            tenant_id=tenant_id, lead_id=lead_id, command=command, idempotency_key=idempotency_key
+        )
         return BookingSummary(id=booking.id, status=booking.status, start_at=booking.start_at)
 
     def create_booking(
@@ -128,11 +137,16 @@ class SchedulingFacade:
         lead_id: str,
         command: CreateBookingCommand,
         booking_config_id: str | None = None,
+        idempotency_key: str | None = None,
     ) -> BookingView:
         from app.modules.scheduling.application.views import booking_view
 
         booking = self._bookings().create_lead_booking(
-            tenant_id=tenant_id, lead_id=lead_id, command=command, booking_config_id=booking_config_id
+            tenant_id=tenant_id,
+            lead_id=lead_id,
+            command=command,
+            booking_config_id=booking_config_id,
+            idempotency_key=idempotency_key,
         )
         return booking_view(booking)
 

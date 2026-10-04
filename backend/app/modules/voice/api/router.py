@@ -361,7 +361,7 @@ def invoke_runtime_tool(
     trusting the compiled RuntimeSessionSpecV1 the runtime already holds --
     see ToolDispatchService for why."""
     try:
-        result = ToolDispatchService(db).invoke(session_id, tool_key, body.arguments)
+        result = ToolDispatchService(db).invoke(session_id, tool_key, body.arguments, body.invocation_id)
         db.commit()
         return ToolInvokeResponse(result=result)
     except VoiceSessionNotFoundError as exc:

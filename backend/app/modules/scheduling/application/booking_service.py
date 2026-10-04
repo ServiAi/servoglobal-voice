@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import replace
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import select
@@ -20,7 +20,9 @@ from sqlalchemy.orm import Session
 from app.modules.scheduling.application.booking_config_service import (
     BookingConfigService,
 )
+from app.modules.scheduling.application.operation_service import BookingOperationService
 from app.modules.scheduling.application.ports import SchedulingPorts
+from app.modules.scheduling.application.slot_guard import claim_slot
 from app.modules.scheduling.domain.booking import (
     BOOKING_EVENT_CANCELLED,
     BOOKING_EVENT_CREATED,
@@ -42,6 +44,19 @@ from app.modules.scheduling.domain.contracts import (
 )
 from app.modules.scheduling.domain.errors import (
     BookingNotFoundError,
+    SlotConflictError,
+)
+from app.modules.scheduling.domain.operations import (
+    OP_CANCEL,
+    OP_CREATE,
+    OP_RESCHEDULE,
+    cancel_fingerprint,
+    create_fingerprint,
+    derived_cancel_key,
+    derived_reschedule_key,
+    is_outcome_unknown,
+    normalize_idempotency_key,
+    reschedule_fingerprint,
 )
 from app.modules.scheduling.infrastructure.calcom.adapter import CalComProvider
 from app.modules.scheduling.infrastructure.calcom.client import (
@@ -55,6 +70,7 @@ from app.modules.scheduling.infrastructure.google.calendar import (
     sanitize_google_calendar_error,
 )
 from app.modules.scheduling.infrastructure.models import (
+    BookingOperation,
     CrmBooking,
     CrmBookingEvent,
     TenantBookingConfig,
@@ -80,6 +96,7 @@ class BookingService:
         self.config_service = config_service or BookingConfigService(db)
         self.calcom_client = calcom_client or CalComClient()
         self._ports = ports
+        self.operations = BookingOperationService(db)
 
     @property
     def ports(self) -> SchedulingPorts:
@@ -165,7 +182,12 @@ class BookingService:
         command: CreateBookingCommand,
         booking_config_id: str | None = None,
         voice_config: TenantVoiceBookingConfig | None = None,
+        idempotency_key: str | None = None,
     ) -> CrmBooking:
+        """``idempotency_key`` is trusted metadata (Tool Platform / HTTP header),
+        never part of the user-visible command. Without it the flow behaves as
+        before (plus the local slot guard)."""
+        key = normalize_idempotency_key(idempotency_key)
         customer = self.ports.customer.get_booking_customer(tenant_id, lead_id)
         if not customer.email:
             raise ValueError("Lead contact email is required to create a booking.")
@@ -177,6 +199,27 @@ class BookingService:
         )
         voice_config_id = resolved_voice_config.id if resolved_voice_config else None
 
+        op: BookingOperation | None = None
+        if key:
+            begun = self.operations.begin(
+                tenant_id=tenant_id,
+                operation_type=OP_CREATE,
+                key=key,
+                fingerprint=create_fingerprint(
+                    tenant_id=tenant_id,
+                    lead_id=customer.lead_id,
+                    start_at=start_at,
+                    timezone=command.timezone,
+                    event_type_id=command.event_type_id,
+                    event_type_slug=command.event_type_slug,
+                    resource_id=command.scheduling_resource_id,
+                    team_id=command.scheduling_team_id,
+                ),
+            )
+            if not begun.owner:  # replay: same logical booking, no provider call
+                return self._booking_of(begun.operation)
+            op = begun.operation
+
         if is_google_booking(config.provider, config.calendar_mode):
             return self._create_google_booking(
                 tenant_id=tenant_id,
@@ -185,6 +228,7 @@ class BookingService:
                 start_at=start_at,
                 config=config,
                 voice_config_id=voice_config_id,
+                op=op,
             )
         return self._create_calcom_booking(
             tenant_id=tenant_id,
@@ -194,7 +238,27 @@ class BookingService:
             config=config,
             client_config=client_config,  # type: ignore[arg-type]
             voice_config_id=voice_config_id,
+            op=op,
         )
+
+    def _booking_of(self, op: BookingOperation) -> CrmBooking:
+        if not op.booking_id:
+            raise BookingNotFoundError()
+        return self.get_booking(tenant_id=op.tenant_id, booking_id=op.booking_id)
+
+    def _abandon(self, op: BookingOperation | None, exc: BaseException) -> bool:
+        """Record how an operation ended. True = provider outcome unknown (the
+        local booking keeps blocking its slot; nothing is retried blindly)."""
+        if op is None:
+            return False
+        self.db.rollback()
+        unknown = is_outcome_unknown(exc)
+        code = type(exc).__name__
+        if unknown:
+            self.operations.mark_unknown(op, error_code=code)
+        else:
+            self.operations.fail(op, error_code=code)
+        return unknown
 
     def _create_google_booking(
         self,
@@ -205,6 +269,7 @@ class BookingService:
         start_at: datetime,
         config: TenantBookingConfig,
         voice_config_id: str | None,
+        op: BookingOperation | None = None,
     ) -> CrmBooking:
         booking = CrmBooking(
             tenant_id=tenant_id,
@@ -236,13 +301,18 @@ class BookingService:
         self.db.refresh(booking)
         self.record_crm_activity(booking, "booking_requested")
         self.record_crm_booking_event(booking, "booking_requested", "pending", {"start_at": command.start})
+        if op:
+            self.operations.mark_provider_pending(op, provider=GOOGLE_PROVIDER, booking_id=booking.id)
 
         google_provider = GoogleCalendarProvider(self.db, tenant_id=tenant_id, booking_config=config)
         try:
             booking = google_provider.create_booking(booking=booking, customer=customer, command=command)
         except Exception as exc:
-            self._record_failure(booking, GOOGLE_PROVIDER, sanitize_google_calendar_error(str(exc)))
+            if not self._abandon(op, exc):
+                self._record_failure(booking, GOOGLE_PROVIDER, sanitize_google_calendar_error(str(exc)))
             raise
+        if op:
+            self.operations.complete(op, booking_id=booking.id, result={"booking_id": booking.id, "status": booking.status})
 
         self.record_crm_activity(booking, "booking_created")
         self.record_crm_booking_event(
@@ -275,6 +345,7 @@ class BookingService:
         config: TenantBookingConfig,
         client_config: CalComClientConfig,
         voice_config_id: str | None,
+        op: BookingOperation | None = None,
     ) -> CrmBooking:
         event_type_id: int | str | None = command.event_type_id or client_config.event_type_id
         event_type_slug = command.event_type_slug or client_config.event_type_slug
@@ -330,6 +401,8 @@ class BookingService:
         self.db.refresh(booking)
         self.record_crm_activity(booking, "booking_requested")
         self.record_crm_booking_event(booking, "booking_requested", "pending", {"start_at": command.start})
+        if op:
+            self.operations.mark_provider_pending(op, provider=CALCOM_PROVIDER, booking_id=booking.id)
 
         payload = self._calcom_payload(
             config=client_config,
@@ -345,10 +418,13 @@ class BookingService:
         try:
             result = self.calcom_client.create_booking(client_config, payload)
         except Exception as exc:
-            self._record_failure(booking, CALCOM_PROVIDER, sanitize_calcom_error(str(exc)))
+            if not self._abandon(op, exc):
+                self._record_failure(booking, CALCOM_PROVIDER, sanitize_calcom_error(str(exc)))
             raise
 
         self.map_calcom_response_to_crm_booking(booking, result)
+        if op:
+            self.operations.complete(op, booking_id=booking.id, result={"booking_id": booking.id, "status": booking.status})
         self.record_crm_activity(booking, "booking_created")
         self.record_crm_booking_event(booking, "booking_created", booking.status, safe_provider_summary(result))
         IntegrationEventService(self.db).record_event(
@@ -558,68 +634,119 @@ class BookingService:
 
     # ------------------------------------------------------------------
     # Cancel / reschedule
+    #
+    # Each is keyed by a natural operation key (cancel: the booking; reschedule:
+    # booking + current state + target), so concurrent or repeated requests share
+    # ONE operation and ONE provider call; the others replay its outcome.
     # ------------------------------------------------------------------
     def cancel_lead_booking(self, *, tenant_id: str, booking_id: str) -> dict[str, Any]:
         booking = self.get_booking(tenant_id=tenant_id, booking_id=booking_id)
+        outcome = {"status": "success", "booking_id": booking.id}
+        if booking.status == "cancelled":
+            logger.info("scheduling_cancel_replay tenant_id=%s booking_id=%s", tenant_id, booking.id)
+            return outcome
 
-        if booking_is_google(booking.provider, booking.google_calendar_event_id):
-            GoogleCalendarProvider(self.db, tenant_id=tenant_id).cancel_booking(booking=booking)
-            self.record_crm_activity(booking, "booking_created", "Reserva cancelada manualmente desde el CRM")
-            self.record_crm_booking_event(booking, "booking_cancelled", booking.status, {"status": "cancelled"})
-            self._publish_booking_event_safely(
-                tenant_id=tenant_id, booking_id=booking.id, event_type=BOOKING_EVENT_CANCELLED
-            )
-            return {"status": "success", "booking_id": booking.id}
-
-        _config, client_config, _ = self._effective_config(tenant_id)
-        result = self.calcom_client.cancel_booking(client_config, booking.provider_booking_uid)  # type: ignore[arg-type]
-        self.map_calcom_response_to_crm_booking(booking, result)
-        booking.status = "cancelled"
-        self.db.commit()
-        self.db.refresh(booking)
+        begun = self.operations.begin(
+            tenant_id=tenant_id,
+            operation_type=OP_CANCEL,
+            key=derived_cancel_key(booking.id),
+            fingerprint=cancel_fingerprint(booking_id=booking.id),
+            booking_id=booking.id,
+        )
+        if not begun.owner:
+            logger.info("scheduling_cancel_replay tenant_id=%s booking_id=%s", tenant_id, booking.id)
+            return outcome
+        op = begun.operation
+        try:
+            self.operations.mark_provider_pending(op, provider=booking.provider)
+            if booking_is_google(booking.provider, booking.google_calendar_event_id):
+                GoogleCalendarProvider(self.db, tenant_id=tenant_id).cancel_booking(booking=booking)
+                summary: dict[str, Any] = {"status": "cancelled"}
+            else:
+                _config, client_config, _ = self._effective_config(tenant_id)
+                result = self.calcom_client.cancel_booking(client_config, booking.provider_booking_uid)  # type: ignore[arg-type]
+                self.map_calcom_response_to_crm_booking(booking, result)
+                booking.status = "cancelled"
+                self.db.commit()
+                self.db.refresh(booking)
+                summary = safe_provider_summary(result)
+        except Exception as exc:
+            self._abandon(op, exc)
+            raise
+        self.operations.complete(op, booking_id=booking.id, result=outcome)
         self.record_crm_activity(booking, "booking_created", "Reserva cancelada manualmente desde el CRM")
-        self.record_crm_booking_event(booking, "booking_cancelled", booking.status, safe_provider_summary(result))
+        self.record_crm_booking_event(booking, "booking_cancelled", booking.status, summary)
         self._publish_booking_event_safely(
             tenant_id=tenant_id, booking_id=booking.id, event_type=BOOKING_EVENT_CANCELLED
         )
-        return {"status": "success", "booking_id": booking.id}
+        return outcome
 
     def reschedule_lead_booking(
         self, *, tenant_id: str, booking_id: str, new_start_time: str
     ) -> dict[str, Any]:
         booking = self.get_booking(tenant_id=tenant_id, booking_id=booking_id)
-
         new_start_at = parse_utc_start(new_start_time)
-        if booking_is_google(booking.provider, booking.google_calendar_event_id):
-            GoogleCalendarProvider(self.db, tenant_id=tenant_id).reschedule_booking(
-                booking=booking, new_start_at=new_start_at
-            )
-            self.record_crm_activity(booking, "booking_created", "Reserva reprogramada desde el CRM")
-            self.record_crm_booking_event(
-                booking, "booking_rescheduled", booking.status, {"status": "scheduled", "start_at": new_start_time}
-            )
-            self._publish_booking_event_safely(
-                tenant_id=tenant_id, booking_id=booking.id, event_type=BOOKING_EVENT_RESCHEDULED
-            )
-            return {"status": "success", "booking_id": booking.id}
+        outcome = {"status": "success", "booking_id": booking.id}
+        if booking.rescheduled_at and booking.status == "scheduled" and booking.start_at == new_start_at:
+            logger.info("scheduling_reschedule_replay tenant_id=%s booking_id=%s", tenant_id, booking.id)
+            return outcome
 
-        config, client_config, _ = self._effective_config(tenant_id)
-        result = self.calcom_client.reschedule_booking(client_config, booking.provider_booking_uid, new_start_time)  # type: ignore[arg-type]
-        self.map_calcom_response_to_crm_booking(booking, result)
-        booking.status = "scheduled"
-
-        duration_minutes = booking.duration_minutes or config.default_length_minutes
-        booking.start_at = new_start_at
-        booking.end_at = new_start_at + timedelta(minutes=duration_minutes)
-        self.db.commit()
-        self.db.refresh(booking)
-
-        self.record_crm_activity(booking, "booking_created", "Reserva reprogramada desde el CRM")
-        self.record_crm_booking_event(
-            booking, "booking_rescheduled", booking.status, safe_provider_summary(result)
+        begun = self.operations.begin(
+            tenant_id=tenant_id,
+            operation_type=OP_RESCHEDULE,
+            key=derived_reschedule_key(booking.id, booking.start_at, booking.rescheduled_at, new_start_at),
+            fingerprint=reschedule_fingerprint(booking_id=booking.id, new_start_at=new_start_at),
+            booking_id=booking.id,
         )
+        if not begun.owner:
+            logger.info("scheduling_reschedule_replay tenant_id=%s booking_id=%s", tenant_id, booking.id)
+            return outcome
+        op = begun.operation
+
+        previous = (booking.start_at, booking.end_at)
+        new_end_at = new_start_at + timedelta(minutes=booking.duration_minutes or 30)
+        resource_id = booking.scheduling_resource_id or (booking.metadata_json or {}).get("scheduling_resource_id")
+        try:
+            if resource_id:
+                # Lock resource -> re-check overlaps (excluding this booking) ->
+                # tentatively move the booking, all before the provider call.
+                claim_slot(self.db, booking=booking, resource_id=resource_id, start_at=new_start_at, end_at=new_end_at)
+            self.operations.mark_provider_pending(op, provider=booking.provider)
+            if booking_is_google(booking.provider, booking.google_calendar_event_id):
+                GoogleCalendarProvider(self.db, tenant_id=tenant_id).reschedule_booking(
+                    booking=booking, new_start_at=new_start_at
+                )
+                summary: dict[str, Any] = {"status": "scheduled", "start_at": new_start_time}
+            else:
+                config, client_config, _ = self._effective_config(tenant_id)
+                result = self.calcom_client.reschedule_booking(
+                    client_config, booking.provider_booking_uid, new_start_time  # type: ignore[arg-type]
+                )
+                self.map_calcom_response_to_crm_booking(booking, result)
+                booking.status = "scheduled"
+                duration_minutes = booking.duration_minutes or config.default_length_minutes
+                booking.start_at = new_start_at
+                booking.end_at = new_start_at + timedelta(minutes=duration_minutes)
+                booking.rescheduled_at = datetime.now(UTC)
+                self.db.commit()
+                self.db.refresh(booking)
+                summary = safe_provider_summary(result)
+        except Exception as exc:
+            unknown = self._abandon(op, exc)
+            if resource_id and not unknown and not isinstance(exc, SlotConflictError):
+                self._restore_interval(tenant_id, booking.id, *previous)
+            raise
+        self.operations.complete(op, booking_id=booking.id, result=outcome)
+        self.record_crm_activity(booking, "booking_created", "Reserva reprogramada desde el CRM")
+        self.record_crm_booking_event(booking, "booking_rescheduled", booking.status, summary)
         self._publish_booking_event_safely(
             tenant_id=tenant_id, booking_id=booking.id, event_type=BOOKING_EVENT_RESCHEDULED
         )
-        return {"status": "success", "booking_id": booking.id}
+        return outcome
 
+    def _restore_interval(self, tenant_id: str, booking_id: str, start_at: datetime, end_at: datetime | None) -> None:
+        """The provider definitively refused the move: give the old interval back."""
+        booking = self.get_booking(tenant_id=tenant_id, booking_id=booking_id)
+        booking.start_at = start_at
+        booking.end_at = end_at
+        self.db.commit()

@@ -64,3 +64,25 @@ class AvailabilityError(SchedulingError):
 class GoogleConnectionNotFoundError(SchedulingError):
     def __init__(self, message: str = "Google Calendar connection not found.") -> None:
         super().__init__(message)
+
+
+class SlotConflictError(SchedulingError):
+    """The resource already has an active booking overlapping the interval."""
+
+    def __init__(self, message: str = "The requested time slot is no longer available.") -> None:
+        super().__init__(message)
+
+
+class IdempotencyConflictError(SchedulingError):
+    """The same idempotency key was reused for a different request."""
+
+    def __init__(self, message: str = "Idempotency key was already used with a different request.") -> None:
+        super().__init__(message)
+
+
+class BookingOperationInProgressError(SchedulingError):
+    """An operation with this key is running or its provider outcome is
+    uncertain. The provider is NOT called again; retry later or reconcile."""
+
+    def __init__(self, message: str = "A booking operation with this key is still in progress.") -> None:
+        super().__init__(message)

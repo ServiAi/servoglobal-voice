@@ -95,6 +95,8 @@ def _handle_create_booking(
             attendee_email=(contact.email if contact and contact.email else ""),
             attendee_phone=contact.phone if contact else None,
             notes=invocation.llm_args.get("notes"),
+            # Trusted key (session + runtime-minted invocation id); never an LLM argument.
+            idempotency_key=invocation.idempotency_key,
         )
     # ValidationError subclasses ValueError: a malformed booking request is
     # an argument error, anything else the scheduler raises is execution.
@@ -157,7 +159,9 @@ class ToolDispatchService:
             ports = default_tool_ports(db)
         self.ports = ports
 
-    def invoke(self, session_id: str, tool_key: str, arguments: dict[str, Any]) -> dict[str, Any]:
+    def invoke(
+        self, session_id: str, tool_key: str, arguments: dict[str, Any], invocation_id: str | None = None
+    ) -> dict[str, Any]:
         session = self.ports.sessions.get_tool_session(session_id)
         if session.is_terminal:
             raise VoiceSessionError("Voice session is terminal.")
@@ -204,6 +208,7 @@ class ToolDispatchService:
             # metadata for the catalog API / Agent Builder UI (see
             # ToolCatalogService), not a second enforcement layer.
             invocation = contract.build_invocation(llm_args=arguments, context=context, config=binding_config)
+            invocation.idempotency_key = f'voice:{session.id}:{invocation_id}' if invocation_id else None
             result = handler(self.db, self.ports, session.tenant_id, invocation, session)
         except PlatformToolContractError as exc:
             duration_ms = max(0, round((perf_counter() - started) * 1000))

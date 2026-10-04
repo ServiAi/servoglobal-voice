@@ -3,14 +3,22 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.api.auth.deps import AuthContext, require_roles
 from app.db.session import get_db
 from app.models.crm import CrmContact, CrmLead
-from app.modules.scheduling.public import CreateBookingCommand, SchedulingFacade
+from app.modules.scheduling.public import (
+    BookingOperationInProgressError,
+    CreateBookingCommand,
+    IdempotencyConflictError,
+    SchedulingFacade,
+    SlotConflictError,
+)
+
+_BOOKING_CONFLICTS = (SlotConflictError, IdempotencyConflictError, BookingOperationInProgressError)
 from app.schemas.crm import (
     ActivitySchema,
     BookingCreateRequest,
@@ -220,11 +228,17 @@ def create_lead_booking(
     body: BookingCreateRequest,
     context: AuthContext = Depends(require_roles(["platform_admin", "tenant_admin"])),
     db: Session = Depends(get_db),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ) -> Any:
     try:
         return SchedulingFacade(db).create_booking(
-            tenant_id=context.tenant.id, lead_id=lead_id, command=CreateBookingCommand(**body.model_dump())
+            tenant_id=context.tenant.id,
+            lead_id=lead_id,
+            command=CreateBookingCommand(**body.model_dump()),
+            idempotency_key=idempotency_key,
         )
+    except _BOOKING_CONFLICTS as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
 
@@ -240,6 +254,8 @@ def cancel_lead_booking(
         return SchedulingFacade(db).cancel_booking(tenant_id=context.tenant.id, booking_id=booking_id)
     except HTTPException:
         raise
+    except _BOOKING_CONFLICTS as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
@@ -260,6 +276,8 @@ def reschedule_lead_booking(
         )
     except HTTPException:
         raise
+    except _BOOKING_CONFLICTS as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 

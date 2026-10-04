@@ -94,7 +94,7 @@ class ControlPlaneClient:
                 "POST",
                 f"/api/v1/internal/voice-runtime/sessions/{session_id}/tools/{tool_key}/invoke",
                 headers=self._headers(),
-                json={"arguments": arguments},
+                json={"arguments": arguments, "invocation_id": uuid4().hex},
             )
             response.raise_for_status()
         except httpx.HTTPStatusError as exc:
