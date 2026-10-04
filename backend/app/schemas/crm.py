@@ -5,6 +5,15 @@ from typing import Any, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
+# Re-exported for the endpoints and services that import these from ``app.schemas.crm``.
+from app.schemas.integrations import (  # noqa: F401
+    EmailActionRequest,
+    EmailActionResponse,
+    VoiceCallActionRequest,
+    VoiceCallActionResponse,
+    VoiceCallResponse,
+)
+
 # --- Pipeline ---
 
 class CallSummaryResponse(BaseModel):

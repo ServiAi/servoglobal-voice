@@ -1,2 +1,0 @@
-test_admin_tenant_integrations OK
-test_admin_tenant_membership_deletion OK
