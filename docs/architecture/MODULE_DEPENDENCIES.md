@@ -88,7 +88,7 @@ Leyenda: ✅ permitida · ⚠️ cuestionable · ❌ eliminar · 🔁 circular.
 | CRM ↔ Scheduling 🔁 | CRM endpoint → `SchedulingFacade`; Scheduling → `crm.public` (cliente, timeline) | ✅ | **Resuelto**: `BookingCustomerPort`/`CrmActivityPort`; CRM ya no gobierna el booking. |
 | Scheduling → Notifications | booking crea hechos `booking.*` | ✅ | **Resuelto**: puerto `BookingEventPublisherPort`; único puente temporal en `wiring.py` (allowlist) hasta que Notifications se suscriba a `domain_events`. |
 | Integrations ↔ Notifications 🔁 | `whatsapp_message_service` → `NotificationDeliveryStatusService`; notificaciones → WhatsApp | ⚠️ | Notifications → `integrations.public` (command send); el status de entrega vuelve como callback/evento, no import directo. |
-| Integrations → CRM (`crm_activity_service`, `models.crm`) | timeline de mensajes/emails | ⚠️ | Evento `message.sent` → CRM, o `crm.public.record_activity`. |
+| Integrations → CRM (antes `crm_activity_service`, `models.crm`) | timeline de mensajes/emails, lead/contacto de la acción | ✅ **resuelto** (2026-10-04) | `crm.public` (`record_activity`, `get_lead_profile`, `find_contact_by_phone_digits`). Sólo queda `CrmWhatsAppMessage` (Messaging). |
 | Identity → Integrations (`admin/tenants.py` → 10 servicios) | panel admin | ⚠️ | Es un BFF de administración: consumir `public.py` de cada módulo. |
 | Identity ↔ Billing 🔁 | onboarding crea plan/uso; billing lee tenant | ⚠️ | Onboarding → `billing.public.provision_plan`. |
 | Voice Experiences → Telephony / Voice | callbacks, rutas SIP, context schemas | ⚠️ | `telephony.public`, y mover `voice_context` (context schemas) a Voice Experiences. |
@@ -227,3 +227,20 @@ Mismo grafo AST (imports perezosos incluidos), `develop@90bf9d2` → esta rama. 
 | Shims/reexports temporales | 4→0 (Voice) | **0** (ninguno creado) |
 | Tests backend (métodos `test_*`) | 1789 | 1828 |
 | Tests PostgreSQL (métodos en `test_*postgres.py`) | 23 | 28 (+5 de Scheduling: Round Robin ×3, ciclo de vida, doble cancelación; cifra al cierre de la migración: el PR #121 llevó `test_scheduling_postgres` a 24 tests) |
+
+## CRM después de la migración (módulo 6)
+
+| Métrica (CRM) | Antes (`develop@1db650c`) | Después |
+| --- | --- | --- |
+| Archivos de `app/` que importan `app.models.crm` | 34 | **6** (todos por `CrmWhatsAppMessage`: 4 servicios de Messaging, `crm.wiring`, `app.models`) |
+| Archivos de `app/` que importan `app.services.crm_*` | 22 | **1** (`api.endpoints.crm` → read-model del dashboard) |
+| Archivos externos que importan internals de CRM | 23 (43 imports) | **0** de modelos/servicios propios (quedan 4 de `CrmWhatsAppMessage` = deuda de Messaging y 1 de composición del dashboard) |
+| Archivos fuera de CRM que importan clases ORM de CRM | 18 | **0** |
+| Imports de código CRM hacia internals de otros módulos / legacy (sin shared kernel ni `*.public`) | 10 | **2** (`crm.wiring` → `app.models.integrations`, adaptador de payloads; allowlisted) |
+| Shims | 0 | **0** |
+| Violaciones de arquitectura (`test_module_boundaries`, `test_crm_*`) | — | **0** |
+| Componentes conexas de imports que incluyen CRM | 1 (6 módulos) | 1 (42 módulos): `crm.wiring` enlaza puertos con Analytics/Identity/Scheduling mientras éstos usan `crm.public`; ninguna incluye una implementación de proveedor |
+| Tests (métodos `test_*`) | 1862 | 1902 (+40) |
+| Tests PostgreSQL | 47 | 56 (+9: `test_crm_postgres`) |
+| Heads de Alembic | 1 (`202609240001`) | 1 (`202609240001`) |
+| Rutas OpenAPI | 257 paths / 336 operaciones | idénticas |

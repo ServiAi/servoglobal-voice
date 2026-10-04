@@ -52,11 +52,11 @@ Datos de otros módulos que Tool Platform usa, siempre vía API pública y como 
 
 | Tabla | Modelo | Estado |
 | --- | --- | --- |
-| `crm_contacts`, `crm_leads` | `CrmContact`, `CrmLead` | 🔴 escritos por CRM, Voice (resolución/proyección), Voice Legacy (ingestión), Tool Platform (vía `CrmFacade`, recibe sólo `ContactRef`/`LeadRef` ✅) |
-| `crm_pipeline_stages`, `crm_tasks`, `crm_call_contexts` | … | 🟡 |
-| `crm_activities` | `CrmActivity` | 🔴 escrita por Scheduling, Integrations, Voice, Voice Legacy → objetivo: evento o `crm.public.record_activity` |
-| `crm_voice_calls`, `crm_voice_call_events` | `CrmVoiceCall`, `CrmVoiceCallEvent` | 🟡 CRM (propietario); Telephony ya sólo vía `OutboundCallLedger`/`CallLoadPort`; Voice (projection) y Voice Legacy aún escriben |
-| `crm_whatsapp_messages` | `CrmWhatsAppMessage` | 🔴 propietario objetivo: Messaging (el mensaje es del canal; CRM lo muestra en timeline) |
+| `crm_contacts`, `crm_leads` | `CrmContact`, `CrmLead` | ✅ propietario: **CRM** (ORM en `modules/crm/infrastructure/models.py`); el resto sólo ve `ContactProfile`/`LeadProfile`/snapshots por `crm.public` |
+| `crm_pipeline_stages`, `crm_tasks`, `crm_call_contexts` | `CrmPipelineStage`, `CrmTask`, `CrmCallContext` | ✅ CRM. `assigned_to_user_id` se valida por `TaskAssigneePort` → `identity.public`; sin relaciones ORM a Identity |
+| `crm_activities` | `CrmActivity` | ✅ CRM. Los demás módulos escriben por `crm.public` (`record_activity`, `stage_activity` en su transacción, `upsert_call_activity`); `call_id` es sólo un id hacia Analytics |
+| `crm_voice_calls`, `crm_voice_call_events` | `CrmVoiceCall`, `CrmVoiceCallEvent` | ✅ CRM (propietario único). Telephony vía `OutboundCallLedger`/`CallLoadPort`; Voice Legacy (webhooks, callbacks, workers) y la proyección de Analytics vía `crm.public.CrmVoiceCalls`, que escribe en la transacción del llamador y nunca hace commit |
+| `crm_whatsapp_messages` | `CrmWhatsAppMessage` | 🔴 propietario objetivo: Messaging (el mensaje es del canal; CRM lo muestra en timeline). Sigue en `app/models/crm.py` (único modelo que queda ahí, sin reexports); CRM sólo lo toca desde `wiring.LegacyLeadHistory` — deuda de Messaging |
 | `crm_bookings`, `crm_booking_events` | `CrmBooking`, `CrmBookingEvent` | ✅ propietario: **Scheduling** (ORM en `modules/scheduling/infrastructure/models.py`; CRM sólo ve `BookingView`; FKs a `crm_leads`/`crm_contacts` a nivel DB, sin relaciones ORM) |
 
 ## Scheduling
