@@ -587,6 +587,19 @@ class ModuleBoundaryTests(unittest.TestCase):
             [],
         )
 
+    def test_only_lead_service_builds_new_crm_leads(self) -> None:
+        # The open-lead invariant (one open lead per tenant+contact, serialised on the contact
+        # row) lives in CrmLeadService.claim_or_create_open_lead; no other application
+        # service may construct a CrmLead.
+        offenders = []
+        for path in (APP / "modules" / "crm").rglob("*.py"):
+            if path.name in {"lead_service.py", "models.py"}:
+                continue
+            for node in ast.walk(ast.parse(_source(path))):
+                if isinstance(node, ast.Call) and getattr(node.func, "id", getattr(node.func, "attr", "")) == "CrmLead":
+                    offenders.append(f"{path.relative_to(APP)}:{node.lineno}")
+        self.assertEqual(offenders, [])
+
     def test_crm_orm_never_leaves_the_crm_module(self) -> None:
         models = "app.modules.crm.infrastructure.models"
         self.assertEqual(
@@ -1018,7 +1031,7 @@ CRITICAL_PUBLIC_APIS = {
         "OutboundCallLedger",
     ],
     "app.modules.analytics.public": ["VoiceCallProjectionFacade"],
-    "app.modules.crm.public": ["CrmFacade"],
+    "app.modules.crm.public": ["CrmFacade", "CrmVoiceCalls", "OutboundCallLedger"],
     "app.modules.integrations.public": ["WhatsAppFacade"],
     "app.modules.scheduling.public": ["SchedulingFacade"],
 

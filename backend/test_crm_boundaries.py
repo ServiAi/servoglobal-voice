@@ -27,6 +27,8 @@ from app.modules.crm.infrastructure.models import (
     CrmVoiceCallEvent,
 )
 from app.modules.crm.public import (
+    CreateVoiceCallCommand,
+    UpdateVoiceCallCommand,
     ContactProfile,
     CrmFacade,
     CrmVoiceCalls,
@@ -126,7 +128,7 @@ class CrmPublicDtoTests(Integration2ATestCase):
             lead = facade.get_lead_profile(self.tenant.id, lead_id)
             contact = facade.get_contact_profile(self.tenant.id, contact_id)
             calls = CrmVoiceCalls(db)
-            call = calls.create(tenant_id=self.tenant.id, lead_id=lead_id, contact_id=contact_id, provider="x")
+            call = calls.create(CreateVoiceCallCommand(tenant_id=self.tenant.id, lead_id=lead_id, contact_id=contact_id, provider="x"))
         self.assertIsInstance(lead, LeadProfile)
         self.assertIsInstance(contact, ContactProfile)
         self.assertIsInstance(call, VoiceCallView)
@@ -196,9 +198,7 @@ class CrmPortsTests(Integration2ATestCase):
     def test_lead_deletion_reaches_other_modules_only_through_ports(self) -> None:
         lead_id, contact_id = self.seed_lead()
         with SessionLocal() as db:
-            call = CrmVoiceCalls(db).create(
-                tenant_id=self.tenant.id, lead_id=lead_id, contact_id=contact_id, provider="x"
-            )
+            call = CrmVoiceCalls(db).create(CreateVoiceCallCommand(tenant_id=self.tenant.id, lead_id=lead_id, contact_id=contact_id, provider="x"))
             db.commit()
         scheduling, history = FakeScheduling(), FakeHistory()
         with SessionLocal() as db:
@@ -243,25 +243,43 @@ class VoiceCallLedgerTests(Integration2ATestCase):
     def test_ledger_writes_run_in_the_callers_transaction_and_never_commit(self) -> None:
         with SessionLocal() as db:
             calls = CrmVoiceCalls(db)
-            created = calls.create(tenant_id=self.tenant.id, provider="p", status="requested")
-            calls.update(created.id, status="queued", provider_call_id="pc-1")
+            created = calls.create(CreateVoiceCallCommand(tenant_id=self.tenant.id, provider="p", status="requested"))
+            calls.update(created.id, UpdateVoiceCallCommand(status="queued", provider_call_id="pc-1"))
             self.assertEqual(calls.get(created.id).status, "queued")
             db.rollback()  # the caller decides: nothing was committed behind its back
         with SessionLocal() as db:
             self.assertEqual(db.scalar(select(func.count()).select_from(CrmVoiceCall)), 0)
 
-    def test_update_rejects_fields_outside_the_whitelist(self) -> None:
+    def test_update_command_cannot_name_identity_or_link_columns(self) -> None:
+        for bad in ("tenant_id", "id", "created_at", "source_submission_id"):
+            with self.assertRaises(TypeError):
+                UpdateVoiceCallCommand(**{bad: "x"})
+
+    def test_update_changes_only_what_the_command_sets_and_none_clears(self) -> None:
         with SessionLocal() as db:
             calls = CrmVoiceCalls(db)
-            created = calls.create(tenant_id=self.tenant.id, provider="p")
-            for bad in ("tenant_id", "id", "created_at", "source_submission_id"):
-                with self.assertRaises(ValueError):
-                    calls.update(created.id, **{bad: "x"})
+            created = calls.create(
+                CreateVoiceCallCommand(tenant_id=self.tenant.id, provider="p", status="failed", to_phone="+57300")
+            )
+            calls.update(created.id, UpdateVoiceCallCommand(status="queued", error_message="boom"))
+            updated = calls.update(created.id, UpdateVoiceCallCommand(error_message=None))
+            self.assertEqual((updated.status, updated.error_message, updated.to_phone), ("queued", None, "+57300"))
+
+    def test_public_ledger_signatures_take_commands_not_loose_kwargs(self) -> None:
+        import inspect
+
+        for cls in (CrmVoiceCalls, OutboundCallLedger):
+            for name, member in inspect.getmembers(cls, inspect.isfunction):
+                if name.startswith("_"):
+                    continue
+                kinds = {p.kind for p in inspect.signature(member).parameters.values()}
+                self.assertNotIn(inspect.Parameter.VAR_KEYWORD, kinds, f"{cls.__name__}.{name}")
+                self.assertNotIn(inspect.Parameter.VAR_POSITIONAL, kinds, f"{cls.__name__}.{name}")
 
     def test_event_claim_is_idempotent_per_dedup_key(self) -> None:
         with SessionLocal() as db:
             calls = CrmVoiceCalls(db)
-            created = calls.create(tenant_id=self.tenant.id, provider="p")
+            created = calls.create(CreateVoiceCallCommand(tenant_id=self.tenant.id, provider="p"))
             kwargs = dict(
                 tenant_id=self.tenant.id, voice_call_id=created.id, provider="p", event_type="call.joined",
                 status="success", dedup_key="p:call-1:call.joined", payload_summary={}, created_at=datetime.now(UTC),

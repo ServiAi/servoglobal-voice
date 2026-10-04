@@ -10,7 +10,12 @@ from sqlalchemy.orm import Session
 
 from app.models.analytics import Call, CallEvent
 from app.models.voice_submissions import TenantVoiceRuntimeCall
-from app.modules.crm.public import CrmFacade, CrmVoiceCalls, VoiceCallView
+from app.modules.crm.public import (
+    CrmFacade,
+    CrmVoiceCalls,
+    UpdateVoiceCallCommand,
+    VoiceCallView,
+)
 from app.services.voice_config_service import VoiceConfigService
 
 OFFICIAL_EVENTS = {"call.started", "call.joined", "call.ended", "call.billed"}
@@ -131,7 +136,7 @@ class VoiceRuntimeWebhookService:
                 origins, target_status = {"starting", "unknown", "ready", "connected"}, "ended"
             else:
                 origins, target_status = set(), runtime.status
-            call = calls.update(call.id, **changes)
+            call = calls.update(call.id, UpdateVoiceCallCommand(**changes))
             if origins:
                 values: dict[str, Any] = {"status": target_status, "provider_call_id": provider_call_id}
                 if target_status == "connected":

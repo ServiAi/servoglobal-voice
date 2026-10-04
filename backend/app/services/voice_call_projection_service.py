@@ -16,7 +16,13 @@ from sqlalchemy.orm import Session
 
 from app.models.analytics import Agent, Call
 from app.modules.agents.public import AgentsFacade
-from app.modules.crm.public import CrmFacade, CrmVoiceCalls, LeadProfile, VoiceCallView
+from app.modules.crm.public import (
+    CrmFacade,
+    CrmVoiceCalls,
+    LeadProfile,
+    UpdateVoiceCallCommand,
+    VoiceCallView,
+)
 from app.modules.voice.public import (
     SessionEventFact,
     SessionProjectionFacts,
@@ -115,7 +121,7 @@ class VoiceCallProjectionService:
             changes["duration_seconds"] = duration
             if terminal and crm_call.ended_at is None:
                 changes["ended_at"] = ended_at
-            crm_call = CrmVoiceCalls(self.db).update(crm_call.id, **changes)
+            crm_call = CrmVoiceCalls(self.db).update(crm_call.id, UpdateVoiceCallCommand(**changes))
 
         self._activity(session, crm_call, call, events)
         if commit:
@@ -135,11 +141,11 @@ class VoiceCallProjectionService:
             if call is not None and call.tenant_id == session.tenant_id:
                 now = occurred_at or datetime.now(UTC)
                 if event_type == "voice.session.connected" and call.status == "answered":
-                    calls.update(call.id, status="in_progress")
+                    calls.update(call.id, UpdateVoiceCallCommand(status="in_progress"))
                 elif event_type == "voice.session.ended" and call.status not in {
                     "busy", "rejected", "no_answer", "failed", "completed"
                 }:
-                    calls.update(call.id, status="completed" if call.answered_at else "no_answer", ended_at=now)
+                    calls.update(call.id, UpdateVoiceCallCommand(status="completed" if call.answered_at else "no_answer", ended_at=now))
                     logger.info(
                         "LiveKit SIP outbound completed | tenant_id=%s | crm_voice_call_id=%s | voice_session_id=%s | livekit_room_name=%s | livekit_dispatch_id=%s | livekit_sip_trunk_id=%s | sip_participant_identity=%s | sip_call_id=%s",
                         session.tenant_id,
@@ -154,7 +160,7 @@ class VoiceCallProjectionService:
                 elif event_type == "voice.session.failed" and call.status not in {
                     "busy", "rejected", "no_answer", "failed", "completed"
                 }:
-                    calls.update(call.id, status="failed", ended_at=now)
+                    calls.update(call.id, UpdateVoiceCallCommand(status="failed", ended_at=now))
         self.db.flush()
         return self.project_session(session_id, tenant_id=tenant_id, commit=False)
 

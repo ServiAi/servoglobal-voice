@@ -22,7 +22,12 @@ from app.models.voice_submissions import (
     TenantVoiceExperienceSubmission,
     TenantVoiceExperienceSubmissionValue,
 )
-from app.modules.crm.public import CrmFacade, CrmVoiceCalls
+from app.modules.crm.public import (
+    CreateVoiceCallCommand,
+    CrmFacade,
+    CrmVoiceCalls,
+    UpdateVoiceCallCommand,
+)
 from app.modules.telephony.public import (
     CapacityFacade,
     SipRouteFacade,
@@ -117,15 +122,12 @@ class PublicVoiceCallbackService:
                         if existing.status == "failed":
                             # A prior attempt failed (e.g. transient SIP error); let the
                             # worker pick it back up instead of dead-ending the customer.
-                            calls.update(
-                                existing.id,
-                                status="requested",
+                            calls.update(existing.id, UpdateVoiceCallCommand(status="requested",
                                 error_message=None,
                                 provider_call_id=None,
                                 provider_session_id=None,
                                 provider_attempt_started_at=None,
-                                started_at=None,
-                            )
+                                started_at=None))
                         return PublicVoiceCallbackResponse(status="accepted")
                     if context_session.status != "active":
                         raise PublicCallFailure(409, "context_session_unavailable")
@@ -194,9 +196,7 @@ class PublicVoiceCallbackService:
                             route.max_concurrent_calls,
                         )
 
-                    call = calls.create(
-                        flush=True,
-                        tenant_id=context_session.tenant_id,
+                    call = calls.create(CreateVoiceCallCommand(tenant_id=context_session.tenant_id,
                         lead_id=submission.crm_lead_id,
                         contact_id=submission.crm_contact_id,
                         source_submission_id=submission.id,
@@ -206,8 +206,7 @@ class PublicVoiceCallbackService:
                         direction="outbound",
                         status="requested",
                         to_phone=phone.e164,
-                        from_number=route.caller_id,
-                    )
+                        from_number=route.caller_id), flush=True)
                     if submission.crm_contact_id:
                         CrmFacade(db).stage_activity(
                             tenant_id=context_session.tenant_id,
@@ -278,7 +277,7 @@ class VoiceCallbackWorker:
                 call = calls.lock_stale_active(("queued", "in_progress"), reconcile_cutoff)
                 if call is None:
                     return False
-                calls.update(call.id, updated_at=now)
+                calls.update(call.id, UpdateVoiceCallCommand(updated_at=now))
                 call_id = call.id
 
         timed_out = False
@@ -341,7 +340,7 @@ class VoiceCallbackWorker:
                     forced=timed_out,
                 )
             if timed_out and CrmVoiceCalls(db).get(call_id) is not None:
-                CrmVoiceCalls(db).update(call_id, error_message="Provider completion timeout.")
+                CrmVoiceCalls(db).update(call_id, UpdateVoiceCallCommand(error_message="Provider completion timeout."))
                 db.commit()
             return True
 
@@ -369,7 +368,7 @@ class VoiceCallbackWorker:
                 for call in candidates:
                     route = SipRouteFacade(db).lock_route(call.sip_route_id)
                     if route is None or route.status != "active":
-                        calls.update(call.id, status="failed", error_message="Outbound SIP route is unavailable.")
+                        calls.update(call.id, UpdateVoiceCallCommand(status="failed", error_message="Outbound SIP route is unavailable."))
                         return call.id
                     active_count = CapacityFacade(db).callbacks_in_flight(
                         tenant_id=call.tenant_id,
@@ -379,7 +378,7 @@ class VoiceCallbackWorker:
                         # This tenant's route is at capacity; try the next
                         # oldest candidate instead of starving other tenants.
                         continue
-                    calls.update(call.id, status="starting", provider_attempt_started_at=datetime.now(UTC))
+                    calls.update(call.id, UpdateVoiceCallCommand(status="starting", provider_attempt_started_at=datetime.now(UTC)))
                     return call.id
 
                 return None
@@ -441,14 +440,11 @@ class VoiceCallbackWorker:
                     context=context,
                 )
                 normalized = client.normalize_provider_response(call.provider, response)
-                call = calls.update(
-                    call.id,
-                    provider_call_id=normalized.get("provider_call_id"),
+                call = calls.update(call.id, UpdateVoiceCallCommand(provider_call_id=normalized.get("provider_call_id"),
                     provider_session_id=normalized.get("provider_session_id"),
                     status="queued",
                     started_at=datetime.now(UTC),
-                    error_message=None,
-                )
+                    error_message=None))
                 db.commit()
                 VoiceCallService(db).record_integration_event(
                     tenant_id=call.tenant_id,
@@ -461,7 +457,7 @@ class VoiceCallbackWorker:
                     },
                 )
             except Exception as exc:
-                calls.update(call.id, status="failed", error_message=client.sanitize_voice_error(exc))
+                calls.update(call.id, UpdateVoiceCallCommand(status="failed", error_message=client.sanitize_voice_error(exc)))
                 db.commit()
                 logger.warning(
                     "Voice callback start failed",

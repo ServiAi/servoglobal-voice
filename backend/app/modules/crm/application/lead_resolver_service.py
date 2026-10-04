@@ -6,6 +6,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.modules.crm.application.lead_service import CrmLeadService
 from app.modules.crm.application.pipeline_service import CrmPipelineService
 from app.modules.crm.application.ports import AnalyticsPort
 from app.modules.crm.domain.calls import CallRef
@@ -20,6 +21,7 @@ class CrmLeadResolverService:
         self.db = db
         self._analytics = analytics
         self.pipeline_service = CrmPipelineService(db)
+        self.lead_service = CrmLeadService(db)
 
     @property
     def analytics(self) -> AnalyticsPort:
@@ -90,39 +92,33 @@ class CrmLeadResolverService:
         call: CallRef | None = None,
     ) -> CrmLead:
         meta = metadata or {}
-        lead = self.resolve_existing_lead_for_call(tenant_id, call, contact.id, meta) if call else None
-        if lead is None:
-            lead = self._lead_by_context_id(tenant_id, self._value(meta, "context_id", "crm_context_id"))
-        if lead is None:
-            lead = self._lead_by_form_submission_id(tenant_id, self._value(meta, "form_submission_id", "submission_id"))
-        if lead is None:
-            lead = self._open_new_stage_lead_for_contact(tenant_id, contact.id)
+        # Resolved before any contact lock: ensuring the default stages commits.
+        new_stage_id = self.pipeline_service.get_stage_by_key(tenant_id, "new").id
 
-        if lead is None:
-            stage = self.pipeline_service.get_stage_by_key(tenant_id, "new")
-            lead = CrmLead(
-                tenant_id=tenant_id,
-                contact_id=contact.id,
-                current_stage_id=stage.id,
-                status="open",
-                created_from_call_id=call.id if call and call.id else None,
-                last_call_id=call.id if call and call.id else None,
-                form_submission_id=meta.get("form_submission_id"),
-                context_id=meta.get("context_id"),
-                interest=meta.get("interest"),
-                industry=meta.get("industry"),
-                use_case=meta.get("use_case"),
-                volume=meta.get("volume"),
-                pain_point=meta.get("pain_point"),
-                budget_range=meta.get("budget_range"),
-                intent_level=meta.get("intent_level"),
-                source=meta.get("source"),
-                campaign=meta.get("campaign"),
-            )
-            self.db.add(lead)
-            self.db.commit()
-            self.db.refresh(lead)
+        def existing() -> CrmLead | None:
+            lead = self.resolve_existing_lead_for_call(tenant_id, call, contact.id, meta) if call else None
+            if lead is None:
+                lead = self._lead_by_context_id(tenant_id, self._value(meta, "context_id", "crm_context_id"))
+            if lead is None:
+                lead = self._lead_by_form_submission_id(
+                    tenant_id, self._value(meta, "form_submission_id", "submission_id")
+                )
+            if lead is None:
+                lead = self._open_new_stage_lead_for_contact(tenant_id, contact.id, stage_id=new_stage_id)
             return lead
+
+        lead = existing()
+        if lead is None:
+            lead, created = self.lead_service.claim_or_create_open_lead(
+                tenant_id,
+                contact.id,
+                stage_key="new",
+                call_id=call.id if call and call.id else None,
+                metadata=meta,
+                find_existing=existing,
+            )
+            if created:
+                return lead
 
         self._attach_call(lead, call)
         self._enrich_lead_fields(lead, meta)
@@ -140,33 +136,22 @@ class CrmLeadResolverService:
         stage_key: str = "connected",
     ) -> CrmLead:
         meta = metadata or {}
-        lead = self.resolve_existing_lead_for_call(tenant_id, call, contact.id, meta)
 
+        def existing() -> CrmLead | None:
+            return self.resolve_existing_lead_for_call(tenant_id, call, contact.id, meta)
+
+        lead = existing()
         if lead is None:
-            stage = self.pipeline_service.get_stage_by_key(tenant_id, stage_key)
-            lead = CrmLead(
-                tenant_id=tenant_id,
-                contact_id=contact.id,
-                current_stage_id=stage.id,
-                status="open",
-                created_from_call_id=call.id,
-                last_call_id=call.id,
-                form_submission_id=meta.get("form_submission_id"),
-                context_id=meta.get("context_id"),
-                interest=meta.get("interest"),
-                industry=meta.get("industry"),
-                use_case=meta.get("use_case"),
-                volume=meta.get("volume"),
-                pain_point=meta.get("pain_point"),
-                budget_range=meta.get("budget_range"),
-                intent_level=meta.get("intent_level"),
-                source=meta.get("source"),
-                campaign=meta.get("campaign"),
+            lead, created = self.lead_service.claim_or_create_open_lead(
+                tenant_id,
+                contact.id,
+                stage_key=stage_key,
+                call_id=call.id,
+                metadata=meta,
+                find_existing=existing,
             )
-            self.db.add(lead)
-            self.db.commit()
-            self.db.refresh(lead)
-            return lead
+            if created:
+                return lead
 
         self._attach_call(lead, call)
         self._enrich_lead_fields(lead, meta)
@@ -316,20 +301,25 @@ class CrmLeadResolverService:
             .limit(1)
         )
 
-    def _open_new_stage_lead_for_contact(self, tenant_id: str, contact_id: str) -> CrmLead | None:
-        stage = self.pipeline_service.get_stage_by_key(tenant_id, "new")
-        if stage is None:
-            return None
+    def _open_new_stage_lead_for_contact(
+        self, tenant_id: str, contact_id: str, *, stage_id: str | None = None
+    ) -> CrmLead | None:
+        if stage_id is None:
+            stage = self.pipeline_service.get_stage_by_key(tenant_id, "new")
+            if stage is None:
+                return None
+            stage_id = stage.id
         return self.db.scalar(
             select(CrmLead)
             .where(
                 CrmLead.tenant_id == tenant_id,
                 CrmLead.contact_id == contact_id,
                 CrmLead.status == "open",
-                CrmLead.current_stage_id == stage.id,
+                CrmLead.current_stage_id == stage_id,
             )
             .order_by(CrmLead.updated_at.desc())
             .limit(1)
+            .execution_options(populate_existing=True)
         )
 
     def _attach_call(self, lead: CrmLead, call: CallRef | None) -> None:

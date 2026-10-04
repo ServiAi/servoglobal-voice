@@ -35,6 +35,7 @@ from app.models.identity import Tenant
 from app.modules.crm.application.activity_service import CrmActivityService
 from app.modules.crm.application.call_ingestion_service import CrmIngestionService
 from app.modules.crm.application.contact_service import CrmContactService
+from app.modules.crm.application.lead_resolver_service import CrmLeadResolverService
 from app.modules.crm.application.lead_service import CrmLeadService
 from app.modules.crm.application.stage_transition_service import CrmStageTransitionService
 from app.modules.crm.domain.calls import CallRef
@@ -44,7 +45,7 @@ from app.modules.crm.infrastructure.models import (
     CrmLead,
     CrmVoiceCallEvent,
 )
-from app.modules.crm.public import CrmVoiceCalls
+from app.modules.crm.public import CreateVoiceCallCommand, CrmVoiceCalls, UpdateVoiceCallCommand
 
 
 @unittest.skipUnless(
@@ -146,6 +147,81 @@ class CrmPostgresTests(unittest.TestCase):
         self.assertEqual(len(set(results)), 1, "the contact must keep a single open lead")
         self.assertEqual(self._count(CrmLead, tenant_id=tenant_id, status="open"), 1)
 
+    # -- single open lead across ALL entry points (same contact lock) ---------------------
+    def _connected(self, tenant_id: str, contact_id: str, call_id: str) -> str:
+        with self.SessionLocal() as db:
+            contact = db.get(CrmContact, contact_id)
+            ref = CallRef(id=call_id, tenant_id=tenant_id, external_provider="ultravox", external_call_id=f"ext-{call_id}")
+            return CrmLeadResolverService(db).resolve_or_create_lead_for_connected_call(
+                tenant_id, ref, contact, {"interest": "x"}
+            ).id
+
+    def _new_context(self, tenant_id: str, contact_id: str, context_id: str) -> str:
+        with self.SessionLocal() as db:
+            contact = db.get(CrmContact, contact_id)
+            return CrmLeadResolverService(db).resolve_or_create_lead_for_new_context(
+                tenant_id, contact, {"context_id": context_id}
+            ).id
+
+    def _open_count(self, tenant_id: str, contact_id: str) -> int:
+        return self._count(CrmLead, tenant_id=tenant_id, contact_id=contact_id, status="open")
+
+    def test_two_connected_calls_of_the_same_contact_yield_one_open_lead(self) -> None:
+        tenant_id = self._tenant()
+        contact_id = self._contact_id(tenant_id)
+        call_a, call_b = self._call_row(tenant_id), self._call_row(tenant_id)
+        results = self._in_threads(
+            lambda: self._connected(tenant_id, contact_id, call_a), lambda: self._connected(tenant_id, contact_id, call_b)
+        )
+        self.assertFalse([r for r in results if isinstance(r, Exception)], results)
+        self.assertEqual(self._open_count(tenant_id, contact_id), 1)
+        self.assertEqual(len(set(results)), 1)
+
+    def test_two_distinct_contexts_of_the_same_contact_yield_one_open_lead(self) -> None:
+        tenant_id = self._tenant()
+        contact_id = self._contact_id(tenant_id)
+        results = self._in_threads(
+            lambda: self._new_context(tenant_id, contact_id, "context-A"),
+            lambda: self._new_context(tenant_id, contact_id, "context-B"),
+        )
+        self.assertFalse([r for r in results if isinstance(r, Exception)], results)
+        self.assertEqual(self._open_count(tenant_id, contact_id), 1)
+
+    def test_the_same_context_id_concurrently_returns_the_same_lead_without_integrity_errors(self) -> None:
+        tenant_id = self._tenant()
+        contact_id = self._contact_id(tenant_id)
+        results = self._in_threads(*[lambda: self._new_context(tenant_id, contact_id, "same-context")] * 3)
+        self.assertFalse([r for r in results if isinstance(r, Exception)], results)
+        self.assertEqual(len(set(results)), 1)
+        self.assertEqual(self._count(CrmLead, tenant_id=tenant_id, context_id="same-context"), 1)
+
+    def test_different_entry_points_share_the_same_invariant(self) -> None:
+        tenant_id = self._tenant()
+        contact_id = self._contact_id(tenant_id)
+        call_id = self._call_row(tenant_id)
+
+        def service_path():
+            with self.SessionLocal() as db:
+                return CrmLeadService(db).get_or_create_open_lead(tenant_id, contact_id).id
+
+        results = self._in_threads(
+            service_path, lambda: self._connected(tenant_id, contact_id, call_id),
+            lambda: self._new_context(tenant_id, contact_id, "ctx-mixed"),
+        )
+        self.assertFalse([r for r in results if isinstance(r, Exception)], results)
+        self.assertEqual(self._open_count(tenant_id, contact_id), 1)
+        self.assertEqual(len(set(results)), 1)
+
+    def test_open_lead_invariant_is_scoped_per_contact(self) -> None:
+        tenant_id = self._tenant()
+        c1 = self._contact_id(tenant_id, "+573001110001", "one@example.com")
+        c2 = self._contact_id(tenant_id, "+573001110002", "two@example.com")
+        results = self._in_threads(
+            lambda: self._new_context(tenant_id, c1, "ctx-1"), lambda: self._new_context(tenant_id, c2, "ctx-2")
+        )
+        self.assertFalse([r for r in results if isinstance(r, Exception)], results)
+        self.assertEqual((self._open_count(tenant_id, c1), self._open_count(tenant_id, c2)), (1, 1))
+
     # -- timeline -------------------------------------------------------------------
     def _call_row(self, tenant_id: str) -> str:
         with self.SessionLocal() as db:
@@ -218,7 +294,7 @@ class CrmPostgresTests(unittest.TestCase):
     def test_concurrent_call_event_claims_insert_exactly_one_row(self) -> None:
         tenant_id = self._tenant()
         with self.SessionLocal() as db:
-            call = CrmVoiceCalls(db).create(tenant_id=tenant_id, provider="ultravox")
+            call = CrmVoiceCalls(db).create(CreateVoiceCallCommand(tenant_id=tenant_id, provider="ultravox"))
             db.commit()
 
         def claim():

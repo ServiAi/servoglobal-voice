@@ -31,12 +31,14 @@ from app.modules.crm.domain.views import (
     ContactProfile,
     ContactRef,
     ContactSnapshot,
+    CreateVoiceCallCommand,
     CrmFunnelSnapshot,
     LeadProfile,
     LeadRef,
     LeadSnapshot,
     OutboundContactRef,
     PendingActionCandidate,
+    UpdateVoiceCallCommand,
     VoiceCallView,
 )
 
@@ -51,6 +53,7 @@ __all__ = [
     "ContactRef",
     "ContactSnapshot",
     "ContextLookup",
+    "CreateVoiceCallCommand",
     "CrmFacade",
     "CrmFunnelSnapshot",
     "CrmVoiceCalls",
@@ -60,6 +63,7 @@ __all__ = [
     "OutboundCallLedger",
     "OutboundContactRef",
     "PendingActionCandidate",
+    "UpdateVoiceCallCommand",
     "VoiceCallView",
 ]
 
@@ -371,11 +375,11 @@ class CrmVoiceCalls:
     def count_in_statuses(self, tenant_id: str, route_id: str, statuses: Sequence[str]) -> int:
         return self._ledger().count_in_statuses(tenant_id, route_id, statuses)
 
-    def create(self, *, flush: bool = False, **fields: Any) -> VoiceCallView:
-        return self._ledger().create(flush=flush, **fields)
+    def create(self, command: CreateVoiceCallCommand, *, flush: bool = False) -> VoiceCallView:
+        return self._ledger().create(command, flush=flush)
 
-    def update(self, call_id: str, **changes: Any) -> VoiceCallView:
-        return self._ledger().update(call_id, **changes)
+    def update(self, call_id: str, command: UpdateVoiceCallCommand) -> VoiceCallView:
+        return self._ledger().update(call_id, command)
 
     def lock_stale_active(self, statuses: Sequence[str], updated_before: datetime) -> VoiceCallView | None:
         return self._ledger().lock_stale_active(statuses, updated_before)
@@ -450,9 +454,7 @@ class OutboundCallLedger:
     def open_call(self, *, sip_route_id: str, agent_version_id: str | None, to_phone: str, from_number: str) -> str:
         """Adds the CrmVoiceCall (flush, no commit)."""
         target = self.resolve_target()
-        call = self._calls().create(
-            flush=True,
-            tenant_id=self.tenant_id,
+        call = self._calls().create(CreateVoiceCallCommand(tenant_id=self.tenant_id,
             lead_id=target.lead_id,
             contact_id=target.contact_id,
             sip_route_id=sip_route_id,
@@ -461,24 +463,23 @@ class OutboundCallLedger:
             direction="outbound",
             status="requested",
             to_phone=to_phone,
-            from_number=from_number,
-        )
+            from_number=from_number), flush=True)
         self.call_id = call.id
         return call.id
 
     def mark_dialing(self, call_id: str) -> None:
         """Commits."""
         self._calls().refresh(self._own(call_id).id)
-        self._calls().update(call_id, status="dialing", started_at=datetime.now(UTC))
+        self._calls().update(call_id, UpdateVoiceCallCommand(status="dialing", started_at=datetime.now(UTC)))
         self.db.commit()
 
     def mark_answered(self, call_id: str, provider_call_id: str | None) -> None:
         """No commit: the caller commits together with the projection."""
         self._own(call_id)
-        self._calls().update(call_id, provider_call_id=provider_call_id, status="answered", answered_at=datetime.now(UTC))
+        self._calls().update(call_id, UpdateVoiceCallCommand(provider_call_id=provider_call_id, status="answered", answered_at=datetime.now(UTC)))
 
     def mark_failed(self, call_id: str, call_status: str, error_code: str) -> None:
         """No commit: committed with the session failure that follows."""
         self._own(call_id)
         self._calls().refresh(call_id)
-        self._calls().update(call_id, status=call_status, error_message=error_code[:255], ended_at=datetime.now(UTC))
+        self._calls().update(call_id, UpdateVoiceCallCommand(status=call_status, error_message=error_code[:255], ended_at=datetime.now(UTC)))

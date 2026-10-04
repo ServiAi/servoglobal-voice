@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from sqlalchemy import func, or_, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.modules.crm.application.activity_service import CrmActivityService
@@ -46,49 +48,104 @@ class CrmLeadService:
         call_id: str | None = None,
         metadata: dict | None = None,
     ) -> CrmLead:
+        meta_dict = metadata or {}
         lead = self._open_lead(tenant_id, contact_id)
         if lead is None:
-            # Make sure the default stages exist BEFORE locking (that step commits), then
-            # serialise on the contact row so concurrent requests keep a single open lead.
-            default_stage = self.pipeline_service.get_stage_by_key(tenant_id, "new")
-            self.db.execute(
-                select(CrmContact.id)
-                .where(CrmContact.id == contact_id, CrmContact.tenant_id == tenant_id)
-                .with_for_update()
+            lead, created = self.claim_or_create_open_lead(
+                tenant_id, contact_id, stage_key="new", call_id=call_id, metadata=meta_dict
             )
-            lead = self._open_lead(tenant_id, contact_id)
+            if created:
+                return lead
 
-        meta_dict = metadata or {}
-
-        if lead is not None:
-            if call_id:
-                lead.last_call_id = call_id
-            self._enrich_lead_fields(lead, meta_dict)
-            self.db.commit()
-            self.db.refresh(lead)
-        else:
-            lead = CrmLead(
-                tenant_id=tenant_id,
-                contact_id=contact_id,
-                current_stage_id=default_stage.id,
-                status="open",
-                created_from_call_id=call_id,
-                last_call_id=call_id,
-                interest=meta_dict.get("interest"),
-                industry=meta_dict.get("industry"),
-                use_case=meta_dict.get("use_case"),
-                volume=meta_dict.get("volume"),
-                pain_point=meta_dict.get("pain_point"),
-                budget_range=meta_dict.get("budget_range"),
-                intent_level=meta_dict.get("intent_level"),
-                source=meta_dict.get("source"),
-                campaign=meta_dict.get("campaign"),
-            )
-            self.db.add(lead)
-            self.db.commit()
-            self.db.refresh(lead)
-
+        if call_id:
+            lead.last_call_id = call_id
+        self._enrich_lead_fields(lead, meta_dict)
+        self.db.commit()
+        self.db.refresh(lead)
         return lead
+
+    def claim_or_create_open_lead(
+        self,
+        tenant_id: str,
+        contact_id: str,
+        *,
+        stage_key: str = "new",
+        call_id: str | None = None,
+        metadata: dict | None = None,
+        find_existing: Callable[[], CrmLead | None] | None = None,
+    ) -> tuple[CrmLead, bool]:
+        """THE way to create an open lead: no other application service may build a
+        ``CrmLead``. Serialises concurrent requests for the same contact on the
+        contact row, re-reads what the caller treats as "the existing lead"
+        (``find_existing``; by default the lead correlated by call/context/form or the
+        contact's open lead) and creates only when nothing is there. Returns
+        ``(lead, created)``; for ``created=False`` the caller enriches the winner.
+
+        The default stages are ensured BEFORE locking (that step commits); there is no
+        external I/O under the lock. A unique-index race on call/context/form is
+        resolved once by reloading the winner, otherwise re-raised."""
+        meta = metadata or {}
+        stage = self.pipeline_service.get_stage_by_key(tenant_id, stage_key)
+        self.db.execute(
+            select(CrmContact.id)
+            .where(CrmContact.id == contact_id, CrmContact.tenant_id == tenant_id)
+            .with_for_update()
+        )
+        finder = find_existing or (lambda: self._existing_open_lead(tenant_id, contact_id, call_id, meta))
+        existing = finder()
+        if existing is not None:
+            return existing, False
+
+        lead = CrmLead(
+            tenant_id=tenant_id,
+            contact_id=contact_id,
+            current_stage_id=stage.id,
+            status="open",
+            created_from_call_id=call_id,
+            last_call_id=call_id,
+            form_submission_id=meta.get("form_submission_id"),
+            context_id=meta.get("context_id"),
+            interest=meta.get("interest"),
+            industry=meta.get("industry"),
+            use_case=meta.get("use_case"),
+            volume=meta.get("volume"),
+            pain_point=meta.get("pain_point"),
+            budget_range=meta.get("budget_range"),
+            intent_level=meta.get("intent_level"),
+            source=meta.get("source"),
+            campaign=meta.get("campaign"),
+        )
+        self.db.add(lead)
+        try:
+            self.db.commit()
+        except IntegrityError:
+            # A concurrent request claimed the same call/context/form (partial unique
+            # indexes): reload the winner once; no winner means a different failure.
+            self.db.rollback()
+            winner = finder()
+            if winner is None:
+                raise
+            return winner, False
+        self.db.refresh(lead)
+        return lead, True
+
+    def _existing_open_lead(
+        self, tenant_id: str, contact_id: str, call_id: str | None, meta: dict
+    ) -> CrmLead | None:
+        for column, value in (
+            (CrmLead.created_from_call_id, call_id),
+            (CrmLead.context_id, meta.get("context_id") or meta.get("crm_context_id")),
+            (CrmLead.form_submission_id, meta.get("form_submission_id") or meta.get("submission_id")),
+        ):
+            if value:
+                found = self.db.scalar(
+                    select(CrmLead)
+                    .where(CrmLead.tenant_id == tenant_id, column == value)
+                    .execution_options(populate_existing=True)
+                )
+                if found is not None:
+                    return found
+        return self._open_lead(tenant_id, contact_id)
 
     def _open_lead(self, tenant_id: str, contact_id: str) -> CrmLead | None:
         return self.db.scalar(

@@ -9,6 +9,7 @@ project Analytics and update their own state atomically).
 
 from __future__ import annotations
 
+import dataclasses
 from collections.abc import Sequence
 from datetime import datetime
 from typing import Any
@@ -18,19 +19,13 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
 
-from app.modules.crm.domain.views import VoiceCallView
-from app.modules.crm.infrastructure.models import CrmVoiceCall, CrmVoiceCallEvent
-
-# Columns a caller may change on a call (identity, tenant and links are not).
-_UPDATABLE = frozenset(
-    {
-        "lead_id", "contact_id", "sip_route_id", "provider", "provider_call_id", "provider_session_id",
-        "provider_agent_id", "to_phone", "from_number", "status", "error_message", "recording_url",
-        "transcript_url", "summary", "started_at", "provider_attempt_started_at", "answered_at",
-        "ended_at", "duration_seconds", "updated_at",
-    }
+from app.modules.crm.domain.views import (
+    UNSET,
+    CreateVoiceCallCommand,
+    UpdateVoiceCallCommand,
+    VoiceCallView,
 )
-_CREATABLE = _UPDATABLE | {"id", "tenant_id", "source_submission_id", "direction"}
+from app.modules.crm.infrastructure.models import CrmVoiceCall, CrmVoiceCallEvent
 
 
 def view_of(row: CrmVoiceCall) -> VoiceCallView:
@@ -112,25 +107,22 @@ class VoiceCallLedger:
         )
 
     # -- writes (no commit) ------------------------------------------------------------
-    def create(self, *, flush: bool = False, **fields: Any) -> VoiceCallView:
-        unknown = set(fields) - _CREATABLE
-        if unknown:
-            raise ValueError(f"Unsupported voice call fields: {sorted(unknown)}")
+    def create(self, command: CreateVoiceCallCommand, *, flush: bool = False) -> VoiceCallView:
+        fields = {k: v for k, v in dataclasses.asdict(command).items() if v is not None}
         row = CrmVoiceCall(**fields)
         self.db.add(row)
-        if flush or "id" not in fields:
+        if flush or command.id is None:
             self.db.flush()
         return view_of(row)
 
-    def update(self, call_id: str, **changes: Any) -> VoiceCallView:
-        unknown = set(changes) - _UPDATABLE
-        if unknown:
-            raise ValueError(f"Unsupported voice call fields: {sorted(unknown)}")
+    def update(self, call_id: str, command: UpdateVoiceCallCommand) -> VoiceCallView:
         row = self.db.get(CrmVoiceCall, call_id)
         if row is None:
             raise ValueError("Voice call not found.")
-        for key, value in changes.items():
-            setattr(row, key, value)
+        for field in dataclasses.fields(command):
+            value = getattr(command, field.name)
+            if value is not UNSET:
+                setattr(row, field.name, value)
         return view_of(row)
 
     def refresh(self, call_id: str) -> VoiceCallView:

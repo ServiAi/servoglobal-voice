@@ -6,7 +6,13 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.modules.crm.public import CrmFacade, CrmVoiceCalls, VoiceCallView
+from app.modules.crm.public import (
+    CreateVoiceCallCommand,
+    CrmFacade,
+    CrmVoiceCalls,
+    UpdateVoiceCallCommand,
+    VoiceCallView,
+)
 from app.modules.telephony.public import SipRouteFacade
 from app.schemas.integrations import (
     VoiceCallActionRequest,
@@ -66,8 +72,7 @@ class VoiceCallService:
             if not agent_config:
                 raise ValueError("No active voice agent config found for this tenant.")
 
-        voice_call = self.calls.create(
-            tenant_id=tenant_id,
+        voice_call = self.calls.create(CreateVoiceCallCommand(tenant_id=tenant_id,
             lead_id=lead_id,
             contact_id=contact.id,
             provider=provider_config.provider,
@@ -75,8 +80,7 @@ class VoiceCallService:
             direction="outbound",
             status="requested",
             to_phone=to_phone,
-            from_number=sip_route.caller_id,
-        )
+            from_number=sip_route.caller_id))
         self.db.commit()
 
         metadata = {
@@ -117,13 +121,10 @@ class VoiceCallService:
             )
 
             norm = client.normalize_provider_response(provider_config.provider, response)
-            voice_call = self.calls.update(
-                voice_call.id,
-                provider_call_id=norm.get("provider_call_id"),
+            voice_call = self.calls.update(voice_call.id, UpdateVoiceCallCommand(provider_call_id=norm.get("provider_call_id"),
                 provider_session_id=norm.get("provider_session_id"),
                 status="queued",
-                started_at=datetime.now(UTC),
-            )
+                started_at=datetime.now(UTC)))
             self.db.commit()
 
             self.record_call_event(
@@ -161,9 +162,7 @@ class VoiceCallService:
             )
 
         except Exception as e:
-            voice_call = self.calls.update(
-                voice_call.id, status="failed", error_message=client.sanitize_voice_error(e)
-            )
+            voice_call = self.calls.update(voice_call.id, UpdateVoiceCallCommand(status="failed", error_message=client.sanitize_voice_error(e)))
             self.db.commit()
 
             self.record_call_event(

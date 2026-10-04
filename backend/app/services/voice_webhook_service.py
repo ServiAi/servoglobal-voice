@@ -9,7 +9,12 @@ from typing import Any
 from fastapi import HTTPException, Request, status
 from sqlalchemy.orm import Session
 
-from app.modules.crm.public import CrmFacade, CrmVoiceCalls, VoiceCallView
+from app.modules.crm.public import (
+    CrmFacade,
+    CrmVoiceCalls,
+    UpdateVoiceCallCommand,
+    VoiceCallView,
+)
 from app.services.integration_event_service import IntegrationEventService
 from app.services.voice_config_service import VoiceConfigService
 
@@ -108,7 +113,7 @@ class VoiceWebhookService:
         if summary:
             changes["summary"] = summary
         changes["updated_at"] = datetime.now(UTC)
-        call = self.calls.update(call.id, **changes)
+        call = self.calls.update(call.id, UpdateVoiceCallCommand(**changes))
         self.db.commit()
 
         self.record_call_event(

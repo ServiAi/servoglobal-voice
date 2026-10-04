@@ -213,3 +213,66 @@ class PendingActionCandidate:
     last_call_id: str | None
     qualifies_without_call: bool
     requires_call_check: bool
+
+class _Unset:
+    """Marks a field a command leaves untouched (``None`` is a real value: it clears the column)."""
+
+    _instance: _Unset | None = None
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+
+    def __repr__(self) -> str:
+        return "UNSET"
+
+    def __bool__(self) -> bool:
+        return False
+
+
+UNSET = _Unset()
+
+
+@dataclass(frozen=True)
+class CreateVoiceCallCommand:
+    """A new CRM voice call. ``None`` leaves the column to its default."""
+
+    tenant_id: str
+    id: str | None = None
+    lead_id: str | None = None
+    contact_id: str | None = None
+    source_submission_id: str | None = None
+    sip_route_id: str | None = None
+    provider: str | None = None
+    provider_agent_id: str | None = None
+    direction: str | None = None
+    status: str | None = None
+    to_phone: str | None = None
+    from_number: str | None = None
+
+
+@dataclass(frozen=True)
+class UpdateVoiceCallCommand:
+    """A partial update: only the fields that are not ``UNSET`` change."""
+
+    lead_id: str | None | _Unset = UNSET
+    contact_id: str | None | _Unset = UNSET
+    sip_route_id: str | None | _Unset = UNSET
+    provider: str | None | _Unset = UNSET
+    provider_call_id: str | None | _Unset = UNSET
+    provider_session_id: str | None | _Unset = UNSET
+    provider_agent_id: str | None | _Unset = UNSET
+    to_phone: str | None | _Unset = UNSET
+    from_number: str | None | _Unset = UNSET
+    status: str | None | _Unset = UNSET
+    error_message: str | None | _Unset = UNSET
+    recording_url: str | None | _Unset = UNSET
+    transcript_url: str | None | _Unset = UNSET
+    summary: str | None | _Unset = UNSET
+    started_at: datetime | None | _Unset = UNSET
+    provider_attempt_started_at: datetime | None | _Unset = UNSET
+    answered_at: datetime | None | _Unset = UNSET
+    ended_at: datetime | None | _Unset = UNSET
+    duration_seconds: int | None | _Unset = UNSET
+    updated_at: datetime | None | _Unset = UNSET
