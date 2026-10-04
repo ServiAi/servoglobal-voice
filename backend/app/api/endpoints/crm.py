@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.api.auth.deps import AuthContext, require_roles
 from app.db.session import get_db
-from app.models.crm import CrmContact, CrmLead
+from app.modules.crm.infrastructure.models import CrmContact, CrmLead
 from app.modules.scheduling.public import (
     BookingOperationInProgressError,
     CreateBookingCommand,
@@ -49,13 +49,13 @@ from app.schemas.crm import (
     TaskUpdateRequest,
 )
 from app.services.call_summary_service import CallSummaryService
-from app.services.crm_activity_service import CrmActivityService
+from app.modules.crm.application.activity_service import CrmActivityService
 from app.services.crm_dashboard_metrics_service import CrmDashboardMetricsService
-from app.services.crm_lead_service import CrmLeadService
-from app.services.crm_metrics_service import CrmMetricsService
-from app.services.crm_pipeline_service import CrmPipelineService
-from app.services.crm_query_service import CrmQueryService
-from app.services.crm_task_service import CrmTaskService
+from app.modules.crm.application.lead_service import CrmLeadService
+from app.modules.crm.application.metrics_service import CrmMetricsService
+from app.modules.crm.application.pipeline_service import CrmPipelineService
+from app.modules.crm.application.query_service import CrmQueryService
+from app.modules.crm.application.task_service import CrmTaskService
 from app.services.email_send_service import EmailSendService
 
 router = APIRouter(prefix="/api/v1/crm", tags=["CRM"])

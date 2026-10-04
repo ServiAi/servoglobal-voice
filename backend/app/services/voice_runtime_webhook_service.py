@@ -11,9 +11,9 @@ from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
 
 from app.models.analytics import Call, CallEvent
-from app.models.crm import CrmVoiceCall, CrmVoiceCallEvent
+from app.modules.crm.infrastructure.models import CrmVoiceCall, CrmVoiceCallEvent
 from app.models.voice_submissions import TenantVoiceRuntimeCall
-from app.services.crm_activity_service import CrmActivityService
+from app.modules.crm.application.activity_service import CrmActivityService
 from app.services.voice_config_service import VoiceConfigService
 
 OFFICIAL_EVENTS = {"call.started", "call.joined", "call.ended", "call.billed"}

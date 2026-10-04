@@ -21,10 +21,10 @@ from app.core.config import settings
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.main import app
-from app.models.crm import CrmActivity, CrmContact, CrmLead
+from app.modules.crm.infrastructure.models import CrmActivity, CrmContact, CrmLead
 from app.models.identity import Tenant, TenantMembership, User
 from app.models.integrations import TenantEmailAsset
-from app.services.crm_pipeline_service import CrmPipelineService
+from app.modules.crm.application.pipeline_service import CrmPipelineService
 from app.services.email_config_service import EmailConfigService
 from app.services.integration_service import IntegrationService
 from app.services.storage_service import StorageService

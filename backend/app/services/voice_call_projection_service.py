@@ -15,7 +15,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from app.models.analytics import Agent, Call
-from app.models.crm import CrmActivity, CrmContact, CrmLead, CrmVoiceCall
+from app.modules.crm.infrastructure.models import CrmActivity, CrmContact, CrmLead, CrmVoiceCall
 from app.modules.agents.public import AgentsFacade
 from app.modules.voice.public import (
     SessionEventFact,

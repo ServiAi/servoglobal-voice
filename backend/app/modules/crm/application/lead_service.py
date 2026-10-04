@@ -1,33 +1,42 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import UTC, datetime
 
-from sqlalchemy import delete, func, or_, select, update
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.orm import Session
 
-from app.models.crm import (
-    CrmContact,
-    CrmLead,
-    CrmVoiceCall,
-    CrmWhatsAppMessage,
-)
-from app.models.integrations import (
-    TenantEmailSend,
-    TenantFormSubmission,
-    TenantFormToken,
-)
-from app.modules.scheduling.public import SchedulingFacade
-from app.services.crm_activity_service import CrmActivityService
-from app.services.crm_pipeline_service import CrmPipelineService
+from app.modules.crm.infrastructure.models import CrmContact, CrmLead, CrmVoiceCall
+from app.modules.crm.application.ports import LeadHistoryPort, SchedulingPort
+from app.modules.crm.application.activity_service import CrmActivityService
+from app.modules.crm.application.pipeline_service import CrmPipelineService
+from app.modules.crm.domain.pipeline import VALID_LEAD_STATUSES
 
-VALID_LEAD_STATUSES = {"open", "won", "lost", "unqualified", "paused"}
+@dataclass(frozen=True)
+class _LeadPorts:
+    scheduling: SchedulingPort
+    history: LeadHistoryPort
 
 
 class CrmLeadService:
-    def __init__(self, db: Session) -> None:
+    def __init__(
+        self, db: Session, *, scheduling: SchedulingPort | None = None, history: LeadHistoryPort | None = None
+    ) -> None:
         self.db = db
+        self._scheduling = scheduling
+        self._history = history
         self.pipeline_service = CrmPipelineService(db)
         self.activity_service = CrmActivityService(db)
+
+    def _ports(self):
+        """Scheduling/history ports (lazy; bound in ``crm.wiring``)."""
+        if self._scheduling is None or self._history is None:
+            from app.modules.crm.wiring import default_crm_ports
+
+            ports = default_crm_ports(self.db)
+            self._scheduling = self._scheduling or ports.scheduling
+            self._history = self._history or ports.history
+        return _LeadPorts(self._scheduling, self._history)
 
     def get_or_create_open_lead(
         self,
@@ -256,35 +265,23 @@ class CrmLeadService:
         # Bookings, WhatsApp messages, voice calls and email sends are
         # operational history outside the lead/contact lifecycle: keep the
         # rows but clear the now-dangling references instead of blocking the
-        # delete on their foreign keys.
-        SchedulingFacade(self.db).detach_customers(
-            tenant_id=tenant_id, lead_ids=lead_ids, contact_ids=contact_ids
-        )
-        for model in (CrmWhatsAppMessage, CrmVoiceCall, TenantEmailSend):
-            self.db.execute(
-                update(model)
-                .where(
-                    model.tenant_id == tenant_id,
-                    or_(model.lead_id.in_(lead_ids), model.contact_id.in_(contact_ids)),
-                )
-                .values(lead_id=None, contact_id=None)
+        # delete on their foreign keys. CRM clears its own voice calls; the
+        # other modules' rows are cleared through ports.
+        self._ports().scheduling.detach_customers(tenant_id=tenant_id, lead_ids=lead_ids, contact_ids=contact_ids)
+        self._ports().history.clear_references(tenant_id=tenant_id, lead_ids=lead_ids, contact_ids=contact_ids)
+        self.db.execute(
+            update(CrmVoiceCall)
+            .where(
+                CrmVoiceCall.tenant_id == tenant_id,
+                or_(CrmVoiceCall.lead_id.in_(lead_ids), CrmVoiceCall.contact_id.in_(contact_ids)),
             )
+            .values(lead_id=None, contact_id=None)
+        )
 
         # Form tokens/submissions require a lead and cannot be preserved
-        # without one; delete them (submissions first, they reference the
-        # token).
-        self.db.execute(
-            delete(TenantFormSubmission).where(
-                TenantFormSubmission.tenant_id == tenant_id,
-                TenantFormSubmission.lead_id.in_(lead_ids),
-            )
-        )
-        self.db.execute(
-            delete(TenantFormToken).where(
-                TenantFormToken.tenant_id == tenant_id,
-                TenantFormToken.lead_id.in_(lead_ids),
-            )
-        )
+        # without one; they are deleted (submissions first, they reference the
+        # token) by their owner.
+        self._ports().history.delete_form_artifacts(tenant_id=tenant_id, lead_ids=lead_ids)
 
         for lead in self.db.scalars(select(CrmLead).where(CrmLead.id.in_(lead_ids))):
             self.db.delete(lead)

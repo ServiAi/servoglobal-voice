@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.crm import CrmActivity, CrmLead, CrmPipelineStage
+from app.modules.crm.infrastructure.models import CrmActivity, CrmLead, CrmPipelineStage
 
 
 class CrmActivityService:

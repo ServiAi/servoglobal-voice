@@ -30,7 +30,7 @@ from sqlalchemy.orm import sessionmaker
 from app.db.base import Base
 from app.models.analytics import Call, CallEvent
 from app.models.billing import TenantBillingPlan
-from app.models.crm import CrmVoiceCall, CrmVoiceCallEvent
+from app.modules.crm.infrastructure.models import CrmVoiceCall, CrmVoiceCallEvent
 from app.models.identity import Tenant
 from app.models.integrations import TenantVoiceAgentConfig, TenantVoiceProviderConfig
 from app.models.tenant_features import TenantFeatureGrant

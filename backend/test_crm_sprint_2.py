@@ -14,14 +14,14 @@ from app.main import app
 from app.api.auth.deps import AuthContext, get_current_auth_context
 from app.models.analytics import Agent, Call, CallEvent
 from app.models.identity import Tenant, User, TenantMembership
-from app.models.crm import CrmContact, CrmPipelineStage, CrmLead, CrmActivity, CrmTask
-from app.services.crm_pipeline_service import CrmPipelineService
-from app.services.crm_contact_service import CrmContactService
-from app.services.crm_lead_service import CrmLeadService
-from app.services.crm_activity_service import CrmActivityService
-from app.services.crm_task_service import CrmTaskService
-from app.services.crm_metrics_service import CrmMetricsService
-from app.services.crm_query_service import CrmQueryService
+from app.modules.crm.infrastructure.models import CrmContact, CrmPipelineStage, CrmLead, CrmActivity, CrmTask
+from app.modules.crm.application.pipeline_service import CrmPipelineService
+from app.modules.crm.application.contact_service import CrmContactService
+from app.modules.crm.application.lead_service import CrmLeadService
+from app.modules.crm.application.activity_service import CrmActivityService
+from app.modules.crm.application.task_service import CrmTaskService
+from app.modules.crm.application.metrics_service import CrmMetricsService
+from app.modules.crm.application.query_service import CrmQueryService
 
 
 class CrmSprint2Tests(unittest.TestCase):

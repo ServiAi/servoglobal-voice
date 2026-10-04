@@ -954,7 +954,7 @@ class DataBoundaryTests(unittest.TestCase):
         self.assertEqual(found, [])
 
     def test_boundary_checker_detects_leaks(self) -> None:
-        from app.models.crm import CrmLead
+        from app.modules.crm.infrastructure.models import CrmLead
 
         base = _orm_base()
         self.assertTrue(_boundary_problems(tuple[typing.Any, CrmLead], "x", base))

@@ -10,7 +10,7 @@ from sqlalchemy import func, select
 from _integrations_2a_test_base import Integration2ATestCase, SessionLocal
 from app.modules.agents.infrastructure.models import TenantAgent
 from app.models.analytics import Agent, Call
-from app.models.crm import CrmActivity, CrmLead, CrmVoiceCall
+from app.modules.crm.infrastructure.models import CrmActivity, CrmLead, CrmVoiceCall
 from app.modules.voice.infrastructure.models import VoiceSession, VoiceSessionEvent
 from app.schemas.crm import ActivitySchema
 from app.services.voice_call_projection_service import VoiceCallProjectionService

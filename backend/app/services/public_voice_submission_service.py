@@ -20,9 +20,9 @@ from app.schemas.public_voice_submissions import (
     PublicVoiceExperienceSubmissionRequest,
     PublicVoiceExperienceSubmissionResponse,
 )
-from app.services.crm_contact_service import CrmContactService
-from app.services.crm_activity_service import CrmActivityService
-from app.services.crm_lead_resolver_service import CrmLeadResolverService
+from app.modules.crm.application.contact_service import CrmContactService
+from app.modules.crm.application.activity_service import CrmActivityService
+from app.modules.crm.application.lead_resolver_service import CrmLeadResolverService
 from app.services.integration_event_service import IntegrationEventService
 from app.services.public_voice_experience_service import (
     PublicVoiceExperienceService,

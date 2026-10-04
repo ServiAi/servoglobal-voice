@@ -19,22 +19,16 @@ from app.main import app
 from app.api.auth.deps import AuthContext, get_current_auth_context
 from app.models.analytics import Agent, Call, CallEvent
 from app.models.identity import Tenant, User, TenantMembership
-from app.models.crm import (
-    CrmContact,
-    CrmPipelineStage,
-    CrmLead,
-    CrmActivity,
-    CrmTask,
-    CrmWhatsAppMessage,
-    CrmVoiceCall,
-)
+from app.modules.crm.infrastructure.models import CrmContact, CrmPipelineStage, CrmLead, CrmActivity, CrmTask, CrmVoiceCall
+from app.models.crm import CrmWhatsAppMessage
 from app.modules.scheduling.infrastructure.models import CrmBooking
 from app.models.integrations import TenantEmailSend, TenantForm, TenantFormToken, TenantFormSubmission
-from app.services.crm_pipeline_service import CrmPipelineService
-from app.services.crm_contact_service import CrmContactService, normalize_phone
-from app.services.crm_lead_service import CrmLeadService
-from app.services.crm_classifier_service import CrmClassifierService
-from app.services.crm_ingestion_service import CrmIngestionService
+from app.modules.crm.application.pipeline_service import CrmPipelineService
+from app.modules.crm.application.contact_service import CrmContactService
+from app.modules.crm.domain.contacts import normalize_phone
+from app.modules.crm.application.lead_service import CrmLeadService
+from app.services.ultravox_call_classifier import CrmClassifierService
+from crm_test_support import CrmIngestionService
 from app.services.ultravox_ingestion_service import UltravoxIngestionService
 
 class CrmSprint1Tests(unittest.TestCase):

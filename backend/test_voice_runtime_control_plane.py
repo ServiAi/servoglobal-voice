@@ -12,7 +12,7 @@ from _integrations_2a_test_base import Integration2ATestCase
 from app.core.config import settings
 from app.db.session import SessionLocal
 from app.modules.agents.infrastructure.models import TenantAgent, TenantAgentVersion
-from app.models.crm import CrmContact, CrmLead, CrmPipelineStage
+from app.modules.crm.infrastructure.models import CrmContact, CrmLead, CrmPipelineStage
 from app.schemas.integrations import VoiceProviderConfigRequest
 from app.security.voice_runtime_auth import create_runtime_token, require_voice_runtime
 from app.modules.voice.infrastructure.livekit_runtime import RuntimeDispatchResult
@@ -338,7 +338,7 @@ class VoiceRuntimeControlPlaneTests(Integration2ATestCase):
 
         with SessionLocal() as db:
             from app.models.analytics import Call
-            from app.models.crm import CrmActivity, CrmVoiceCall
+            from app.modules.crm.infrastructure.models import CrmActivity, CrmVoiceCall
             from sqlalchemy import select
 
             session = VoiceSessionService(db).get(session_id)

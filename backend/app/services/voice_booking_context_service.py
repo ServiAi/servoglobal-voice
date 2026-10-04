@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.analytics import Agent
-from app.models.crm import CrmCallContext, CrmLead
+from app.modules.crm.infrastructure.models import CrmCallContext, CrmLead
 from app.modules.scheduling.public import SchedulingFacade
 
 

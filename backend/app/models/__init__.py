@@ -34,17 +34,17 @@ from app.models.integrations import (
     TenantWhatsAppFlow,
     TenantWhatsAppTemplate,
 )
-from app.models.crm import (
+from app.modules.crm.infrastructure.models import (  # noqa: F401  (registers the tables)
     CrmActivity,
     CrmCallContext,
     CrmContact,
     CrmLead,
     CrmPipelineStage,
     CrmTask,
-    CrmWhatsAppMessage,
     CrmVoiceCall,
     CrmVoiceCallEvent,
 )
+from app.models.crm import CrmWhatsAppMessage
 from app.models.notifications import (
     DomainEvent,
     NotificationDelivery,

@@ -10,7 +10,7 @@ from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.models.crm import CrmActivity, CrmVoiceCall
+from app.modules.crm.infrastructure.models import CrmActivity, CrmVoiceCall
 from app.models.identity import Tenant
 from app.models.integrations import TenantVoiceAgentConfig
 from app.models.voice_context import TenantVoiceContextField

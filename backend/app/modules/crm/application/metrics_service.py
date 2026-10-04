@@ -4,7 +4,7 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import func, select, case
 from sqlalchemy.orm import Session
 
-from app.models.crm import CrmContact, CrmLead, CrmActivity, CrmTask
+from app.modules.crm.infrastructure.models import CrmContact, CrmLead, CrmActivity, CrmTask
 
 
 class CrmMetricsService:
@@ -80,7 +80,7 @@ class CrmMetricsService:
             .group_by(CrmLead.current_stage_id)
         ).all()
 
-        from app.services.crm_pipeline_service import CrmPipelineService
+        from app.modules.crm.application.pipeline_service import CrmPipelineService
         pipeline_service = CrmPipelineService(self.db)
         stages = pipeline_service.ensure_default_pipeline(tenant_id)
         stage_map = {s.id: s for s in stages}

@@ -16,9 +16,9 @@ from sqlalchemy import func, select
 
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
-from app.models.crm import CrmActivity, CrmContact, CrmLead
+from app.modules.crm.infrastructure.models import CrmActivity, CrmContact, CrmLead
 from app.models.identity import Tenant
-from app.services.crm_pipeline_service import CrmPipelineService
+from app.modules.crm.application.pipeline_service import CrmPipelineService
 from app.services.form_service import FormService
 
 

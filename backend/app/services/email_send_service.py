@@ -7,9 +7,9 @@ from datetime import UTC, datetime
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
-from app.models.crm import CrmLead
+from app.modules.crm.infrastructure.models import CrmLead
 from app.models.integrations import TenantEmailSend, TenantEmailSendAsset, TenantFormToken
-from app.services.crm_activity_service import CrmActivityService
+from app.modules.crm.application.activity_service import CrmActivityService
 from app.services.call_summary_service import CallSummaryService
 from app.services.email_asset_service import EmailAssetService
 from app.services.email_config_service import EmailConfigService, validate_email

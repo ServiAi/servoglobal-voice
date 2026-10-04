@@ -5,10 +5,10 @@ from sqlalchemy import func, select, and_, or_, case
 from sqlalchemy.orm import Session, joinedload
 from zoneinfo import ZoneInfo
 
-from app.models.crm import CrmContact, CrmLead, CrmActivity, CrmTask, CrmPipelineStage, CrmCallContext
+from app.modules.crm.infrastructure.models import CrmContact, CrmLead, CrmActivity, CrmTask, CrmPipelineStage, CrmCallContext
 from app.models.analytics import Call
 from app.models.identity import Tenant
-from app.services.crm_pipeline_service import CrmPipelineService
+from app.modules.crm.application.pipeline_service import CrmPipelineService
 from app.services.voice_capacity_report_service import VoiceCapacityReportService
 
 

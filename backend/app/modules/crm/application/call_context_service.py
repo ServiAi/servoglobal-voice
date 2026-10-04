@@ -6,9 +6,10 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.identity import _uuid
-from app.models.crm import CrmCallContext
-from app.services.crm_contact_service import normalize_phone
+from app.db.mixins import _uuid
+from app.modules.crm.domain.calls import ContextLookup
+from app.modules.crm.infrastructure.models import CrmCallContext
+from app.modules.crm.domain.contacts import normalize_phone
 
 
 CONTEXT_PHONE_LOOKBACK_MINUTES = 30
@@ -155,39 +156,22 @@ class CrmCallContextService:
         )
         return candidates[0] if len(candidates) == 1 else None
 
-    def find_context_from_payload(
+    def find_context_from_lookup(
         self,
         tenant_id: str,
-        payload: dict[str, Any],
+        lookup: ContextLookup,
         *,
         external_provider: str = "ultravox",
     ) -> CrmCallContext | None:
-        call = payload.get("call") if isinstance(payload.get("call"), dict) else payload
-        metadata = {}
-        for candidate in (call.get("metadata"), payload.get("metadata"), payload.get("meta")):
-            if isinstance(candidate, dict):
-                metadata.update(candidate)
-        initial_state = call.get("initialState") or call.get("initial_state")
-        if isinstance(initial_state, dict):
-            metadata.update({k: v for k, v in initial_state.items() if k not in metadata})
-
+        """Locate the call context a provider payload refers to (the adapter
+        turned the payload into ``lookup``; CRM never reads provider payloads)."""
         return self.find_context_for_call(
             tenant_id,
             external_provider=external_provider,
-            external_call_id=self._string_value(call, "callId", "call_id", "external_call_id"),
-            form_submission_id=self._string_value(metadata, "form_submission_id", "submission_id"),
-            context_id=self._string_value(metadata, "context_id", "crm_context_id"),
-            phone=self._string_value(
-                metadata,
-                "phone",
-                "user_phone",
-                "customer_phone",
-                "lead_phone",
-                "telefono",
-                "celular",
-                "mobile",
-            )
-            or self._string_value(call, "customerPhone", "customer_phone", "phone"),
+            external_call_id=lookup.external_call_id,
+            form_submission_id=lookup.form_submission_id,
+            context_id=lookup.context_id,
+            phone=lookup.phone,
         )
 
     def _string_value(self, data: dict[str, Any], *keys: str) -> str | None:

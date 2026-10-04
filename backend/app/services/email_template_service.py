@@ -7,7 +7,7 @@ from string import Template
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.crm import CrmLead
+from app.modules.crm.infrastructure.models import CrmLead
 from app.models.integrations import TenantEmailTemplate
 
 ALLOWED_VARIABLES = [

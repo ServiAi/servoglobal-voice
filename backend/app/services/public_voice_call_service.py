@@ -11,7 +11,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
 
-from app.models.crm import CrmVoiceCall
+from app.modules.crm.infrastructure.models import CrmVoiceCall
 from app.models.identity import Tenant
 from app.models.integrations import TenantVoiceAgentConfig
 from app.models.voice_experiences import TenantVoiceExperience, TenantVoiceExperienceVersion

@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.db.session import get_db
-from app.models.crm import CrmLead
+from app.modules.crm.infrastructure.models import CrmLead
 from app.models.integrations import TenantVoiceAgentConfig
 from app.modules.scheduling.public import CreateBookingCommand, SchedulingFacade
 from app.schemas.crm import (

@@ -13,12 +13,12 @@ os.environ.setdefault("ULTRAVOX_API_KEY", "test")
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.models.analytics import Agent, Call
-from app.models.crm import CrmCallContext, CrmContact, CrmLead, CrmPipelineStage
+from app.modules.crm.infrastructure.models import CrmCallContext, CrmContact, CrmLead, CrmPipelineStage
 from app.models.identity import Tenant
-from app.services.crm_call_context_service import CrmCallContextService
-from app.services.crm_contact_service import CrmContactService
-from app.services.crm_ingestion_service import CrmIngestionService
-from app.services.crm_lead_resolver_service import CrmLeadResolverService
+from app.modules.crm.application.call_context_service import CrmCallContextService
+from app.modules.crm.application.contact_service import CrmContactService
+from crm_test_support import CrmIngestionService
+from app.modules.crm.application.lead_resolver_service import CrmLeadResolverService
 
 
 class CrmIngestionHardeningTests(unittest.TestCase):

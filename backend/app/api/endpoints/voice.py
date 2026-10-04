@@ -9,9 +9,9 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.db.session import get_db
 from app.models.identity import Tenant
-from app.services.crm_call_context_service import CrmCallContextService
-from app.services.crm_contact_service import CrmContactService
-from app.services.crm_lead_resolver_service import CrmLeadResolverService
+from app.modules.crm.application.call_context_service import CrmCallContextService
+from app.modules.crm.application.contact_service import CrmContactService
+from app.modules.crm.application.lead_resolver_service import CrmLeadResolverService
 from app.services.voice_service import create_call_session, create_sip_call_via_pbx
 from app.services.notification_service import run_demo_start_notification_task
 from app.services.tenant_usage_service import TenantUsageService

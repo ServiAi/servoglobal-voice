@@ -1,26 +1,11 @@
 from __future__ import annotations
 
-import re
 from datetime import datetime
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-from app.models.crm import CrmContact
-from app.models.identity import _utcnow
-
-def normalize_phone(phone: str | None) -> str | None:
-    if not phone:
-        return None
-    # Remove all spaces, tabs, dashes, parenthesis, dots
-    cleaned = re.sub(r"[\s\-\(\)\.]", "", phone)
-    if not cleaned:
-        return None
-        
-    # Colombia specific rule: if it has 10 digits and doesn't start with "+"
-    # e.g., "3001112233" -> "+573001112233"
-    if re.match(r"^\d{10}$", cleaned):
-        cleaned = f"+57{cleaned}"
-        
-    return cleaned
+from app.modules.crm.domain.contacts import normalize_phone
+from app.modules.crm.infrastructure.models import CrmContact
+from app.db.mixins import _utcnow
 
 class CrmContactService:
     def __init__(self, db: Session) -> None:

@@ -6,13 +6,13 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.crm import CrmLead, CrmVoiceCall, CrmVoiceCallEvent
+from app.modules.crm.infrastructure.models import CrmLead, CrmVoiceCall, CrmVoiceCallEvent
 from app.modules.telephony.public import SipRouteFacade
 from app.schemas.integrations import VoiceCallActionRequest, VoiceCallActionResponse, VoiceCallResponse
 from app.services.voice_client import VoiceClient, VoiceClientConfig, VoiceSipRouteConfig
 from app.services.voice_config_service import VoiceConfigService
 from app.services.voice_agent_service import VoiceAgentService
-from app.services.crm_activity_service import CrmActivityService
+from app.modules.crm.application.activity_service import CrmActivityService
 from app.services.integration_event_service import IntegrationEventService
 
 logger = logging.getLogger(__name__)

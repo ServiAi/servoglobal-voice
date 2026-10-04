@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.config import settings
-from app.models.crm import CrmLead
+from app.modules.crm.infrastructure.models import CrmLead
 from app.models.integrations import (
     TenantForm,
     TenantFormField,
@@ -17,7 +17,7 @@ from app.models.integrations import (
     TenantFormToken,
 )
 from app.schemas.forms import FormCreateRequest
-from app.services.crm_activity_service import CrmActivityService
+from app.modules.crm.application.activity_service import CrmActivityService
 from app.services.integration_event_service import IntegrationEventService
 
 

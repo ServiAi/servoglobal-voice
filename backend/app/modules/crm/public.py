@@ -82,8 +82,8 @@ class CrmFacade:
         self, *, tenant_id: str, phone: str, email: str | None, name: str
     ) -> tuple[ContactRef, LeadRef]:
         """Idempotent: reuses the contact for ``phone`` and its open lead."""
-        from app.services.crm_contact_service import CrmContactService
-        from app.services.crm_lead_service import CrmLeadService
+        from app.modules.crm.application.contact_service import CrmContactService
+        from app.modules.crm.application.lead_service import CrmLeadService
 
         contact = CrmContactService(self.db).get_or_create_contact(tenant_id, phone, email, name)
         lead = CrmLeadService(self.db).get_or_create_open_lead(tenant_id, contact.id)
@@ -99,13 +99,13 @@ class CrmFacade:
     # closed with a cross-tenant error instead of a silent "not found".
 
     def get_contact(self, contact_id: str) -> ContactSnapshot | None:
-        from app.models.crm import CrmContact
+        from app.modules.crm.infrastructure.models import CrmContact
 
         row = self.db.get(CrmContact, contact_id)
         return _contact_snapshot(row) if row is not None else None
 
     def get_lead(self, lead_id: str) -> LeadSnapshot | None:
-        from app.models.crm import CrmLead
+        from app.modules.crm.infrastructure.models import CrmLead
 
         row = self.db.get(CrmLead, lead_id)
         return _lead_snapshot(row) if row is not None else None
@@ -123,7 +123,7 @@ class CrmFacade:
     ) -> None:
         """Append an entry to the customer's CRM timeline (commits, like the
         activity service always did)."""
-        from app.services.crm_activity_service import CrmActivityService
+        from app.modules.crm.application.activity_service import CrmActivityService
 
         CrmActivityService(self.db).create_activity(
             tenant_id=tenant_id,
@@ -138,7 +138,7 @@ class CrmFacade:
     def find_contact_by_normalized_phone(self, tenant_id: str, phone_normalized: str) -> ContactSnapshot | None:
         from sqlalchemy import select
 
-        from app.models.crm import CrmContact
+        from app.modules.crm.infrastructure.models import CrmContact
 
         row = self.db.scalar(
             select(CrmContact).where(CrmContact.tenant_id == tenant_id, CrmContact.phone_normalized == phone_normalized)
@@ -150,7 +150,7 @@ class CrmFacade:
         (Telephony's CallLoadPort, for the legacy provider-callback flow)."""
         from sqlalchemy import func, select
 
-        from app.models.crm import CrmVoiceCall
+        from app.modules.crm.infrastructure.models import CrmVoiceCall
 
         return int(
             self.db.scalar(
@@ -193,7 +193,7 @@ class OutboundCallLedger:
         self.call_id: str | None = None
 
     def resolve_target(self) -> OutboundContactRef:
-        from app.models.crm import CrmLead
+        from app.modules.crm.infrastructure.models import CrmLead
 
         lead = self.db.get(CrmLead, self.lead_id)
         if lead is None or lead.tenant_id != self.tenant_id or lead.contact is None:
@@ -205,7 +205,7 @@ class OutboundCallLedger:
         )
 
     def _call(self, call_id: str):
-        from app.models.crm import CrmVoiceCall
+        from app.modules.crm.infrastructure.models import CrmVoiceCall
 
         call = self.db.get(CrmVoiceCall, call_id)
         if call is None or call.tenant_id != self.tenant_id:
@@ -219,7 +219,7 @@ class OutboundCallLedger:
 
     def open_call(self, *, sip_route_id: str, agent_version_id: str | None, to_phone: str, from_number: str) -> str:
         """Adds the CrmVoiceCall (flush, no commit)."""
-        from app.models.crm import CrmLead, CrmVoiceCall
+        from app.modules.crm.infrastructure.models import CrmLead, CrmVoiceCall
 
         lead = self.db.get(CrmLead, self.lead_id)
         call = CrmVoiceCall(

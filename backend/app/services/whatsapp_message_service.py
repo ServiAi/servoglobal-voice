@@ -9,12 +9,13 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
-from app.models.crm import CrmActivity, CrmContact, CrmLead, CrmWhatsAppMessage
+from app.modules.crm.infrastructure.models import CrmActivity, CrmContact, CrmLead
+from app.models.crm import CrmWhatsAppMessage
 from app.models.integrations import TenantWhatsAppConfig
 from app.models.notifications import NotificationDelivery
 from app.schemas.crm import WhatsAppActionRequest, WhatsAppActionResponse
 from app.schemas.integrations import WhatsAppTestMessageRequest, WhatsAppTestMessageResponse
-from app.services.crm_activity_service import CrmActivityService
+from app.modules.crm.application.activity_service import CrmActivityService
 from app.services.integration_event_service import IntegrationEventService
 from app.services.notification_delivery_status_service import NotificationDeliveryStatusService
 from app.services.whatsapp_client import WhatsAppCloudClient, WhatsAppCloudClientError, sanitize_whatsapp_error

@@ -10,10 +10,10 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.analytics import Call
-from app.models.crm import CrmActivity, CrmCallContext, CrmLead
+from app.modules.crm.infrastructure.models import CrmActivity, CrmCallContext, CrmLead
 from app.models.identity import Tenant
 from app.models.integrations import TenantEmailAsset
-from app.services.crm_activity_service import CrmActivityService
+from app.modules.crm.application.activity_service import CrmActivityService
 from app.services.storage_service import StorageService
 
 

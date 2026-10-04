@@ -6,24 +6,34 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.analytics import Call
-from app.models.crm import CrmCallContext, CrmContact, CrmLead
-from app.services.crm_contact_service import normalize_phone
-from app.services.crm_pipeline_service import CrmPipelineService
+from app.modules.crm.infrastructure.models import CrmCallContext, CrmContact, CrmLead
+from app.modules.crm.domain.contacts import normalize_phone
+from app.modules.crm.application.pipeline_service import CrmPipelineService
+from app.modules.crm.application.ports import AnalyticsPort
+from app.modules.crm.domain.calls import CallRef
 
 
 logger = logging.getLogger(__name__)
 
 
 class CrmLeadResolverService:
-    def __init__(self, db: Session) -> None:
+    def __init__(self, db: Session, analytics: AnalyticsPort | None = None) -> None:
         self.db = db
+        self._analytics = analytics
         self.pipeline_service = CrmPipelineService(db)
+
+    @property
+    def analytics(self) -> AnalyticsPort:
+        if self._analytics is None:
+            from app.modules.crm.wiring import default_crm_ports
+
+            self._analytics = default_crm_ports(self.db).analytics
+        return self._analytics
 
     def resolve_existing_lead_for_call(
         self,
         tenant_id: str,
-        call: Call,
+        call: CallRef,
         contact_id: str | None = None,
         context: dict[str, Any] | None = None,
     ) -> CrmLead | None:
@@ -40,17 +50,9 @@ class CrmLeadResolverService:
             return lead
 
         if external_call_id:
-            related_call = self.db.scalar(
-                select(Call)
-                .where(
-                    Call.tenant_id == tenant_id,
-                    Call.external_provider == call.external_provider,
-                    Call.external_call_id == external_call_id,
-                )
-                .limit(1)
-            )
-            if related_call:
-                lead = self._lead_by_call_id(tenant_id, related_call.id, created_first=True)
+            related_call_id = self.analytics.find_call_id(tenant_id, call.external_provider, external_call_id)
+            if related_call_id:
+                lead = self._lead_by_call_id(tenant_id, related_call_id, created_first=True)
                 if lead:
                     return lead
 
@@ -86,7 +88,7 @@ class CrmLeadResolverService:
         contact: CrmContact,
         metadata: dict | None = None,
         *,
-        call: Call | None = None,
+        call: CallRef | None = None,
     ) -> CrmLead:
         meta = metadata or {}
         lead = self.resolve_existing_lead_for_call(tenant_id, call, contact.id, meta) if call else None
@@ -132,7 +134,7 @@ class CrmLeadResolverService:
     def resolve_or_create_lead_for_connected_call(
         self,
         tenant_id: str,
-        call: Call,
+        call: CallRef,
         contact: CrmContact,
         metadata: dict | None = None,
         *,
@@ -221,7 +223,7 @@ class CrmLeadResolverService:
     def _find_call_context(
         self,
         tenant_id: str,
-        call: Call,
+        call: CallRef,
         context: dict[str, Any] | None,
         external_call_id: str | None,
     ) -> CrmCallContext | None:
@@ -263,17 +265,11 @@ class CrmLeadResolverService:
             return lead
 
         if call_context.external_call_id:
-            related_call = self.db.scalar(
-                select(Call)
-                .where(
-                    Call.tenant_id == tenant_id,
-                    Call.external_provider == call_context.external_provider,
-                    Call.external_call_id == call_context.external_call_id,
-                )
-                .limit(1)
+            related_call_id = self.analytics.find_call_id(
+                tenant_id, call_context.external_provider, call_context.external_call_id
             )
-            if related_call:
-                lead = self._lead_by_call_id(tenant_id, related_call.id, created_first=True)
+            if related_call_id:
+                lead = self._lead_by_call_id(tenant_id, related_call_id, created_first=True)
                 if lead:
                     return lead
 
@@ -337,7 +333,7 @@ class CrmLeadResolverService:
             .limit(1)
         )
 
-    def _attach_call(self, lead: CrmLead, call: Call | None) -> None:
+    def _attach_call(self, lead: CrmLead, call: CallRef | None) -> None:
         if call and call.id:
             if not lead.created_from_call_id:
                 lead.created_from_call_id = call.id

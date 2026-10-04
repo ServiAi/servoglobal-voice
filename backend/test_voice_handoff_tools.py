@@ -6,7 +6,7 @@ from sqlalchemy import select
 
 from _integrations_2a_test_base import Integration2ATestCase, SessionLocal
 from app.core.config import settings
-from app.models.crm import CrmActivity, CrmLead
+from app.modules.crm.infrastructure.models import CrmActivity, CrmLead
 from app.models.integrations import TenantChatwootConfig, TenantVoiceAgentConfig
 
 

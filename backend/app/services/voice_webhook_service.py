@@ -10,10 +10,10 @@ from fastapi import HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.crm import CrmVoiceCall, CrmVoiceCallEvent
+from app.modules.crm.infrastructure.models import CrmVoiceCall, CrmVoiceCallEvent
 from app.models.integrations import TenantVoiceProviderConfig
 from app.services.voice_config_service import VoiceConfigService
-from app.services.crm_activity_service import CrmActivityService
+from app.modules.crm.application.activity_service import CrmActivityService
 from app.services.integration_event_service import IntegrationEventService
 
 _PLATFORM_TENANT_ID = "platform"

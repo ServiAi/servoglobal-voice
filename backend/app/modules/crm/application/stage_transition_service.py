@@ -3,24 +3,10 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.crm import CrmActivity, CrmLead, CrmPipelineStage
-from app.models.identity import _utcnow
-from app.services.crm_pipeline_service import CrmPipelineService
-
-
-TERMINAL_STAGES = {"not_interested", "won", "lost"}
-AUTOMATIC_TRANSITIONS = {
-    "new": {"contacted", "connected", "qualified", "scheduled", "voicemail", "follow_up", "not_interested"},
-    "contacted": {"connected", "qualified", "scheduled", "voicemail", "follow_up", "not_interested"},
-    "connected": {"qualified", "scheduled", "voicemail", "follow_up", "not_interested"},
-    "qualified": {"scheduled", "voicemail", "follow_up", "not_interested"},
-    "voicemail": {"contacted", "connected", "qualified", "scheduled", "follow_up", "not_interested"},
-    "follow_up": {"contacted", "connected", "qualified", "scheduled", "voicemail", "not_interested"},
-    "scheduled": set(),
-    "not_interested": set(),
-    "won": set(),
-    "lost": set(),
-}
+from app.modules.crm.infrastructure.models import CrmActivity, CrmLead, CrmPipelineStage
+from app.db.mixins import _utcnow
+from app.modules.crm.application.pipeline_service import CrmPipelineService
+from app.modules.crm.domain.pipeline import AUTOMATIC_TRANSITIONS, TERMINAL_STAGES
 
 
 class CrmStageTransitionService:

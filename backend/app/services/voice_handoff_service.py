@@ -17,12 +17,12 @@ import logging
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.crm import CrmActivity, CrmContact, CrmLead
+from app.modules.crm.infrastructure.models import CrmActivity, CrmContact, CrmLead
 from app.models.integrations import TenantVoiceAgentConfig
 from app.schemas.integrations import HANDOFF_TRIGGER_LEAD_SCORE
 from app.services.chatwoot_client import ChatwootClient
 from app.services.chatwoot_config_service import ChatwootConfigService
-from app.services.crm_activity_service import CrmActivityService
+from app.modules.crm.application.activity_service import CrmActivityService
 from app.services.integration_event_service import IntegrationEventService
 
 logger = logging.getLogger(__name__)

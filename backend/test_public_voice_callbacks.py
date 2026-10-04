@@ -12,7 +12,7 @@ from app.api.endpoints.voice_public import get_public_rate_limiter, get_public_t
 from app.core.config import settings
 from app.db.session import SessionLocal
 from app.main import app
-from app.models.crm import CrmActivity, CrmVoiceCall
+from app.modules.crm.infrastructure.models import CrmActivity, CrmVoiceCall
 from app.modules.telephony.infrastructure.models import TenantSipRoute
 from app.models.integrations import (
     TenantIntegrationEvent,
