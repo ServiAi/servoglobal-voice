@@ -83,18 +83,22 @@ class ControlPlaneClient:
         data = response.json()
         return ProviderCredential(provider=data["provider"], api_key=data["api_key"], base_url=data.get("base_url"))
 
-    async def invoke_tool(self, session_id: str, tool_key: str, arguments: dict) -> dict:
+    async def invoke_tool(self, session_id: str, tool_key: str, arguments: dict, *, invocation_id: str) -> dict:
         """Single attempt, no retry: a tool call can be side-effecting (e.g.
         sends a WhatsApp message) -- retrying a transient 5xx here could
         silently duplicate a real-world effect, the same reasoning behind
         UltravoxProviderClient.preview_external_voice's no-retry rule on
-        the backend. Deliberately bypasses `_request`'s retry loop."""
+        the backend. Deliberately bypasses `_request`'s retry loop.
+
+        `invocation_id` identifies the *logical* tool call (LiveKit's
+        FunctionCall.call_id, normalised by the tool dispatcher), not this HTTP
+        attempt. It is trusted metadata, kept apart from the LLM `arguments`."""
         try:
             response = await self.client.request(
                 "POST",
                 f"/api/v1/internal/voice-runtime/sessions/{session_id}/tools/{tool_key}/invoke",
                 headers=self._headers(),
-                json={"arguments": arguments, "invocation_id": uuid4().hex},
+                json={"arguments": arguments, "invocation_id": invocation_id},
             )
             response.raise_for_status()
         except httpx.HTTPStatusError as exc:

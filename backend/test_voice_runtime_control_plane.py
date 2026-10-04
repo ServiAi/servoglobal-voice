@@ -399,13 +399,16 @@ class AgentToolInvokeEndpointTests(Integration2ATestCase):
             db.commit()
             return session.id
 
-    def _invoke(self, session_id: str, tool_key: str, arguments: dict | None = None):
+    def _invoke(self, session_id: str, tool_key: str, arguments: dict | None = None, invocation_id: str | None = None):
+        body: dict = {"arguments": arguments or {}}
+        if invocation_id is not None:
+            body["invocation_id"] = invocation_id
         with patch.object(settings, "VOICE_RUNTIME_SERVICE_SECRET", "x" * 32):
             token = create_runtime_token()
             return self.client.post(
                 f"/api/v1/internal/voice-runtime/sessions/{session_id}/tools/{tool_key}/invoke",
                 headers={"Authorization": f"Bearer {token}"},
-                json={"arguments": arguments or {}},
+                json=body,
             )
 
     def _configure_whatsapp(self, tenant_id: str) -> None:
@@ -705,6 +708,51 @@ class AgentToolInvokeEndpointTests(Integration2ATestCase):
         self.assertEqual(response.status_code, 200, response.text)
         self.assertEqual(mocked.call_args.kwargs["lead_id"], lead_id)
         self.assertEqual(mocked.call_args.kwargs["command"].attendee_email, "carlos@example.com")
+
+    def _booking_stub(self, contact_id: str, lead_id: str):
+        from datetime import datetime, timezone
+
+        from app.modules.scheduling.infrastructure.models import CrmBooking
+
+        return CrmBooking(
+            id="booking-1", tenant_id=self.tenant.id, lead_id=lead_id, contact_id=contact_id,
+            provider="calcom", title="x", status="confirmed",
+            start_at=datetime(2026, 9, 15, 20, 0, tzinfo=timezone.utc),
+            end_at=datetime(2026, 9, 15, 20, 30, tzinfo=timezone.utc),
+            timezone="America/Bogota", duration_minutes=30,
+            attendee_name="Carlos Pérez", attendee_email="carlos@example.com",
+        )
+
+    def test_create_booking_idempotency_key_is_built_from_session_and_runtime_invocation_id(self) -> None:
+        contact_id, lead_id = self._seed_contact_and_lead(self.tenant.id)
+        session_id = self._session_with_tools(
+            [{"key": "calendar.create_booking", "enabled": True, "config": {}}], lead_id=lead_id
+        )
+        args = {"start": "2026-09-15T15:00:00-05:00"}
+        with patch("app.modules.scheduling.application.booking_service.BookingService.create_lead_booking") as mocked:
+            mocked.return_value = self._booking_stub(contact_id, lead_id)
+            self.assertEqual(self._invoke(session_id, "calendar.create_booking", args, "call-123").status_code, 200)
+            self.assertEqual(self._invoke(session_id, "calendar.create_booking", args, "call-123").status_code, 200)
+            self.assertEqual(self._invoke(session_id, "calendar.create_booking", args, "call-456").status_code, 200)
+            self._invoke(session_id, "calendar.create_booking", args)  # no id -> no idempotency
+        keys = [c.kwargs["idempotency_key"] for c in mocked.call_args_list]
+        self.assertEqual(
+            keys, [f"voice:{session_id}:call-123", f"voice:{session_id}:call-123", f"voice:{session_id}:call-456", None]
+        )
+
+    def test_invocation_id_cannot_be_smuggled_through_llm_arguments_or_be_malformed(self) -> None:
+        _, lead_id = self._seed_contact_and_lead(self.tenant.id)
+        session_id = self._session_with_tools(
+            [{"key": "calendar.create_booking", "enabled": True, "config": {}}], lead_id=lead_id
+        )
+        with patch("app.modules.scheduling.application.booking_service.BookingService.create_lead_booking") as mocked:
+            evil = self._invoke(
+                session_id, "calendar.create_booking", {"start": "2026-09-15T15:00:00-05:00", "invocation_id": "evil"}
+            )
+            bad = self._invoke(session_id, "calendar.create_booking", {"start": "2026-09-15T15:00:00-05:00"}, "has space/../")
+        self.assertEqual(evil.status_code, 422, evil.text)
+        self.assertEqual(bad.status_code, 422, bad.text)
+        mocked.assert_not_called()
 
     def test_create_lead_tool_ignores_llm_supplied_phone_argument(self) -> None:
         # phone is not even in the LLM-visible input_schema -- passing one

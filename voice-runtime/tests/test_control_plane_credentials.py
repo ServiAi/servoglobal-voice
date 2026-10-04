@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import unittest
 
 import httpx
@@ -86,17 +87,20 @@ class ControlPlaneToolInvocationClientTests(unittest.IsolatedAsyncioTestCase):
             return httpx.Response(200, json={"result": {"date": "2026-09-15", "slots": []}})
 
         client = client_with(handler)
-        result = await client.invoke_tool("session-a", "calendar.check_availability", {"date": "mañana"})
+        result = await client.invoke_tool(
+            "session-a", "calendar.check_availability", {"date": "mañana"}, invocation_id="call-123"
+        )
 
         self.assertEqual(result, {"date": "2026-09-15", "slots": []})
         self.assertEqual(seen["path"], "/api/v1/internal/voice-runtime/sessions/session-a/tools/calendar.check_availability/invoke")
         self.assertIn(b"ma\xc3\xb1ana", seen["body"])
+        self.assertEqual(json.loads(seen["body"])["invocation_id"], "call-123")
         await client.aclose()
 
     async def test_error_response_detail_becomes_the_exception_message(self) -> None:
         client = client_with(lambda request: httpx.Response(422, json={"detail": "tool_argument_invalid:Missing required argument 'date'."}))
         with self.assertRaises(ToolInvocationError) as ctx:
-            await client.invoke_tool("session-a", "calendar.check_availability", {})
+            await client.invoke_tool("session-a", "calendar.check_availability", {}, invocation_id="c1")
         self.assertIn("tool_argument_invalid", str(ctx.exception))
         self.assertEqual(ctx.exception.status_code, 422)
         await client.aclose()
@@ -113,7 +117,9 @@ class ControlPlaneToolInvocationClientTests(unittest.IsolatedAsyncioTestCase):
 
         client = client_with(handler)
         with self.assertRaises(ToolInvocationError):
-            await client.invoke_tool("session-a", "whatsapp.send_message", {"to_phone": "+573000000001", "template_key": "x"})
+            await client.invoke_tool(
+                "session-a", "whatsapp.send_message", {"to_phone": "+573000000001", "template_key": "x"}, invocation_id="c1"
+            )
         self.assertEqual(calls["count"], 1)
         await client.aclose()
 
