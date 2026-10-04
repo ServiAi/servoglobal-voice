@@ -45,16 +45,17 @@ class CrmLeadService:
         call_id: str | None = None,
         metadata: dict | None = None,
     ) -> CrmLead:
-        lead = self.db.scalar(
-            select(CrmLead)
-            .where(
-                CrmLead.tenant_id == tenant_id,
-                CrmLead.contact_id == contact_id,
-                CrmLead.status == "open",
+        lead = self._open_lead(tenant_id, contact_id)
+        if lead is None:
+            # Make sure the default stages exist BEFORE locking (that step commits), then
+            # serialise on the contact row so concurrent requests keep a single open lead.
+            default_stage = self.pipeline_service.get_stage_by_key(tenant_id, "new")
+            self.db.execute(
+                select(CrmContact.id)
+                .where(CrmContact.id == contact_id, CrmContact.tenant_id == tenant_id)
+                .with_for_update()
             )
-            .order_by(CrmLead.updated_at.desc())
-            .limit(1)
-        )
+            lead = self._open_lead(tenant_id, contact_id)
 
         meta_dict = metadata or {}
 
@@ -65,7 +66,6 @@ class CrmLeadService:
             self.db.commit()
             self.db.refresh(lead)
         else:
-            default_stage = self.pipeline_service.get_stage_by_key(tenant_id, "new")
             lead = CrmLead(
                 tenant_id=tenant_id,
                 contact_id=contact_id,
@@ -88,6 +88,19 @@ class CrmLeadService:
             self.db.refresh(lead)
 
         return lead
+
+    def _open_lead(self, tenant_id: str, contact_id: str) -> CrmLead | None:
+        return self.db.scalar(
+            select(CrmLead)
+            .where(
+                CrmLead.tenant_id == tenant_id,
+                CrmLead.contact_id == contact_id,
+                CrmLead.status == "open",
+            )
+            .order_by(CrmLead.updated_at.desc())
+            .limit(1)
+            .execution_options(populate_existing=True)
+        )
 
     def _enrich_lead_fields(self, lead: CrmLead, metadata: dict) -> None:
         if not lead.interest and metadata.get("interest"):

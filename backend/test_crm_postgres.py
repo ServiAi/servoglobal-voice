@@ -1,0 +1,254 @@
+r"""Real PostgreSQL behaviour of CRM: get-or-create under concurrency, open-lead
+uniqueness, timeline and call-event deduplication, tenant isolation.
+
+SQLite cannot prove these: they depend on unique/partial indexes, ``ON CONFLICT``
+and row locks. No provider is involved: every database interaction is real.
+
+Run only against a dedicated disposable database:
+
+    $env:VOICE_RUNTIME_TEST_DATABASE_URL = "postgresql+psycopg://serviai:serviai@localhost:5432/serviai_voice_runtime_test"
+    .\.venv\Scripts\python.exe -m unittest test_crm_postgres -v
+"""
+
+import os
+import unittest
+from concurrent.futures import ThreadPoolExecutor
+from datetime import UTC, datetime
+from threading import Barrier
+from uuid import uuid4
+
+from cryptography.fernet import Fernet
+
+DATABASE_URL = os.environ.get("VOICE_RUNTIME_TEST_DATABASE_URL")
+if DATABASE_URL:
+    os.environ.setdefault("ULTRAVOX_API_KEY", "test")
+    os.environ.setdefault("INTEGRATIONS_ENCRYPTION_KEY", Fernet.generate_key().decode())
+    os.environ["DATABASE_URL"] = DATABASE_URL
+
+from sqlalchemy import create_engine, func, select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import sessionmaker
+
+from app.db.base import Base
+from app.models.analytics import Call
+from app.models.identity import Tenant
+from app.modules.crm.application.activity_service import CrmActivityService
+from app.modules.crm.application.call_ingestion_service import CrmIngestionService
+from app.modules.crm.application.contact_service import CrmContactService
+from app.modules.crm.application.lead_service import CrmLeadService
+from app.modules.crm.application.stage_transition_service import CrmStageTransitionService
+from app.modules.crm.domain.calls import CallRef
+from app.modules.crm.infrastructure.models import (
+    CrmActivity,
+    CrmContact,
+    CrmLead,
+    CrmVoiceCallEvent,
+)
+from app.modules.crm.public import CrmVoiceCalls
+
+
+@unittest.skipUnless(
+    DATABASE_URL,
+    "VOICE_RUNTIME_TEST_DATABASE_URL not set; skipping real PostgreSQL CRM tests",
+)
+class CrmPostgresTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.engine = create_engine(DATABASE_URL, pool_pre_ping=True)
+        if cls.engine.dialect.name != "postgresql":
+            raise unittest.SkipTest("VOICE_RUNTIME_TEST_DATABASE_URL must point to PostgreSQL")
+        cls.SessionLocal = sessionmaker(bind=cls.engine, autoflush=False, expire_on_commit=False)
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        Base.metadata.drop_all(bind=cls.engine)
+        cls.engine.dispose()
+
+    def setUp(self) -> None:
+        Base.metadata.drop_all(bind=self.engine)
+        Base.metadata.create_all(bind=self.engine)
+
+    # -- seed / helpers ---------------------------------------------------------
+    def _tenant(self) -> str:
+        with self.SessionLocal() as db:
+            tenant = Tenant(name="CRM PG", slug=f"crm-{uuid4().hex[:8]}")
+            db.add(tenant)
+            db.commit()
+            return tenant.id
+
+    def _in_threads(self, *calls):
+        barrier = Barrier(len(calls))
+
+        def run(call):
+            barrier.wait(timeout=30)
+            try:
+                return call()
+            except Exception as exc:  # noqa: BLE001 - the outcome is what the test asserts on
+                return exc
+
+        with ThreadPoolExecutor(max_workers=len(calls)) as pool:
+            return [f.result(timeout=90) for f in [pool.submit(run, c) for c in calls]]
+
+    def _count(self, model, **where) -> int:
+        with self.SessionLocal() as db:
+            stmt = select(func.count()).select_from(model)
+            for key, value in where.items():
+                stmt = stmt.where(getattr(model, key) == value)
+            return db.scalar(stmt)
+
+    def _contact_id(self, tenant_id: str, phone: str = "+573001112233", email: str | None = "a@example.com") -> str:
+        with self.SessionLocal() as db:
+            return CrmContactService(db).get_or_create_contact(tenant_id, phone, email, "Ana").id
+
+    # -- contacts -------------------------------------------------------------------
+    def test_concurrent_get_or_create_contact_by_phone_yields_one_contact(self) -> None:
+        tenant_id = self._tenant()
+
+        def create():
+            with self.SessionLocal() as db:
+                return CrmContactService(db).get_or_create_contact(tenant_id, "300 111 2233", None, "Ana").id
+
+        results = self._in_threads(create, create, create)
+        self.assertFalse([r for r in results if isinstance(r, Exception)], results)
+        self.assertEqual(len(set(results)), 1)
+        self.assertEqual(self._count(CrmContact, tenant_id=tenant_id), 1)
+
+    def test_concurrent_get_or_create_contact_by_email_yields_one_contact(self) -> None:
+        tenant_id = self._tenant()
+
+        def create():
+            with self.SessionLocal() as db:
+                return CrmContactService(db).get_or_create_contact(tenant_id, None, "same@example.com", "Ana").id
+
+        results = self._in_threads(create, create, create)
+        self.assertFalse([r for r in results if isinstance(r, Exception)], results)
+        self.assertEqual(len(set(results)), 1)
+        self.assertEqual(self._count(CrmContact, tenant_id=tenant_id), 1)
+
+    def test_same_phone_and_email_in_two_tenants_do_not_collide(self) -> None:
+        t1, t2 = self._tenant(), self._tenant()
+        a = self._contact_id(t1)
+        b = self._contact_id(t2)
+        self.assertNotEqual(a, b)
+        self.assertEqual(self._count(CrmContact), 2)
+
+    # -- leads ----------------------------------------------------------------------
+    def test_concurrent_get_or_create_open_lead_yields_one_open_lead(self) -> None:
+        tenant_id = self._tenant()
+        contact_id = self._contact_id(tenant_id)
+
+        def open_lead():
+            with self.SessionLocal() as db:
+                return CrmLeadService(db).get_or_create_open_lead(tenant_id, contact_id).id
+
+        results = self._in_threads(open_lead, open_lead, open_lead)
+        self.assertFalse([r for r in results if isinstance(r, Exception)], results)
+        self.assertEqual(len(set(results)), 1, "the contact must keep a single open lead")
+        self.assertEqual(self._count(CrmLead, tenant_id=tenant_id, status="open"), 1)
+
+    # -- timeline -------------------------------------------------------------------
+    def _call_row(self, tenant_id: str) -> str:
+        with self.SessionLocal() as db:
+            call = Call(
+                tenant_id=tenant_id, external_provider="ultravox", external_call_id=f"uvx-{uuid4().hex[:8]}",
+                normalized_status="in_progress", started_at=datetime.now(UTC),
+            )
+            db.add(call)
+            db.commit()
+            return call.id
+
+    def test_activity_unique_key_is_enforced_by_the_database(self) -> None:
+        tenant_id = self._tenant()
+        contact_id = self._contact_id(tenant_id)
+        call_id = self._call_row(tenant_id)
+
+        def add():
+            with self.SessionLocal() as db:
+                CrmActivityService(db).create_activity(
+                    tenant_id=tenant_id, lead_id=None, contact_id=contact_id, activity_type="call_joined",
+                    title="x", call_id=call_id, deduplication_key="k",
+                )
+
+        add()
+        with self.assertRaises(IntegrityError):
+            add()
+        self.assertEqual(self._count(CrmActivity, tenant_id=tenant_id), 1)
+
+    def test_concurrent_ingestion_of_the_same_event_creates_one_activity(self) -> None:
+        tenant_id = self._tenant()
+        call_id = self._call_row(tenant_id)
+        with self.SessionLocal() as db:
+            external = db.get(Call, call_id).external_call_id
+        payload = {
+            "event": "call.joined",
+            "call": {"callId": external, "customerPhone": "+573004445566", "metadata": {"name": "Ana", "interest": "x"}},
+        }
+        ref = CallRef(id=call_id, tenant_id=tenant_id, external_provider="ultravox", external_call_id=external,
+                      customer_phone="+573004445566")
+
+        def ingest():
+            with self.SessionLocal() as db:
+                CrmIngestionService(db).process_call_event(payload, ref)
+
+        results = self._in_threads(ingest, ingest)
+        self.assertFalse([r for r in results if isinstance(r, Exception)], results)
+        self.assertEqual(self._count(CrmActivity, tenant_id=tenant_id, call_id=call_id, activity_type="call_joined"), 1)
+        self.assertEqual(self._count(CrmLead, tenant_id=tenant_id), 1)
+        self.assertEqual(self._count(CrmContact, tenant_id=tenant_id), 1)
+
+    def test_concurrent_identical_stage_transitions_record_one_history_entry(self) -> None:
+        tenant_id = self._tenant()
+        contact_id = self._contact_id(tenant_id)
+        with self.SessionLocal() as db:
+            lead_id = CrmLeadService(db).get_or_create_open_lead(tenant_id, contact_id).id
+        call_id = self._call_row(tenant_id)
+
+        def move():
+            with self.SessionLocal() as db:
+                lead = db.get(CrmLead, lead_id)
+                return CrmStageTransitionService(db).move_to_contacted(tenant_id, lead, call_id=call_id)
+
+        results = self._in_threads(move, move)
+        self.assertFalse([r for r in results if isinstance(r, Exception)], results)
+        self.assertEqual(
+            self._count(CrmActivity, tenant_id=tenant_id, lead_id=lead_id, activity_type="stage_changed"), 1
+        )
+
+    # -- voice call events ------------------------------------------------------------
+    def test_concurrent_call_event_claims_insert_exactly_one_row(self) -> None:
+        tenant_id = self._tenant()
+        with self.SessionLocal() as db:
+            call = CrmVoiceCalls(db).create(tenant_id=tenant_id, provider="ultravox")
+            db.commit()
+
+        def claim():
+            with self.SessionLocal() as db:
+                won = CrmVoiceCalls(db).claim_event(
+                    tenant_id=tenant_id, voice_call_id=call.id, provider="ultravox", event_type="call.joined",
+                    status="success", dedup_key="ultravox:call-1:call.joined", payload_summary={},
+                    created_at=datetime.now(UTC),
+                )
+                db.commit()
+                return won
+
+        results = self._in_threads(claim, claim, claim)
+        self.assertFalse([r for r in results if isinstance(r, Exception)], results)
+        self.assertEqual(sorted(results), [False, False, True])
+        self.assertEqual(self._count(CrmVoiceCallEvent, tenant_id=tenant_id), 1)
+
+    # -- tenant isolation -------------------------------------------------------------
+    def test_dedup_keys_and_phones_are_scoped_per_tenant(self) -> None:
+        t1, t2 = self._tenant(), self._tenant()
+        for tenant_id in (t1, t2):
+            contact_id = self._contact_id(tenant_id)
+            call_id = self._call_row(tenant_id)
+            with self.SessionLocal() as db:
+                CrmActivityService(db).create_activity(
+                    tenant_id=tenant_id, lead_id=None, contact_id=contact_id, activity_type="call_joined",
+                    title="x", call_id=call_id, deduplication_key="same-key",
+                )
+        self.assertEqual(self._count(CrmActivity), 2)
+
+
+if __name__ == "__main__":
+    unittest.main()

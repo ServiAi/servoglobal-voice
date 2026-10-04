@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from app.modules.crm.domain.contacts import normalize_phone
 from app.modules.crm.infrastructure.models import CrmContact
@@ -18,6 +19,8 @@ class CrmContactService:
         email: str | None,
         name: str | None,
         metadata: dict | None = None,
+        *,
+        _retry: bool = True,
     ) -> CrmContact:
         phone_normalized = normalize_phone(phone)
         contact = None
@@ -86,7 +89,15 @@ class CrmContactService:
                 metadata_json=meta_dict,
             )
             self.db.add(contact)
-            self.db.commit()
+            try:
+                self.db.commit()
+            except IntegrityError:
+                # A concurrent request created the same contact (unique per tenant+phone and
+                # tenant+email): discard ours and enrich theirs. One retry only.
+                self.db.rollback()
+                if not _retry:
+                    raise
+                return self.get_or_create_contact(tenant_id, phone, email, name, metadata, _retry=False)
             self.db.refresh(contact)
 
         return contact

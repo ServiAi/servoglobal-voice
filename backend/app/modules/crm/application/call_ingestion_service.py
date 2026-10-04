@@ -4,6 +4,7 @@ import logging
 from typing import Any
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.modules.crm.infrastructure.models import CrmActivity, CrmContact, CrmLead
@@ -391,9 +392,10 @@ class CrmIngestionService:
         to_stage_id: str | None = None,
         deduplication_key: str = "",
     ) -> CrmActivity:
-        activity = None
-        if call_id:
-            activity = self.db.scalar(
+        def existing() -> CrmActivity | None:
+            if not call_id:
+                return None
+            return self.db.scalar(
                 select(CrmActivity).where(
                     CrmActivity.tenant_id == tenant_id,
                     CrmActivity.call_id == call_id,
@@ -401,6 +403,8 @@ class CrmIngestionService:
                     CrmActivity.deduplication_key == deduplication_key,
                 )
             )
+
+        activity = existing()
 
         if activity is not None:
             activity.title = title
@@ -429,6 +433,22 @@ class CrmIngestionService:
             deduplication_key=deduplication_key,
         )
         self.db.add(activity)
-        self.db.commit()
+        try:
+            self.db.commit()
+        except IntegrityError:
+            # A concurrent delivery of the same event inserted it first: refresh theirs instead.
+            self.db.rollback()
+            winner = existing()
+            if winner is None:
+                raise
+            winner.title = title
+            winner.description = description
+            winner.outcome = outcome
+            winner.payload_json = payload_json
+            winner.from_stage_id = from_stage_id
+            winner.to_stage_id = to_stage_id
+            self.db.commit()
+            self.db.refresh(winner)
+            return winner
         self.db.refresh(activity)
         return activity

@@ -128,6 +128,45 @@ SCHEDULING_DOMAIN_FORBIDDEN = (
     "app.modules.scheduling.api",
 )
 
+# Legacy/shared code CRM may import: the shared kernel (auth deps for its router, DB session,
+# base metadata, mixins, settings). Nothing else: no Analytics/Identity/Integrations ORM and no
+# legacy services.
+CRM_LEGACY_ALLOWED = {
+    "app.api.auth.deps",
+    "app.core.config",
+    "app.db.base",
+    "app.db.mixins",
+    "app.db.session",
+}
+# Composition-root exceptions (TEMPORARY, each retires with its owner's migration): CRM's lead
+# deletion still clears Messaging (``CrmWhatsAppMessage``), Email and Forms rows through
+# ``crm.wiring.LegacyLeadHistory``, and the Ultravox payload parsing is a Voice Legacy adapter.
+CRM_WIRING_ALLOWED = {
+    "app.models.crm",  # CrmWhatsAppMessage: Messaging debt, not CRM's
+    "app.models.integrations",  # TenantEmailSend / TenantFormToken / TenantFormSubmission
+    "app.services.legacy_call_payload_adapter",
+}
+# Only these application modules may lazily default their ports via wiring.
+CRM_APPLICATION_MAY_IMPORT_WIRING = {
+    "app.modules.crm.application.lead_service",
+    "app.modules.crm.application.task_service",
+    "app.modules.crm.application.lead_resolver_service",
+    "app.modules.crm.application.call_ingestion_service",
+}
+# Imports that must never appear in the pure domain.
+CRM_DOMAIN_FORBIDDEN = (
+    "sqlalchemy", "fastapi", "starlette", "httpx", "pydantic",
+    "app.models", "app.services", "app.schemas", "app.db", "app.api",
+    "app.modules.crm.infrastructure", "app.modules.crm.application", "app.modules.crm.api",
+)
+# Words a pure CRM domain must not know (providers/integrations).
+CRM_DOMAIN_FORBIDDEN_WORDS = ("ultravox", "livekit", "google", "cal.com", "calcom", "whatsapp", "resend", "chatwoot")
+# The ORM classes CRM owns (``CrmWhatsAppMessage`` is Messaging's and stays in app.models.crm).
+CRM_MODELS = {
+    "CrmContact", "CrmPipelineStage", "CrmLead", "CrmCallContext", "CrmActivity", "CrmTask",
+    "CrmVoiceCall", "CrmVoiceCallEvent",
+}
+
 # Things Telephony must never touch, whatever the route: Voice and CRM
 # internals, and the projection/runtime implementations behind voice.public /
 # analytics.public.
@@ -470,6 +509,163 @@ class ModuleBoundaryTests(unittest.TestCase):
         }
         self.assertEqual(found, KNOWN_SHIMS, "Register new shims in KNOWN_SHIMS and the migration roadmap")
 
+    # -- CRM -----------------------------------------------------------------------
+
+    def test_crm_only_touches_allowlisted_legacy_code(self) -> None:
+        def violates(source: str, target: str) -> bool:
+            if _owner(source) != "crm" or _owner(target) is not None:
+                return False
+            if target in CRM_LEGACY_ALLOWED:
+                return False
+            return not (source == "app.modules.crm.wiring" and target in CRM_WIRING_ALLOWED)
+
+        self.assertEqual(self._violations(violates), [], "CRM reaches other domains via <module>.public or a port")
+
+    def test_crm_uses_other_modules_only_through_public(self) -> None:
+        self.assertEqual(
+            self._violations(
+                lambda s, t: _owner(s) == "crm" and _owner(t) not in (None, "crm") and not t.endswith(".public")
+            ),
+            [],
+        )
+
+    def test_crm_application_and_domain_never_import_legacy_orm_or_services(self) -> None:
+        # Only the composition root (wiring) may name the temporary Messaging/Email/Forms adapters.
+        self.assertEqual(
+            self._violations(
+                lambda s, t: s.startswith(("app.modules.crm.application", "app.modules.crm.domain", "app.modules.crm.api"))
+                and t.startswith(("app.models.crm", "app.models.integrations", "app.models.analytics",
+                                  "app.models.identity", "app.services"))
+            ),
+            [],
+        )
+
+    def test_crm_domain_layer_is_pure(self) -> None:
+        offenders = []
+        for path in (APP / "modules" / "crm" / "domain").rglob("*.py"):
+            tree = ast.parse(_source(path))
+            for target in _runtime_imports(tree):
+                if target.startswith(CRM_DOMAIN_FORBIDDEN) and not target.startswith("app.modules.crm.domain"):
+                    offenders.append(f"{path.name}: {target}")
+                if _owner(target) not in (None, "crm"):
+                    offenders.append(f"{path.name}: {target}")
+            for node in ast.walk(tree):
+                names = (
+                    [node.module or ""] if isinstance(node, ast.ImportFrom)
+                    else [a.name for a in node.names] if isinstance(node, ast.Import) else []
+                )
+                offenders += [
+                    f"{path.name}: {n}" for n in names if n.startswith(("sqlalchemy", "fastapi", "httpx", "pydantic"))
+                ]
+            lowered = _source(path).lower()
+            offenders += [f"{path.name}: mentions {w!r}" for w in CRM_DOMAIN_FORBIDDEN_WORDS if w in lowered]
+        self.assertEqual(sorted(set(offenders)), [])
+
+    def test_crm_layers_do_not_depend_upwards(self) -> None:
+        self.assertEqual(
+            self._violations(
+                lambda s, t: s.startswith("app.modules.crm.application")
+                and (
+                    t.startswith("app.modules.crm.api")
+                    or (t == "app.modules.crm.wiring" and s not in CRM_APPLICATION_MAY_IMPORT_WIRING)
+                )
+            ),
+            [],
+        )
+        self.assertEqual(
+            self._violations(
+                lambda s, t: s.startswith("app.modules.crm.infrastructure")
+                and t.startswith(("app.modules.crm.api", "app.modules.crm.application"))
+            ),
+            [],
+        )
+        self.assertEqual(
+            self._violations(
+                lambda s, t: s.startswith("app.modules.crm.domain")
+                and t.startswith(("app.modules.crm.api", "app.modules.crm.application", "app.modules.crm.infrastructure"))
+            ),
+            [],
+        )
+
+    def test_crm_orm_never_leaves_the_crm_module(self) -> None:
+        models = "app.modules.crm.infrastructure.models"
+        self.assertEqual(
+            self._violations(lambda s, t: t == models and _owner(s) != "crm" and s != "app.models"), []
+        )
+
+    def test_crm_is_only_reached_through_its_public_api_or_routers(self) -> None:
+        def violates(source: str, target: str) -> bool:
+            if _owner(target) != "crm" or _owner(source) == "crm":
+                return False
+            if target.endswith(".public"):
+                return False
+            # the app entrypoint mounts the module's router; the registry loads the ORM
+            if source == "app.main" and target.startswith("app.modules.crm.api"):
+                return False
+            return source != "app.models"
+
+        self.assertEqual(self._violations(violates), [])
+
+    def test_nobody_imports_the_old_crm_paths(self) -> None:
+        gone = (
+            "app.services.crm_contact_service", "app.services.crm_pipeline_service",
+            "app.services.crm_activity_service", "app.services.crm_task_service",
+            "app.services.crm_stage_transition_service", "app.services.crm_lead_service",
+            "app.services.crm_query_service", "app.services.crm_metrics_service",
+            "app.services.crm_call_context_service", "app.services.crm_lead_resolver_service",
+            "app.services.crm_ingestion_service", "app.services.crm_context_extractor_service",
+            "app.services.crm_booking_detector_service", "app.services.crm_classifier_service",
+        )
+        self.assertEqual(self._violations(lambda s, t: t.startswith(gone)), [])
+        for old in gone:
+            self.assertFalse((APP.parent / (old.replace(".", "/") + ".py")).exists(), old)
+
+    def test_app_models_crm_holds_only_the_messaging_model_and_reexports_nothing(self) -> None:
+        # CrmWhatsAppMessage is Messaging's (pending its migration); app.models.crm must not become a
+        # shim for the models CRM owns now.
+        path = APP / "models" / "crm.py"
+        tree = ast.parse(_source(path))
+        classes = {node.name for node in tree.body if isinstance(node, ast.ClassDef)}
+        self.assertEqual(classes, {"CrmWhatsAppMessage"})
+        imported = {
+            alias.name
+            for node in ast.walk(tree)
+            if isinstance(node, (ast.Import, ast.ImportFrom))
+            for alias in node.names
+        }
+        self.assertFalse(imported & CRM_MODELS, "app.models.crm must not re-export CRM's models")
+        self.assertFalse(
+            self._violations(
+                lambda s, t: t == "app.models.crm" and s.startswith(("app.modules.crm.application", "app.modules.crm.domain"))
+            ),
+            "CRM application/domain must not know CrmWhatsAppMessage",
+        )
+
+    def test_nobody_imports_crm_models_from_the_legacy_module(self) -> None:
+        offenders = []
+        for module, (path, _) in self.graph.items():
+            for node in ast.walk(ast.parse(_source(path))):
+                if isinstance(node, ast.ImportFrom) and node.module == "app.models.crm":
+                    moved = {a.name for a in node.names} & CRM_MODELS
+                    if moved:
+                        offenders.append(f"{module}: {sorted(moved)}")
+        self.assertEqual(offenders, [])
+
+    def test_crm_public_exposes_only_frozen_dtos(self) -> None:
+        import dataclasses
+
+        from app.modules.crm import public
+
+        problems = []
+        for name in public.__all__:
+            obj = getattr(public, name)
+            if dataclasses.is_dataclass(obj) and not obj.__dataclass_params__.frozen:
+                problems.append(f"{name} is not frozen")
+            if name.startswith("Crm") and name not in {"CrmFacade", "CrmVoiceCalls", "CrmFunnelSnapshot"}:
+                problems.append(f"{name} looks like an ORM class")
+        self.assertEqual(problems, [])
+
+
     # -- Telephony ----------------------------------------------------------------
 
     def test_telephony_does_not_import_other_domains_legacy_internals(self) -> None:
@@ -715,6 +911,7 @@ class ModuleBoundaryTests(unittest.TestCase):
             "app.modules.agents.application", "app.modules.voice_providers.application",
             "app.modules.voice_providers.infrastructure",
             "app.modules.scheduling.application", "app.modules.scheduling.infrastructure",
+            "app.modules.crm.application", "app.modules.crm.infrastructure", "app.modules.crm.api",
             "app.modules.scheduling.api", "httpx", "google",
         )
         for module in (

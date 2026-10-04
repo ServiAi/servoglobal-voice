@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.modules.crm.infrastructure.models import CrmActivity, CrmLead, CrmPipelineStage
@@ -163,9 +164,10 @@ class CrmStageTransitionService:
         description: str,
         from_stage_id: str | None,
     ) -> CrmActivity:
-        existing_activity = None
-        if call_id:
-            existing_activity = self.db.scalar(
+        def existing() -> CrmActivity | None:
+            if not call_id:
+                return None
+            return self.db.scalar(
                 select(CrmActivity).where(
                     CrmActivity.tenant_id == tenant_id,
                     CrmActivity.call_id == call_id,
@@ -173,6 +175,8 @@ class CrmStageTransitionService:
                     CrmActivity.deduplication_key == target_stage.key,
                 )
             )
+
+        existing_activity = existing()
         if existing_activity is not None:
             return existing_activity
 
@@ -192,6 +196,14 @@ class CrmStageTransitionService:
             deduplication_key=target_stage.key,
         )
         self.db.add(activity)
-        self.db.commit()
+        try:
+            self.db.commit()
+        except IntegrityError:
+            # A concurrent request recorded the same transition (unique per call/type/key): keep theirs.
+            self.db.rollback()
+            winner = existing()
+            if winner is None:
+                raise
+            return winner
         self.db.refresh(activity)
         return activity

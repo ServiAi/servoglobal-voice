@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from app.modules.crm.domain.pipeline import DEFAULT_STAGE_KEYS, DEFAULT_STAGES
 from app.modules.crm.infrastructure.models import CrmLead, CrmPipelineStage
@@ -10,6 +11,15 @@ class CrmPipelineService:
         self.db = db
 
     def ensure_default_pipeline(self, tenant_id: str) -> list[CrmPipelineStage]:
+        try:
+            return self._ensure_default_pipeline(tenant_id)
+        except IntegrityError:
+            # A concurrent request created the default stages first (unique per tenant+key):
+            # start over, now they exist.
+            self.db.rollback()
+            return self._ensure_default_pipeline(tenant_id)
+
+    def _ensure_default_pipeline(self, tenant_id: str) -> list[CrmPipelineStage]:
         stages = list(
             self.db.scalars(
                 select(CrmPipelineStage)
