@@ -7,7 +7,7 @@ from collections.abc import Sequence
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from app.modules.integrations.infrastructure.models import CrmWhatsAppMessage
@@ -483,11 +483,15 @@ class WhatsAppMessageService:
         status = event.status
         if not provider_message_id or not status:
             return 0
+        # FOR UPDATE: two webhooks for the same message (e.g. "delivered" and "read") are serialized, so
+        # the loser re-reads the winner's status and cannot move the message backwards.
         message = self.db.scalar(
-            select(CrmWhatsAppMessage).where(
+            select(CrmWhatsAppMessage)
+            .where(
                 CrmWhatsAppMessage.tenant_id == config.tenant_id,
                 CrmWhatsAppMessage.provider_message_id == provider_message_id,
             )
+            .with_for_update()
         )
         if message is None:
             return 0
@@ -550,6 +554,8 @@ class WhatsAppMessageService:
             )
             return 0
 
+        if provider_message_id:
+            self._lock_inbound(config.tenant_id, provider_message_id)
         if provider_message_id and self.db.scalar(
             select(CrmWhatsAppMessage.id).where(
                 CrmWhatsAppMessage.tenant_id == config.tenant_id,
@@ -594,6 +600,16 @@ class WhatsAppMessageService:
             resource_id=message.id,
         )
         return 1
+
+    def _lock_inbound(self, tenant_id: str, provider_message_id: str) -> None:
+        """Serialize concurrent deliveries of the same inbound message until our commit (PostgreSQL only;
+        there is no unique constraint on provider_message_id and this change adds no DDL)."""
+        if self.db.get_bind().dialect.name != "postgresql":
+            return
+        self.db.execute(
+            text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"),
+            {"key": f"wa-inbound:{tenant_id}:{provider_message_id}"},
+        )
 
     def _find_contact(self, tenant_id: str, phone: str | None) -> ContactProfile | None:
         return self.crm.find_contact_by_phone_digits(tenant_id, phone)

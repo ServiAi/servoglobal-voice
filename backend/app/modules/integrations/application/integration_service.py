@@ -4,6 +4,7 @@ import json
 from datetime import UTC, datetime
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.modules.integrations.infrastructure.models import TenantIntegration
@@ -42,21 +43,29 @@ class IntegrationService:
             for provider in self.supported_providers
         ]
 
+    def _get_or_create(self, tenant_id: str, provider: str, **defaults) -> TenantIntegration:
+        """The (tenant, provider) row. A concurrent creator that wins the unique constraint is
+        adopted instead of failing, so concurrent writers converge on one row."""
+        integration = self.get_integration(tenant_id, provider)
+        if integration is not None:
+            return integration
+        integration = TenantIntegration(
+            tenant_id=tenant_id, provider=provider, status="inactive", config_json={}, **defaults
+        )
+        try:
+            with self.db.begin_nested():
+                self.db.add(integration)
+        except IntegrityError:
+            integration = self.get_integration(tenant_id, provider)
+            if integration is None:
+                raise
+        return integration
+
     def set_enabled(self, tenant_id: str, provider: str, enabled: bool) -> TenantIntegration:
         if provider not in self.supported_providers:
             raise ValueError("Unsupported integration provider.")
-        integration = self.get_integration(tenant_id, provider)
-        if integration is None:
-            integration = TenantIntegration(
-                tenant_id=tenant_id,
-                provider=provider,
-                enabled=enabled,
-                status="inactive",
-                config_json={},
-            )
-            self.db.add(integration)
-        else:
-            integration.enabled = enabled
+        integration = self._get_or_create(tenant_id, provider, enabled=enabled)
+        integration.enabled = enabled
         self.db.commit()
         self.db.refresh(integration)
         return integration
@@ -69,16 +78,7 @@ class IntegrationService:
         config: dict,
         api_key: str | None,
     ) -> TenantIntegration:
-        integration = self.get_integration(tenant_id, "resend")
-        if integration is None:
-            integration = TenantIntegration(
-                tenant_id=tenant_id,
-                provider="resend",
-                display_name=display_name,
-                status="inactive",
-                config_json={},
-            )
-            self.db.add(integration)
+        integration = self._get_or_create(tenant_id, "resend", display_name=display_name)
 
         integration.display_name = display_name
         integration.config_json = config
