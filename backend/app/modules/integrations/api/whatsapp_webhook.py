@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.db.session import get_db
 from app.modules.integrations.application.whatsapp.message_service import WhatsAppMessageService
+from app.modules.integrations.infrastructure.whatsapp.webhook_parser import parse_webhook_payload
 
 
 logger = logging.getLogger(__name__)
@@ -53,6 +54,6 @@ async def receive_whatsapp_webhook(request: Request, db: Session = Depends(get_d
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid JSON payload") from exc
     if not isinstance(payload, dict):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid webhook payload")
-    result = WhatsAppMessageService(db).handle_webhook_payload(payload)
+    result = WhatsAppMessageService(db).handle_events(parse_webhook_payload(payload))
     logger.info("WhatsApp webhook processed statuses=%s inbound=%s", result["statuses"], result["inbound"])
     return {"status": "ok", **result}

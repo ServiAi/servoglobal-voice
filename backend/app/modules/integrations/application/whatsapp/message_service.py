@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass
+from collections.abc import Sequence
 from datetime import datetime, timezone
 from typing import Any
 
@@ -17,6 +18,9 @@ from app.modules.integrations.application.event_service import IntegrationEventS
 from app.modules.integrations.application.ports import NotificationsPort, WhatsAppProviderPort
 from app.modules.integrations.domain.errors import ProviderError
 from app.modules.integrations.domain.whatsapp import (
+    WhatsAppInboundMessage,
+    WhatsAppStatusUpdate,
+    WhatsAppWebhookEvent,
     MISSING_PROVIDER_MESSAGE_ID_ERROR,
     can_advance_status,
     extract_provider_message_id,
@@ -449,161 +453,152 @@ class WhatsAppMessageService:
             .order_by(CrmWhatsAppMessage.created_at.desc())
         ).all()
 
-    def handle_webhook_payload(self, payload: dict[str, Any]) -> dict[str, int]:
+    def handle_events(self, events: Sequence[WhatsAppWebhookEvent]) -> dict[str, int]:
+        """Process provider events already parsed by the provider adapter. Events whose
+        ``phone_number_id`` matches no tenant are ignored (logged by count, never by content)."""
+        configs: dict[str | None, TenantWhatsAppConfig | None] = {}
+        ignored = {"status": 0, "inbound": 0}
         statuses = 0
         inbound = 0
-        for entry in payload.get("entry") or []:
-            for change in entry.get("changes") or []:
-                value = change.get("value") or {}
-                statuses += self._handle_statuses(value)
-                inbound += self._handle_inbound(value)
+        for event in events:
+            if event.phone_number_id not in configs:
+                configs[event.phone_number_id] = self._config_by_phone_number_id(event.phone_number_id)
+            config = configs[event.phone_number_id]
+            kind = "status" if isinstance(event, WhatsAppStatusUpdate) else "inbound"
+            if config is None:
+                ignored[kind] += 1
+                continue
+            if isinstance(event, WhatsAppStatusUpdate):
+                statuses += self._handle_status(config, event)
+            else:
+                inbound += self._handle_inbound(config, event)
+        if ignored["status"]:
+            logger.info("WhatsApp status webhook ignored tenant_unresolved count=%s", ignored["status"])
+        if ignored["inbound"]:
+            logger.info("WhatsApp inbound webhook ignored tenant_unresolved count=%s", ignored["inbound"])
         return {"statuses": statuses, "inbound": inbound}
 
-    def _handle_statuses(self, value: dict[str, Any]) -> int:
-        config = self._config_from_value(value)
-        if config is None:
-            statuses = value.get("statuses") or []
-            if statuses:
-                logger.info("WhatsApp status webhook ignored tenant_unresolved count=%s", len(statuses))
+    def _handle_status(self, config: TenantWhatsAppConfig, event: WhatsAppStatusUpdate) -> int:
+        provider_message_id = event.provider_message_id
+        status = event.status
+        if not provider_message_id or not status:
             return 0
-
-        count = 0
-        for item in value.get("statuses") or []:
-            provider_message_id = item.get("id")
-            status = item.get("status")
-            if not provider_message_id or not status:
-                continue
-            message = self.db.scalar(
-                select(CrmWhatsAppMessage).where(
-                    CrmWhatsAppMessage.tenant_id == config.tenant_id,
-                    CrmWhatsAppMessage.provider_message_id == provider_message_id,
-                )
+        message = self.db.scalar(
+            select(CrmWhatsAppMessage).where(
+                CrmWhatsAppMessage.tenant_id == config.tenant_id,
+                CrmWhatsAppMessage.provider_message_id == provider_message_id,
             )
-            if message is None:
-                continue
-            if not can_advance_status(message.status, status):
-                # Out-of-order webhook (e.g. a late "delivered" after "read"): never move a message backwards.
-                continue
-            now = datetime.now(timezone.utc)
-            message.status = status
-            status_error_message = None
-            if status == "delivered":
-                message.delivered_at = now
-            elif status == "read":
-                message.read_at = now
-            elif status == "failed":
-                message.failed_at = now
-                error = item.get("errors")
-                status_error_message = sanitize_whatsapp_error(str(error)) if error else "WhatsApp delivery failed"
-                message.error_message = status_error_message
-            self.db.commit()
-            self.notifications.report_delivery_status(
-                tenant_id=config.tenant_id,
-                provider_message_id=provider_message_id,
-                status=status,
-                occurred_at=now,
-                error_message=status_error_message,
-            )
-            self.events.record_event(
-                tenant_id=message.tenant_id,
-                provider=self.provider,
-                event_type=f"whatsapp_status_{status}",
-                status="success" if status != "failed" else "failed",
-                resource_type="crm_whatsapp_message",
-                resource_id=message.id,
-            )
-            if message.lead_id and message.contact_id:
-                self.crm.record_activity(
-                    tenant_id=message.tenant_id,
-                    lead_id=message.lead_id,
-                    contact_id=message.contact_id,
-                    activity_type=f"whatsapp_status_{status}",
-                    title=f"WhatsApp {status}",
-                    outcome=status,
-                    deduplication_key=f"whatsapp_status:{provider_message_id}:{status}",
-                    payload={"message_id": message.id, "status": status},
-                )
-            count += 1
-        return count
-
-    def _handle_inbound(self, value: dict[str, Any]) -> int:
-        config = self._config_from_value(value)
-        if config is None:
-            messages = value.get("messages") or []
-            if messages:
-                logger.info("WhatsApp inbound webhook ignored tenant_unresolved count=%s", len(messages))
+        )
+        if message is None:
             return 0
-
-        count = 0
-        for item in value.get("messages") or []:
-            from_phone = item.get("from")
-            provider_message_id = item.get("id")
-            body = ((item.get("text") or {}).get("body")) if isinstance(item.get("text"), dict) else None
-            contact = self._find_contact(config.tenant_id, from_phone)
-            lead = self._find_open_lead(config.tenant_id, contact.id) if contact else None
-            if contact is None or lead is None:
-                self.events.record_event(
-                    tenant_id=config.tenant_id,
-                    provider=self.provider,
-                    event_type="whatsapp_inbound_unmatched",
-                    status="ignored",
-                    resource_type="webhook",
-                    resource_id=(provider_message_id or "")[:80],
-                )
-                continue
-
-            if provider_message_id and self.db.scalar(
-                select(CrmWhatsAppMessage.id).where(
-                    CrmWhatsAppMessage.tenant_id == config.tenant_id,
-                    CrmWhatsAppMessage.provider_message_id == provider_message_id,
-                    CrmWhatsAppMessage.direction == "inbound",
-                )
-            ):
-                # Meta retries webhooks: an inbound message already stored is not stored (nor logged) twice.
-                continue
-
-            message = CrmWhatsAppMessage(
-                tenant_id=config.tenant_id,
-                lead_id=lead.id,
-                contact_id=contact.id,
-                provider_message_id=provider_message_id,
-                direction="inbound",
-                from_phone=from_phone,
-                to_phone=config.display_phone_number,
-                message_preview=safe_preview(body),
-                status="received",
-                metadata_json={},
-            )
-            self.db.add(message)
-            self.db.commit()
-            self.db.refresh(message)
+        if not can_advance_status(message.status, status):
+            # Out-of-order webhook (e.g. a late "delivered" after "read"): never move a message backwards.
+            return 0
+        now = datetime.now(timezone.utc)
+        message.status = status
+        status_error_message = None
+        if status == "delivered":
+            message.delivered_at = now
+        elif status == "read":
+            message.read_at = now
+        elif status == "failed":
+            message.failed_at = now
+            status_error_message = sanitize_whatsapp_error(event.error) if event.error else "WhatsApp delivery failed"
+            message.error_message = status_error_message
+        self.db.commit()
+        self.notifications.report_delivery_status(
+            tenant_id=config.tenant_id,
+            provider_message_id=provider_message_id,
+            status=status,
+            occurred_at=now,
+            error_message=status_error_message,
+        )
+        self.events.record_event(
+            tenant_id=message.tenant_id,
+            provider=self.provider,
+            event_type=f"whatsapp_status_{status}",
+            status="success" if status != "failed" else "failed",
+            resource_type="crm_whatsapp_message",
+            resource_id=message.id,
+        )
+        if message.lead_id and message.contact_id:
             self.crm.record_activity(
-                tenant_id=config.tenant_id,
-                lead_id=lead.id,
-                contact_id=contact.id,
-                activity_type="whatsapp_inbound_received",
-                title="WhatsApp recibido",
-                outcome="received",
-                deduplication_key=f"whatsapp_inbound:{provider_message_id or message.id}",
-                payload={"message_id": message.id, "status": "received"},
+                tenant_id=message.tenant_id,
+                lead_id=message.lead_id,
+                contact_id=message.contact_id,
+                activity_type=f"whatsapp_status_{status}",
+                title=f"WhatsApp {status}",
+                outcome=status,
+                deduplication_key=f"whatsapp_status:{provider_message_id}:{status}",
+                payload={"message_id": message.id, "status": status},
             )
+        return 1
+
+    def _handle_inbound(self, config: TenantWhatsAppConfig, event: WhatsAppInboundMessage) -> int:
+        from_phone = event.from_phone
+        provider_message_id = event.provider_message_id
+        contact = self._find_contact(config.tenant_id, from_phone)
+        lead = self._find_open_lead(config.tenant_id, contact.id) if contact else None
+        if contact is None or lead is None:
             self.events.record_event(
                 tenant_id=config.tenant_id,
                 provider=self.provider,
-                event_type="whatsapp_inbound_received",
-                status="success",
-                resource_type="crm_whatsapp_message",
-                resource_id=message.id,
+                event_type="whatsapp_inbound_unmatched",
+                status="ignored",
+                resource_type="webhook",
+                resource_id=(provider_message_id or "")[:80],
             )
-            count += 1
-        return count
+            return 0
+
+        if provider_message_id and self.db.scalar(
+            select(CrmWhatsAppMessage.id).where(
+                CrmWhatsAppMessage.tenant_id == config.tenant_id,
+                CrmWhatsAppMessage.provider_message_id == provider_message_id,
+                CrmWhatsAppMessage.direction == "inbound",
+            )
+        ):
+            # Meta retries webhooks: an inbound message already stored is not stored (nor logged) twice.
+            return 0
+
+        message = CrmWhatsAppMessage(
+            tenant_id=config.tenant_id,
+            lead_id=lead.id,
+            contact_id=contact.id,
+            provider_message_id=provider_message_id,
+            direction="inbound",
+            from_phone=from_phone,
+            to_phone=config.display_phone_number,
+            message_preview=safe_preview(event.body),
+            status="received",
+            metadata_json={},
+        )
+        self.db.add(message)
+        self.db.commit()
+        self.db.refresh(message)
+        self.crm.record_activity(
+            tenant_id=config.tenant_id,
+            lead_id=lead.id,
+            contact_id=contact.id,
+            activity_type="whatsapp_inbound_received",
+            title="WhatsApp recibido",
+            outcome="received",
+            deduplication_key=f"whatsapp_inbound:{provider_message_id or message.id}",
+            payload={"message_id": message.id, "status": "received"},
+        )
+        self.events.record_event(
+            tenant_id=config.tenant_id,
+            provider=self.provider,
+            event_type="whatsapp_inbound_received",
+            status="success",
+            resource_type="crm_whatsapp_message",
+            resource_id=message.id,
+        )
+        return 1
 
     def _find_contact(self, tenant_id: str, phone: str | None) -> ContactProfile | None:
         return self.crm.find_contact_by_phone_digits(tenant_id, phone)
 
-    def _config_from_value(self, value: dict[str, Any]) -> TenantWhatsAppConfig | None:
-        metadata = value.get("metadata") or {}
-        phone_number_id = metadata.get("phone_number_id")
+    def _config_by_phone_number_id(self, phone_number_id: str | None) -> TenantWhatsAppConfig | None:
         if not phone_number_id:
             return None
         return self.db.scalar(

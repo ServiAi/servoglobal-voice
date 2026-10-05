@@ -62,3 +62,26 @@ def can_advance_status(current: str | None, new: str) -> bool:
     if current in STATUS_RANK and new in STATUS_RANK:
         return STATUS_RANK[new] >= STATUS_RANK[current]
     return True
+
+
+@dataclass(frozen=True)
+class WhatsAppStatusUpdate:
+    """A delivery status reported by the provider for a message we sent."""
+
+    phone_number_id: str | None
+    provider_message_id: str | None
+    status: str | None
+    error: str | None = None
+
+
+@dataclass(frozen=True)
+class WhatsAppInboundMessage:
+    """A message a contact sent to the tenant's number."""
+
+    phone_number_id: str | None
+    from_phone: str | None
+    provider_message_id: str | None
+    body: str | None = None
+
+
+WhatsAppWebhookEvent = WhatsAppStatusUpdate | WhatsAppInboundMessage
