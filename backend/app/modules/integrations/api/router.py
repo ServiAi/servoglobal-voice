@@ -7,10 +7,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.auth.deps import AuthContext, require_roles
+from app.api.deps import require_enabled_integration
 from app.db.session import get_db
 from app.modules.integrations.infrastructure.models import TenantEmailTemplate, TenantWhatsAppTemplate
-from app.modules.scheduling.public import SchedulingFacade
-from app.schemas.integrations import (
+from app.modules.integrations.domain.catalog import catalog_status
+from app.modules.integrations.wiring import foreign_catalog_inputs
+from app.modules.integrations.api.schemas import (
     ChatwootAgentInviteRequest,
     ChatwootAgentSummary,
     ChatwootAgentUpdateRequest,
@@ -32,10 +34,6 @@ from app.schemas.integrations import (
     ResendIntegrationConfigResponse,
     ResendTestEmailRequest,
     ResendTestEmailResponse,
-    VoiceAgentConfigRequest,
-    VoiceAgentConfigResponse,
-    VoiceProviderConfigRequest,
-    VoiceProviderConfigResponse,
     WhatsAppConfigRequest,
     WhatsAppConfigResponse,
     WhatsAppTemplateCreateRequest,
@@ -60,8 +58,6 @@ from app.modules.integrations.application.email.send_service import EmailSendSer
 from app.modules.integrations.application.email.template_service import EmailTemplateService
 from app.modules.integrations.application.event_service import IntegrationEventService
 from app.modules.integrations.application.integration_service import IntegrationService
-from app.services.voice_agent_service import VoiceAgentService
-from app.services.voice_config_service import VoiceConfigService
 from app.modules.integrations.application.whatsapp.config_service import WhatsAppConfigService
 from app.modules.integrations.application.whatsapp.message_service import WhatsAppMessageService
 from app.modules.integrations.application.whatsapp.template_service import WhatsAppTemplateService
@@ -70,20 +66,6 @@ router = APIRouter(prefix="/api/v1/integrations", tags=["Integrations"])
 
 _READ_ROLES = ["platform_admin", "tenant_admin", "tenant_analyst", "tenant_viewer"]
 _WRITE_ROLES = ["platform_admin", "tenant_admin"]
-
-
-def require_enabled_integration(provider: str, roles: list[str]):
-    role_dependency = require_roles(roles)
-
-    def dependency(
-        context: AuthContext = Depends(role_dependency),
-        db: Session = Depends(get_db),
-    ) -> AuthContext:
-        if not IntegrationService(db).is_enabled(context.tenant.id, provider):
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Integration is not enabled for this tenant.")
-        return context
-
-    return dependency
 
 
 def _resend_response(
@@ -104,16 +86,6 @@ def _resend_response(
         last_health_check_at=config.last_health_check_at if config else None,
         last_error_message=(config.last_error_message if config else integration.last_error_message if integration else None),
     )
-
-
-def _catalog_status(*, configured: bool, provider_status: str | None, has_error: bool) -> str:
-    if has_error or provider_status in {"error", "failed"}:
-        return "error"
-    if not configured:
-        return "not_configured"
-    if provider_status in {"active", "connected"}:
-        return "active"
-    return "configured"
 
 
 @router.get("", response_model=list[ResendIntegrationConfigResponse])
@@ -153,7 +125,7 @@ def _integration_catalog_statuses(
     if "resend" in selected:
         integration = integration_service.get_integration(tenant_id, "resend")
         config = EmailConfigService(db).get_config(tenant_id, "resend")
-        statuses["resend"] = _catalog_status(
+        statuses["resend"] = catalog_status(
             configured=bool(integration or config),
             provider_status=config.status if config else integration.status if integration else None,
             has_error=bool(config.last_error_message if config else integration.last_error_message if integration else None),
@@ -161,42 +133,21 @@ def _integration_catalog_statuses(
 
     if "whatsapp" in selected:
         config = WhatsAppConfigService(db).get_config(tenant_id)
-        statuses["whatsapp"] = _catalog_status(
+        statuses["whatsapp"] = catalog_status(
             configured=config is not None,
             provider_status=config.status if config else None,
             has_error=bool(config and config.last_error_message),
         )
 
-    if "voice" in selected:
-        config = VoiceConfigService(db).get_provider_config(tenant_id)
-        statuses["voice"] = _catalog_status(
-            configured=config is not None,
-            provider_status=config.status if config else None,
-            has_error=bool(config and config.last_error_message),
-        )
-
-    if "calcom" in selected or "google_calendar" in selected:
-        scheduling = SchedulingFacade(db).catalog_status_inputs(tenant_id)
-
-    if "calcom" in selected:
-        facts = scheduling["calcom"]
-        statuses["calcom"] = _catalog_status(
-            configured=facts["configured"],
-            provider_status=facts["status"],
-            has_error=facts["has_error"],
-        )
-
-    if "google_calendar" in selected:
-        facts = scheduling["google_calendar"]
-        statuses["google_calendar"] = _catalog_status(
-            configured=facts["configured"],
-            provider_status="connected" if facts["connected"] else None,
-            has_error=facts["has_error"],
+    foreign = foreign_catalog_inputs(db, tenant_id, selected)
+    for provider, facts in foreign.items():
+        statuses[provider] = catalog_status(
+            configured=facts.configured, provider_status=facts.provider_status, has_error=facts.has_error
         )
 
     if "chatwoot" in selected:
         config = ChatwootConfigService(db).get_config(tenant_id)
-        statuses["chatwoot"] = _catalog_status(
+        statuses["chatwoot"] = catalog_status(
             configured=config is not None,
             provider_status=config.status if config else None,
             has_error=bool(config and config.last_error_message),
@@ -531,84 +482,6 @@ def upsert_resend_template(
 
 # --- Voice Integration Config ---
 
-@router.get("/voice/config", response_model=VoiceProviderConfigResponse)
-def get_voice_config(
-    context: AuthContext = Depends(require_enabled_integration("voice", _READ_ROLES)),
-    db: Session = Depends(get_db),
-) -> Any:
-    return VoiceConfigService(db).get_config_response(context.tenant.id)
-
-
-@router.post("/voice/config", response_model=VoiceProviderConfigResponse)
-def configure_voice(
-    body: VoiceProviderConfigRequest,
-    context: AuthContext = Depends(require_enabled_integration("voice", _WRITE_ROLES)),
-    db: Session = Depends(get_db),
-) -> Any:
-    try:
-        config = VoiceConfigService(db).upsert_provider_config(context.tenant.id, body)
-        return VoiceConfigService(db).get_config_response(context.tenant.id, config.provider)
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
-
-
-@router.post("/voice/test")
-def test_voice(
-    provider: str = "ultravox",
-    context: AuthContext = Depends(require_enabled_integration("voice", _WRITE_ROLES)),
-    db: Session = Depends(get_db),
-) -> Any:
-    try:
-        result, error = VoiceConfigService(db).test_connection(context.tenant.id, provider)
-        if result != "active":
-            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=error or "Voice test failed.")
-        return {"status": result}
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
-
-
-# --- Voice Agent Config ---
-
-@router.get("/voice/agents", response_model=list[VoiceAgentConfigResponse])
-def list_voice_agents(
-    context: AuthContext = Depends(require_enabled_integration("voice", _READ_ROLES)),
-    db: Session = Depends(get_db),
-) -> Any:
-    service = VoiceAgentService(db)
-    agents = service.list_agent_configs(context.tenant.id)
-    return [service.response(agent) for agent in agents]
-
-
-@router.post("/voice/agents", response_model=VoiceAgentConfigResponse)
-def create_voice_agent(
-    body: VoiceAgentConfigRequest,
-    context: AuthContext = Depends(require_enabled_integration("voice", _WRITE_ROLES)),
-    db: Session = Depends(get_db),
-) -> Any:
-    try:
-        service = VoiceAgentService(db)
-        agent = service.create_or_update_agent_config(context.tenant.id, body)
-        return service.response(agent)
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
-
-
-@router.put("/voice/agents/{agent_config_id}", response_model=VoiceAgentConfigResponse)
-def update_voice_agent(
-    agent_config_id: str,
-    body: VoiceAgentConfigRequest,
-    context: AuthContext = Depends(require_enabled_integration("voice", _WRITE_ROLES)),
-    db: Session = Depends(get_db),
-) -> Any:
-    try:
-        service = VoiceAgentService(db)
-        agent = service.create_or_update_agent_config(context.tenant.id, body, agent_config_id)
-        return service.response(agent)
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
-
-
-# --- Chatwoot Integration Config ---
 
 @router.get("/chatwoot/config", response_model=ChatwootConfigResponse)
 def get_chatwoot_config(

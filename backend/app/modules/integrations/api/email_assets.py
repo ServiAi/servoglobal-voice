@@ -14,7 +14,7 @@ from app.api.auth.deps import AuthContext, get_current_auth_context, require_rol
 from app.db.session import get_db
 from app.modules.integrations.infrastructure.models import TenantEmailAsset
 from app.models.identity import Tenant, User
-from app.schemas.integrations import EmailAssetItem
+from app.modules.integrations.api.schemas import EmailAssetItem
 from app.modules.integrations.application.email.asset_service import EmailAssetService
 from app.services.onboarding_service import OnboardingService
 

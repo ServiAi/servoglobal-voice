@@ -8,7 +8,7 @@ from sqlalchemy import select
 from _integrations_2a_test_base import Integration2ATestCase, SessionLocal
 from app.models.identity import Tenant, TenantMembership
 from app.modules.integrations.infrastructure.models import TenantIntegrationEvent, TenantWhatsAppFlow
-from app.schemas.integrations import WhatsAppConfigRequest
+from app.modules.integrations.api.schemas import WhatsAppConfigRequest
 from app.modules.integrations.domain.whatsapp_flows import WhatsAppFlowCreateRequest, WhatsAppFlowUpdateRequest
 from app.modules.integrations.application.whatsapp.config_service import WhatsAppConfigService
 from app.modules.integrations.domain.whatsapp_flow_compiler import WhatsAppFlowCompiler

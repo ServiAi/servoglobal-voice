@@ -13,10 +13,7 @@ from app.modules.integrations.infrastructure.models import CrmWhatsAppMessage
 from app.modules.integrations.infrastructure.models import TenantWhatsAppConfig
 from app.modules.crm.public import ContactProfile, CrmFacade, LeadProfile
 from app.schemas.crm import WhatsAppActionRequest, WhatsAppActionResponse
-from app.schemas.integrations import (
-    WhatsAppTestMessageRequest,
-    WhatsAppTestMessageResponse,
-)
+from app.modules.integrations.api.schemas import WhatsAppTestMessageRequest, WhatsAppTestMessageResponse
 from app.modules.integrations.application.event_service import IntegrationEventService
 from app.modules.integrations.infrastructure.whatsapp.meta_client import (
     WhatsAppCloudClient,

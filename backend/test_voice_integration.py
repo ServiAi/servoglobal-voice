@@ -80,7 +80,7 @@ class VoiceEndpointTests(Integration2ATestCase):
     def test_voice_test_endpoint_canonical_works(self):
         self.configure_voice()
 
-        with patch("app.api.endpoints.integrations.VoiceConfigService.test_connection") as mock_test:
+        with patch("app.api.endpoints.voice_integrations.VoiceConfigService.test_connection") as mock_test:
             mock_test.return_value = ("active", None)
             response = self.client.post(
                 "/api/v1/integrations/voice/test",
@@ -108,7 +108,7 @@ class VoiceEndpointTests(Integration2ATestCase):
 
         other_tenant, _ = self._seed_tenant_user(slug="tenant-b", email="b@example.com")
 
-        with patch("app.api.endpoints.integrations.VoiceConfigService.test_connection") as mock_test:
+        with patch("app.api.endpoints.voice_integrations.VoiceConfigService.test_connection") as mock_test:
             mock_test.return_value = ("active", None)
             response = self.client.post(
                 "/api/v1/integrations/voice/test",

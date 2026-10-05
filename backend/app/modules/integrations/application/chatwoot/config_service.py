@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.modules.integrations.infrastructure.models import TenantChatwootConfig
-from app.schemas.integrations import (
+from app.modules.integrations.api.schemas import (
     ChatwootAgentSummary,
     ChatwootConfigRequest,
     ChatwootConfigResponse,

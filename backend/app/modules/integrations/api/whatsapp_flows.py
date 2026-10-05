@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
 from app.api.auth.deps import AuthContext
-from app.api.endpoints.integrations import require_enabled_integration
+from app.api.deps import require_enabled_integration
 from app.db.session import get_db
 from app.modules.integrations.domain.whatsapp_flows import (
     WhatsAppFlowCompileResponse,

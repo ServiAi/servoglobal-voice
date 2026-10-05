@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.modules.integrations.infrastructure.models import TenantWhatsAppConfig
-from app.schemas.integrations import (
+from app.modules.integrations.api.schemas import (
     WhatsAppConfigRequest,
     WhatsAppConfigResponse,
     WhatsAppTemplateSubmitResponse,

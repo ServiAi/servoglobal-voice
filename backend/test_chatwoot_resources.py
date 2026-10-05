@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, patch
 
 from _integrations_2a_test_base import Integration2ATestCase, SessionLocal
 from app.core.config import settings
-from app.schemas.integrations import ChatwootConfigRequest
+from app.modules.integrations.api.schemas import ChatwootConfigRequest
 from app.modules.integrations.application.chatwoot.config_service import ChatwootConfigService
 
 

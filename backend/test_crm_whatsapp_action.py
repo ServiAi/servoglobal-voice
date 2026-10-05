@@ -6,7 +6,7 @@ from _integrations_2a_test_base import Integration2ATestCase, SessionLocal
 from app.modules.crm.infrastructure.models import CrmActivity
 from app.modules.integrations.infrastructure.models import CrmWhatsAppMessage
 from app.modules.integrations.infrastructure.models import TenantIntegrationEvent, TenantWhatsAppTemplate
-from app.schemas.integrations import WhatsAppTestMessageRequest
+from app.modules.integrations.api.schemas import WhatsAppTestMessageRequest
 from app.modules.integrations.infrastructure.whatsapp.meta_client import WhatsAppCloudClient
 
 

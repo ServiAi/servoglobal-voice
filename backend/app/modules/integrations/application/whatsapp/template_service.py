@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.modules.integrations.infrastructure.models import CrmWhatsAppMessage
 from app.modules.integrations.infrastructure.models import TenantWhatsAppTemplate
-from app.schemas.integrations import WhatsAppTemplateCreateRequest, WhatsAppTemplateUpdateRequest
+from app.modules.integrations.api.schemas import WhatsAppTemplateCreateRequest, WhatsAppTemplateUpdateRequest
 from app.services.tenant_feature_service import TenantFeatureService, WHATSAPP_BUSINESS_CALLING
 
 

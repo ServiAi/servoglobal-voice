@@ -4,7 +4,7 @@ from sqlalchemy import select
 
 from _integrations_2a_test_base import Integration2ATestCase, SessionLocal
 from app.modules.integrations.infrastructure.models import TenantIntegrationEvent
-from app.schemas.integrations import ChatwootConfigRequest
+from app.modules.integrations.api.schemas import ChatwootConfigRequest
 from app.modules.integrations.application.chatwoot.config_service import ChatwootConfigService
 
 
