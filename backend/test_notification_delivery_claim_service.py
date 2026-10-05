@@ -12,8 +12,8 @@ from sqlalchemy.dialects import postgresql
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.models.identity import Tenant
-from app.models.notifications import DomainEvent, NotificationDelivery, TenantNotificationRule
-from app.services.notification_delivery_claim_service import (
+from app.modules.notifications.infrastructure.models import DomainEvent, NotificationDelivery, TenantNotificationRule
+from app.modules.notifications.application.delivery_claim_service import (
     NotificationDeliveryClaim,
     NotificationDeliveryClaimService,
 )

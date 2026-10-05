@@ -5,7 +5,7 @@ from enum import Enum
 from pydantic import BaseModel, ConfigDict, Field, ValidationError as PydanticValidationError
 from pydantic import model_validator
 
-from app.domain.notification_rules import validate_field_path
+from app.modules.notifications.domain.rules import validate_field_path
 
 _MAX_VARIABLES = 50
 _MAX_KEY_LENGTH = 80

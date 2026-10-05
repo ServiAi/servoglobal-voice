@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
-from app.models.notifications import TenantCapability
+from app.modules.notifications.infrastructure.models import TenantCapability
 
 
 class NotificationCapabilityService:

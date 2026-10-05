@@ -7,7 +7,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request,
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.services.notification_event_pipeline import run_call_notification_pipeline_task
+from app.modules.notifications.public import publish_call_event
 from app.services.voice_webhook_service import VoiceWebhookService
 from app.services.voice_runtime_webhook_service import VoiceRuntimeWebhookService
 
@@ -81,7 +81,7 @@ async def voice_webhook(
 
     if result.get("status") == "processed" and result.get("call_status") in _NOTIFIABLE_CALL_STATUSES:
         background_tasks.add_task(
-            run_call_notification_pipeline_task,
+            publish_call_event,
             tenant_id=call.tenant_id,
             voice_call_id=result["voice_call_id"],
         )

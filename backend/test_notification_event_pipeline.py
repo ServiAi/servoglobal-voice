@@ -20,7 +20,7 @@ from app.modules.crm.infrastructure.models import CrmContact, CrmLead, CrmPipeli
 from app.modules.scheduling.infrastructure.models import CrmBooking, CrmBookingEvent
 from app.models.identity import Tenant
 from app.models.integrations import TenantIntegrationEvent, TenantWhatsAppConfig, TenantWhatsAppTemplate
-from app.models.notifications import (
+from app.modules.notifications.infrastructure.models import (
     DomainEvent,
     NotificationDelivery,
     TenantCapability,
@@ -29,8 +29,8 @@ from app.models.notifications import (
 )
 from app.services.secret_manager_service import SecretManager
 from app.services.whatsapp_client import WhatsAppCloudClient, WhatsAppCloudClientError
-from app.services import notification_event_pipeline as pipeline_module
-from app.services.notification_event_pipeline import (
+from app.modules.notifications.runtime import event_pipeline as pipeline_module
+from app.modules.notifications.runtime.event_pipeline import (
     NotificationEventPipeline,
     run_booking_notification_pipeline_task,
     run_call_notification_pipeline_task,
@@ -996,7 +996,7 @@ class BookingServiceIntegrationTests(Integration2ATestCase):
         lead_id, _ = self.seed_lead()
 
         with patch("app.modules.scheduling.application.booking_service.CalComClient.create_booking") as create_booking, patch(
-            "app.services.notification_event_pipeline.NotificationEventPipeline.process_booking_event"
+            "app.modules.notifications.runtime.event_pipeline.NotificationEventPipeline.process_booking_event"
         ) as process_event:
             create_booking.return_value = {"data": {"id": 1, "uid": "uid-1", "status": "accepted"}}
             response = self.client.post(
@@ -1023,7 +1023,7 @@ class BookingServiceIntegrationTests(Integration2ATestCase):
         lead_id, _ = self.seed_lead()
 
         with patch("app.modules.scheduling.application.booking_service.CalComClient.create_booking") as create_booking, patch(
-            "app.services.notification_event_pipeline.NotificationEventPipeline.process_booking_event"
+            "app.modules.notifications.runtime.event_pipeline.NotificationEventPipeline.process_booking_event"
         ) as process_event:
             create_booking.side_effect = RuntimeError("cal.com is down")
             with SessionLocal() as db, self.assertRaises(RuntimeError):
@@ -1045,7 +1045,7 @@ class BookingServiceIntegrationTests(Integration2ATestCase):
         lead_id, _ = self.seed_lead()
 
         with patch("app.modules.scheduling.application.booking_service.CalComClient.create_booking") as create_booking, patch(
-            "app.services.notification_event_pipeline.NotificationEventPipeline.process_booking_event"
+            "app.modules.notifications.runtime.event_pipeline.NotificationEventPipeline.process_booking_event"
         ) as process_event:
             create_booking.return_value = {"data": {"id": 1, "uid": "uid-1", "status": "accepted"}}
             process_event.side_effect = RuntimeError("boom")
@@ -1089,7 +1089,7 @@ class BookingServiceIntegrationTests(Integration2ATestCase):
             booking_id = booking.id
 
             with patch("app.modules.scheduling.application.booking_service.CalComClient.cancel_booking") as cancel_booking, patch(
-                "app.services.notification_event_pipeline.NotificationEventPipeline.process_booking_event"
+                "app.modules.notifications.runtime.event_pipeline.NotificationEventPipeline.process_booking_event"
             ) as process_event:
                 cancel_booking.return_value = {"data": {"status": "cancelled"}}
                 BookingService(db).cancel_lead_booking(tenant_id=self.tenant.id, booking_id=booking_id)
@@ -1125,7 +1125,7 @@ class BookingServiceIntegrationTests(Integration2ATestCase):
             booking_id = booking.id
 
             with patch("app.modules.scheduling.application.booking_service.CalComClient.reschedule_booking") as reschedule_booking, patch(
-                "app.services.notification_event_pipeline.NotificationEventPipeline.process_booking_event"
+                "app.modules.notifications.runtime.event_pipeline.NotificationEventPipeline.process_booking_event"
             ) as process_event:
                 reschedule_booking.return_value = {"data": {"status": "accepted"}}
                 BookingService(db).reschedule_lead_booking(
@@ -1570,7 +1570,7 @@ class VoiceWebhookNotificationTests(Integration2ATestCase):
                     provider_call_id=f"call-{expected_status}", lead_id=lead_id, contact_id=contact_id
                 )
                 payload = {"event": "call.ended", "call": {"id": f"call-{expected_status}", **call_fields}}
-                with patch("app.api.endpoints.voice_webhook.run_call_notification_pipeline_task") as run_task:
+                with patch("app.api.endpoints.voice_webhook.publish_call_event") as run_task:
                     response = self.client.post("/api/v1/voice/webhook/ultravox", json=payload)
 
                 self.assertEqual(response.status_code, 200)
@@ -1583,7 +1583,7 @@ class VoiceWebhookNotificationTests(Integration2ATestCase):
     def test_intermediate_status_does_not_schedule_task(self):
         call_id = self._seed_call(provider_call_id="call-ringing")
         payload = {"event": "call.updated", "call": {"id": "call-ringing", "status": "ringing"}}
-        with patch("app.api.endpoints.voice_webhook.run_call_notification_pipeline_task") as run_task:
+        with patch("app.api.endpoints.voice_webhook.publish_call_event") as run_task:
             response = self.client.post("/api/v1/voice/webhook/ultravox", json=payload)
 
         self.assertEqual(response.status_code, 200)
@@ -1591,7 +1591,7 @@ class VoiceWebhookNotificationTests(Integration2ATestCase):
 
     def test_unreconciled_call_does_not_schedule_task(self):
         payload = {"event": "call.ended", "call": {"id": "unknown-call", "status": "ended"}}
-        with patch("app.api.endpoints.voice_webhook.run_call_notification_pipeline_task") as run_task:
+        with patch("app.api.endpoints.voice_webhook.publish_call_event") as run_task:
             response = self.client.post("/api/v1/voice/webhook/ultravox", json=payload)
 
         self.assertEqual(response.status_code, 200)
@@ -1601,7 +1601,7 @@ class VoiceWebhookNotificationTests(Integration2ATestCase):
         call_id = self._seed_call(provider_call_id="call-safe")
         payload = {"event": "call.ended", "call": {"id": "call-safe", "status": "ended"}}
         with patch(
-            "app.services.notification_event_pipeline.NotificationEventPipeline.process_call_event"
+            "app.modules.notifications.runtime.event_pipeline.NotificationEventPipeline.process_call_event"
         ) as process_event:
             process_event.side_effect = RuntimeError("boom")
             response = self.client.post("/api/v1/voice/webhook/ultravox", json=payload)
@@ -1631,7 +1631,7 @@ class NotificationEventPipelineSecurityTests(_BasePipelineTestCase):
         failing_pipeline = NotificationEventPipeline(
             self.db, whatsapp_client=_FakeWhatsAppClient(fail_phones={"573001112233"})
         )
-        with patch("app.services.notification_event_pipeline.logger.error") as error_log:
+        with patch("app.modules.notifications.runtime.event_pipeline.logger.error") as error_log:
             failing_pipeline.process_booking_event(
                 tenant_id=tenant_id, booking_id=booking.id, event_type="booking.created", now=NOW
             )

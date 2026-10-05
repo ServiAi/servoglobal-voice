@@ -4,8 +4,8 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.domain.notification_rules import NotificationRecipientResolutionError, validate_field_path
-from app.models.notifications import TenantNotificationRecipient, TenantNotificationRule
+from app.modules.notifications.domain.rules import NotificationRecipientResolutionError, validate_field_path
+from app.modules.notifications.infrastructure.models import TenantNotificationRecipient, TenantNotificationRule
 
 _MIN_DESTINATION_LENGTH = 8
 _MAX_DESTINATION_LENGTH = 32

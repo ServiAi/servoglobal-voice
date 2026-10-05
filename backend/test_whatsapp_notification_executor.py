@@ -13,7 +13,7 @@ os.environ["DATABASE_URL"] = f"sqlite:///./{TEST_DB_PATH.as_posix()}"
 
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
-from app.domain.notification_variables import (
+from app.modules.notifications.domain.variables import (
     NotificationVariableConfigurationError,
     NotificationVariableMappingError,
 )
@@ -21,16 +21,16 @@ from app.modules.crm.infrastructure.models import CrmActivity, CrmContact, CrmLe
 from app.models.crm import CrmWhatsAppMessage
 from app.models.identity import Tenant
 from app.models.integrations import TenantIntegrationEvent, TenantWhatsAppConfig, TenantWhatsAppTemplate
-from app.models.notifications import DomainEvent, NotificationDelivery, TenantNotificationRule
-from app.services.domain_event_service import DomainEventService
-from app.services.notification_delivery_claim_service import NotificationDeliveryClaimService
-from app.services.notification_retry_policy import NotificationRetryPolicy
-from app.services.notification_variable_mapper import NotificationVariableMapper
+from app.modules.notifications.infrastructure.models import DomainEvent, NotificationDelivery, TenantNotificationRule
+from app.modules.notifications.application.domain_event_service import DomainEventService
+from app.modules.notifications.application.delivery_claim_service import NotificationDeliveryClaimService
+from app.modules.notifications.application.retry_policy import NotificationRetryPolicy
+from app.modules.notifications.application.variable_mapper import NotificationVariableMapper
 from app.services.secret_manager_service import SecretManager
 from app.services.whatsapp_client import WhatsAppCloudClient, WhatsAppCloudClientError
 from app.services.whatsapp_message_service import WhatsAppMessageService
-from app.services import whatsapp_notification_executor as executor_module
-from app.services.whatsapp_notification_executor import (
+from app.modules.notifications.infrastructure import whatsapp_executor as executor_module
+from app.modules.notifications.infrastructure.whatsapp_executor import (
     WhatsAppNotificationExecutionError,
     WhatsAppNotificationExecutor,
 )
@@ -727,7 +727,7 @@ class WhatsAppNotificationExecutorTests(_BaseExecutorTestCase):
         ctx = self._seed_happy_path()
         client = _FakeWhatsAppClient()
         executor = WhatsAppNotificationExecutor(self.db, client=client)
-        self.assertIs(executor._message_service.client, client)
+        self.assertIs(executor._channel._facade._transport, client)
         executor.execute(tenant_id=ctx["tenant_id"], delivery_id=ctx["delivery"].id, now=FIXED_NOW)
         self.assertEqual(client.send_calls, 1)
 
@@ -1205,7 +1205,7 @@ class WhatsAppExecuteClaimedTests(_BaseExecutorTestCase):
         a different (newer) execution appears to own the delivery — as if
         its lease had expired and someone else reclaimed it while the HTTP
         call was in flight."""
-        original_send = executor._message_service.send_template_notification
+        original_send = executor._channel._facade.send_template
 
         def wrapped(*args, **kwargs):
             result = original_send(*args, **kwargs)
@@ -1218,7 +1218,7 @@ class WhatsAppExecuteClaimedTests(_BaseExecutorTestCase):
             self.db.commit()
             return result
 
-        executor._message_service.send_template_notification = wrapped
+        executor._channel._facade.send_template = wrapped
         return executor
 
     def test_stale_owner_does_not_overwrite_sent_with_positive_evidence(self):
@@ -1279,7 +1279,7 @@ class WhatsAppExecuteClaimedTests(_BaseExecutorTestCase):
         claim = self._claim(ctx["tenant_id"], ctx["delivery"].id)
         client = _FakeWhatsAppClient()
         executor = WhatsAppNotificationExecutor(self.db, client=client)
-        real_send = executor._message_service.send_template_notification
+        real_send = executor._channel._facade.send_template
 
         def wrapped(*args, **kwargs):
             result = real_send(*args, **kwargs)
@@ -1289,13 +1289,14 @@ class WhatsAppExecuteClaimedTests(_BaseExecutorTestCase):
             delivery.status = "processing"
             delivery.claim_token = "tok-new-owner"
             self.db.add(delivery)
-            result.message.status = "delivered"
-            result.message.delivered_at = FIXED_NOW
-            self.db.add(result.message)
+            message = self.db.get(CrmWhatsAppMessage, result.message.id)
+            message.status = "delivered"
+            message.delivered_at = FIXED_NOW
+            self.db.add(message)
             self.db.commit()
             return result
 
-        executor._message_service.send_template_notification = wrapped
+        executor._channel._facade.send_template = wrapped
         result = executor.execute_claimed(
             tenant_id=ctx["tenant_id"], delivery_id=ctx["delivery"].id, claim_token=claim.claim_token, now=FIXED_NOW
         )
@@ -1308,7 +1309,7 @@ class WhatsAppExecuteClaimedTests(_BaseExecutorTestCase):
         claim = self._claim(ctx["tenant_id"], ctx["delivery"].id)
         client = _FakeWhatsAppClient()
         executor = WhatsAppNotificationExecutor(self.db, client=client)
-        real_send = executor._message_service.send_template_notification
+        real_send = executor._channel._facade.send_template
 
         def wrapped(*args, **kwargs):
             result = real_send(*args, **kwargs)
@@ -1318,14 +1319,15 @@ class WhatsAppExecuteClaimedTests(_BaseExecutorTestCase):
             delivery.status = "processing"
             delivery.claim_token = "tok-new-owner"
             self.db.add(delivery)
-            result.message.status = "read"
-            result.message.delivered_at = FIXED_NOW
-            result.message.read_at = FIXED_NOW
-            self.db.add(result.message)
+            message = self.db.get(CrmWhatsAppMessage, result.message.id)
+            message.status = "read"
+            message.delivered_at = FIXED_NOW
+            message.read_at = FIXED_NOW
+            self.db.add(message)
             self.db.commit()
             return result
 
-        executor._message_service.send_template_notification = wrapped
+        executor._channel._facade.send_template = wrapped
         result = executor.execute_claimed(
             tenant_id=ctx["tenant_id"], delivery_id=ctx["delivery"].id, claim_token=claim.claim_token, now=FIXED_NOW
         )
@@ -1342,7 +1344,7 @@ class WhatsAppExecuteClaimedTests(_BaseExecutorTestCase):
         claim = self._claim(ctx["tenant_id"], ctx["delivery"].id)
         client = _FakeWhatsAppClient(fail=True, error_message="Simulated Meta failure")
         executor = WhatsAppNotificationExecutor(self.db, client=client)
-        real_send = executor._message_service.send_template_notification
+        real_send = executor._channel._facade.send_template
 
         def wrapped(*args, **kwargs):
             result = real_send(*args, **kwargs)
@@ -1361,7 +1363,7 @@ class WhatsAppExecuteClaimedTests(_BaseExecutorTestCase):
             self.db.commit()
             return result
 
-        executor._message_service.send_template_notification = wrapped
+        executor._channel._facade.send_template = wrapped
         result = executor.execute_claimed(
             tenant_id=ctx["tenant_id"], delivery_id=ctx["delivery"].id, claim_token=claim.claim_token, now=FIXED_NOW
         )
@@ -1469,7 +1471,7 @@ class WhatsAppMissingProviderMessageIdTests(_BaseExecutorTestCase):
         claim = self._claim(ctx["tenant_id"], ctx["delivery"].id)
         client = self._NoIdClient(payload)
         executor = WhatsAppNotificationExecutor(self.db, client=client)
-        real_send = executor._message_service.send_template_notification
+        real_send = executor._channel._facade.send_template
 
         def wrapped(*args, **kwargs):
             result = real_send(*args, **kwargs)
@@ -1482,7 +1484,7 @@ class WhatsAppMissingProviderMessageIdTests(_BaseExecutorTestCase):
             self.db.commit()
             return result
 
-        executor._message_service.send_template_notification = wrapped
+        executor._channel._facade.send_template = wrapped
         result = executor.execute_claimed(
             tenant_id=ctx["tenant_id"], delivery_id=ctx["delivery"].id, claim_token=claim.claim_token, now=FIXED_NOW
         )

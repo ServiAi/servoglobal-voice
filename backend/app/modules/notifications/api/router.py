@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.api.auth.deps import AuthContext, require_roles
 from app.db.session import get_db
-from app.schemas.notification_admin import (
+from app.modules.notifications.api.schemas import (
     NotificationCapabilityItem,
     NotificationCapabilityUpdateRequest,
     NotificationCatalogResponse,
@@ -25,7 +25,7 @@ from app.schemas.notification_admin import (
     NotificationRuleTestResponse,
     NotificationRuleUpdateRequest,
 )
-from app.services.notification_admin_service import NotificationAdminError, NotificationAdminService
+from app.modules.notifications.application.admin_service import NotificationAdminError, NotificationAdminService
 from app.services.identity_service import IdentityService
 
 router = APIRouter(prefix="/api/v1/admin/notifications", tags=["Notification Administration"])
@@ -77,14 +77,14 @@ def _rule_item(service: NotificationAdminService, rule) -> NotificationRuleItem:
 
 
 def _recipient_item(recipient) -> NotificationRecipientItem:
-    from app.services.whatsapp_message_service import mask_phone
+    from app.modules.notifications.domain.destinations import mask_recipient
 
     return NotificationRecipientItem(
         id=recipient.id,
         group_key=recipient.group_key,
         name=recipient.name,
         channel=recipient.channel,
-        destination_masked=mask_phone(recipient.destination),
+        destination_masked=mask_recipient(recipient.destination),
         status=recipient.status,
         created_at=recipient.created_at,
         updated_at=recipient.updated_at,

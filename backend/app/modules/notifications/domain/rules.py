@@ -7,8 +7,6 @@ from pydantic import BaseModel, ConfigDict, Field
 from pydantic import ValidationError as PydanticValidationError
 from pydantic import model_validator
 
-if TYPE_CHECKING:
-    from app.models.notifications import TenantNotificationRule
 
 SUPPORTED_NOTIFICATION_CHANNELS = {"whatsapp"}
 
@@ -158,7 +156,7 @@ class NotificationEventProcessingError(RuntimeError):
         self.code = code
 
 
-def validate_notification_rule(rule: TenantNotificationRule) -> list[NotificationCondition]:
+def validate_notification_rule(rule: object) -> list[NotificationCondition]:
     tenant_id = rule.tenant_id
     rule_id = rule.id
 
@@ -206,7 +204,7 @@ def validate_notification_rule(rule: TenantNotificationRule) -> list[Notificatio
     if not isinstance(rule.variable_mapping_json, dict):
         raise _fail("variable_mapping_must_be_dict")
 
-    from app.domain.notification_event_schemas import (  # local import avoids a domain cycle
+    from app.modules.notifications.domain.event_schemas import (  # local import avoids a domain cycle
         NotificationEventSchemaError,
         validate_rule_event_schema,
     )

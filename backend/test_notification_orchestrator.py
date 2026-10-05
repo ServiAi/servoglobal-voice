@@ -12,7 +12,7 @@ os.environ["DATABASE_URL"] = f"sqlite:///./{TEST_DB_PATH.as_posix()}"
 
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
-from app.domain.notification_rules import (
+from app.modules.notifications.domain.rules import (
     NotificationCondition,
     NotificationConditionEvaluationError,
     NotificationConditionOperator,
@@ -22,19 +22,19 @@ from app.domain.notification_rules import (
 )
 from app.models.crm import CrmWhatsAppMessage
 from app.models.identity import Tenant
-from app.models.notifications import (
+from app.modules.notifications.infrastructure.models import (
     DomainEvent,
     NotificationDelivery,
     TenantCapability,
     TenantNotificationRecipient,
     TenantNotificationRule,
 )
-from app.services.domain_event_service import DomainEventService
-from app.services.notification_capability_service import NotificationCapabilityService
-from app.services.notification_condition_service import NotificationConditionService
-from app.services.notification_orchestrator import NotificationOrchestrator
-from app.services.notification_recipient_service import NotificationRecipientService
-from app.services.notification_rule_service import NotificationRuleService
+from app.modules.notifications.application.domain_event_service import DomainEventService
+from app.modules.notifications.application.capability_service import NotificationCapabilityService
+from app.modules.notifications.application.condition_service import NotificationConditionService
+from app.modules.notifications.application.orchestrator import NotificationOrchestrator
+from app.modules.notifications.application.recipient_service import NotificationRecipientService
+from app.modules.notifications.application.rule_service import NotificationRuleService
 
 
 @sa_event.listens_for(engine, "connect")
@@ -49,12 +49,12 @@ PAST_AVAILABLE_AT = datetime(2026, 7, 1, 0, 0, 0, tzinfo=timezone.utc)
 FUTURE_AVAILABLE_AT = datetime(2026, 8, 5, 0, 0, 0, tzinfo=timezone.utc)
 
 _PHASE3_SOURCE_FILES = [
-    Path("app/domain/notification_rules.py"),
-    Path("app/services/notification_capability_service.py"),
-    Path("app/services/notification_rule_service.py"),
-    Path("app/services/notification_condition_service.py"),
-    Path("app/services/notification_recipient_service.py"),
-    Path("app/services/notification_orchestrator.py"),
+    Path("app/modules/notifications/domain/rules.py"),
+    Path("app/modules/notifications/application/capability_service.py"),
+    Path("app/modules/notifications/application/rule_service.py"),
+    Path("app/modules/notifications/application/condition_service.py"),
+    Path("app/modules/notifications/application/recipient_service.py"),
+    Path("app/modules/notifications/application/orchestrator.py"),
 ]
 
 

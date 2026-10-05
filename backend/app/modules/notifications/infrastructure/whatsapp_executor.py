@@ -7,28 +7,28 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.domain.notification_delivery_state import (
+from app.modules.notifications.domain.delivery_state import (
     CLAIMABLE_STATUSES,
     FINAL_NON_RETRYABLE_STATUSES,
 )
-from app.domain.notification_variables import (
+from app.modules.notifications.domain.variables import (
     NotificationVariableConfigurationError,
     NotificationVariableMappingError,
 )
-from app.models.crm import CrmWhatsAppMessage
-from app.models.notifications import (
+from app.modules.integrations.public import find_whatsapp_delivery_evidence
+from app.modules.notifications.infrastructure.models import (
     DomainEvent,
     NotificationDelivery,
     TenantNotificationRule,
 )
 from app.modules.crm.public import CrmFacade
-from app.services.notification_delivery_claim_service import (
+from app.modules.notifications.application.delivery_claim_service import (
     NotificationDeliveryClaimService,
 )
-from app.services.notification_variable_mapper import NotificationVariableMapper
-from app.services.whatsapp_client import WhatsAppCloudClient
-from app.services.whatsapp_message_service import WhatsAppMessageService
-from app.services.whatsapp_template_service import WhatsAppTemplateService
+from app.modules.notifications.application.variable_mapper import NotificationVariableMapper
+from app.modules.notifications.infrastructure.channel import IntegrationsWhatsAppChannel
+from app.modules.notifications.ports import NotificationChannelPort
+from app.modules.integrations.public import WhatsAppTransportPort
 
 _RESCHEDULE_SUPERSEDABLE_TYPES = {"booking.created", "booking.rescheduled"}
 _RESCHEDULE_EVENT_TYPES = {"booking.cancelled", "booking.rescheduled"}
@@ -49,7 +49,7 @@ class WhatsAppNotificationExecutionError(RuntimeError):
 @dataclass(frozen=True)
 class WhatsAppNotificationExecutionResult:
     delivery: NotificationDelivery
-    message: CrmWhatsAppMessage | None
+    message: object | None
     outcome: str
     error_code: str | None = None
     retryable: bool | None = None
@@ -59,14 +59,14 @@ class WhatsAppNotificationExecutor:
     def __init__(
         self,
         db: Session,
-        client: WhatsAppCloudClient | None = None,
+        client: WhatsAppTransportPort | None = None,
         *,
+        channel: NotificationChannelPort | None = None,
         lease_seconds: int | None = None,
         max_attempts: int | None = None,
     ) -> None:
         self.db = db
-        self._message_service = WhatsAppMessageService(db, client=client)
-        self._templates = WhatsAppTemplateService(db)
+        self._channel = channel or IntegrationsWhatsAppChannel(db, transport=client)
         self._variable_mapper = NotificationVariableMapper()
         self._claims = NotificationDeliveryClaimService(db)
         self._lease_seconds = (
@@ -77,7 +77,7 @@ class WhatsAppNotificationExecutor:
         )
 
     # ------------------------------------------------------------------
-    # Direct execution (Phase 5 compatibility) — claims atomically, then
+    # Direct execution (Phase 5 compatibility) â€” claims atomically, then
     # delegates to execute_claimed.
     # ------------------------------------------------------------------
     def execute(
@@ -129,7 +129,7 @@ class WhatsAppNotificationExecutor:
         )
 
     # ------------------------------------------------------------------
-    # Claimed execution — the durable worker calls this directly with a
+    # Claimed execution â€” the durable worker calls this directly with a
     # claim token it already owns.
     # ------------------------------------------------------------------
     def execute_claimed(
@@ -163,12 +163,9 @@ class WhatsAppNotificationExecutor:
                 mapping=rule.variable_mapping_json,
                 payload=event.payload_json,
             )
-            template = self._templates.get_synced_template(
-                tenant_id,
-                template_key=delivery.template_key or rule.template_key,
-                provider_template_name=None,
-            )
-            required_keys = self._templates.get_approved_parameter_keys(template)
+            template_key = delivery.template_key or rule.template_key
+            template = self._channel.get_template(tenant_id=tenant_id, template_key=template_key)
+            required_keys = template.required_variables
             missing = [key for key in required_keys if key not in variables]
             if missing:
                 raise NotificationVariableMappingError(
@@ -200,7 +197,7 @@ class WhatsAppNotificationExecutor:
         }
 
         try:
-            result = self._message_service.send_template_notification(
+            result = self._channel.send_template(
                 tenant_id=tenant_id,
                 to_phone=delivery.recipient,
                 template_key=template.template_key,
@@ -232,7 +229,7 @@ class WhatsAppNotificationExecutor:
         )
 
     # ------------------------------------------------------------------
-    # Post-Meta finalization — the HTTP call may have taken long enough for
+    # Post-Meta finalization â€” the HTTP call may have taken long enough for
     # the lease to expire and a different execution to take over, so the
     # outcome is only written back if this call still owns the claim.
     # ------------------------------------------------------------------
@@ -256,8 +253,9 @@ class WhatsAppNotificationExecutor:
 
         if result.status == "sent":
             metadata_json = dict(delivery.metadata_json or {})
-            if result.message is not None:
-                metadata_json["crm_whatsapp_message_id"] = result.message.id
+            message_id = getattr(result, "message_id", None) or getattr(result.message, "id", None)
+            if message_id:
+                metadata_json["crm_whatsapp_message_id"] = message_id
             delivery.metadata_json = metadata_json
             delivery.status = "sent"
             delivery.provider_message_id = result.provider_message_id
@@ -324,13 +322,12 @@ class WhatsAppNotificationExecutor:
                 delivery=delivery, message=result.message, outcome="stale_claim_ignored"
             )
 
-        message = self.db.scalar(
-            select(CrmWhatsAppMessage)
-            .where(
-                CrmWhatsAppMessage.tenant_id == tenant_id,
-                CrmWhatsAppMessage.notification_delivery_id == delivery.id,
-            )
-            .order_by(CrmWhatsAppMessage.created_at.desc(), CrmWhatsAppMessage.id.desc())
+        metadata = delivery.metadata_json or {}
+        fallback_id = metadata.get("crm_whatsapp_message_id")
+        message = find_whatsapp_delivery_evidence(
+            tenant_id=tenant_id,
+            delivery_id=delivery.id,
+            fallback_message_id=fallback_id if isinstance(fallback_id, str) else None,
         )
         if message is None or not message.provider_message_id or message.status not in _STALE_CLAIM_RANK:
             return WhatsAppNotificationExecutionResult(
@@ -426,7 +423,7 @@ class WhatsAppNotificationExecutor:
         return WhatsAppNotificationExecutionResult(delivery=delivery, message=None, outcome="cancelled")
 
     # ------------------------------------------------------------------
-    # Pre-send failure helper — a configuration/mapping error was hit before
+    # Pre-send failure helper â€” a configuration/mapping error was hit before
     # any HTTP call to Meta was made. Unlike a provider failure, there is
     # nothing ambiguous to protect against, but finalizing (failed/dead_letter,
     # clearing the claim) is still the retry policy's job alone: this only

@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from app.domain.notification_variables import (
+from app.modules.notifications.domain.variables import (
     NotificationVariableFormat,
     NotificationVariableMappingError,
     NotificationVariableSource,

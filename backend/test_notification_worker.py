@@ -15,12 +15,12 @@ from app.db.session import SessionLocal, engine
 from app.modules.crm.infrastructure.models import CrmContact, CrmLead, CrmPipelineStage
 from app.models.identity import Tenant
 from app.models.integrations import TenantWhatsAppConfig, TenantWhatsAppTemplate
-from app.models.notifications import DomainEvent, NotificationDelivery, TenantNotificationRule
-from app.services.domain_event_service import DomainEventService
-from app.services.notification_delivery_recovery_service import NotificationDeliveryRecoveryService
+from app.modules.notifications.infrastructure.models import DomainEvent, NotificationDelivery, TenantNotificationRule
+from app.modules.notifications.application.domain_event_service import DomainEventService
+from app.modules.notifications.application.delivery_recovery_service import NotificationDeliveryRecoveryService
 from app.services.secret_manager_service import SecretManager
 from app.services.whatsapp_client import WhatsAppCloudClient, WhatsAppCloudClientError
-from app.workers import notification_worker as worker_module
+from app.modules.notifications.runtime import worker as worker_module
 
 FIXED_NOW = datetime(2026, 8, 1, 10, 0, 0, tzinfo=timezone.utc)
 PAST = FIXED_NOW - timedelta(hours=1)
@@ -540,7 +540,7 @@ class RunCycleShutdownTests(_BaseWorkerTestCase):
 
     def test_sigint_handler_sets_the_same_flag_as_sigterm(self):
         flag = worker_module._ShutdownFlag()
-        with mock.patch("app.workers.notification_worker.signal.signal") as mock_signal:
+        with mock.patch("app.modules.notifications.runtime.worker.signal.signal") as mock_signal:
             worker_module._install_signal_handlers(flag)
         handlers = {call.args[0]: call.args[1] for call in mock_signal.call_args_list}
         import signal as signal_module
@@ -577,7 +577,7 @@ class RunCycleShutdownTests(_BaseWorkerTestCase):
 
     def test_signal_handlers_are_installed_for_sigterm_and_sigint(self):
         flag = worker_module._ShutdownFlag()
-        with mock.patch("app.workers.notification_worker.signal.signal") as mock_signal:
+        with mock.patch("app.modules.notifications.runtime.worker.signal.signal") as mock_signal:
             worker_module._install_signal_handlers(flag)
         registered = {call.args[0] for call in mock_signal.call_args_list}
         import signal as signal_module
@@ -659,7 +659,7 @@ class LoggingSafetyTests(_BaseWorkerTestCase):
         self.db.add(event)
         self.db.commit()
 
-        with self.assertLogs("app.workers.notification_worker", level="ERROR") as captured:
+        with self.assertLogs("app.modules.notifications.runtime.worker", level="ERROR") as captured:
             worker_module.run_cycle(
                 worker_config=self.worker_config,
                 session_factory=SessionLocal,

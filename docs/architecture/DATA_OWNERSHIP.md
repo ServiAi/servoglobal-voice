@@ -78,9 +78,9 @@ Ahora en `app/modules/scheduling/infrastructure/models.py` (en la migración de 
 
 | Tabla | Modelo | Estado |
 | --- | --- | --- |
-| `tenant_capabilities`, `tenant_notification_rules`, `tenant_notification_recipients` | … | ✅ |
-| `domain_events` | `DomainEvent` | 🟡 escrita por Voice y, para `booking.*`, por la infraestructura de eventos vía el puerto de Scheduling (patrón correcto; exponer como `notifications.public`) |
-| `notification_deliveries` | `NotificationDelivery` | 🔴 `whatsapp_message_service` actualiza su estado directamente |
+| `tenant_capabilities`, `tenant_notification_rules`, `tenant_notification_recipients` | Modelos Notifications | Propiedad de Notifications |
+| `domain_events` | `DomainEvent` | Notifications; Voice y Scheduling publican hechos por las entradas publicas |
+| `notification_deliveries` | `NotificationDelivery` | Notifications; Messaging reporta estados por `notifications.public` |
 
 ## Integrations / Messaging
 

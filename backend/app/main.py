@@ -50,7 +50,7 @@ from app.api.endpoints import whatsapp_webhook
 from app.api.endpoints import whatsapp_flows
 from app.api.endpoints import crm_voice
 from app.api.endpoints import voice_webhook
-from app.api.endpoints import notification_admin
+from app.modules.notifications.api import router as notification_admin
 from app.api.endpoints import voice_context_schemas
 from app.api.endpoints import voice_experiences
 from app.api.endpoints import voice_public

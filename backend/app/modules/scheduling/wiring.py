@@ -89,11 +89,9 @@ class NotificationBookingEvents:
         self.db = db
 
     def publish_booking_event(self, *, tenant_id: str, booking_id: str, event_type: str) -> None:
-        from app.services.notification_event_pipeline import NotificationEventPipeline
+        from app.modules.notifications.public import publish_booking_event
 
-        NotificationEventPipeline(self.db).process_booking_event(
-            tenant_id=tenant_id, booking_id=booking_id, event_type=event_type
-        )
+        publish_booking_event(tenant_id=tenant_id, booking_id=booking_id, event_type=event_type)
 
 
 def default_scheduling_ports(db: Session) -> SchedulingPorts:
@@ -107,8 +105,6 @@ def default_scheduling_ports(db: Session) -> SchedulingPorts:
 def run_booking_event_task(*, tenant_id: str, booking_id: str, event_type: str) -> None:
     """Background-task entry point to announce a booking fact (opens its own
     session; never raises). Used by the Cal.com webhook."""
-    from app.services.notification_event_pipeline import (
-        run_booking_notification_pipeline_task,
-    )
+    from app.modules.notifications.public import publish_booking_event
 
-    run_booking_notification_pipeline_task(tenant_id=tenant_id, booking_id=booking_id, event_type=event_type)
+    publish_booking_event(tenant_id=tenant_id, booking_id=booking_id, event_type=event_type)

@@ -8,8 +8,8 @@ import sqlalchemy as sa
 from sqlalchemy import Select, select
 from sqlalchemy.orm import Session
 
-from app.domain.notification_delivery_state import CLAIMABLE_STATUSES
-from app.models.notifications import NotificationDelivery
+from app.modules.notifications.domain.delivery_state import CLAIMABLE_STATUSES
+from app.modules.notifications.infrastructure.models import NotificationDelivery
 
 
 @dataclass(frozen=True)

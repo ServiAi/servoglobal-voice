@@ -6,9 +6,11 @@ from datetime import datetime, timedelta
 from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session
 
-from app.models.crm import CrmWhatsAppMessage
-from app.models.notifications import NotificationDelivery
-from app.services.notification_retry_policy import NotificationRetryPolicy
+from app.modules.notifications.infrastructure.models import NotificationDelivery
+from app.modules.integrations.public import find_whatsapp_delivery_evidence
+from app.modules.notifications.public import NotificationDeliveryEvidence
+from app.modules.notifications.ports import DeliveryEvidencePort
+from app.modules.notifications.application.retry_policy import NotificationRetryPolicy
 
 _UNSENT_MESSAGE_ERROR = "worker_claim_expired_before_send"
 _MANUAL_REVIEW_ERROR = "whatsapp_send_outcome_unknown"
@@ -22,16 +24,23 @@ class NotificationRecoveryOutcome:
 
 
 class NotificationDeliveryRecoveryService:
-    """Reconciles abandoned `processing` deliveries against CrmWhatsAppMessage.
+    """Reconciles abandoned `processing` deliveries against channel evidence.
 
     Never calls the WhatsApp provider: it only reads what was already
     recorded locally and decides whether to trust it as sent evidence, retry,
     or flag for manual review.
     """
 
-    def __init__(self, db: Session, *, retry_policy: NotificationRetryPolicy) -> None:
+    def __init__(
+        self,
+        db: Session,
+        *,
+        retry_policy: NotificationRetryPolicy,
+        evidence_port: DeliveryEvidencePort | None = None,
+    ) -> None:
         self.db = db
         self.retry_policy = retry_policy
+        self.evidence_port = evidence_port or _IntegrationsDeliveryEvidence()
 
     def recover_batch(
         self,
@@ -132,27 +141,13 @@ class NotificationDeliveryRecoveryService:
         )
         return NotificationRecoveryOutcome(delivery.tenant_id, delivery.id, decision.action)
 
-    def _find_message(self, delivery: NotificationDelivery) -> CrmWhatsAppMessage | None:
-        message = self.db.scalar(
-            select(CrmWhatsAppMessage)
-            .where(
-                CrmWhatsAppMessage.tenant_id == delivery.tenant_id,
-                CrmWhatsAppMessage.notification_delivery_id == delivery.id,
-            )
-            .order_by(CrmWhatsAppMessage.created_at.desc(), CrmWhatsAppMessage.id.desc())
-        )
-        if message is not None:
-            return message
-
+    def _find_message(self, delivery: NotificationDelivery) -> NotificationDeliveryEvidence | None:
         metadata = delivery.metadata_json or {}
         fallback_id = metadata.get("crm_whatsapp_message_id")
-        if not fallback_id:
-            return None
-        return self.db.scalar(
-            select(CrmWhatsAppMessage).where(
-                CrmWhatsAppMessage.tenant_id == delivery.tenant_id,
-                CrmWhatsAppMessage.id == fallback_id,
-            )
+        return self.evidence_port.find_delivery_evidence(
+            tenant_id=delivery.tenant_id,
+            delivery_id=delivery.id,
+            fallback_message_id=fallback_id if isinstance(fallback_id, str) else None,
         )
 
     def _sync_terminal(
@@ -160,7 +155,7 @@ class NotificationDeliveryRecoveryService:
         delivery: NotificationDelivery,
         *,
         status: str,
-        message: CrmWhatsAppMessage,
+        message: NotificationDeliveryEvidence,
         now: datetime,
     ) -> None:
         delivery.status = status
@@ -186,3 +181,25 @@ class NotificationDeliveryRecoveryService:
         delivery.claimed_at = None
         delivery.claim_expires_at = None
         self.db.add(delivery)
+
+
+class _IntegrationsDeliveryEvidence:
+    def find_delivery_evidence(
+        self, *, tenant_id: str, delivery_id: str, fallback_message_id: str | None = None
+    ) -> NotificationDeliveryEvidence | None:
+        evidence = find_whatsapp_delivery_evidence(
+            tenant_id=tenant_id,
+            delivery_id=delivery_id,
+            fallback_message_id=fallback_message_id,
+        )
+        if evidence is None:
+            return None
+        return NotificationDeliveryEvidence(
+            id=evidence.id,
+            status=evidence.status,
+            provider_message_id=evidence.provider_message_id,
+            sent_at=evidence.sent_at,
+            delivered_at=evidence.delivered_at,
+            read_at=evidence.read_at,
+            created_at=evidence.created_at,
+        )
