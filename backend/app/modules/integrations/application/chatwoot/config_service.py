@@ -7,13 +7,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.modules.integrations.api.schemas import (
-    ChatwootAgentSummary,
-    ChatwootConfigRequest,
-    ChatwootConfigResponse,
-    ChatwootInboxSummary,
-    ChatwootTeamSummary,
-    ChatwootTestResponse,
+from app.modules.integrations.application.dto import (
+    ChatwootAgentView,
+    ChatwootConfigCommand,
+    ChatwootConfigView,
+    ChatwootInboxView,
+    ChatwootTeamView,
+    ChatwootTestResult,
 )
 from app.modules.integrations.application.event_service import IntegrationEventService
 from app.modules.integrations.application.ports import (
@@ -84,14 +84,14 @@ class ChatwootConfigService:
         if existing is not None and existing.tenant_id != tenant_id:
             raise ChatwootAccountConflictError("This Chatwoot Account is already assigned to another tenant.")
 
-    def get_response(self, tenant_id: str) -> ChatwootConfigResponse:
+    def get_response(self, tenant_id: str) -> ChatwootConfigView:
         config = self.get_config(tenant_id)
         if config is None:
-            return ChatwootConfigResponse(status="inactive", has_secret=False)
+            return ChatwootConfigView(status="inactive", has_secret=False)
         return self.to_response(config)
 
-    def to_response(self, config: TenantChatwootConfig) -> ChatwootConfigResponse:
-        return ChatwootConfigResponse(
+    def to_response(self, config: TenantChatwootConfig) -> ChatwootConfigView:
+        return ChatwootConfigView(
             mode=config.mode,
             status=config.status,
             base_url=config.base_url,
@@ -105,7 +105,7 @@ class ChatwootConfigService:
             last_error_message=config.last_error_message,
         )
 
-    def upsert_config(self, tenant_id: str, request: ChatwootConfigRequest) -> ChatwootConfigResponse:
+    def upsert_config(self, tenant_id: str, request: ChatwootConfigCommand) -> ChatwootConfigView:
         config = self.get_config(tenant_id)
         if config is None and not request.api_token:
             raise ValueError("Chatwoot api_token is required for first configuration")
@@ -155,10 +155,10 @@ class ChatwootConfigService:
             default_inbox_id=config.default_inbox_id,
         )
 
-    def test_connection(self, tenant_id: str) -> ChatwootTestResponse:
+    def test_connection(self, tenant_id: str) -> ChatwootTestResult:
         config = self.get_config(tenant_id)
         if config is None or not config.api_token_encrypted:
-            return ChatwootTestResponse(status="failed", error_message="Chatwoot integration is not configured")
+            return ChatwootTestResult(status="failed", error_message="Chatwoot integration is not configured")
 
         try:
             _, client_config = self.get_active_client_config(tenant_id)
@@ -177,7 +177,7 @@ class ChatwootConfigService:
                 resource_id=config.id,
                 message=message,
             )
-            return ChatwootTestResponse(status="failed", error_message=message)
+            return ChatwootTestResult(status="failed", error_message=message)
 
         account_name = account_payload.get("name") if isinstance(account_payload, dict) else None
         if isinstance(account_name, str) and account_name:
@@ -193,9 +193,9 @@ class ChatwootConfigService:
             resource_type="tenant_chatwoot_config",
             resource_id=config.id,
         )
-        return ChatwootTestResponse(status="success")
+        return ChatwootTestResult(status="success")
 
-    def provision_managed_account(self, tenant_id: str, *, account_name: str) -> ChatwootConfigResponse:
+    def provision_managed_account(self, tenant_id: str, *, account_name: str) -> ChatwootConfigView:
         """Crea una Account, un usuario administrator dedicado, un inbox 'api' y el
         webhook de cuenta en Chatwoot vía Platform API, dejando al tenant operativo
         sin que el operador pegue credenciales a mano. Requiere CHATWOOT_PLATFORM_API_TOKEN
@@ -314,7 +314,7 @@ class ChatwootConfigService:
         )
         return self.to_response(config)
 
-    def disconnect(self, tenant_id: str) -> ChatwootConfigResponse:
+    def disconnect(self, tenant_id: str) -> ChatwootConfigView:
         """Desactiva la integracion sin borrar la configuracion (Account, token,
         webhook_key se conservan) para que reconectar despues sea inmediato."""
         config = self.get_config(tenant_id)
@@ -334,35 +334,35 @@ class ChatwootConfigService:
         )
         return self.to_response(config)
 
-    async def list_inboxes(self, tenant_id: str) -> list[ChatwootInboxSummary]:
+    async def list_inboxes(self, tenant_id: str) -> list[ChatwootInboxView]:
         """Usado para poblar el selector de inbox del handoff de voz->humano."""
         _, client_config = self.get_active_client_config(tenant_id)
         inboxes = await self.client_factory(client_config).list_inboxes()
         return [
-            ChatwootInboxSummary(
+            ChatwootInboxView(
                 id=inbox["id"], name=inbox.get("name") or f"Inbox {inbox['id']}", channel_type=inbox.get("channel_type")
             )
             for inbox in inboxes
         ]
 
-    async def list_teams(self, tenant_id: str) -> list[ChatwootTeamSummary]:
+    async def list_teams(self, tenant_id: str) -> list[ChatwootTeamView]:
         """Usado para poblar el selector de team del handoff de voz->humano."""
         _, client_config = self.get_active_client_config(tenant_id)
         teams = await self.client_factory(client_config).list_teams()
-        return [ChatwootTeamSummary(id=team["id"], name=team.get("name") or f"Team {team['id']}") for team in teams]
+        return [ChatwootTeamView(id=team["id"], name=team.get("name") or f"Team {team['id']}") for team in teams]
 
-    async def list_agents(self, tenant_id: str) -> list[ChatwootAgentSummary]:
+    async def list_agents(self, tenant_id: str) -> list[ChatwootAgentView]:
         _, client_config = self.get_active_client_config(tenant_id)
         agents = await self.client_factory(client_config).list_agents()
         return [
-            ChatwootAgentSummary(
+            ChatwootAgentView(
                 id=a["id"], name=a.get("name") or f"Agent {a['id']}", email=a.get("email") or "", role=a.get("role") or "agent",
                 confirmed=a.get("confirmed", True),
             )
             for a in agents
         ]
 
-    async def create_inbox(self, tenant_id: str, *, name: str) -> ChatwootInboxSummary:
+    async def create_inbox(self, tenant_id: str, *, name: str) -> ChatwootInboxView:
         config, client_config = self.get_active_client_config(tenant_id)
         if not settings.BACKEND_PUBLIC_BASE_URL:
             raise ValueError("BACKEND_PUBLIC_BASE_URL is not configured")
@@ -372,46 +372,46 @@ class ChatwootConfigService:
             tenant_id=tenant_id, provider=self.provider, event_type="chatwoot_inbox_created", status="success",
             resource_type="inbox", resource_id=str(inbox.get("id")),
         )
-        return ChatwootInboxSummary(id=inbox["id"], name=inbox.get("name") or name, channel_type=inbox.get("channel_type"))
+        return ChatwootInboxView(id=inbox["id"], name=inbox.get("name") or name, channel_type=inbox.get("channel_type"))
 
-    async def create_team(self, tenant_id: str, *, name: str, description: str | None = None) -> ChatwootTeamSummary:
+    async def create_team(self, tenant_id: str, *, name: str, description: str | None = None) -> ChatwootTeamView:
         _, client_config = self.get_active_client_config(tenant_id)
         team = await self.client_factory(client_config).create_team(name=name, description=description)
         self.events.record_event(
             tenant_id=tenant_id, provider=self.provider, event_type="chatwoot_team_created", status="success",
             resource_type="team", resource_id=str(team.get("id")),
         )
-        return ChatwootTeamSummary(id=team["id"], name=team.get("name") or name)
+        return ChatwootTeamView(id=team["id"], name=team.get("name") or name)
 
-    async def invite_agent(self, tenant_id: str, *, name: str, email: str, role: str = "agent") -> ChatwootAgentSummary:
+    async def invite_agent(self, tenant_id: str, *, name: str, email: str, role: str = "agent") -> ChatwootAgentView:
         _, client_config = self.get_active_client_config(tenant_id)
         agent = await self.client_factory(client_config).invite_agent(name=name, email=email, role=role)
         self.events.record_event(
             tenant_id=tenant_id, provider=self.provider, event_type="chatwoot_agent_invited", status="success",
             resource_type="agent", resource_id=str(agent.get("id")), metadata={"role": role},
         )
-        return ChatwootAgentSummary(
+        return ChatwootAgentView(
             id=agent["id"], name=agent.get("name") or name, email=agent.get("email") or email,
             role=agent.get("role") or role, confirmed=agent.get("confirmed", False),
         )
 
-    async def update_inbox(self, tenant_id: str, inbox_id: int, *, name: str) -> ChatwootInboxSummary:
+    async def update_inbox(self, tenant_id: str, inbox_id: int, *, name: str) -> ChatwootInboxView:
         _, client_config = self.get_active_client_config(tenant_id)
         inbox = await self.client_factory(client_config).update_inbox(inbox_id, name=name)
         self.events.record_event(
             tenant_id=tenant_id, provider=self.provider, event_type="chatwoot_inbox_updated", status="success",
             resource_type="inbox", resource_id=str(inbox_id),
         )
-        return ChatwootInboxSummary(id=inbox["id"], name=inbox.get("name") or name, channel_type=inbox.get("channel_type"))
+        return ChatwootInboxView(id=inbox["id"], name=inbox.get("name") or name, channel_type=inbox.get("channel_type"))
 
-    async def update_team(self, tenant_id: str, team_id: int, *, name: str | None = None, description: str | None = None) -> ChatwootTeamSummary:
+    async def update_team(self, tenant_id: str, team_id: int, *, name: str | None = None, description: str | None = None) -> ChatwootTeamView:
         _, client_config = self.get_active_client_config(tenant_id)
         team = await self.client_factory(client_config).update_team(team_id, name=name, description=description)
         self.events.record_event(
             tenant_id=tenant_id, provider=self.provider, event_type="chatwoot_team_updated", status="success",
             resource_type="team", resource_id=str(team_id),
         )
-        return ChatwootTeamSummary(id=team["id"], name=team.get("name") or "")
+        return ChatwootTeamView(id=team["id"], name=team.get("name") or "")
 
     async def delete_team(self, tenant_id: str, team_id: int) -> None:
         _, client_config = self.get_active_client_config(tenant_id)
@@ -421,14 +421,14 @@ class ChatwootConfigService:
             resource_type="team", resource_id=str(team_id),
         )
 
-    async def update_agent(self, tenant_id: str, agent_id: int, *, name: str | None = None, role: str | None = None) -> ChatwootAgentSummary:
+    async def update_agent(self, tenant_id: str, agent_id: int, *, name: str | None = None, role: str | None = None) -> ChatwootAgentView:
         _, client_config = self.get_active_client_config(tenant_id)
         agent = await self.client_factory(client_config).update_agent(agent_id, name=name, role=role)
         self.events.record_event(
             tenant_id=tenant_id, provider=self.provider, event_type="chatwoot_agent_updated", status="success",
             resource_type="agent", resource_id=str(agent_id),
         )
-        return ChatwootAgentSummary(
+        return ChatwootAgentView(
             id=agent["id"], name=agent.get("name") or "", email=agent.get("email") or "",
             role=agent.get("role") or "agent", confirmed=agent.get("confirmed", True),
         )

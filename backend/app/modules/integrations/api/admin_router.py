@@ -61,6 +61,12 @@ from app.modules.integrations.application.email.send_service import EmailSendSer
 from app.modules.integrations.application.email.template_service import (
     EmailTemplateService,
 )
+from app.modules.integrations.api.translate import template_create_command, template_update_command
+from app.modules.integrations.application.dto import (
+    ChatwootConfigCommand,
+    WhatsAppConfigCommand,
+    WhatsAppTestMessageCommand,
+)
 from app.modules.integrations.application.event_service import IntegrationEventService
 from app.modules.integrations.application.integration_service import IntegrationService
 from app.modules.integrations.application.whatsapp.config_service import (
@@ -172,7 +178,7 @@ def configure_tenant_chatwoot_admin(
 ) -> Any:
     try:
         require_tenant(db, tenant_id)
-        return ChatwootConfigService(db).upsert_config(tenant_id, body)
+        return ChatwootConfigService(db).upsert_config(tenant_id, ChatwootConfigCommand(**body.model_dump()))
     except ChatwootAccountConflictError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except ValueError as exc:
@@ -541,7 +547,7 @@ def configure_tenant_whatsapp_admin(
 ) -> Any:
     try:
         require_tenant(db, tenant_id)
-        return WhatsAppConfigService(db).upsert_config(tenant_id, body)
+        return WhatsAppConfigService(db).upsert_config(tenant_id, WhatsAppConfigCommand(**body.model_dump()))
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
 
@@ -598,7 +604,7 @@ def send_tenant_whatsapp_test_message_admin(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     try:
-        result = WhatsAppMessageService(db).send_test_template_message(tenant_id, body)
+        result = WhatsAppMessageService(db).send_test_template_message(tenant_id, WhatsAppTestMessageCommand(**body.model_dump()))
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
     if result.status == "failed":
@@ -652,7 +658,7 @@ def create_tenant_whatsapp_template_admin(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     service = WhatsAppTemplateService(db)
     try:
-        template = service.create_draft(tenant_id, body, None)
+        template = service.create_draft(tenant_id, template_create_command(body), None)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
     return _whatsapp_template_detail(service, template)
@@ -687,7 +693,7 @@ def update_tenant_whatsapp_template_admin(
 ) -> Any:
     service = WhatsAppTemplateService(db)
     try:
-        template = service.update_draft(tenant_id, template_id, body)
+        template = service.update_draft(tenant_id, template_id, template_update_command(body))
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
     return _whatsapp_template_detail(service, template)

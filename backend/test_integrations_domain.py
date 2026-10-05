@@ -144,9 +144,18 @@ class WhatsAppRulesTests(unittest.TestCase):
         self.assertFalse(can_advance_status("read", "delivered"))
         self.assertFalse(can_advance_status("delivered", "sent"))
 
-    def test_failed_and_unknown_statuses_are_always_accepted(self) -> None:
-        self.assertTrue(can_advance_status("read", "failed"))
+    def test_late_failed_never_overwrites_a_confirmed_outcome(self) -> None:
+        # Same rule as Notifications: otherwise the two ledgers could say failed / read.
+        for confirmed in ("delivered", "read"):
+            self.assertFalse(can_advance_status(confirmed, "failed"), confirmed)
+        # "sent" is only provider acceptance: the delivery failure still arrives after it.
         self.assertTrue(can_advance_status("sent", "failed"))
+        self.assertTrue(can_advance_status("queued", "failed"))
+        self.assertTrue(can_advance_status(None, "failed"))
+
+    def test_only_meta_delivery_statuses_are_accepted(self) -> None:
+        for unknown in ("deleted", "warning", "queued", "received", "", None):
+            self.assertFalse(can_advance_status("sent", unknown), unknown)
         self.assertTrue(can_advance_status("received", "delivered"))
         self.assertTrue(can_advance_status(None, "read"))
 

@@ -11,6 +11,9 @@ MISSING_PROVIDER_MESSAGE_ID_ERROR = "whatsapp_provider_message_id_missing"
 
 # Meta delivery progress; a status may only move forward (a late "delivered" never undoes "read").
 STATUS_RANK = {"queued": 0, "sent": 1, "delivered": 2, "read": 3}
+PROVIDER_STATUSES = frozenset({"sent", "delivered", "read", "failed"})
+# ``sent`` only means Meta accepted the request: a real delivery failure still arrives after it.
+CONFIRMED_STATUSES = frozenset({"delivered", "read"})
 
 
 @dataclass(frozen=True)
@@ -55,11 +58,18 @@ def extract_provider_message_id(payload: dict[str, Any]) -> str | None:
     return None
 
 
-def can_advance_status(current: str | None, new: str) -> bool:
-    """True unless ``new`` would move a delivered/read message backwards.
+def can_advance_status(current: str | None, new: str | None) -> bool:
+    """Whether a provider status may overwrite the message's current one.
 
-    Unknown statuses (``failed``, ``received``...) are always accepted, as before."""
-    if current in STATUS_RANK and new in STATUS_RANK:
+    Only Meta's ``sent|delivered|read|failed`` are accepted. Delivery never moves backwards
+    (a late ``delivered`` cannot undo ``read``) and a late ``failed`` cannot overwrite a
+    confirmed ``delivered|read``, so the message ledger never contradicts a confirmed delivery in
+    Notifications. ``sent`` is only provider acceptance, so ``sent -> failed`` is a real outcome."""
+    if new not in PROVIDER_STATUSES:
+        return False
+    if new == "failed":
+        return current not in CONFIRMED_STATUSES
+    if current in STATUS_RANK:
         return STATUS_RANK[new] >= STATUS_RANK[current]
     return True
 

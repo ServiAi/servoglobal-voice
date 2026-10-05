@@ -10,9 +10,9 @@ from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from app.modules.crm.public import ContactProfile, CrmFacade, LeadProfile
-from app.modules.integrations.api.schemas import (
-    WhatsAppTestMessageRequest,
-    WhatsAppTestMessageResponse,
+from app.modules.integrations.application.dto import (
+    WhatsAppTestMessageCommand,
+    WhatsAppTestMessageResult,
 )
 from app.modules.integrations.application.event_service import IntegrationEventService
 from app.modules.integrations.application.ports import (
@@ -378,8 +378,8 @@ class WhatsAppMessageService:
     def send_test_template_message(
         self,
         tenant_id: str,
-        request: WhatsAppTestMessageRequest,
-    ) -> WhatsAppTestMessageResponse:
+        request: WhatsAppTestMessageCommand,
+    ) -> WhatsAppTestMessageResult:
         phone = normalize_phone(request.to_phone)
         if not phone or len(phone) < 8:
             raise ValueError("A valid destination phone is required")
@@ -418,7 +418,7 @@ class WhatsAppMessageService:
                 status="failed",
                 message=error_message,
             )
-            return WhatsAppTestMessageResponse(status="failed", error_message=error_message, to_phone_masked=mask_phone(phone))
+            return WhatsAppTestMessageResult(status="failed", error_message=error_message, to_phone_masked=mask_phone(phone))
         message = CrmWhatsAppMessage(
             tenant_id=tenant_id,
             template_id=template.id,
@@ -447,7 +447,7 @@ class WhatsAppMessageService:
             resource_id=message.id,
             metadata={"template_key": template.template_key, "provider_message_id": provider_message_id},
         )
-        return WhatsAppTestMessageResponse(
+        return WhatsAppTestMessageResult(
             status="sent",
             whatsapp_message_id=message.id,
             provider_message_id=provider_message_id,
@@ -507,7 +507,9 @@ class WhatsAppMessageService:
         if message is None:
             return 0
         if not can_advance_status(message.status, status):
-            # Out-of-order webhook (e.g. a late "delivered" after "read"): never move a message backwards.
+            # Out-of-order webhook (a late "delivered" after "read", a late "failed" after "sent") or a status
+            # Meta may add that we do not model: ignore it and end the transaction to release the row lock now.
+            self.db.commit()
             return 0
         now = datetime.now(timezone.utc)
         message.status = status
@@ -575,6 +577,8 @@ class WhatsAppMessageService:
             )
         ):
             # Meta retries webhooks: an inbound message already stored is not stored (nor logged) twice.
+            # End the transaction so the advisory lock is released immediately.
+            self.db.commit()
             return 0
 
         message = CrmWhatsAppMessage(

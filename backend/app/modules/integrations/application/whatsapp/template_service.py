@@ -8,9 +8,9 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.modules.integrations.api.schemas import (
-    WhatsAppTemplateCreateRequest,
-    WhatsAppTemplateUpdateRequest,
+from app.modules.integrations.application.dto import (
+    WhatsAppTemplateCreateCommand,
+    WhatsAppTemplateUpdateCommand,
 )
 from app.modules.integrations.application.ports import FeatureGatePort
 from app.modules.integrations.domain.whatsapp import WHATSAPP_BUSINESS_CALLING_FEATURE
@@ -312,7 +312,7 @@ class WhatsAppTemplateService:
     def create_draft(
         self,
         tenant_id: str,
-        request: WhatsAppTemplateCreateRequest,
+        request: WhatsAppTemplateCreateCommand,
         created_by_user_id: str | None,
     ) -> TenantWhatsAppTemplate:
         template_key = request.template_key.strip()
@@ -330,7 +330,7 @@ class WhatsAppTemplateService:
         if existing is not None:
             raise ValueError(f"A template with key '{template_key}' already exists")
 
-        buttons = [button.model_dump(exclude_none=True) for button in request.buttons]
+        buttons = [button.to_meta_dict() for button in request.buttons]
         _ensure_voice_call_allowed(self.features, tenant_id, buttons)
         components = _build_meta_components(
             header_text=request.header_text, body=request.body, footer_text=request.footer_text, buttons=buttons
@@ -363,7 +363,7 @@ class WhatsAppTemplateService:
         self,
         tenant_id: str,
         template_id: str,
-        request: WhatsAppTemplateUpdateRequest,
+        request: WhatsAppTemplateUpdateCommand,
     ) -> TenantWhatsAppTemplate:
         template = self.get_owned(tenant_id, template_id)
         if template.status not in ("draft", "rejected"):
@@ -377,7 +377,7 @@ class WhatsAppTemplateService:
         body = request.body if request.body is not None else template.body
         footer_text = request.footer_text if request.footer_text is not None else template.footer_text
         buttons = (
-            [button.model_dump(exclude_none=True) for button in request.buttons]
+            [button.to_meta_dict() for button in request.buttons]
             if request.buttons is not None
             else (template.buttons_json or [])
         )

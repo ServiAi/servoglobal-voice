@@ -239,26 +239,44 @@ class WhatsAppWebhookTests(Integration2ATestCase):
         self.assertIsNone(message.delivered_at)
         self.assertEqual(delivered_events, 0)
 
-    def test_whatsapp_failed_status_is_still_recorded_after_sent(self):
-        self.configure_whatsapp()
+    def _seed_outbound(self, wamid: str, status: str) -> None:
         with SessionLocal() as db:
             db.add(CrmWhatsAppMessage(
                 tenant_id=self.tenant.id,
-                provider_message_id="wamid.fail-1",
+                provider_message_id=wamid,
                 direction="outbound",
                 to_phone="573001112233",
-                status="sent",
+                status=status,
                 metadata_json={},
-                sent_at=datetime.now(timezone.utc),
             ))
             db.commit()
 
-        self._post_statuses({"id": "wamid.fail-1", "status": "failed", "errors": [{"code": 131026}]})
-
+    def _status_of(self, wamid: str) -> str:
         with SessionLocal() as db:
-            message = db.scalar(select(CrmWhatsAppMessage).where(CrmWhatsAppMessage.provider_message_id == "wamid.fail-1"))
+            return db.scalar(select(CrmWhatsAppMessage.status).where(CrmWhatsAppMessage.provider_message_id == wamid))
+
+    def test_whatsapp_late_failed_does_not_overwrite_a_confirmed_status(self):
+        self.configure_whatsapp()
+        for confirmed in ("delivered", "read"):
+            wamid = f"wamid.late-fail-{confirmed}"
+            self._seed_outbound(wamid, confirmed)
+            self._post_statuses({"id": wamid, "status": "failed", "errors": [{"code": 131026}]})
+            self.assertEqual(self._status_of(wamid), confirmed)
+
+    def test_whatsapp_failed_is_recorded_for_a_message_that_was_never_confirmed(self):
+        self.configure_whatsapp()
+        self._seed_outbound("wamid.fail-queued", "sent")
+        self._post_statuses({"id": "wamid.fail-queued", "status": "failed", "errors": [{"code": 131026}]})
+        with SessionLocal() as db:
+            message = db.scalar(select(CrmWhatsAppMessage).where(CrmWhatsAppMessage.provider_message_id == "wamid.fail-queued"))
         self.assertEqual(message.status, "failed")
         self.assertIsNotNone(message.failed_at)
+
+    def test_whatsapp_unmodelled_provider_status_is_ignored(self):
+        self.configure_whatsapp()
+        self._seed_outbound("wamid.unknown-status", "sent")
+        self._post_statuses({"id": "wamid.unknown-status", "status": "deleted"})
+        self.assertEqual(self._status_of("wamid.unknown-status"), "sent")
 
     def test_whatsapp_inbound_webhook_retry_does_not_duplicate_message_or_activity(self):
         self.configure_whatsapp()

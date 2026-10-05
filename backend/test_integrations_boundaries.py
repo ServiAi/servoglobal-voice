@@ -146,8 +146,7 @@ assert not loaded, loaded
             "app.modules.integrations.infrastructure.whatsapp",
             "app.modules.integrations.infrastructure.email",
             "app.modules.integrations.infrastructure.chatwoot",
-            "app.modules.integrations.api.router",
-            "app.modules.integrations.api.admin_router",
+            "app.modules.integrations.api",  # layers point inward: api -> application, never the reverse
             "app.modules.crm.application",
             "app.modules.crm.infrastructure",
             "app.modules.crm.domain",

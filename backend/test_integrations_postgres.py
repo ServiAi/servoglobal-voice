@@ -30,7 +30,7 @@ if INTEGRATIONS_TEST_DATABASE_URL:
     os.environ.setdefault("ULTRAVOX_API_KEY", "test")
     os.environ["DATABASE_URL"] = INTEGRATIONS_TEST_DATABASE_URL
 
-from sqlalchemy import create_engine, func, select
+from sqlalchemy import create_engine, func, select, text
 from sqlalchemy.orm import sessionmaker
 
 from app.db.base import Base
@@ -176,6 +176,36 @@ class IntegrationsPostgresConcurrencyTests(unittest.TestCase):
                 )
             }
         self.assertEqual(set(statuses.values()), {"read"}, statuses)
+
+    def test_late_failed_after_read_never_overwrites_it_and_releases_the_row_lock(self) -> None:
+        with self.SessionLocal() as db:
+            tenant_id = self._tenant(db)
+            phone_number_id = self._whatsapp_config(db, tenant_id)
+            wamid = f"wamid.late-failed-{uuid4().hex[:6]}"
+            message_id = self._outbound_message(db, tenant_id, wamid)
+
+        def status(name):
+            return [WhatsAppStatusUpdate(phone_number_id=phone_number_id, provider_message_id=wamid, status=name)]
+
+        self._process(status("read"))
+        self._process(status("failed"))
+        with self.SessionLocal() as db:
+            self.assertEqual(db.get(CrmWhatsAppMessage, message_id).status, "read")
+
+        # The ignored webhook must not keep the row locked: another writer gets it without waiting.
+        session = self.SessionLocal()
+        try:
+            service = WhatsAppMessageService(session, client=object(), notifications=_Notifications())
+            service.handle_events(status("failed"))
+            other = self.SessionLocal()
+            try:
+                other.execute(text("SET lock_timeout = '500ms'"))
+                other.execute(select(CrmWhatsAppMessage).where(CrmWhatsAppMessage.id == message_id).with_for_update())
+            finally:
+                other.rollback()
+                other.close()
+        finally:
+            session.close()
 
     # -- inbound idempotency ----------------------------------------------------------------------
 

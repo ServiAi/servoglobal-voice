@@ -282,8 +282,8 @@ Mismo grafo AST (imports perezosos incluidos), `develop@9c220d3` (PR #123) → `
 | Componente conexa del grafo de archivos con Integrations | 48 nodos / 1 archivo de Integrations | 60 nodos / 10 archivos (crece por los puertos de `wiring.py` y las lecturas lazy a `*.public`; no hay aristas privadas entre módulos) |
 | Tablas / head Alembic | 79 / `202609240001` | **79 / `202609240001`**, firmas completas idénticas |
 | OpenAPI | 257 paths / 293 schemas | **257 / 293**, idénticos (paths y schemas comparados completos) |
-| Métodos de test backend | 1920 | **1968** (+48) |
-| Métodos de test PostgreSQL | 64 | **69** (`test_integrations_postgres`: 5, en CI sobre la base `serviai_integrations_test`) |
+| Métodos de test backend | 1920 | **1972** (+52) |
+| Métodos de test PostgreSQL | 64 | **70** (`test_integrations_postgres`: 6, en CI sobre la base `serviai_integrations_test`) |
 | Shims | 0 | **0** |
 | Ruff (`app`, `uvx ruff` 0.16.10, reglas del repo) | 1400 hallazgos | **1398**, sin hallazgos `F` nuevos (el gate de CI sigue siendo informativo) |
 

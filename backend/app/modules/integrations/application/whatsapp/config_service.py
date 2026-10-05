@@ -5,12 +5,12 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.modules.integrations.api.schemas import (
-    WhatsAppConfigRequest,
-    WhatsAppConfigResponse,
-    WhatsAppTemplateSubmitResponse,
-    WhatsAppTemplateSyncResponse,
-    WhatsAppTestResponse,
+from app.modules.integrations.application.dto import (
+    WhatsAppConfigCommand,
+    WhatsAppConfigView,
+    WhatsAppConnectionTestResult,
+    WhatsAppTemplateSubmitResult,
+    WhatsAppTemplateSyncReport,
 )
 from app.modules.integrations.application.event_service import IntegrationEventService
 from app.modules.integrations.application.ports import (
@@ -57,17 +57,17 @@ class WhatsAppConfigService:
             )
         )
 
-    def get_response(self, tenant_id: str) -> WhatsAppConfigResponse:
+    def get_response(self, tenant_id: str) -> WhatsAppConfigView:
         config = self.get_config(tenant_id)
         voice_calling_enabled = self.features.is_enabled(tenant_id, WHATSAPP_BUSINESS_CALLING_FEATURE)
         if config is None:
-            return WhatsAppConfigResponse(status="inactive", has_secret=False, voice_calling_enabled=voice_calling_enabled)
+            return WhatsAppConfigView(status="inactive", has_secret=False, voice_calling_enabled=voice_calling_enabled)
         return self.to_response(config, voice_calling_enabled=voice_calling_enabled)
 
-    def to_response(self, config: TenantWhatsAppConfig, voice_calling_enabled: bool | None = None) -> WhatsAppConfigResponse:
+    def to_response(self, config: TenantWhatsAppConfig, voice_calling_enabled: bool | None = None) -> WhatsAppConfigView:
         if voice_calling_enabled is None:
             voice_calling_enabled = self.features.is_enabled(config.tenant_id, WHATSAPP_BUSINESS_CALLING_FEATURE)
-        return WhatsAppConfigResponse(
+        return WhatsAppConfigView(
             status=config.status,
             phone_number_id=config.phone_number_id,
             business_account_id=config.business_account_id,
@@ -80,7 +80,7 @@ class WhatsAppConfigService:
             last_error_message=config.last_error_message,
         )
 
-    def upsert_config(self, tenant_id: str, request: WhatsAppConfigRequest) -> WhatsAppConfigResponse:
+    def upsert_config(self, tenant_id: str, request: WhatsAppConfigCommand) -> WhatsAppConfigView:
         config = self.get_config(tenant_id)
         if config is None and not request.access_token:
             raise ValueError("WhatsApp access_token is required for first configuration")
@@ -119,10 +119,10 @@ class WhatsAppConfigService:
         token = self.secret_manager.decrypt_secret(config.access_token_encrypted)
         return config, WhatsAppClientConfig(access_token=token, phone_number_id=config.phone_number_id)
 
-    def test_connection(self, tenant_id: str) -> WhatsAppTestResponse:
+    def test_connection(self, tenant_id: str) -> WhatsAppConnectionTestResult:
         config = self.get_config(tenant_id)
         if config is None or not config.access_token_encrypted:
-            return WhatsAppTestResponse(status="failed", error_message="WhatsApp integration is not configured")
+            return WhatsAppConnectionTestResult(status="failed", error_message="WhatsApp integration is not configured")
 
         try:
             _, client_config = self.get_active_client_config(tenant_id)
@@ -141,7 +141,7 @@ class WhatsAppConfigService:
                 resource_id=config.id,
                 message=message,
             )
-            return WhatsAppTestResponse(status="failed", error_message=message)
+            return WhatsAppConnectionTestResult(status="failed", error_message=message)
 
         display_phone = payload.get("display_phone_number")
         if isinstance(display_phone, str) and display_phone:
@@ -157,7 +157,7 @@ class WhatsAppConfigService:
             resource_type="tenant_whatsapp_config",
             resource_id=config.id,
         )
-        return WhatsAppTestResponse(
+        return WhatsAppConnectionTestResult(
             status="success",
             message=(
                 "Conexión exitosa con Meta. Se validó el access token y el Phone Number ID. "
@@ -166,7 +166,7 @@ class WhatsAppConfigService:
             sends_message=False,
         )
 
-    def sync_templates(self, tenant_id: str) -> WhatsAppTemplateSyncResponse:
+    def sync_templates(self, tenant_id: str) -> WhatsAppTemplateSyncReport:
         config, client_config = self.get_active_client_config(tenant_id)
         business_account_id = (config.business_account_id or "").strip()
         if not business_account_id:
@@ -189,7 +189,7 @@ class WhatsAppConfigService:
                 resource_id=config.id,
                 message=message,
             )
-            return WhatsAppTemplateSyncResponse(status="failed", error_message=message)
+            return WhatsAppTemplateSyncReport(status="failed", error_message=message)
         self.events.record_event(
             tenant_id=tenant_id,
             provider=self.provider,
@@ -204,9 +204,9 @@ class WhatsAppConfigService:
                 "ignored_count": result.ignored_count,
             },
         )
-        return WhatsAppTemplateSyncResponse(status="success", **result.__dict__)
+        return WhatsAppTemplateSyncReport(status="success", **result.__dict__)
 
-    def submit_template(self, tenant_id: str, template_id: str) -> WhatsAppTemplateSubmitResponse:
+    def submit_template(self, tenant_id: str, template_id: str) -> WhatsAppTemplateSubmitResult:
         config, client_config = self.get_active_client_config(tenant_id)
         business_account_id = (config.business_account_id or "").strip()
         if not business_account_id:
@@ -243,7 +243,7 @@ class WhatsAppConfigService:
                 resource_id=template.id,
                 message=message,
             )
-            return WhatsAppTemplateSubmitResponse(status="failed", error_message=message)
+            return WhatsAppTemplateSubmitResult(status="failed", error_message=message)
 
         template.provider_template_id = str(payload.get("id") or template.provider_template_id or "") or None
         template.meta_status = str(payload.get("status") or "PENDING").upper()
@@ -258,13 +258,13 @@ class WhatsAppConfigService:
             resource_type="tenant_whatsapp_template",
             resource_id=template.id,
         )
-        return WhatsAppTemplateSubmitResponse(
+        return WhatsAppTemplateSubmitResult(
             status="success",
             meta_status=template.meta_status,
             provider_template_id=template.provider_template_id,
         )
 
-    def sync_template_status(self, tenant_id: str, template_id: str) -> WhatsAppTemplateSubmitResponse:
+    def sync_template_status(self, tenant_id: str, template_id: str) -> WhatsAppTemplateSubmitResult:
         _, client_config = self.get_active_client_config(tenant_id)
         templates = WhatsAppTemplateService(self.db)
         template = templates.get_owned(tenant_id, template_id)
@@ -286,7 +286,7 @@ class WhatsAppConfigService:
                 resource_id=template.id,
                 message=message,
             )
-            return WhatsAppTemplateSubmitResponse(status="failed", error_message=message)
+            return WhatsAppTemplateSubmitResult(status="failed", error_message=message)
 
         meta_status = str(payload.get("status") or "").upper()
         template.meta_status = meta_status or template.meta_status
@@ -309,7 +309,7 @@ class WhatsAppConfigService:
             resource_id=template.id,
             metadata={"meta_status": meta_status, "status": template.status},
         )
-        return WhatsAppTemplateSubmitResponse(
+        return WhatsAppTemplateSubmitResult(
             status="success",
             meta_status=template.meta_status,
             provider_template_id=template.provider_template_id,
