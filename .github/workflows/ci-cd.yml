@@ -39,6 +39,7 @@ jobs:
       VOICE_RUNTIME_TEST_DATABASE_URL: postgresql+psycopg://serviai:serviai@localhost:5432/serviai_voice_runtime_test
       NOTIFICATION_TEST_DATABASE_URL: postgresql+psycopg://serviai:serviai@localhost:5432/serviai_notification_worker_test
       INTEGRATIONS_TEST_DATABASE_URL: postgresql+psycopg://serviai:serviai@localhost:5432/serviai_integrations_test
+      INTEGRATIONS_MIGRATION_TEST_DATABASE_URL: postgresql+psycopg://serviai:serviai@localhost:5432/serviai_integrations_migration_test
       ULTRAVOX_API_KEY: ci_test_ultravox_key
     steps:
       - uses: actions/checkout@v4
@@ -61,6 +62,7 @@ jobs:
                       "serviai_voice_runtime_test",
                       "serviai_notification_worker_test",
                       "serviai_integrations_test",
+                      "serviai_integrations_migration_test",
                   ):
                       cur.execute("SELECT 1 FROM pg_database WHERE datname = %s", (name,))
                       if cur.fetchone() is None:
@@ -71,7 +73,7 @@ jobs:
       - name: Backend test suite (excludes test_endpoints.py / test_kpis.py / test_db.py / test_db_user.py / test_db_validation.py - hardcoded staging DB creds, no network to staging from CI; excludes test_crm_sprint_2.py - known pre-existing assertion drift vs voice_call_service/voice_config_service error messages, unrelated to this branch, tracked separately)
         working-directory: backend
         run: |
-          modules=$(ls test_*.py | grep -v -e test_endpoints.py -e test_kpis.py -e test_db.py -e test_db_user.py -e test_db_validation.py -e test_crm_sprint_2.py -e test_voice_runtime_postgres.py -e test_telephony_postgres.py -e test_scheduling_postgres.py -e test_crm_postgres.py -e test_notification_worker_postgres.py -e test_integrations_postgres.py | sed 's/\.py$//')
+          modules=$(ls test_*.py | grep -v -e test_endpoints.py -e test_kpis.py -e test_db.py -e test_db_user.py -e test_db_validation.py -e test_crm_sprint_2.py -e test_voice_runtime_postgres.py -e test_telephony_postgres.py -e test_scheduling_postgres.py -e test_crm_postgres.py -e test_notification_worker_postgres.py -e test_integrations_postgres.py -e test_integrations_migration_postgres.py | sed 's/\.py$//')
           status=0
           for module in $modules; do
             # Most test modules pin DATABASE_URL to their own sqlite file at import time,
@@ -123,6 +125,14 @@ jobs:
           python -m unittest test_integrations_postgres -v 2>&1 | tee /tmp/integrations_pg.log
           # Fail if the suite was skipped instead of executed (env var missing/misconfigured).
           ! grep -q "skipped" /tmp/integrations_pg.log
+      - name: Integrations PostgreSQL migration (provider message identity: upgrade, duplicate abort, downgrade)
+        # Explicit shell enables -o pipefail, so a unittest failure is not masked by tee.
+        shell: bash
+        working-directory: backend
+        run: |
+          python -m unittest test_integrations_migration_postgres -v 2>&1 | tee /tmp/integrations_migration_pg.log
+          # Fail if the suite was skipped instead of executed (env var missing/misconfigured).
+          ! grep -q "skipped" /tmp/integrations_migration_pg.log
       - name: Compile check
         working-directory: backend
         run: python -m compileall app

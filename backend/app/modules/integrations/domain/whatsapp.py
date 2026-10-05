@@ -8,6 +8,7 @@ from typing import Any
 
 WHATSAPP_BUSINESS_CALLING_FEATURE = "whatsapp_business_calling"
 MISSING_PROVIDER_MESSAGE_ID_ERROR = "whatsapp_provider_message_id_missing"
+PROVIDER_MESSAGE_ID_CONFLICT_ERROR = "whatsapp_provider_message_id_conflict"
 
 # Meta delivery progress; a status may only move forward (a late "delivered" never undoes "read").
 STATUS_RANK = {"queued": 0, "sent": 1, "delivered": 2, "read": 3}

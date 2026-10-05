@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy import select, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.modules.crm.public import ContactProfile, CrmFacade, LeadProfile
@@ -28,6 +29,7 @@ from app.modules.integrations.application.whatsapp.template_service import (
 from app.modules.integrations.domain.errors import ProviderError
 from app.modules.integrations.domain.whatsapp import (
     MISSING_PROVIDER_MESSAGE_ID_ERROR,
+    PROVIDER_MESSAGE_ID_CONFLICT_ERROR,
     WhatsAppInboundMessage,
     WhatsAppStatusUpdate,
     WhatsAppWebhookEvent,
@@ -198,11 +200,8 @@ class WhatsAppMessageService:
             )
             return WhatsAppSendResult(status="failed", message=message, error_message=error_message)
 
-        message.provider_message_id = provider_message_id
-        message.status = "sent"
-        message.sent_at = now
-        self.db.commit()
-        self.db.refresh(message)
+        if not self._acknowledge(message, provider_message_id, now):
+            return self._provider_id_conflict(tenant_id, message)
         self.crm.record_activity(
             tenant_id=tenant_id,
             lead_id=lead.id,
@@ -345,11 +344,8 @@ class WhatsAppMessageService:
                 status="manual_review", message=message, error_message=MISSING_PROVIDER_MESSAGE_ID_ERROR
             )
 
-        message.provider_message_id = provider_message_id
-        message.status = "sent"
-        message.sent_at = datetime.now(timezone.utc)
-        self.db.commit()
-        self.db.refresh(message)
+        if not self._acknowledge(message, provider_message_id, datetime.now(timezone.utc)):
+            return self._provider_id_conflict(tenant_id, message)
 
         if message.lead_id and message.contact_id:
             self.crm.record_activity(
@@ -436,7 +432,19 @@ class WhatsAppMessageService:
             sent_at=datetime.now(timezone.utc),
         )
         self.db.add(message)
-        self.db.commit()
+        try:
+            self.db.commit()
+        except IntegrityError:
+            self.db.rollback()
+            if not self._provider_id_taken(tenant_id, provider_message_id):
+                raise
+            self._record_provider_id_conflict(tenant_id, resource_id=None)
+            return WhatsAppTestMessageResult(
+                status="manual_review",
+                error_message=PROVIDER_MESSAGE_ID_CONFLICT_ERROR,
+                template_key=template.template_key,
+                to_phone_masked=mask_phone(phone),
+            )
         self.db.refresh(message)
         self.events.record_event(
             tenant_id=tenant_id,
@@ -569,13 +577,7 @@ class WhatsAppMessageService:
 
         if provider_message_id:
             self._lock_inbound(config.tenant_id, provider_message_id)
-        if provider_message_id and self.db.scalar(
-            select(CrmWhatsAppMessage.id).where(
-                CrmWhatsAppMessage.tenant_id == config.tenant_id,
-                CrmWhatsAppMessage.provider_message_id == provider_message_id,
-                CrmWhatsAppMessage.direction == "inbound",
-            )
-        ):
+        if provider_message_id and self._inbound_exists(config.tenant_id, provider_message_id):
             # Meta retries webhooks: an inbound message already stored is not stored (nor logged) twice.
             # End the transaction so the advisory lock is released immediately.
             self.db.commit()
@@ -594,7 +596,16 @@ class WhatsAppMessageService:
             metadata_json={},
         )
         self.db.add(message)
-        self.db.commit()
+        try:
+            self.db.commit()
+        except IntegrityError:
+            # The unique (tenant, provider message id) index fired despite the advisory lock. It is a
+            # benign Meta retry only if that inbound message is really stored; any other integrity
+            # error is a real failure and must surface.
+            self.db.rollback()
+            if provider_message_id and self._inbound_exists(config.tenant_id, provider_message_id):
+                return 0
+            raise
         self.db.refresh(message)
         self.crm.record_activity(
             tenant_id=config.tenant_id,
@@ -615,6 +626,66 @@ class WhatsAppMessageService:
             resource_id=message.id,
         )
         return 1
+
+    def _inbound_exists(self, tenant_id: str, provider_message_id: str) -> bool:
+        return (
+            self.db.scalar(
+                select(CrmWhatsAppMessage.id).where(
+                    CrmWhatsAppMessage.tenant_id == tenant_id,
+                    CrmWhatsAppMessage.provider_message_id == provider_message_id,
+                    CrmWhatsAppMessage.direction == "inbound",
+                )
+            )
+            is not None
+        )
+
+    def _provider_id_taken(self, tenant_id: str, provider_message_id: str | None) -> bool:
+        if not provider_message_id:
+            return False
+        return (
+            self.db.scalar(
+                select(CrmWhatsAppMessage.id).where(
+                    CrmWhatsAppMessage.tenant_id == tenant_id,
+                    CrmWhatsAppMessage.provider_message_id == provider_message_id,
+                )
+            )
+            is not None
+        )
+
+    def _acknowledge(self, message: CrmWhatsAppMessage, provider_message_id: str, sent_at: datetime) -> bool:
+        """Record Meta's acceptance. False if that provider id already belongs to another message of the
+        tenant: the row is left untouched (still ``queued``), nothing is overwritten or re-attached."""
+        message.provider_message_id = provider_message_id
+        message.status = "sent"
+        message.sent_at = sent_at
+        try:
+            self.db.commit()
+        except IntegrityError:
+            self.db.rollback()
+            if not self._provider_id_taken(message.tenant_id, provider_message_id):
+                raise
+            return False
+        self.db.refresh(message)
+        return True
+
+    def _record_provider_id_conflict(self, tenant_id: str, *, resource_id: str | None) -> None:
+        self.events.record_event(
+            tenant_id=tenant_id,
+            provider=self.provider,
+            event_type="whatsapp_provider_message_id_conflict",
+            status="failed",
+            resource_type="crm_whatsapp_message" if resource_id else None,
+            resource_id=resource_id,
+            message=PROVIDER_MESSAGE_ID_CONFLICT_ERROR,
+        )
+
+    def _provider_id_conflict(self, tenant_id: str, message: CrmWhatsAppMessage) -> WhatsAppSendResult:
+        """Meta returned a provider id another row already owns: the outcome is ambiguous, never retried."""
+        self._record_provider_id_conflict(tenant_id, resource_id=message.id)
+        self.db.refresh(message)
+        return WhatsAppSendResult(
+            status="manual_review", message=message, error_message=PROVIDER_MESSAGE_ID_CONFLICT_ERROR
+        )
 
     def _lock_inbound(self, tenant_id: str, provider_message_id: str) -> None:
         """Serialize concurrent deliveries of the same inbound message until our commit (PostgreSQL only;

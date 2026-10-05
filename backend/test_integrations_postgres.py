@@ -3,9 +3,8 @@ r"""Real PostgreSQL concurrency tests for Integrations / Messaging.
 Only invariants SQLite cannot prove:
 
 * a late ``delivered`` webhook never downgrades ``read`` (row lock on the message),
-* a retried inbound webhook creates one message and one CRM activity (advisory lock;
-  ``crm_whatsapp_messages`` has no unique constraint on ``provider_message_id`` and this
-  module adds no DDL, see ``test_inbound_idempotency_is_best_effort_without_a_constraint``),
+* a retried inbound webhook creates one message and one CRM activity (advisory lock + the
+  partial unique index on ``(tenant_id, provider_message_id)``, which also stops direct writers),
 * concurrent writers of the same ``(tenant, provider)`` catalog row converge on one row.
 
 Run only against a dedicated disposable database:
@@ -31,6 +30,7 @@ if INTEGRATIONS_TEST_DATABASE_URL:
     os.environ["DATABASE_URL"] = INTEGRATIONS_TEST_DATABASE_URL
 
 from sqlalchemy import create_engine, func, select, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 
 from app.db.base import Base
@@ -248,17 +248,127 @@ class IntegrationsPostgresConcurrencyTests(unittest.TestCase):
             )
         self.assertEqual((messages, activities), (1, 1))
 
-    def test_inbound_idempotency_is_best_effort_without_a_constraint(self) -> None:
-        """Documented debt: the guarantee is application-level (advisory lock + lookup); the table has
-        no unique index on (tenant_id, provider_message_id), so a writer that bypasses the service
-        can still insert a duplicate. Adding the index is a DDL decision for a dedicated migration."""
-        table = Base.metadata.tables["crm_whatsapp_messages"]
-        unique_on_provider_message = [
-            index
-            for index in table.indexes
-            if index.unique and {column.name for column in index.columns} >= {"provider_message_id"}
+    # -- database-level identity of provider messages ----------------------------------------------
+
+    def _insert_message(self, tenant_id: str, provider_message_id: str | None, direction: str = "outbound") -> None:
+        """A writer that bypasses WhatsAppMessageService and its advisory lock."""
+        with self.SessionLocal() as db:
+            db.add(
+                CrmWhatsAppMessage(
+                    tenant_id=tenant_id,
+                    provider_message_id=provider_message_id,
+                    direction=direction,
+                    status="sent",
+                    metadata_json={},
+                )
+            )
+            db.commit()
+
+    def test_database_rejects_a_duplicate_provider_message_id_from_a_direct_writer(self) -> None:
+        with self.SessionLocal() as db:
+            tenant_id = self._tenant(db)
+        wamid = f"wamid.direct-{uuid4().hex[:6]}"
+        self._insert_message(tenant_id, wamid)
+        with self.assertRaises(IntegrityError):
+            self._insert_message(tenant_id, wamid, direction="inbound")
+        with self.SessionLocal() as db:
+            count = db.scalar(
+                select(func.count()).select_from(CrmWhatsAppMessage).where(CrmWhatsAppMessage.provider_message_id == wamid)
+            )
+        self.assertEqual(count, 1)
+
+    def test_the_same_provider_message_id_is_allowed_in_different_tenants(self) -> None:
+        with self.SessionLocal() as db:
+            tenant_a, tenant_b = self._tenant(db), self._tenant(db)
+        wamid = f"wamid.shared-{uuid4().hex[:6]}"
+        self._insert_message(tenant_a, wamid)
+        self._insert_message(tenant_b, wamid)
+        with self.SessionLocal() as db:
+            count = db.scalar(
+                select(func.count()).select_from(CrmWhatsAppMessage).where(CrmWhatsAppMessage.provider_message_id == wamid)
+            )
+        self.assertEqual(count, 2)
+
+    def test_messages_without_a_provider_message_id_may_repeat(self) -> None:
+        with self.SessionLocal() as db:
+            tenant_id = self._tenant(db)
+        for _ in range(3):
+            self._insert_message(tenant_id, None)
+        with self.SessionLocal() as db:
+            count = db.scalar(
+                select(func.count()).select_from(CrmWhatsAppMessage).where(
+                    CrmWhatsAppMessage.tenant_id == tenant_id, CrmWhatsAppMessage.provider_message_id.is_(None)
+                )
+            )
+        self.assertEqual(count, 3)
+
+    def test_inbound_unique_violation_after_the_lock_is_a_duplicate_not_a_500(self) -> None:
+        """If the unique index fires despite the advisory lock (simulated by hiding the existing row from the
+        lookup), the retry is ignored only because the inbound message really is stored."""
+        with self.SessionLocal() as db:
+            tenant_id = self._tenant(db)
+            phone_number_id = self._whatsapp_config(db, tenant_id)
+            lead_id, _ = self._open_lead(db, tenant_id, "+573001112233")
+        wamid = f"wamid.race-ix-{uuid4().hex[:6]}"
+        events = [
+            WhatsAppInboundMessage(
+                phone_number_id=phone_number_id, from_phone="573001112233", provider_message_id=wamid, body="Hola"
+            )
         ]
-        self.assertEqual(unique_on_provider_message, [])
+        self.assertEqual(self._process(events)["inbound"], 1)
+
+        real_exists = WhatsAppMessageService._inbound_exists
+        calls = {"count": 0}
+
+        def blind_first_lookup(service, tenant, provider_message_id):
+            # The pre-insert duplicate check misses (as if the advisory lock had been bypassed), so the
+            # INSERT really collides with the unique index; the post-collision check then sees the row.
+            calls["count"] += 1
+            return False if calls["count"] == 1 else real_exists(service, tenant, provider_message_id)
+
+        with patch.object(WhatsAppMessageService, "_inbound_exists", blind_first_lookup):
+            result = self._process(events)
+
+        self.assertEqual(result["inbound"], 0)
+        with self.SessionLocal() as db:
+            activities = db.scalar(
+                select(func.count()).select_from(CrmActivity).where(
+                    CrmActivity.lead_id == lead_id, CrmActivity.activity_type == "whatsapp_inbound_received"
+                )
+            )
+        self.assertEqual(activities, 1)
+
+    def test_outbound_provider_id_collision_is_manual_review_and_overwrites_nothing(self) -> None:
+        with self.SessionLocal() as db:
+            tenant_id = self._tenant(db)
+        wamid = f"wamid.taken-{uuid4().hex[:6]}"
+        self._insert_message(tenant_id, wamid)
+        with self.SessionLocal() as db:
+            queued = CrmWhatsAppMessage(
+                tenant_id=tenant_id, direction="outbound", status="queued", metadata_json={}
+            )
+            db.add(queued)
+            db.commit()
+            queued_id = queued.id
+
+        session = self.SessionLocal()
+        try:
+            service = WhatsAppMessageService(session, client=object(), notifications=_Notifications())
+            message = session.get(CrmWhatsAppMessage, queued_id)
+            acknowledged = service._acknowledge(message, wamid, datetime.now(timezone.utc))
+            result = service._provider_id_conflict(tenant_id, message)
+        finally:
+            session.close()
+
+        self.assertFalse(acknowledged)
+        self.assertEqual(result.status, "manual_review")
+        self.assertEqual(result.error_message, "whatsapp_provider_message_id_conflict")
+        with self.SessionLocal() as db:
+            row = db.get(CrmWhatsAppMessage, queued_id)
+            owners = db.scalar(
+                select(func.count()).select_from(CrmWhatsAppMessage).where(CrmWhatsAppMessage.provider_message_id == wamid)
+            )
+        self.assertEqual((row.status, row.provider_message_id, owners), ("queued", None, 1))
 
     # -- catalog race -----------------------------------------------------------------------------
 
