@@ -21,7 +21,7 @@ from app.schemas.voice_context import (
     VoiceContextSchemaSummaryResponse,
 )
 from app.modules.integrations.public import IntegrationEvents
-from app.services.tenant_feature_service import TenantFeatureService, VOICE_EXPERIENCES
+from app.modules.identity.public import FeatureFlags, VOICE_EXPERIENCES
 from app.services.voice_agent_service import VoiceAgentService
 
 
@@ -67,7 +67,7 @@ def _matches_constraint(
 class VoiceContextService:
     def __init__(self, db: Session) -> None:
         self.db = db
-        self.feature_service = TenantFeatureService(db)
+        self.feature_service = FeatureFlags(db)
         self.agent_service = VoiceAgentService(db)
         self.event_service = IntegrationEvents(db)
 

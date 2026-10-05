@@ -27,7 +27,7 @@ from app.schemas.voice_experiences import (
     VoiceExperienceWriteRequest,
 )
 from app.modules.integrations.public import IntegrationEvents
-from app.services.tenant_feature_service import VOICE_EXPERIENCES, TenantFeatureService
+from app.modules.identity.public import VOICE_EXPERIENCES, FeatureFlags
 from app.services.voice_agent_service import VoiceAgentService
 
 VERSION_CONSTRAINT = "uq_tenant_voice_experience_versions_experience_version"
@@ -60,7 +60,7 @@ def _matches_constraint(exc: IntegrityError, name: str, sqlite_columns: str) -> 
 class VoiceExperienceService:
     def __init__(self, db: Session) -> None:
         self.db = db
-        self.feature_service = TenantFeatureService(db)
+        self.feature_service = FeatureFlags(db)
         self.event_service = IntegrationEvents(db)
         self.agent_service = VoiceAgentService(db)
 

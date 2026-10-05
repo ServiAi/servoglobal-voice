@@ -36,7 +36,7 @@ from sqlalchemy.orm import sessionmaker
 from app.db.base import Base
 from app.db.session import SessionLocal as AppSessionLocal
 from app.modules.crm.infrastructure.models import CrmContact, CrmLead, CrmPipelineStage, CrmVoiceCall
-from app.models.identity import Tenant
+from app.modules.identity.infrastructure.models import Tenant
 from app.modules.agents.infrastructure.models import TenantAgent, TenantAgentVersion
 from app.modules.telephony.infrastructure.livekit_sip import LiveKitSipDialResult
 from app.modules.telephony.infrastructure.models import TenantSipRoute
@@ -47,7 +47,7 @@ from app.modules.voice.infrastructure.livekit_runtime import RuntimeDispatchResu
 from app.modules.voice.infrastructure.models import VoiceSession
 from app.schemas.integrations import VoiceCallActionRequest
 from app.services.outbound_voice_call_service import OutboundVoiceCallService
-from app.services.tenant_feature_service import LIVEKIT_SIP_OUTBOUND_V2, VOICE_RUNTIME_V2, TenantFeatureService
+from app.modules.identity.application.feature_service import LIVEKIT_SIP_OUTBOUND_V2, VOICE_RUNTIME_V2, TenantFeatureService
 
 
 class ReadyBackend:

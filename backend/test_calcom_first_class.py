@@ -16,7 +16,7 @@ from app.modules.scheduling.domain.errors import (
     SchedulingUpstreamError,
     SchedulingValidationError,
 )
-from app.models.identity import Tenant, TenantMembership, User
+from app.modules.identity.infrastructure.models import Tenant, TenantMembership, User
 from app.modules.integrations.infrastructure.models import TenantIntegrationEvent
 from app.modules.scheduling.infrastructure.models import (
     TenantAgentSchedulingConfig,

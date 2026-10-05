@@ -18,7 +18,7 @@ os.environ["DATABASE_URL"] = f"sqlite:///./{TEST_DB_PATH.as_posix()}"
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.modules.agents.infrastructure.models import TenantAgent, TenantAgentVersion
-from app.models.identity import Tenant
+from app.modules.identity.infrastructure.models import Tenant
 from app.modules.integrations.infrastructure.models import TenantIntegrationEvent
 from app.modules.tools.infrastructure.models import TenantHttpToolConfig, TenantTool
 from app.modules.tools.application.dispatcher import (
@@ -29,7 +29,7 @@ from app.modules.tools.application.dispatcher import (
     ToolNotFoundError,
 )
 from app.modules.tools.infrastructure.http_safety import SafeHttpClient
-from app.services.tenant_feature_service import CUSTOM_HTTP_TOOLS, TenantFeatureService
+from app.modules.identity.application.feature_service import CUSTOM_HTTP_TOOLS, TenantFeatureService
 from app.modules.voice.application.session_service import VoiceSessionService
 
 

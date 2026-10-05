@@ -20,7 +20,7 @@ from app.schemas.public_voice_experiences import (
     PublicVoiceTheme,
 )
 from app.modules.telephony.public import SipRouteFacade
-from app.services.tenant_feature_service import VOICE_EXPERIENCES, TenantFeatureService
+from app.modules.identity.public import VOICE_EXPERIENCES, FeatureFlags
 
 
 PUBLIC_SLUG_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
@@ -42,7 +42,7 @@ class PublicVoiceSnapshot:
 class PublicVoiceExperienceService:
     def __init__(self, db: Session) -> None:
         self.db = db
-        self.feature_service = TenantFeatureService(db)
+        self.feature_service = FeatureFlags(db)
 
     def resolve(self, slug: str) -> PublicVoiceExperienceResponse:
         snapshot = self._resolve_snapshot(slug)

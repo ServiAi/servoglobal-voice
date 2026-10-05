@@ -17,16 +17,16 @@ from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 
-from app.api.auth.deps import AuthContext, get_current_auth_context
+from app.modules.identity.api.deps import AuthContext, get_current_auth_context
 from app.api.endpoints.admin.tenants import get_auth0_provisioning_service
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.main import app
 from app.models.analytics import Agent, Call
 from app.models.billing import TenantBillingPlan, TenantUsageAlert
-from app.models.identity import Tenant, TenantMembership, User
+from app.modules.identity.infrastructure.models import Tenant, TenantMembership, User
 from app.schemas.billing import TenantPlanRequest
-from app.services.auth0_provisioning_service import Auth0ProvisionedUser
+from app.modules.identity.infrastructure.auth0.provisioning import Auth0ProvisionedUser
 from app.services.tenant_usage_service import TenantUsageService
 from app.services.ultravox_ingestion_service import UltravoxIngestionService
 

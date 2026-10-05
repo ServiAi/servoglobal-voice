@@ -14,7 +14,7 @@ from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.models.analytics import Agent, Call
 from app.modules.crm.infrastructure.models import CrmCallContext, CrmContact, CrmLead, CrmPipelineStage
-from app.models.identity import Tenant
+from app.modules.identity.infrastructure.models import Tenant
 from app.modules.crm.application.call_context_service import CrmCallContextService
 from app.modules.crm.application.contact_service import CrmContactService
 from crm_test_support import CrmIngestionService

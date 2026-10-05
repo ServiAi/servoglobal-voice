@@ -11,15 +11,7 @@ from jwt import PyJWKClient
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass(frozen=True)
-class AuthenticatedIdentity:
-    external_auth_id: str
-    email: str | None = None
-    name: str | None = None
-    email_verified: bool | None = None
-    claims: dict | None = None
+from app.modules.identity.domain.contracts import ExternalIdentity
 
 
 class Auth0TokenVerifier:
@@ -39,7 +31,7 @@ class Auth0TokenVerifier:
         domain = settings.AUTH0_DOMAIN.rstrip("/")
         return f"https://{domain}/.well-known/jwks.json"
 
-    def verify(self, token: str) -> AuthenticatedIdentity:
+    def verify(self, token: str) -> ExternalIdentity:
         if not settings.AUTH0_DOMAIN or not settings.AUTH0_AUDIENCE:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -100,7 +92,7 @@ class Auth0TokenVerifier:
             except Exception as exc:
                 logger.debug("Failed to fetch userinfo from Auth0: %s", exc)
 
-        return AuthenticatedIdentity(
+        return ExternalIdentity(
             external_auth_id=external_auth_id,
             email=email,
             name=name,

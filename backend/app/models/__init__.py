@@ -4,7 +4,7 @@ from app.models.billing import (
     TenantBillingPlan,
     TenantUsageAlert,
 )
-from app.models.identity import AccessAuditLog, Tenant, TenantMembership, User
+from app.modules.identity.infrastructure.models import AccessAuditLog, Tenant, TenantMembership, User
 from app.models.integrations import (  # noqa: F401  (residual: Forms + Voice config)
     TenantVoiceAgentConfig,
     TenantVoiceProviderConfig,
@@ -31,7 +31,7 @@ from app.modules.notifications.infrastructure.models import (
     TenantNotificationRecipient,
     TenantNotificationRule,
 )
-from app.models.tenant_features import TenantFeatureGrant
+from app.modules.identity.infrastructure.models import TenantFeatureGrant
 from app.models.voice_context import TenantVoiceContextField, TenantVoiceContextSchema
 from app.models.voice_experiences import (
     TenantVoiceExperience,

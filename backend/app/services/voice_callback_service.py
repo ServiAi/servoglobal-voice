@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.models.identity import Tenant
+from app.modules.identity.infrastructure.models import Tenant
 from app.models.integrations import TenantVoiceAgentConfig
 from app.models.voice_context import TenantVoiceContextField
 from app.models.voice_experiences import (
@@ -36,7 +36,7 @@ from app.modules.telephony.public import (
 )
 from app.schemas.public_voice_calls import PublicVoiceCallbackResponse
 from app.services.public_voice_call_service import PublicCallFailure
-from app.services.tenant_feature_service import TenantFeatureService
+from app.modules.identity.public import FeatureFlags
 from app.services.tenant_usage_service import TenantUsageService
 from app.services.voice_call_service import VoiceCallService
 from app.services.voice_client import (
@@ -135,7 +135,7 @@ class PublicVoiceCallbackService:
                         raise PublicCallFailure(410, "context_session_expired")
                     if submission is None or not submission.consent_accepted:
                         raise PublicCallFailure(409, "context_session_unavailable")
-                    if not TenantFeatureService(db).is_enabled(
+                    if not FeatureFlags(db).is_enabled(
                         context_session.tenant_id, "voice_experiences"
                     ):
                         raise PublicCallFailure(404, "experience_unavailable")

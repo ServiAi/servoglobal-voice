@@ -31,7 +31,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.db.base import Base
 from app.models.analytics import Call
-from app.models.identity import Tenant
+from app.modules.identity.infrastructure.models import Tenant
 from app.modules.crm.application.activity_service import CrmActivityService
 from app.modules.crm.application.call_ingestion_service import CrmIngestionService
 from app.modules.crm.application.contact_service import CrmContactService

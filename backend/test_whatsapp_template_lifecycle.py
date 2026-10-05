@@ -5,7 +5,7 @@ from sqlalchemy import select
 from _integrations_2a_test_base import Integration2ATestCase, SessionLocal
 from app.modules.integrations.infrastructure.models import CrmWhatsAppMessage
 from app.modules.integrations.infrastructure.models import TenantIntegrationEvent, TenantWhatsAppTemplate
-from app.models.tenant_features import TenantFeatureGrant
+from app.modules.identity.infrastructure.models import TenantFeatureGrant
 from app.modules.integrations.infrastructure.whatsapp.meta_client import WhatsAppCloudClient
 from app.modules.integrations.application.whatsapp.config_service import WhatsAppConfigService
 from app.modules.integrations.application.whatsapp.template_service import WhatsAppTemplateService

@@ -12,7 +12,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
 
-from app.models.identity import _uuid
+from app.db.mixins import _uuid
 from app.models.voice_submissions import VoicePublicRateLimitWindow
 
 

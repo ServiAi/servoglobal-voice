@@ -20,7 +20,7 @@ from app.core.config import settings
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.main import app
-from app.models.identity import Tenant
+from app.modules.identity.infrastructure.models import Tenant
 
 
 class _StubCallContext:

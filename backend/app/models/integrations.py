@@ -12,7 +12,7 @@ from sqlalchemy import DateTime, ForeignKey, Index, String, Text, UniqueConstrai
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
-from app.models.identity import TimestampMixin, _uuid, _utcnow
+from app.db.mixins import TimestampMixin, _uuid, _utcnow
 
 
 class TenantForm(Base, TimestampMixin):

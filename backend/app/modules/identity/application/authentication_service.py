@@ -9,8 +9,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.config import settings
-from app.models.identity import AccessAuditLog, Tenant, TenantMembership, User
-from app.services.auth0_service import AuthenticatedIdentity
+from app.modules.identity.infrastructure.models import AccessAuditLog, Tenant, TenantMembership, User
+from app.modules.identity.domain.contracts import ExternalIdentity
 
 
 ACTIVE = "active"
@@ -29,7 +29,7 @@ class IdentityService:
     def __init__(self, db: Session) -> None:
         self.db = db
 
-    def resolve_user(self, identity: AuthenticatedIdentity) -> User:
+    def resolve_user(self, identity: ExternalIdentity) -> User:
         # Step 1: Try exact match by external_auth_id (highest priority)
         user = self.db.scalar(
             select(User).where(User.external_auth_id == identity.external_auth_id)
@@ -79,11 +79,22 @@ class IdentityService:
             last_login_at=datetime.now(UTC),
         )
         self.db.add(user)
-        self.db.commit()
+        from sqlalchemy.exc import IntegrityError
+
+        try:
+            self.db.commit()
+        except IntegrityError:
+            self.db.rollback()
+            winner = self.db.scalar(
+                select(User).where(User.external_auth_id == identity.external_auth_id)
+            )
+            if winner is None:
+                raise
+            return winner
         self.db.refresh(user)
         return user
 
-    def _resolve_user_by_email_strict(self, identity: AuthenticatedIdentity) -> User | None:
+    def _resolve_user_by_email_strict(self, identity: ExternalIdentity) -> User | None:
         """Resolve a user by email with strict ambiguity detection.
 
         Rules:
@@ -134,11 +145,22 @@ class IdentityService:
         user.external_auth_id = identity.external_auth_id
         user.name = identity.name or user.name
         user.last_login_at = datetime.now(UTC)
-        self.db.commit()
+        from sqlalchemy.exc import IntegrityError
+
+        try:
+            self.db.commit()
+        except IntegrityError:
+            self.db.rollback()
+            winner = self.db.scalar(
+                select(User).where(User.external_auth_id == identity.external_auth_id)
+            )
+            if winner is None:
+                raise
+            return winner
         self.db.refresh(user)
         return user
 
-    def _update_user_from_identity(self, user: User, identity: AuthenticatedIdentity) -> None:
+    def _update_user_from_identity(self, user: User, identity: ExternalIdentity) -> None:
         """Update user fields from Auth0 identity after a successful match."""
         if user.status != ACTIVE:
             raise HTTPException(

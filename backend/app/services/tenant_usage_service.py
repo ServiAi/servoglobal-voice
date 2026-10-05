@@ -11,7 +11,8 @@ from sqlalchemy.orm import Session
 
 from app.models.analytics import Call
 from app.models.billing import ExternalProviderPricing, TenantBillingPlan, TenantUsageAlert
-from app.models.identity import Tenant
+from app.modules.identity.infrastructure.models import Tenant
+from app.modules.identity.public import TenantLifecycle
 from app.schemas.billing import (
     SavingsComparisonProviderResponse,
     TenantPlanRequest,
@@ -189,6 +190,16 @@ class TenantUsageService:
     def get_usage(self, tenant: Tenant, *, persist_alerts: bool = True) -> TenantUsageResponse:
         return self.refresh_usage_state(tenant, persist_alerts=persist_alerts)
 
+    def get_usage_for_tenant_id(
+        self, tenant_id: str, *, persist_alerts: bool = True
+    ) -> TenantUsageResponse:
+        return self.get_usage(self._get_tenant(tenant_id), persist_alerts=persist_alerts)
+
+    def get_savings_comparison_for_tenant_id(
+        self, tenant_id: str
+    ) -> TenantSavingsComparisonResponse:
+        return self.get_savings_comparison(self._get_tenant(tenant_id))
+
     def get_savings_comparison(self, tenant: Tenant) -> TenantSavingsComparisonResponse:
         usage = self.refresh_usage_state(tenant, persist_alerts=True)
         plan = usage.plan
@@ -305,11 +316,11 @@ class TenantUsageService:
 
         if calculated_status in {STATUS_LIMIT_REACHED, STATUS_OVER_LIMIT}:
             plan.usage_status = STATUS_SUSPENDED_USAGE_LIMIT
-            tenant.status = STATUS_SUSPENDED_USAGE_LIMIT
+            TenantLifecycle(self.db).set_usage_suspension(tenant.id, True, commit=False)
         else:
             plan.usage_status = calculated_status
             if tenant.status == STATUS_SUSPENDED_USAGE_LIMIT:
-                tenant.status = TENANT_ACTIVE
+                TenantLifecycle(self.db).set_usage_suspension(tenant.id, False, commit=False)
 
         plan.last_usage_recalculated_at = datetime.now(UTC)
         if persist_alerts:

@@ -153,3 +153,8 @@ Redirects permanentes desde las rutas legacy (preservan query params):
 ## Evidencia de pruebas
 
 El repositorio contiene cobertura backend específica para identidad, analítica, CRM, dashboard, Resend, assets, formularios, Cal.com, Google Calendar foundation, WhatsApp, voz, context schemas, Voice Experiences, resolución pública y snapshots publicados, webhooks, límites de uso, el pipeline de notificaciones y Agent Builder. Voice Runtime añade pruebas del token LiveKit, grants, aislamiento tenant, lifecycle/eventos, resolución de credenciales por tenant (incluye aislamiento cross-tenant de la API key) y del runtime standalone; `frontend/tests/livekit-adapter.spec.ts` cubre conexión, publicación única de micrófono y cleanup. El frontend incluye lint, typecheck, build y pruebas privadas/públicas existentes. La prueba WebRTC bidireccional con LiveKit y Ultravox reales sigue siendo una verificación de entorno, no una prueba unitaria; usar `docs-local/fase-4/WEBRTC_VOICE_RUNTIME_SMOKE.md`. Los resultados históricos están en `docs-local/` y deben ejecutarse nuevamente antes de cada entrega.
+
+
+## Sprint 9 ? Identity / Tenancy
+
+Identity / Tenancy is being migrated into `app.modules.identity` as module 9. The target ownership is five tables: `tenants`, `users`, `tenant_memberships`, `access_audit_logs`, and `tenant_feature_grants`. Local structural checks currently preserve 79 tables, 257 OpenAPI paths, and Alembic head `202610050001`. The PostgreSQL concurrency suite and its CI job remain release gates; this sprint is not complete until those checks pass on PostgreSQL.

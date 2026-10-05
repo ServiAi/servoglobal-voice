@@ -17,11 +17,11 @@ os.environ["EMAIL_ASSETS_STORAGE_PATH"] = "storage/test-email-assets"
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
-from app.api.auth.deps import AuthContext, get_current_auth_context
+from app.modules.identity.api.deps import AuthContext, get_current_auth_context
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.main import app
-from app.models.identity import Tenant, TenantMembership, User
+from app.modules.identity.infrastructure.models import Tenant, TenantMembership, User
 from app.modules.integrations.infrastructure.models import TenantEmailAsset
 from app.modules.integrations.application.email.asset_service import EmailAssetService
 from app.services.storage_service import StorageService

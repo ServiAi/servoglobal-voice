@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import verify_turnstile
 from app.core.config import settings
 from app.db.session import get_db
-from app.models.identity import Tenant
+from app.modules.identity.infrastructure.models import Tenant
 from app.modules.crm.public import CrmFacade
 from app.services.notification_service import run_demo_start_notification_task
 from app.services.tenant_usage_service import TenantUsageService

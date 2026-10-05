@@ -159,3 +159,8 @@ El evaluador admite composición `all`/`any` y rutas seguras sobre diccionarios;
 - Mantener cambios mínimos en routers/modelos compartidos.
 - Registrar metadata segura, no payloads completos.
 - Preservar idempotencia y aislamiento tenant en reintentos y webhooks.
+
+
+## Identity / Tenancy (Sprint 9)
+
+`app.modules.identity` owns authentication context, tenant and membership lifecycle, roles, feature grants, bootstrap, onboarding orchestration, and access auditing. Its ORM is isolated in `identity.infrastructure.models`; consumers use immutable views and the lazy `identity.public` facade. Auth0 and temporary Billing / Analytics adapters are composed in `identity.wiring`. No schema migration is part of this move. PostgreSQL concurrency acceptance is still required before marking the sprint complete.

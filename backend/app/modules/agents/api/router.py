@@ -8,7 +8,7 @@ from typing import Any, NoReturn
 from fastapi import APIRouter, Body, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.api.auth.deps import AuthContext, require_roles
+from app.modules.identity.api.deps import AuthContext, require_roles
 from app.db.session import get_db
 from app.modules.agents.api.schemas import (
     AgentCreateRequest,

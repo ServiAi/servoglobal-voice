@@ -19,7 +19,7 @@ from app.modules.notifications.domain.variables import (
 )
 from app.modules.crm.infrastructure.models import CrmActivity, CrmContact, CrmLead, CrmPipelineStage
 from app.modules.integrations.infrastructure.models import CrmWhatsAppMessage
-from app.models.identity import Tenant
+from app.modules.identity.infrastructure.models import Tenant
 from app.modules.integrations.infrastructure.models import (
     TenantIntegrationEvent,
     TenantWhatsAppConfig,

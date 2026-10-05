@@ -5,7 +5,7 @@ from typing import Any, NoReturn
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
-from app.api.auth.deps import AuthContext, require_roles
+from app.modules.identity.api.deps import AuthContext, require_roles
 from app.db.session import get_db
 from app.schemas.voice_context import (
     VoiceContextFieldRequest,
@@ -15,7 +15,7 @@ from app.schemas.voice_context import (
     VoiceContextSchemaResponse,
     VoiceContextSchemaSummaryResponse,
 )
-from app.services.tenant_feature_service import TenantFeatureDisabledError
+from app.modules.identity.public import FeatureDisabledError as TenantFeatureDisabledError
 from app.services.voice_context_service import (
     VoiceContextConflictError,
     VoiceContextNotFoundError,

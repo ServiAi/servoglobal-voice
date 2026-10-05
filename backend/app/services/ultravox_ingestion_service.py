@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.analytics import Agent, Call, CallEvent
-from app.models.identity import Tenant
+from app.modules.identity.infrastructure.models import Tenant
 from app.services.call_persistence_service import (
     CallPersistenceService,
     PersistCallInput,

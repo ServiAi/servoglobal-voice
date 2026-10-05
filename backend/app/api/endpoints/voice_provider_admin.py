@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.orm import Session
 
-from app.api.auth.deps import AuthContext
+from app.modules.identity.api.deps import AuthContext
 from app.api.deps import require_enabled_integration
 from app.db.session import get_db
 from app.modules.agents.public import (

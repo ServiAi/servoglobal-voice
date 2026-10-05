@@ -3,13 +3,13 @@ from __future__ import annotations
 from sqlalchemy import select
 
 from _integrations_2a_test_base import Integration2ATestCase
-from app.api.auth.deps import get_current_auth_context
+from app.modules.identity.api.deps import get_current_auth_context
 from app.db.session import SessionLocal
 from app.main import app
 from app.models.integrations import TenantVoiceAgentConfig
 from app.models.voice_context import TenantVoiceContextField, TenantVoiceContextSchema
 from app.models.voice_experiences import TenantVoiceExperience, TenantVoiceExperienceVersion
-from app.services.tenant_feature_service import VOICE_EXPERIENCES, TenantFeatureService
+from app.modules.identity.application.feature_service import VOICE_EXPERIENCES, TenantFeatureService
 
 
 class PublicVoiceExperienceTests(Integration2ATestCase):

@@ -12,7 +12,7 @@ from app.modules.tools.public import ToolDispatchService, ToolExecutionError
 from app.modules.voice.application.session_service import VoiceSessionService
 from app.modules.telephony.public import TelephonyFacade
 from app.modules.telephony.wiring import default_telephony_ports
-from app.services.tenant_feature_service import TenantFeatureService, VOICE_RUNTIME_V2
+from app.modules.identity.application.feature_service import TenantFeatureService, VOICE_RUNTIME_V2
 from test_outbound_voice_call_service import FakeSip, ReadyBackend
 
 

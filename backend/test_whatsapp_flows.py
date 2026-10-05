@@ -6,7 +6,7 @@ import unittest
 from sqlalchemy import select
 
 from _integrations_2a_test_base import Integration2ATestCase, SessionLocal
-from app.models.identity import Tenant, TenantMembership
+from app.modules.identity.infrastructure.models import Tenant, TenantMembership
 from app.modules.integrations.infrastructure.models import TenantIntegrationEvent, TenantWhatsAppFlow
 from app.modules.integrations.api.schemas import WhatsAppConfigRequest
 from app.modules.integrations.domain.whatsapp_flows import WhatsAppFlowCreateRequest, WhatsAppFlowUpdateRequest

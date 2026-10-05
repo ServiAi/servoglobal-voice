@@ -14,7 +14,7 @@ from app.modules.integrations.infrastructure.models import TenantIntegrationEven
 from app.modules.agents.api.schemas import AgentCreateRequest
 from app.modules.agents.application.service import AgentService
 from app.services.secret_manager_service import SecretManager
-from app.services.tenant_feature_service import AGENT_BUILDER, TenantFeatureService
+from app.modules.identity.application.feature_service import AGENT_BUILDER, TenantFeatureService
 from app.schemas.ultravox_admin import UltravoxToolSummary
 
 

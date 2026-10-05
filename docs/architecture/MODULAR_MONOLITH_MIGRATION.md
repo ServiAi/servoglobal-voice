@@ -239,3 +239,8 @@ Workflow Automation, Knowledge, Human Handoff, Agent Copilot, Evaluations y Obse
 
 - Una plantilla WhatsApp `approved` con parámetros internamente malformados falla al construir `WhatsAppTemplateContract`, antes de validar `recipient.strategy` (`test_platform_tool_contract_service.test_malformed_approved_template_fails_while_building_its_contract`).
 - Un binding de tool con `config` no-dict se normaliza a `{}` en la vista de lectura, aunque el schema del draft ya rechaza ese estado (`test_agent_builder_provider_agnostic.ToolBindingViewTests`).
+
+
+### Sprint 9 ? Identity / Tenancy
+
+Identity / Tenancy is the ninth real module. The migration centralizes its five owned tables, provider-neutral contracts, auth context, feature flags, onboarding, bootstrap, and audit services under `backend/app/modules/identity/`. No Alembic migration is intended. Closure depends on the seven PostgreSQL concurrency scenarios and CI execution; until then this entry is in progress.

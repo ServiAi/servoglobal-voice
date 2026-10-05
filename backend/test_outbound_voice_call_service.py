@@ -25,7 +25,7 @@ from app.modules.telephony.application.route_service import SipRouteService
 from app.modules.telephony.public import TelephonyFacade
 from app.modules.telephony.wiring import default_telephony_ports
 from app.services.outbound_voice_call_service import OutboundVoiceCallService
-from app.services.tenant_feature_service import (
+from app.modules.identity.application.feature_service import (
     LIVEKIT_SIP_OUTBOUND_V2,
     VOICE_RUNTIME_V2,
     TenantFeatureService,

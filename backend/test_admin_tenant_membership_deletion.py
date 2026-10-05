@@ -14,13 +14,13 @@ os.environ["DATABASE_URL"] = f"sqlite:///./{TEST_DB_PATH.as_posix()}"
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
-from app.api.auth.deps import AuthContext, get_current_auth_context
+from app.modules.identity.api.deps import AuthContext, get_current_auth_context
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.main import app
-from app.models.identity import Tenant, TenantMembership, User
+from app.modules.identity.infrastructure.models import Tenant, TenantMembership, User
 from app.modules.scheduling.infrastructure.google.oauth import GoogleCalendarOAuthService
-from app.services.onboarding_service import OnboardingService
+from app.modules.identity.wiring import create_onboarding_service
 
 
 class AdminTenantMembershipDeletionTests(unittest.TestCase):
@@ -93,13 +93,13 @@ class AdminTenantMembershipDeletionTests(unittest.TestCase):
 
     def test_cannot_delete_last_admin_membership(self):
         with SessionLocal() as db:
-            service = OnboardingService(db)
+            service = create_onboarding_service(db)
             with self.assertRaisesRegex(ValueError, "No se puede eliminar la única membresía de administrador"):
                 service.delete_membership(self.tenant_id, self.admin_membership_id)
 
     def test_delete_analyst_membership_service(self):
         with SessionLocal() as db:
-            service = OnboardingService(db)
+            service = create_onboarding_service(db)
             res = service.delete_membership(self.tenant_id, self.analyst_membership_id)
             self.assertTrue(res["deleted"])
 
@@ -117,7 +117,7 @@ class AdminTenantMembershipDeletionTests(unittest.TestCase):
             db.commit()
             m2_id = m2.id
 
-            service = OnboardingService(db)
+            service = create_onboarding_service(db)
             res = service.delete_membership(self.tenant_id, m2_id)
             self.assertTrue(res["deleted"])
 

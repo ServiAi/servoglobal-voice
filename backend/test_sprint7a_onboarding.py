@@ -22,22 +22,23 @@ os.environ.setdefault("AUTH0_AUDIENCE", "https://api.example.test")
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
-from app.api.auth.deps import AuthContext, get_current_auth_context
-from app.api.endpoints.admin.tenants import get_auth0_provisioning_service
+from app.modules.identity.api.deps import AuthContext, get_current_auth_context
+from app.modules.identity.api.deps import get_identity_provisioning_port
 from app.core.config import settings
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.main import app
 from app.models.analytics import Agent, Call, CallEvent, MetricSnapshotDaily
-from app.models.identity import AccessAuditLog, Tenant, TenantMembership, User
-from app.services.auth0_service import AuthenticatedIdentity
-from app.services.auth0_provisioning_service import (
+from app.modules.identity.infrastructure.models import AccessAuditLog, Tenant, TenantMembership, User
+from app.modules.identity.domain.contracts import ExternalIdentity
+from app.modules.identity.infrastructure.auth0.provisioning import (
     Auth0ProvisionedUser,
     Auth0ProvisioningError,
     Auth0ProvisioningService,
 )
-from app.services.identity_service import IdentityService
-from app.services.onboarding_service import OnboardingConsistencyError, OnboardingService
+from app.modules.identity.application.authentication_service import IdentityService
+from app.modules.identity.domain.errors import OnboardingConsistencyError
+from app.modules.identity.wiring import create_onboarding_service
 
 
 class FakeAuth0ProvisioningService:
@@ -194,7 +195,7 @@ class Sprint7AIdentityTests(unittest.TestCase):
         self.client = TestClient(app)
         self.admin_user = self._seed_internal_admin()
         self.auth0_provisioning = FakeAuth0ProvisioningService()
-        app.dependency_overrides[get_auth0_provisioning_service] = (
+        app.dependency_overrides[get_identity_provisioning_port] = (
             lambda: self.auth0_provisioning
         )
         self._override_auth_context()
@@ -285,7 +286,7 @@ class Sprint7AIdentityTests(unittest.TestCase):
             db.refresh(user)
             self.assertIsNone(user.external_auth_id)
 
-            identity = AuthenticatedIdentity(
+            identity = ExternalIdentity(
                 external_auth_id="auth0|link123",
                 email="link-test@test.com",
                 name="Preprovisioned User",
@@ -314,7 +315,7 @@ class Sprint7AIdentityTests(unittest.TestCase):
             db.commit()
             db.refresh(user)
 
-            identity = AuthenticatedIdentity(
+            identity = ExternalIdentity(
                 external_auth_id="auth0|newsub",
                 email="no-dup@test.com",
                 name="Existing User",
@@ -355,7 +356,7 @@ class Sprint7AIdentityTests(unittest.TestCase):
             db.commit()
 
             # Login with external_auth_id that matches user_a
-            identity = AuthenticatedIdentity(
+            identity = ExternalIdentity(
                 external_auth_id="auth0|matched",
                 email="user-a@test.com",
                 name="User A Correct",
@@ -393,7 +394,7 @@ class Sprint7AIdentityTests(unittest.TestCase):
             status="active",
         )
 
-        identity = AuthenticatedIdentity(
+        identity = ExternalIdentity(
             external_auth_id="auth0|new",
             email="ambiguous@test.com",
             name="Trying to Login",
@@ -549,7 +550,7 @@ class Sprint7AIdentityTests(unittest.TestCase):
         response = self.client.post("/api/v1/admin/tenants", json=payload)
 
         self.assertEqual(response.status_code, 502)
-        self.assertEqual(response.json()["detail"], "Auth0 unavailable")
+        self.assertEqual(response.json()["detail"], "Identity provider provisioning failed")
         with SessionLocal() as db:
             self.assertIsNone(db.scalar(select(Tenant).where(Tenant.slug == slug)))
             self.assertIsNone(db.scalar(select(User).where(User.email == email)))
@@ -561,7 +562,7 @@ class Sprint7AIdentityTests(unittest.TestCase):
         fake_auth0 = FakeAuth0ProvisioningService()
 
         with SessionLocal() as db:
-            service = OnboardingService(db, fake_auth0)
+            service = create_onboarding_service(db, fake_auth0)
             with self.assertRaises(OnboardingConsistencyError) as ctx:
                 service.create_tenant(
                     name="Broken Agency",
@@ -816,7 +817,7 @@ class Sprint7AIdentityTests(unittest.TestCase):
         deleted = self.client.delete(f"/api/v1/admin/tenants/{tenant_id}")
 
         self.assertEqual(deleted.status_code, 502)
-        self.assertEqual(deleted.json()["detail"], "Auth0 delete failed")
+        self.assertEqual(deleted.json()["detail"], "Identity provider deletion failed")
         with SessionLocal() as db:
             self.assertIsNotNone(db.scalar(select(Tenant).where(Tenant.id == tenant_id)))
             self.assertIsNotNone(db.scalar(select(User).where(User.email == email)))
@@ -893,7 +894,7 @@ class Sprint7AIdentityTests(unittest.TestCase):
             db.commit()
             db.refresh(user)
 
-            identity = AuthenticatedIdentity(
+            identity = ExternalIdentity(
                 external_auth_id="auth0|original",
                 email="existing-linked@test.com",
                 name="Updated Name",
@@ -910,7 +911,7 @@ class Sprint7AIdentityTests(unittest.TestCase):
 
     def test_new_user_created_when_no_match(self):
         """When no user matches email or external_auth_id, a new one is created."""
-        identity = AuthenticatedIdentity(
+        identity = ExternalIdentity(
             external_auth_id="auth0|brandnew",
             email="brandnew@test.com",
             name="Brand New",
@@ -940,7 +941,7 @@ class Sprint7AIdentityTests(unittest.TestCase):
             db.commit()
             db.refresh(user)
 
-            identity = AuthenticatedIdentity(
+            identity = ExternalIdentity(
                 external_auth_id="auth0|unverified",
                 email="unverified@test.com",
                 name="Unverified User",
@@ -966,7 +967,7 @@ class Sprint7AIdentityTests(unittest.TestCase):
             db.commit()
             db.refresh(user)
 
-            identity = AuthenticatedIdentity(
+            identity = ExternalIdentity(
                 external_auth_id="auth0|newsub2",
                 email="unverified-by-email@test.com",
                 name="Unverified By Email",

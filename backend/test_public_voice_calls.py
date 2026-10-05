@@ -20,7 +20,7 @@ from app.modules.crm.infrastructure.models import CrmVoiceCallEvent
 from app.models.integrations import TenantVoiceAgentConfig, TenantVoiceProviderConfig
 from app.models.voice_submissions import TenantVoiceContextSession, TenantVoiceRuntimeCall
 from app.services.secret_manager_service import SecretManager
-from app.services.tenant_feature_service import TenantFeatureService, VOICE_EXPERIENCES
+from app.modules.identity.application.feature_service import TenantFeatureService, VOICE_EXPERIENCES
 from app.services.voice_experience_service import VoiceExperienceService
 from app.services.voice_experience_runtime_provider import ProviderAmbiguousFailure, ProviderCallResult
 import test_public_voice_experience_submissions as submissions_tests

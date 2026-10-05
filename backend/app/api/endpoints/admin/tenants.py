@@ -6,9 +6,9 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.api.auth.deps import AuthContext, get_current_auth_context
+from app.modules.identity.api.deps import AuthContext, get_current_auth_context
 from app.db.session import get_db
-from app.models.identity import User
+from app.modules.identity.public import UserView as User
 from app.modules.scheduling.public import (
     BookingConfigRequest,
     BookingConfigResponse,
@@ -31,15 +31,15 @@ from app.schemas.onboarding import (
     TenantCreateRequest,
     TenantUpdateRequest,
 )
-from app.services.auth0_provisioning_service import (
-    Auth0ProvisioningError,
-    Auth0ProvisioningService,
-)
-from app.services.onboarding_service import (
+from app.modules.identity.api.deps import get_identity_provisioning_port
+from app.modules.identity.application.ports import IdentityProvisioningPort
+from app.modules.identity.domain.errors import (
+    IdentityProviderError,
     OnboardingConsistencyError,
-    OnboardingService,
+    ProvisioningConflictError,
     TenantDeletionBlockedError,
 )
+from app.modules.identity.wiring import create_onboarding_service
 from app.services.tenant_usage_service import TenantUsageService
 from app.services.voice_agent_service import VoiceAgentService
 from app.services.voice_config_service import VoiceConfigService
@@ -68,9 +68,6 @@ def get_current_internal_db(
     return db
 
 
-def get_auth0_provisioning_service() -> Auth0ProvisioningService:
-    return Auth0ProvisioningService()
-
 
 @router.post(
     "/tenants",
@@ -80,11 +77,9 @@ def get_auth0_provisioning_service() -> Auth0ProvisioningService:
 def create_tenant(
     payload: TenantCreateRequest,
     db: Session = Depends(get_current_internal_db),
-    auth0_provisioning_service: Auth0ProvisioningService = Depends(
-        get_auth0_provisioning_service
-    ),
+    provisioning: IdentityProvisioningPort = Depends(get_identity_provisioning_port),
 ) -> dict:
-    service = OnboardingService(db, auth0_provisioning_service)
+    service = create_onboarding_service(db, provisioning)
     agents = [a.model_dump() for a in payload.agents]
     try:
         result = service.create_tenant(
@@ -103,7 +98,7 @@ def create_tenant(
             status_code=status.HTTP_409_CONFLICT,
             detail=str(exc),
         ) from exc
-    except Auth0ProvisioningError as exc:
+    except (IdentityProviderError, ProvisioningConflictError) as exc:
         status_code = (
             status.HTTP_409_CONFLICT
             if exc.status_code == status.HTTP_409_CONFLICT
@@ -130,7 +125,7 @@ def create_tenant(
 def list_tenants(
     db: Session = Depends(get_current_internal_db),
 ) -> list[dict]:
-    service = OnboardingService(db)
+    service = create_onboarding_service(db)
     usage_service = TenantUsageService(db)
     tenants = service.list_tenants()
     return [
@@ -170,7 +165,7 @@ def get_tenant(
     tenant_id: str,
     db: Session = Depends(get_current_internal_db),
 ) -> dict:
-    service = OnboardingService(db)
+    service = create_onboarding_service(db)
     usage_service = TenantUsageService(db)
     tenant = service.get_tenant(tenant_id)
     members = service.list_memberships(tenant_id)
@@ -224,7 +219,7 @@ def update_tenant(
     payload: TenantUpdateRequest,
     db: Session = Depends(get_current_internal_db),
 ) -> dict:
-    service = OnboardingService(db)
+    service = create_onboarding_service(db)
     usage_service = TenantUsageService(db)
     tenant = service.update_tenant(
         tenant_id,
@@ -282,7 +277,7 @@ def get_tenant_usage(
     tenant_id: str,
     db: Session = Depends(get_current_internal_db),
 ) -> dict:
-    service = OnboardingService(db)
+    service = create_onboarding_service(db)
     tenant = service.get_tenant(tenant_id)
     usage_service = TenantUsageService(db)
     usage = usage_service.get_usage(tenant)
@@ -306,7 +301,7 @@ def update_tenant_plan(
     usage_service = TenantUsageService(db)
     try:
         usage = usage_service.update_plan(tenant_id, payload)
-        tenant = OnboardingService(db).get_tenant(tenant_id)
+        tenant = create_onboarding_service(db).get_tenant(tenant_id)
         savings = usage_service.get_savings_comparison(tenant)
     except ValueError as exc:
         raise HTTPException(
@@ -323,11 +318,9 @@ def update_tenant_plan(
 def delete_tenant(
     tenant_id: str,
     db: Session = Depends(get_current_internal_db),
-    auth0_provisioning_service: Auth0ProvisioningService = Depends(
-        get_auth0_provisioning_service
-    ),
+    provisioning: IdentityProvisioningPort = Depends(get_identity_provisioning_port),
 ) -> dict:
-    service = OnboardingService(db, auth0_provisioning_service)
+    service = create_onboarding_service(db, provisioning)
     try:
         return service.delete_tenant(tenant_id)
     except ValueError as exc:
@@ -340,7 +333,7 @@ def delete_tenant(
             status_code=status.HTTP_409_CONFLICT,
             detail=str(exc),
         ) from exc
-    except Auth0ProvisioningError as exc:
+    except (IdentityProviderError, ProvisioningConflictError) as exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=str(exc),
@@ -352,7 +345,7 @@ def list_tenant_memberships(
     tenant_id: str,
     db: Session = Depends(get_current_internal_db),
 ) -> list[dict]:
-    service = OnboardingService(db)
+    service = create_onboarding_service(db)
     memberships = service.list_memberships(tenant_id)
     return [
         {
@@ -377,11 +370,9 @@ def add_tenant_membership(
     tenant_id: str,
     payload: MembershipCreateRequest,
     db: Session = Depends(get_current_internal_db),
-    auth0_provisioning_service: Auth0ProvisioningService = Depends(
-        get_auth0_provisioning_service
-    ),
+    provisioning: IdentityProvisioningPort = Depends(get_identity_provisioning_port),
 ) -> dict:
-    service = OnboardingService(db, auth0_provisioning_service)
+    service = create_onboarding_service(db, provisioning)
     try:
         membership = service.add_membership(
             tenant_id,
@@ -418,11 +409,9 @@ def send_membership_password_reset(
     tenant_id: str,
     membership_id: str,
     db: Session = Depends(get_current_internal_db),
-    auth0_provisioning_service: Auth0ProvisioningService = Depends(
-        get_auth0_provisioning_service
-    ),
+    provisioning: IdentityProvisioningPort = Depends(get_identity_provisioning_port),
 ) -> dict:
-    service = OnboardingService(db, auth0_provisioning_service)
+    service = create_onboarding_service(db, provisioning)
     membership = service.get_membership(tenant_id, membership_id)
     if not membership or not membership.user or not membership.user.email:
         raise HTTPException(
@@ -434,26 +423,26 @@ def send_membership_password_reset(
     # Ensure user is provisioned in Auth0
     if membership.user.external_auth_id is None:
         try:
-            provisioned = auth0_provisioning_service.provision_tenant_admin(
+            provisioned = provisioning.provision_tenant_admin(
                 email=email,
                 name=membership.user.name or email.split("@")[0],
             )
-            membership.user.external_auth_id = provisioned.user_id
+            membership.user.external_auth_id = provisioned.external_auth_id
             db.commit()
-        except Auth0ProvisioningError as exc:
+        except (IdentityProviderError, ProvisioningConflictError) as exc:
             if exc.status_code != 409:
                 logger.warning("Auth0 provisioning error on password reset: %s", exc)
 
     error_detail: str | None = None
     try:
-        auth0_provisioning_service.trigger_password_reset_email(email=email)
-    except Auth0ProvisioningError as exc:
+        provisioning.trigger_password_reset_email(email=email)
+    except (IdentityProviderError, ProvisioningConflictError) as exc:
         error_detail = str(exc)
         logger.warning("trigger_password_reset_email failed: %s", exc)
 
     ticket_url = None
     try:
-        ticket_url = auth0_provisioning_service.create_password_change_ticket(email=email)
+        ticket_url = provisioning.create_password_change_ticket(email=email)
     except Exception as exc:
         logger.warning("create_password_change_ticket failed: %s", exc)
 
@@ -479,7 +468,7 @@ def delete_tenant_membership(
     membership_id: str,
     db: Session = Depends(get_current_internal_db),
 ) -> dict:
-    service = OnboardingService(db)
+    service = create_onboarding_service(db)
     try:
         return service.delete_membership(tenant_id, membership_id)
     except ValueError as exc:
@@ -499,7 +488,7 @@ def list_tenant_agents(
     tenant_id: str,
     db: Session = Depends(get_current_internal_db),
 ) -> list[dict]:
-    service = OnboardingService(db)
+    service = create_onboarding_service(db)
     agents = service.list_agents(tenant_id)
     return [
         {
@@ -525,7 +514,7 @@ def add_tenant_agent(
     payload: AgentCreateRequest,
     db: Session = Depends(get_current_internal_db),
 ) -> dict:
-    service = OnboardingService(db)
+    service = create_onboarding_service(db)
     try:
         agent = service.add_agent(
             tenant_id,
@@ -557,7 +546,7 @@ def get_tenant_booking_config_admin(
     db: Session = Depends(get_current_internal_db),
 ) -> Any:
     try:
-        OnboardingService(db).get_tenant(tenant_id)
+        create_onboarding_service(db).get_tenant(tenant_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return SchedulingFacade(db).get_booking_config(tenant_id)
@@ -570,7 +559,7 @@ def configure_tenant_calcom_admin(
     db: Session = Depends(get_current_internal_db),
 ) -> Any:
     try:
-        OnboardingService(db).get_tenant(tenant_id)
+        create_onboarding_service(db).get_tenant(tenant_id)
         return SchedulingFacade(db).configure_calcom(tenant_id, body)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
@@ -582,7 +571,7 @@ def test_tenant_calcom_admin(
     db: Session = Depends(get_current_internal_db),
 ) -> Any:
     try:
-        OnboardingService(db).get_tenant(tenant_id)
+        create_onboarding_service(db).get_tenant(tenant_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     try:
@@ -603,7 +592,7 @@ def get_tenant_calcom_slots_admin(
     db: Session = Depends(get_current_internal_db),
 ) -> Any:
     try:
-        OnboardingService(db).get_tenant(tenant_id)
+        create_onboarding_service(db).get_tenant(tenant_id)
         return SchedulingFacade(db).get_available_slots(
             tenant_id=tenant_id,
             date_input=date,
@@ -620,7 +609,7 @@ def list_tenant_google_calendar_connections_admin(
     db: Session = Depends(get_current_internal_db),
 ) -> Any:
     try:
-        OnboardingService(db).get_tenant(tenant_id)
+        create_onboarding_service(db).get_tenant(tenant_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return SchedulingFacade(db).list_google_connections(tenant_id)
@@ -633,7 +622,7 @@ def delete_tenant_google_calendar_connection_admin(
     db: Session = Depends(get_current_internal_db),
 ) -> Any:
     try:
-        OnboardingService(db).get_tenant(tenant_id)
+        create_onboarding_service(db).get_tenant(tenant_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     try:
@@ -651,7 +640,7 @@ def create_tenant_lead_booking_admin(
     db: Session = Depends(get_current_internal_db),
 ) -> Any:
     try:
-        OnboardingService(db).get_tenant(tenant_id)
+        create_onboarding_service(db).get_tenant(tenant_id)
         return SchedulingFacade(db).create_booking(
             tenant_id=tenant_id, lead_id=lead_id, command=CreateBookingCommand(**body.model_dump())
         )
@@ -666,7 +655,7 @@ def list_tenant_lead_bookings_admin(
     db: Session = Depends(get_current_internal_db),
 ) -> Any:
     try:
-        OnboardingService(db).get_tenant(tenant_id)
+        create_onboarding_service(db).get_tenant(tenant_id)
         return SchedulingFacade(db).list_lead_bookings(tenant_id=tenant_id, lead_id=lead_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
@@ -685,7 +674,7 @@ def get_tenant_voice_config_admin(
     db: Session = Depends(get_current_internal_db),
 ) -> Any:
     try:
-        OnboardingService(db).get_tenant(tenant_id)
+        create_onboarding_service(db).get_tenant(tenant_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return VoiceConfigService(db).get_config_response(tenant_id)
@@ -701,7 +690,7 @@ def configure_tenant_voice_admin(
     db: Session = Depends(get_current_internal_db),
 ) -> Any:
     try:
-        OnboardingService(db).get_tenant(tenant_id)
+        create_onboarding_service(db).get_tenant(tenant_id)
         config = VoiceConfigService(db).upsert_provider_config(tenant_id, body)
         return VoiceConfigService(db).get_config_response(tenant_id, config.provider)
     except ValueError as exc:
@@ -716,7 +705,7 @@ def test_tenant_voice_admin(
     db: Session = Depends(get_current_internal_db),
 ) -> Any:
     try:
-        OnboardingService(db).get_tenant(tenant_id)
+        create_onboarding_service(db).get_tenant(tenant_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     try:
@@ -739,7 +728,7 @@ def list_tenant_voice_agents_admin(
     db: Session = Depends(get_current_internal_db),
 ) -> Any:
     try:
-        OnboardingService(db).get_tenant(tenant_id)
+        create_onboarding_service(db).get_tenant(tenant_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     service = VoiceAgentService(db)
@@ -757,7 +746,7 @@ def create_tenant_voice_agent_admin(
     db: Session = Depends(get_current_internal_db),
 ) -> Any:
     try:
-        OnboardingService(db).get_tenant(tenant_id)
+        create_onboarding_service(db).get_tenant(tenant_id)
         service = VoiceAgentService(db)
         agent = service.create_or_update_agent_config(tenant_id, body)
         return service.response(agent)
@@ -776,7 +765,7 @@ def update_tenant_voice_agent_admin(
     db: Session = Depends(get_current_internal_db),
 ) -> Any:
     try:
-        OnboardingService(db).get_tenant(tenant_id)
+        create_onboarding_service(db).get_tenant(tenant_id)
         service = VoiceAgentService(db)
         agent = service.create_or_update_agent_config(tenant_id, body, agent_config_id)
         return service.response(agent)

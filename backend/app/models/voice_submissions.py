@@ -7,7 +7,7 @@ from sqlalchemy import DateTime, ForeignKey, Index, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
-from app.models.identity import _utcnow, _uuid
+from app.db.mixins import _utcnow, _uuid
 
 
 class TenantVoiceExperienceSubmission(Base):

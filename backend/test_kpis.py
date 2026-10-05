@@ -5,11 +5,11 @@ os.environ.setdefault('DATABASE_URL', 'postgresql+psycopg://serviai:serviai@loca
 
 from fastapi.testclient import TestClient
 from app.main import app
-from app.api.auth.deps import get_current_identity
-from app.services.auth0_service import AuthenticatedIdentity
+from app.modules.identity.api.deps import get_current_identity
+from app.modules.identity.domain.contracts import ExternalIdentity
 
 async def _identity_override():
-    return AuthenticatedIdentity(
+    return ExternalIdentity(
         external_auth_id="auth0|69f7dba26aea0d1fa52cdd37",
         email="ventas-ia@serviglobal.co",
         name="Test Staging User",

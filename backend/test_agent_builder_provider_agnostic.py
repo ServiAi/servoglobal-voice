@@ -35,7 +35,7 @@ from app.modules.voice_providers.public import (
     ProviderVoiceSelection,
     VoiceProviderError,
 )
-from app.services.tenant_feature_service import AGENT_BUILDER, TenantFeatureService
+from app.modules.identity.application.feature_service import AGENT_BUILDER, TenantFeatureService
 
 
 class FakeVoiceProvider:

@@ -9,7 +9,7 @@ from _integrations_2a_test_base import Integration2ATestCase
 from app.core.config import settings
 from app.db.session import SessionLocal
 from app.security.voice_runtime_auth import create_runtime_token
-from app.services.tenant_feature_service import AGENT_BUILDER, CUSTOM_HTTP_TOOLS, TenantFeatureService
+from app.modules.identity.application.feature_service import AGENT_BUILDER, CUSTOM_HTTP_TOOLS, TenantFeatureService
 from app.modules.tools.infrastructure.http_safety import SafeHttpClient
 from app.modules.voice.application.session_service import VoiceSessionService
 
