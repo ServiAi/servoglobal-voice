@@ -1,10 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
-from app.models.analytics import Call
-from app.models.crm import CrmCallContext
-
+from app.modules.crm.public import CallRef
 
 NORMALIZED_CONTEXT_FIELDS = (
     "name",
@@ -51,8 +50,8 @@ class CrmContextExtractorService:
     def extract(
         self,
         payload: dict[str, Any],
-        call_record: Call | None = None,
-        call_context: CrmCallContext | None = None,
+        call_record: CallRef | None = None,
+        call_context: Mapping[str, Any] | None = None,
     ) -> dict[str, Any]:
         normalized = {field: None for field in NORMALIZED_CONTEXT_FIELDS}
         field_sources: dict[str, str] = {}
@@ -74,8 +73,8 @@ class CrmContextExtractorService:
     def _sources(
         self,
         payload: dict[str, Any],
-        call_record: Call | None,
-        call_context: CrmCallContext | None,
+        call_record: CallRef | None,
+        call_context: Mapping[str, Any] | None,
     ):
         call = payload.get("call") if isinstance(payload.get("call"), dict) else payload
         initial_state = call.get("initialState")
@@ -84,10 +83,7 @@ class CrmContextExtractorService:
         request_context_snake = call.get("request_context")
 
         if call_context is not None:
-            yield "crm_call_contexts", {
-                field: getattr(call_context, field, None)
-                for field in NORMALIZED_CONTEXT_FIELDS
-            }
+            yield "crm_call_contexts", {field: call_context.get(field) for field in NORMALIZED_CONTEXT_FIELDS}
         yield "payload.call.metadata", call.get("metadata")
         yield "payload.metadata", payload.get("metadata")
         yield "payload.meta", payload.get("meta")

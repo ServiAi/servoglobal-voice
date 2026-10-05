@@ -12,7 +12,7 @@ from datetime import datetime
 
 from sqlalchemy.orm import Session
 
-__all__ = ["VoiceCallProjectionFacade"]
+__all__ = ["CallLookup", "VoiceCallProjectionFacade"]
 
 
 class VoiceCallProjectionFacade:
@@ -57,3 +57,25 @@ class VoiceCallProjectionFacade:
         )
 
         return VoiceCallProjectionService(self.db).projection_exists(session_id, tenant_id)
+
+
+class CallLookup:
+    """Read-only lookup of Analytics' call ids (used by CRM's lead resolution)."""
+
+    def __init__(self, db: Session) -> None:
+        self.db = db
+
+    def find_call_id(self, tenant_id: str, external_provider: str | None, external_call_id: str) -> str | None:
+        from sqlalchemy import select
+
+        from app.models.analytics import Call
+
+        return self.db.scalar(
+            select(Call.id)
+            .where(
+                Call.tenant_id == tenant_id,
+                Call.external_provider == external_provider,
+                Call.external_call_id == external_call_id,
+            )
+            .limit(1)
+        )

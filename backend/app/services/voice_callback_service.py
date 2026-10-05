@@ -2,23 +2,31 @@ from __future__ import annotations
 
 import hashlib
 import logging
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
-from typing import Callable
 
 from fastapi import HTTPException
-from sqlalchemy import select, update
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.models.crm import CrmActivity, CrmVoiceCall
 from app.models.identity import Tenant
 from app.models.integrations import TenantVoiceAgentConfig
 from app.models.voice_context import TenantVoiceContextField
-from app.models.voice_experiences import TenantVoiceExperience, TenantVoiceExperienceVersion
+from app.models.voice_experiences import (
+    TenantVoiceExperience,
+    TenantVoiceExperienceVersion,
+)
 from app.models.voice_submissions import (
     TenantVoiceContextSession,
     TenantVoiceExperienceSubmission,
     TenantVoiceExperienceSubmissionValue,
+)
+from app.modules.crm.public import (
+    CreateVoiceCallCommand,
+    CrmFacade,
+    CrmVoiceCalls,
+    UpdateVoiceCallCommand,
 )
 from app.modules.telephony.public import (
     CapacityFacade,
@@ -31,10 +39,13 @@ from app.services.public_voice_call_service import PublicCallFailure
 from app.services.tenant_feature_service import TenantFeatureService
 from app.services.tenant_usage_service import TenantUsageService
 from app.services.voice_call_service import VoiceCallService
-from app.services.voice_client import VoiceClient, VoiceClientConfig, VoiceSipRouteConfig
+from app.services.voice_client import (
+    VoiceClient,
+    VoiceClientConfig,
+    VoiceSipRouteConfig,
+)
 from app.services.voice_config_service import VoiceConfigService
 from app.services.voice_webhook_service import VoiceWebhookService
-
 
 logger = logging.getLogger(__name__)
 CLAIM_BATCH_SIZE = 25
@@ -105,23 +116,18 @@ class PublicVoiceCallbackService:
                     ):
                         raise PublicCallFailure(404, "experience_unavailable")
 
-                    existing = db.scalar(
-                        select(CrmVoiceCall)
-                        .where(
-                            CrmVoiceCall.source_submission_id == context_session.submission_id
-                        )
-                        .with_for_update()
-                    )
+                    calls = CrmVoiceCalls(db)
+                    existing = calls.find_by_source_submission(context_session.submission_id, for_update=True)
                     if existing is not None:
                         if existing.status == "failed":
                             # A prior attempt failed (e.g. transient SIP error); let the
                             # worker pick it back up instead of dead-ending the customer.
-                            existing.status = "requested"
-                            existing.error_message = None
-                            existing.provider_call_id = None
-                            existing.provider_session_id = None
-                            existing.provider_attempt_started_at = None
-                            existing.started_at = None
+                            calls.update(existing.id, UpdateVoiceCallCommand(status="requested",
+                                error_message=None,
+                                provider_call_id=None,
+                                provider_session_id=None,
+                                provider_attempt_started_at=None,
+                                started_at=None))
                         return PublicVoiceCallbackResponse(status="accepted")
                     if context_session.status != "active":
                         raise PublicCallFailure(409, "context_session_unavailable")
@@ -190,8 +196,7 @@ class PublicVoiceCallbackService:
                             route.max_concurrent_calls,
                         )
 
-                    call = CrmVoiceCall(
-                        tenant_id=context_session.tenant_id,
+                    call = calls.create(CreateVoiceCallCommand(tenant_id=context_session.tenant_id,
                         lead_id=submission.crm_lead_id,
                         contact_id=submission.crm_contact_id,
                         source_submission_id=submission.id,
@@ -201,27 +206,22 @@ class PublicVoiceCallbackService:
                         direction="outbound",
                         status="requested",
                         to_phone=phone.e164,
-                        from_number=route.caller_id,
-                    )
-                    db.add(call)
-                    db.flush()
+                        from_number=route.caller_id), flush=True)
                     if submission.crm_contact_id:
-                        db.add(
-                            CrmActivity(
-                                tenant_id=context_session.tenant_id,
-                                lead_id=submission.crm_lead_id,
-                                contact_id=submission.crm_contact_id,
-                                activity_type="voice_call_requested",
-                                title="Llamada saliente solicitada",
-                                description="Solicitud creada desde una experiencia de voz publicada.",
-                                occurred_at=now,
-                                deduplication_key=f"voice-callback-request:{submission.id}",
-                                payload_json={
-                                    "voice_call_id": call.id,
-                                    "provider": agent.provider,
-                                    "status": "requested",
-                                },
-                            )
+                        CrmFacade(db).stage_activity(
+                            tenant_id=context_session.tenant_id,
+                            lead_id=submission.crm_lead_id,
+                            contact_id=submission.crm_contact_id,
+                            activity_type="voice_call_requested",
+                            title="Llamada saliente solicitada",
+                            description="Solicitud creada desde una experiencia de voz publicada.",
+                            occurred_at=now,
+                            deduplication_key=f"voice-callback-request:{submission.id}",
+                            payload={
+                                "voice_call_id": call.id,
+                                "provider": agent.provider,
+                                "status": "requested",
+                            },
                         )
                     if not context_session.mark_consumed(db, now=now, commit=False):
                         raise PublicCallFailure(409, "context_session_unavailable")
@@ -235,11 +235,7 @@ class PublicVoiceCallbackService:
                 raise PublicCallFailure(429, "call_capacity_reached") from None
             except IntegrityError:
                 db.rollback()
-                existing = db.scalar(
-                    select(CrmVoiceCall.id).where(
-                        CrmVoiceCall.source_submission_id == context_session.submission_id
-                    )
-                )
+                existing = CrmVoiceCalls(db).find_by_source_submission(context_session.submission_id)
                 if existing is None:
                     raise
         return PublicVoiceCallbackResponse(status="accepted")
@@ -277,25 +273,16 @@ class VoiceCallbackWorker:
         reconcile_cutoff = now - timedelta(seconds=self.reconcile_after_seconds)
         with self.session_factory() as db:
             with db.begin():
-                call = db.scalar(
-                    select(CrmVoiceCall)
-                    .where(
-                        CrmVoiceCall.status.in_(("queued", "in_progress")),
-                        CrmVoiceCall.provider_call_id.is_not(None),
-                        CrmVoiceCall.updated_at < reconcile_cutoff,
-                    )
-                    .order_by(CrmVoiceCall.updated_at)
-                    .with_for_update(skip_locked=True)
-                    .limit(1)
-                )
+                calls = CrmVoiceCalls(db)
+                call = calls.lock_stale_active(("queued", "in_progress"), reconcile_cutoff)
                 if call is None:
                     return False
-                call.updated_at = now
+                calls.update(call.id, UpdateVoiceCallCommand(updated_at=now))
                 call_id = call.id
 
         timed_out = False
         with self.session_factory() as db:
-            call = db.get(CrmVoiceCall, call_id)
+            call = CrmVoiceCalls(db).get(call_id)
             if call is None or call.status not in {"queued", "in_progress"}:
                 return True
             started_at = call.started_at or call.provider_attempt_started_at or call.created_at
@@ -352,11 +339,9 @@ class VoiceCallbackWorker:
                     resulting_status=result["call_status"],
                     forced=timed_out,
                 )
-            if timed_out:
-                call = db.get(CrmVoiceCall, call_id)
-                if call is not None:
-                    call.error_message = "Provider completion timeout."
-                    db.commit()
+            if timed_out and CrmVoiceCalls(db).get(call_id) is not None:
+                CrmVoiceCalls(db).update(call_id, UpdateVoiceCallCommand(error_message="Provider completion timeout."))
+                db.commit()
             return True
 
     @staticmethod
@@ -367,42 +352,23 @@ class VoiceCallbackWorker:
         cutoff = datetime.now(UTC) - timedelta(seconds=self.starting_lease_seconds)
         with self.session_factory() as db:
             with db.begin():
-                result = db.execute(
-                    update(CrmVoiceCall)
-                    .where(
-                        CrmVoiceCall.status == "starting",
-                        CrmVoiceCall.provider_attempt_started_at.is_not(None),
-                        CrmVoiceCall.provider_attempt_started_at < cutoff,
-                    )
-                    .values(status="requested", provider_attempt_started_at=None)
-                )
-            if result.rowcount:
+                recovered = CrmVoiceCalls(db).recover_stale_starting(cutoff)
+            if recovered:
                 logger.warning(
                     "Recovered voice callback calls stuck in starting",
-                    extra={"recovered_count": result.rowcount},
+                    extra={"recovered_count": recovered},
                 )
 
     def _claim(self) -> str | None:
         with self.session_factory() as db:
             with db.begin():
-                candidates = db.scalars(
-                    select(CrmVoiceCall)
-                    .where(
-                        CrmVoiceCall.status == "requested",
-                        CrmVoiceCall.direction == "outbound",
-                        CrmVoiceCall.source_submission_id.is_not(None),
-                        CrmVoiceCall.sip_route_id.is_not(None),
-                    )
-                    .order_by(CrmVoiceCall.created_at)
-                    .with_for_update(skip_locked=True)
-                    .limit(CLAIM_BATCH_SIZE)
-                ).all()
+                calls = CrmVoiceCalls(db)
+                candidates = calls.lock_requested_callbacks(CLAIM_BATCH_SIZE)
 
                 for call in candidates:
                     route = SipRouteFacade(db).lock_route(call.sip_route_id)
                     if route is None or route.status != "active":
-                        call.status = "failed"
-                        call.error_message = "Outbound SIP route is unavailable."
+                        calls.update(call.id, UpdateVoiceCallCommand(status="failed", error_message="Outbound SIP route is unavailable."))
                         return call.id
                     active_count = CapacityFacade(db).callbacks_in_flight(
                         tenant_id=call.tenant_id,
@@ -412,15 +378,15 @@ class VoiceCallbackWorker:
                         # This tenant's route is at capacity; try the next
                         # oldest candidate instead of starving other tenants.
                         continue
-                    call.status = "starting"
-                    call.provider_attempt_started_at = datetime.now(UTC)
+                    calls.update(call.id, UpdateVoiceCallCommand(status="starting", provider_attempt_started_at=datetime.now(UTC)))
                     return call.id
 
                 return None
 
     def _start(self, call_id: str) -> None:
         with self.session_factory() as db:
-            call = db.get(CrmVoiceCall, call_id)
+            calls = CrmVoiceCalls(db)
+            call = calls.get(call_id)
             if call is None or call.status != "starting":
                 return
             config_service = VoiceConfigService(db)
@@ -474,11 +440,11 @@ class VoiceCallbackWorker:
                     context=context,
                 )
                 normalized = client.normalize_provider_response(call.provider, response)
-                call.provider_call_id = normalized.get("provider_call_id")
-                call.provider_session_id = normalized.get("provider_session_id")
-                call.status = "queued"
-                call.started_at = datetime.now(UTC)
-                call.error_message = None
+                call = calls.update(call.id, UpdateVoiceCallCommand(provider_call_id=normalized.get("provider_call_id"),
+                    provider_session_id=normalized.get("provider_session_id"),
+                    status="queued",
+                    started_at=datetime.now(UTC),
+                    error_message=None))
                 db.commit()
                 VoiceCallService(db).record_integration_event(
                     tenant_id=call.tenant_id,
@@ -491,8 +457,7 @@ class VoiceCallbackWorker:
                     },
                 )
             except Exception as exc:
-                call.status = "failed"
-                call.error_message = client.sanitize_voice_error(exc)
+                calls.update(call.id, UpdateVoiceCallCommand(status="failed", error_message=client.sanitize_voice_error(exc)))
                 db.commit()
                 logger.warning(
                     "Voice callback start failed",

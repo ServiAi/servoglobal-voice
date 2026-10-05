@@ -5,7 +5,7 @@ from unittest.mock import patch, MagicMock
 
 from _integrations_2a_test_base import Integration2ATestCase, SessionLocal
 from app.models.integrations import TenantIntegrationEvent
-from app.models.crm import CrmActivity, CrmVoiceCall
+from app.modules.crm.infrastructure.models import CrmActivity, CrmVoiceCall
 
 
 class VoiceWebhookSafetyTests(Integration2ATestCase):
@@ -51,7 +51,7 @@ class VoiceWebhookSafetyTests(Integration2ATestCase):
 
     def test_voice_webhook_unreconciled_does_not_create_voice_call_event(self):
         from app.services.voice_webhook_service import VoiceWebhookService
-        from app.models.crm import CrmVoiceCallEvent
+        from app.modules.crm.infrastructure.models import CrmVoiceCallEvent
 
         with SessionLocal() as db:
             service = VoiceWebhookService(db)

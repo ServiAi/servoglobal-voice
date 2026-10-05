@@ -1,26 +1,34 @@
 from __future__ import annotations
 
-import re
 import logging
+import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session
 
-from app.models.crm import CrmActivity, CrmContact, CrmLead, CrmWhatsAppMessage
+from app.models.crm import CrmWhatsAppMessage
 from app.models.integrations import TenantWhatsAppConfig
 from app.models.notifications import NotificationDelivery
+from app.modules.crm.public import ContactProfile, CrmFacade, LeadProfile
 from app.schemas.crm import WhatsAppActionRequest, WhatsAppActionResponse
-from app.schemas.integrations import WhatsAppTestMessageRequest, WhatsAppTestMessageResponse
-from app.services.crm_activity_service import CrmActivityService
+from app.schemas.integrations import (
+    WhatsAppTestMessageRequest,
+    WhatsAppTestMessageResponse,
+)
 from app.services.integration_event_service import IntegrationEventService
-from app.services.notification_delivery_status_service import NotificationDeliveryStatusService
-from app.services.whatsapp_client import WhatsAppCloudClient, WhatsAppCloudClientError, sanitize_whatsapp_error
+from app.services.notification_delivery_status_service import (
+    NotificationDeliveryStatusService,
+)
+from app.services.whatsapp_client import (
+    WhatsAppCloudClient,
+    WhatsAppCloudClientError,
+    sanitize_whatsapp_error,
+)
 from app.services.whatsapp_config_service import WhatsAppConfigService
 from app.services.whatsapp_template_service import WhatsAppTemplateService
-
 
 logger = logging.getLogger(__name__)
 
@@ -79,20 +87,16 @@ class WhatsAppMessageService:
         self.configs = WhatsAppConfigService(db, client=self.client)
         self.templates = WhatsAppTemplateService(db)
         self.events = IntegrationEventService(db)
-        self.activities = CrmActivityService(db)
+        self.crm = CrmFacade(db)
         self.delivery_status = NotificationDeliveryStatusService(db)
 
-    def _get_lead(self, tenant_id: str, lead_id: str) -> CrmLead:
-        lead = self.db.scalar(
-            select(CrmLead)
-            .options(joinedload(CrmLead.contact))
-            .where(CrmLead.tenant_id == tenant_id, CrmLead.id == lead_id)
-        )
+    def _get_lead(self, tenant_id: str, lead_id: str) -> LeadProfile:
+        lead = self.crm.get_lead_profile(tenant_id, lead_id)
         if lead is None:
             raise ValueError("Lead not found")
         return lead
 
-    def _lead_variables(self, lead: CrmLead, request: WhatsAppActionRequest) -> dict[str, Any]:
+    def _lead_variables(self, lead: LeadProfile, request: WhatsAppActionRequest) -> dict[str, Any]:
         contact = lead.contact
         return {
             "contact_name": contact.name,
@@ -177,7 +181,7 @@ class WhatsAppMessageService:
             message.error_message = error_message
             message.failed_at = datetime.now(timezone.utc)
             self.db.commit()
-            self.activities.create_activity(
+            self.crm.record_activity(
                 tenant_id=tenant_id,
                 lead_id=lead.id,
                 contact_id=contact.id,
@@ -185,7 +189,7 @@ class WhatsAppMessageService:
                 title="WhatsApp no enviado",
                 outcome="failed",
                 deduplication_key=f"whatsapp_failed:{message.id}",
-                payload_json={"message_id": message.id, "status": "failed"},
+                payload={"message_id": message.id, "status": "failed"},
             )
             self.events.record_event(
                 tenant_id=tenant_id,
@@ -203,7 +207,7 @@ class WhatsAppMessageService:
         message.sent_at = now
         self.db.commit()
         self.db.refresh(message)
-        self.activities.create_activity(
+        self.crm.record_activity(
             tenant_id=tenant_id,
             lead_id=lead.id,
             contact_id=contact.id,
@@ -212,7 +216,7 @@ class WhatsAppMessageService:
             description=f"Plantilla: {template.name}",
             outcome="sent",
             deduplication_key=f"whatsapp_sent:{message.id}",
-            payload_json={"message_id": message.id, "template_key": template.template_key, "status": "sent"},
+            payload={"message_id": message.id, "template_key": template.template_key, "status": "sent"},
         )
         self.events.record_event(
             tenant_id=tenant_id,
@@ -267,17 +271,15 @@ class WhatsAppMessageService:
         )
         components = self.templates.build_approved_template_components(template, variables)
 
-        lead: CrmLead | None = None
+        lead: LeadProfile | None = None
         if lead_id:
-            lead = self.db.scalar(select(CrmLead).where(CrmLead.tenant_id == tenant_id, CrmLead.id == lead_id))
+            lead = self.crm.get_lead_profile(tenant_id, lead_id)
             if lead is None:
                 raise ValueError("Lead not found")
 
-        contact: CrmContact | None = None
+        contact: ContactProfile | None = None
         if contact_id:
-            contact = self.db.scalar(
-                select(CrmContact).where(CrmContact.tenant_id == tenant_id, CrmContact.id == contact_id)
-            )
+            contact = self.crm.get_contact_profile(tenant_id, contact_id)
             if contact is None:
                 raise ValueError("Contact not found")
 
@@ -360,7 +362,7 @@ class WhatsAppMessageService:
         self.db.refresh(message)
 
         if message.lead_id and message.contact_id:
-            self.activities.create_activity(
+            self.crm.record_activity(
                 tenant_id=tenant_id,
                 lead_id=message.lead_id,
                 contact_id=message.contact_id,
@@ -369,7 +371,7 @@ class WhatsAppMessageService:
                 description=f"Plantilla: {template.name}",
                 outcome="sent",
                 deduplication_key=f"whatsapp_notification_sent:{message.id}",
-                payload_json={"message_id": message.id, "template_key": template.template_key, "status": "sent"},
+                payload={"message_id": message.id, "template_key": template.template_key, "status": "sent"},
             )
 
         self.events.record_event(
@@ -542,7 +544,7 @@ class WhatsAppMessageService:
                 resource_id=message.id,
             )
             if message.lead_id and message.contact_id:
-                self.activities.create_activity(
+                self.crm.record_activity(
                     tenant_id=message.tenant_id,
                     lead_id=message.lead_id,
                     contact_id=message.contact_id,
@@ -550,7 +552,7 @@ class WhatsAppMessageService:
                     title=f"WhatsApp {status}",
                     outcome=status,
                     deduplication_key=f"whatsapp_status:{provider_message_id}:{status}",
-                    payload_json={"message_id": message.id, "status": status},
+                    payload={"message_id": message.id, "status": status},
                 )
             count += 1
         return count
@@ -596,7 +598,7 @@ class WhatsAppMessageService:
             self.db.add(message)
             self.db.commit()
             self.db.refresh(message)
-            self.activities.create_activity(
+            self.crm.record_activity(
                 tenant_id=config.tenant_id,
                 lead_id=lead.id,
                 contact_id=contact.id,
@@ -604,7 +606,7 @@ class WhatsAppMessageService:
                 title="WhatsApp recibido",
                 outcome="received",
                 deduplication_key=f"whatsapp_inbound:{provider_message_id or message.id}",
-                payload_json={"message_id": message.id, "status": "received"},
+                payload={"message_id": message.id, "status": "received"},
             )
             self.events.record_event(
                 tenant_id=config.tenant_id,
@@ -617,15 +619,8 @@ class WhatsAppMessageService:
             count += 1
         return count
 
-    def _find_contact(self, tenant_id: str, phone: str | None) -> CrmContact | None:
-        normalized = normalize_phone(phone)
-        if not normalized:
-            return None
-        contacts = self.db.scalars(select(CrmContact).where(CrmContact.tenant_id == tenant_id)).all()
-        for contact in contacts:
-            if normalize_phone(contact.phone_normalized) == normalized or normalize_phone(contact.phone) == normalized:
-                return contact
-        return None
+    def _find_contact(self, tenant_id: str, phone: str | None) -> ContactProfile | None:
+        return self.crm.find_contact_by_phone_digits(tenant_id, phone)
 
     def _config_from_value(self, value: dict[str, Any]) -> TenantWhatsAppConfig | None:
         metadata = value.get("metadata") or {}
@@ -636,9 +631,5 @@ class WhatsAppMessageService:
             select(TenantWhatsAppConfig).where(TenantWhatsAppConfig.phone_number_id == str(phone_number_id))
         )
 
-    def _find_open_lead(self, tenant_id: str, contact_id: str) -> CrmLead | None:
-        return self.db.scalar(
-            select(CrmLead)
-            .where(CrmLead.tenant_id == tenant_id, CrmLead.contact_id == contact_id, CrmLead.status == "open")
-            .order_by(CrmLead.created_at.desc())
-        )
+    def _find_open_lead(self, tenant_id: str, contact_id: str) -> LeadProfile | None:
+        return self.crm.get_open_lead_for_contact(tenant_id, contact_id)

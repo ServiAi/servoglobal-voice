@@ -6,14 +6,13 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.db.session import SessionLocal
 from app.domain.events import _check_json_safe
-from app.models.crm import CrmContact, CrmLead, CrmVoiceCall
 from app.models.notifications import DomainEvent
+from app.modules.crm.public import CrmFacade, CrmVoiceCalls, VoiceCallView
 from app.modules.scheduling.public import (
     BookingNotFoundError,
     BookingView,
@@ -168,12 +167,8 @@ class NotificationEventPipeline:
         try:
             current_time = self._resolve_now(now)
 
-            call = self.db.scalar(
-                select(CrmVoiceCall).where(
-                    CrmVoiceCall.tenant_id == tenant_id, CrmVoiceCall.id == voice_call_id
-                )
-            )
-            if call is None:
+            call = CrmVoiceCalls(self.db).get(voice_call_id)
+            if call is None or call.tenant_id != tenant_id:
                 return _safe_result(error_code="voice_call_not_found")
 
             event_type = _CALL_STATUS_EVENT_MAP.get(call.status)
@@ -368,16 +363,14 @@ class NotificationEventPipeline:
             payload["customer"] = customer
 
         if booking.lead_id:
-            lead = self.db.scalar(
-                select(CrmLead).where(CrmLead.tenant_id == tenant_id, CrmLead.id == booking.lead_id)
-            )
+            lead = CrmFacade(self.db).get_lead_profile(tenant_id, booking.lead_id)
             if lead is not None:
                 payload["lead"] = {"id": lead.id, "status": lead.status}
 
         payload["custom"] = self._safe_custom({"notification_custom": booking.notification_custom})
         return payload
 
-    def _call_payload(self, *, tenant_id: str, call: CrmVoiceCall) -> dict[str, Any]:
+    def _call_payload(self, *, tenant_id: str, call: VoiceCallView) -> dict[str, Any]:
         summary = call.summary[:4000] if isinstance(call.summary, str) else call.summary
         call_dict: dict[str, Any] = {
             "id": call.id,
@@ -391,9 +384,7 @@ class NotificationEventPipeline:
         payload: dict[str, Any] = {"call": call_dict}
 
         if call.contact_id:
-            contact = self.db.scalar(
-                select(CrmContact).where(CrmContact.tenant_id == tenant_id, CrmContact.id == call.contact_id)
-            )
+            contact = CrmFacade(self.db).get_contact_profile(tenant_id, call.contact_id)
             if contact is not None:
                 customer = {
                     "name": contact.name or None,
@@ -404,9 +395,7 @@ class NotificationEventPipeline:
                     payload["customer"] = customer
 
         if call.lead_id:
-            lead = self.db.scalar(
-                select(CrmLead).where(CrmLead.tenant_id == tenant_id, CrmLead.id == call.lead_id)
-            )
+            lead = CrmFacade(self.db).get_lead_profile(tenant_id, call.lead_id)
             if lead is not None:
                 payload["lead"] = {"id": lead.id, "status": lead.status}
 
@@ -428,7 +417,7 @@ class NotificationEventPipeline:
         return f"booking:{booking.id}:rescheduled:{digest}"
 
     @staticmethod
-    def _call_idempotency_key(*, call: CrmVoiceCall, event_type: str) -> str:
+    def _call_idempotency_key(*, call: VoiceCallView, event_type: str) -> str:
         suffix = _CALL_IDEMPOTENCY_SUFFIX[event_type]
         return f"voice_call:{call.id}:{suffix}"
 

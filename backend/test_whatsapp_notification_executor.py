@@ -17,7 +17,8 @@ from app.domain.notification_variables import (
     NotificationVariableConfigurationError,
     NotificationVariableMappingError,
 )
-from app.models.crm import CrmActivity, CrmContact, CrmLead, CrmPipelineStage, CrmWhatsAppMessage
+from app.modules.crm.infrastructure.models import CrmActivity, CrmContact, CrmLead, CrmPipelineStage
+from app.models.crm import CrmWhatsAppMessage
 from app.models.identity import Tenant
 from app.models.integrations import TenantIntegrationEvent, TenantWhatsAppConfig, TenantWhatsAppTemplate
 from app.models.notifications import DomainEvent, NotificationDelivery, TenantNotificationRule

@@ -1,22 +1,33 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.crm import CrmActivity, CrmContact, CrmLead, CrmTask
-from app.models.identity import TenantMembership, User
-from app.services.crm_activity_service import CrmActivityService
-
-
-VALID_TASK_STATUSES = {"pending", "done", "cancelled", "overdue"}
-VALID_TASK_PRIORITIES = {"low", "medium", "high"}
+from app.modules.crm.application.activity_service import CrmActivityService
+from app.modules.crm.application.ports import TaskAssigneePort
+from app.modules.crm.domain.tasks import VALID_TASK_PRIORITIES, VALID_TASK_STATUSES
+from app.modules.crm.infrastructure.models import (
+    CrmContact,
+    CrmLead,
+    CrmTask,
+)
 
 
 class CrmTaskService:
-    def __init__(self, db: Session) -> None:
+    def __init__(self, db: Session, assignees: TaskAssigneePort | None = None) -> None:
         self.db = db
+        self._assignees = assignees
         self.activity_service = CrmActivityService(db)
+
+    @property
+    def assignees(self) -> TaskAssigneePort:
+        if self._assignees is None:
+            from app.modules.crm.wiring import default_crm_ports
+
+            self._assignees = default_crm_ports(self.db).assignees
+        return self._assignees
 
     def _validate_tenant_resources(
         self,
@@ -45,16 +56,8 @@ class CrmTaskService:
             if not contact:
                 raise ValueError("Contact not found in this tenant")
 
-        if assigned_to_user_id:
-            membership = self.db.scalar(
-                select(TenantMembership).where(
-                    TenantMembership.tenant_id == tenant_id,
-                    TenantMembership.user_id == assigned_to_user_id,
-                    TenantMembership.status == "active",
-                )
-            )
-            if not membership:
-                raise ValueError("Assigned user is not an active member of this tenant")
+        if assigned_to_user_id and not self.assignees.is_active_member(tenant_id, assigned_to_user_id):
+            raise ValueError("Assigned user is not an active member of this tenant")
 
     def create_task(
         self,

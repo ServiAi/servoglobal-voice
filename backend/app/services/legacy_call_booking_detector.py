@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-
 BOOKING_TOOL_NAMES = {
     "crear_evento",
     "create_event",

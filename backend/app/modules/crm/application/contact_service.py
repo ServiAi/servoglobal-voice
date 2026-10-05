@@ -1,26 +1,13 @@
 from __future__ import annotations
 
-import re
-from datetime import datetime
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
-from app.models.crm import CrmContact
-from app.models.identity import _utcnow
 
-def normalize_phone(phone: str | None) -> str | None:
-    if not phone:
-        return None
-    # Remove all spaces, tabs, dashes, parenthesis, dots
-    cleaned = re.sub(r"[\s\-\(\)\.]", "", phone)
-    if not cleaned:
-        return None
-        
-    # Colombia specific rule: if it has 10 digits and doesn't start with "+"
-    # e.g., "3001112233" -> "+573001112233"
-    if re.match(r"^\d{10}$", cleaned):
-        cleaned = f"+57{cleaned}"
-        
-    return cleaned
+from app.db.mixins import _utcnow
+from app.modules.crm.domain.contacts import normalize_phone
+from app.modules.crm.infrastructure.models import CrmContact
+
 
 class CrmContactService:
     def __init__(self, db: Session) -> None:
@@ -33,6 +20,8 @@ class CrmContactService:
         email: str | None,
         name: str | None,
         metadata: dict | None = None,
+        *,
+        _retry: bool = True,
     ) -> CrmContact:
         phone_normalized = normalize_phone(phone)
         contact = None
@@ -101,7 +90,15 @@ class CrmContactService:
                 metadata_json=meta_dict,
             )
             self.db.add(contact)
-            self.db.commit()
+            try:
+                self.db.commit()
+            except IntegrityError:
+                # A concurrent request created the same contact (unique per tenant+phone and
+                # tenant+email): discard ours and enrich theirs. One retry only.
+                self.db.rollback()
+                if not _retry:
+                    raise
+                return self.get_or_create_contact(tenant_id, phone, email, name, metadata, _retry=False)
             self.db.refresh(contact)
 
         return contact

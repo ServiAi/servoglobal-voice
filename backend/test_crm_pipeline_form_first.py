@@ -13,14 +13,14 @@ from app.api.endpoints.voice import _create_form_context_and_lead
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.models.analytics import Agent, Call
-from app.models.crm import CrmCallContext, CrmContact, CrmLead, CrmPipelineStage
+from app.modules.crm.infrastructure.models import CrmCallContext, CrmContact, CrmLead, CrmPipelineStage
 from app.models.identity import Tenant
-from app.services.crm_call_context_service import CrmCallContextService
-from app.services.crm_classifier_service import CrmClassifierService
-from app.services.crm_ingestion_service import CrmIngestionService
-from app.services.crm_lead_resolver_service import CrmLeadResolverService
-from app.services.crm_lead_service import CrmLeadService
-from app.services.crm_query_service import CrmQueryService
+from app.modules.crm.application.call_context_service import CrmCallContextService
+from app.services.legacy_call_classifier import CrmClassifierService
+from crm_test_support import CrmIngestionService
+from app.modules.crm.application.lead_resolver_service import CrmLeadResolverService
+from app.modules.crm.application.lead_service import CrmLeadService
+from app.modules.crm.application.query_service import CrmQueryService
 
 
 class CrmPipelineFormFirstTests(unittest.TestCase):

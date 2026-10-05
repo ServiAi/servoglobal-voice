@@ -18,7 +18,7 @@ from app.api.auth.deps import AuthContext, get_current_auth_context
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.main import app
-from app.models.crm import CrmCallContext, CrmContact, CrmLead, CrmPipelineStage
+from app.modules.crm.infrastructure.models import CrmCallContext, CrmContact, CrmLead, CrmPipelineStage
 from app.models.identity import Tenant, TenantMembership, User
 from app.modules.scheduling.domain.contracts import BookingConfigRequest
 from app.modules.scheduling.application.booking_config_service import BookingConfigService

@@ -4,43 +4,49 @@ import logging
 from typing import Any
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.models.analytics import Call
-from app.models.crm import CrmActivity, CrmContact, CrmLead
-from app.models.identity import _utcnow
-from app.services.crm_booking_detector_service import BookingDetectionResult, CrmBookingDetectorService
-from app.services.crm_call_context_service import CrmCallContextService
-from app.services.crm_classifier_service import CrmClassifierService
-from app.services.crm_contact_service import CrmContactService, normalize_phone
-from app.services.crm_context_extractor_service import CrmContextExtractorService
-from app.services.crm_lead_resolver_service import CrmLeadResolverService
-from app.services.crm_pipeline_service import CrmPipelineService
-from app.services.crm_stage_transition_service import CrmStageTransitionService
+from app.db.mixins import _utcnow
+from app.modules.crm.application.call_context_service import CrmCallContextService
+from app.modules.crm.application.contact_service import CrmContactService
+from app.modules.crm.application.lead_resolver_service import CrmLeadResolverService
+from app.modules.crm.application.pipeline_service import CrmPipelineService
+from app.modules.crm.application.ports import CrmPorts
+from app.modules.crm.application.stage_transition_service import (
+    CrmStageTransitionService,
+)
+from app.modules.crm.domain.calls import BookingDetection, CallRef
+from app.modules.crm.domain.contacts import normalize_phone
+from app.modules.crm.infrastructure.models import CrmActivity, CrmContact, CrmLead
 
 logger = logging.getLogger(__name__)
 
 
 class CrmIngestionService:
-    def __init__(self, db: Session) -> None:
+    def __init__(self, db: Session, ports: CrmPorts | None = None) -> None:
+        if ports is None:
+            from app.modules.crm.wiring import default_crm_ports
+
+            ports = default_crm_ports(db)
         self.db = db
+        self.payloads = ports.payloads
         self.contact_service = CrmContactService(db)
         self.pipeline_service = CrmPipelineService(db)
-        self.classifier_service = CrmClassifierService()
         self.context_service = CrmCallContextService(db)
-        self.context_extractor = CrmContextExtractorService()
-        self.lead_resolver = CrmLeadResolverService(db)
-        self.booking_detector = CrmBookingDetectorService()
+        self.lead_resolver = CrmLeadResolverService(db, ports.analytics)
         self.transition_service = CrmStageTransitionService(db)
 
-    def process_ultravox_event(self, payload: dict[str, Any], call_record: Call) -> None:
+    def process_call_event(self, payload: dict[str, Any], call_record: CallRef) -> None:
+        """Apply one provider call event. The payload is opaque to CRM: the
+        payload port normalises it; CRM keeps it only as timeline evidence."""
         try:
             tenant_id = call_record.tenant_id
             if not tenant_id:
                 logger.warning("CRM ingestion skipped: call record has no tenant_id")
                 return
 
-            event_type = self._event_type(payload)
+            event_type = self.payloads.event_type(payload)
 
             if event_type == "call.started":
                 context = self._extract_context(tenant_id, payload, call_record)
@@ -56,7 +62,7 @@ class CrmIngestionService:
                     call_id=call_record.id,
                     activity_type="call_started",
                     title="Intento de llamada iniciado",
-                    description="Ultravox reporto el inicio del intento de contacto.",
+                    description="El proveedor reporto el inicio del intento de contacto.",
                     outcome="contacted",
                     payload_json=payload,
                 )
@@ -120,12 +126,12 @@ class CrmIngestionService:
                 self._enrich_lead_from_context(lead, context)
                 self._update_lead_summary(lead, payload, call_record)
 
-                booking = self.booking_detector.detect_successful_booking(payload)
+                booking = self.payloads.detect_booking(payload)
                 if booking.created:
                     self.transition_service.move_to_scheduled(tenant_id, lead, call_id=call_record.id)
                     self._create_booking_activity(tenant_id, lead, contact.id, call_record.id, booking, payload)
                 else:
-                    classification = self.classifier_service.classify_after_call(
+                    classification = self.payloads.classify_after_call(
                         call_record.normalized_status,
                         lead.summary,
                         lead.short_summary,
@@ -171,15 +177,26 @@ class CrmIngestionService:
                 return
 
         except Exception as e:
-            logger.exception(f"Error processing CRM ingestion for Ultravox event: {e}")
+            logger.exception(f"Error processing CRM ingestion for call event: {e}")
 
-    def _extract_context(self, tenant_id: str, payload: dict[str, Any], call_record: Call) -> dict[str, Any]:
-        call_context = self.context_service.find_context_from_payload(
-            tenant_id,
-            payload,
-            external_provider=call_record.external_provider,
+    def _extract_context(self, tenant_id: str, payload: dict[str, Any], call_record: CallRef) -> dict[str, Any]:
+        kwargs = {"external_provider": call_record.external_provider} if call_record.external_provider else {}
+        call_context = self.context_service.find_context_from_lookup(
+            tenant_id, self.payloads.context_lookup(payload), **kwargs
         )
-        return self.context_extractor.extract(payload, call_record=call_record, call_context=call_context)
+        context_fields = (
+            {
+                field: getattr(call_context, field, None)
+                for field in (
+                    "name", "email", "phone", "company", "interest", "industry", "use_case", "volume",
+                    "pain_point", "budget_range", "intent_level", "source", "campaign", "utm_source",
+                    "utm_campaign", "form_submission_id", "context_id",
+                )
+            }
+            if call_context is not None
+            else None
+        )
+        return self.payloads.extract_context(payload, call_record, context_fields)
 
     def _get_or_create_contact(self, tenant_id: str, context: dict[str, Any]) -> CrmContact:
         return self.contact_service.get_or_create_contact(
@@ -245,16 +262,8 @@ class CrmIngestionService:
         self.db.commit()
         self.db.refresh(lead)
 
-    def _update_lead_summary(self, lead: CrmLead, payload: dict[str, Any], call_record: Call) -> None:
-        call_obj = payload.get("call") if isinstance(payload.get("call"), dict) else {}
-        summary = call_obj.get("summary") or payload.get("summary") or call_record.summary
-        short_summary = (
-            call_obj.get("shortSummary")
-            or call_obj.get("short_summary")
-            or payload.get("shortSummary")
-            or payload.get("short_summary")
-            or call_record.short_summary
-        )
+    def _update_lead_summary(self, lead: CrmLead, payload: dict[str, Any], call_record: CallRef) -> None:
+        summary, short_summary = self.payloads.summary_fields(payload, call_record)
         if summary:
             lead.summary = summary
         if short_summary:
@@ -264,7 +273,7 @@ class CrmIngestionService:
         self.db.commit()
         self.db.refresh(lead)
 
-    def _attach_call_to_lead(self, lead: CrmLead, call_record: Call) -> None:
+    def _attach_call_to_lead(self, lead: CrmLead, call_record: CallRef) -> None:
         if not call_record.id:
             return
         if not lead.created_from_call_id:
@@ -295,7 +304,7 @@ class CrmIngestionService:
         lead: CrmLead,
         contact_id: str,
         call_id: str | None,
-        booking: BookingDetectionResult,
+        booking: BookingDetection,
         payload: dict[str, Any],
     ) -> None:
         description_parts = ["Evento de agenda verificado por tool."]
@@ -323,10 +332,9 @@ class CrmIngestionService:
         contact_id: str,
         call_id: str | None,
         payload: dict[str, Any],
-        call_record: Call,
+        call_record: CallRef,
     ) -> None:
-        call_obj = payload.get("call") if isinstance(payload.get("call"), dict) else {}
-        end_reason = call_obj.get("endReason") or call_obj.get("end_reason") or call_record.provider_status or "unknown"
+        end_reason = self.payloads.end_reason(payload, call_record)
         outcome_desc = f"Llamada finalizada. Motivo: {end_reason}."
         if call_record.duration_seconds is not None:
             outcome_desc += f" Duracion: {call_record.duration_seconds} segundos."
@@ -349,18 +357,9 @@ class CrmIngestionService:
         contact_id: str,
         call_id: str | None,
         payload: dict[str, Any],
-        call_record: Call,
+        call_record: CallRef,
     ) -> None:
-        call_obj = payload.get("call") if isinstance(payload.get("call"), dict) else {}
-        billed_duration = (
-            call_obj.get("billedDuration")
-            or call_obj.get("billed_duration")
-            or payload.get("billedDuration")
-            or payload.get("billed_duration")
-        )
-        sip_details = call_obj.get("sipDetails") or call_obj.get("sip_details") or payload.get("sipDetails") or payload.get("sip_details")
-        if not billed_duration and isinstance(sip_details, dict):
-            billed_duration = sip_details.get("billedDuration") or sip_details.get("billed_duration")
+        billed_duration = self.payloads.billed_duration(payload)
 
         desc = "Llamada facturada."
         if billed_duration:
@@ -380,12 +379,6 @@ class CrmIngestionService:
             payload_json=payload,
         )
 
-    def _event_type(self, payload: dict[str, Any]) -> str:
-        event = payload.get("event") or payload.get("event_type") or payload.get("eventType")
-        if isinstance(event, str):
-            return event.strip().lower()
-        return "call.updated"
-
     def _create_or_update_activity(
         self,
         tenant_id: str,
@@ -401,9 +394,10 @@ class CrmIngestionService:
         to_stage_id: str | None = None,
         deduplication_key: str = "",
     ) -> CrmActivity:
-        activity = None
-        if call_id:
-            activity = self.db.scalar(
+        def existing() -> CrmActivity | None:
+            if not call_id:
+                return None
+            return self.db.scalar(
                 select(CrmActivity).where(
                     CrmActivity.tenant_id == tenant_id,
                     CrmActivity.call_id == call_id,
@@ -411,6 +405,8 @@ class CrmIngestionService:
                     CrmActivity.deduplication_key == deduplication_key,
                 )
             )
+
+        activity = existing()
 
         if activity is not None:
             activity.title = title
@@ -439,6 +435,22 @@ class CrmIngestionService:
             deduplication_key=deduplication_key,
         )
         self.db.add(activity)
-        self.db.commit()
+        try:
+            self.db.commit()
+        except IntegrityError:
+            # A concurrent delivery of the same event inserted it first: refresh theirs instead.
+            self.db.rollback()
+            winner = existing()
+            if winner is None:
+                raise
+            winner.title = title
+            winner.description = description
+            winner.outcome = outcome
+            winner.payload_json = payload_json
+            winner.from_stage_id = from_stage_id
+            winner.to_stage_id = to_stage_id
+            self.db.commit()
+            self.db.refresh(winner)
+            return winner
         self.db.refresh(activity)
         return activity

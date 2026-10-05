@@ -9,7 +9,8 @@ from sqlalchemy import func, select
 
 from _integrations_2a_test_base import Integration2ATestCase, SessionLocal
 from app.core.config import settings
-from app.models.crm import CrmActivity, CrmWhatsAppMessage
+from app.modules.crm.infrastructure.models import CrmActivity
+from app.models.crm import CrmWhatsAppMessage
 from app.models.integrations import TenantIntegrationEvent, TenantWhatsAppConfig
 
 
@@ -194,7 +195,7 @@ class WhatsAppWebhookTests(Integration2ATestCase):
         self.assertEqual(response.status_code, 200)
         with SessionLocal() as db:
             message = db.scalar(select(CrmWhatsAppMessage).where(CrmWhatsAppMessage.provider_message_id == "wamid.in-1"))
-            lead_count = db.scalar(select(func.count()).select_from(__import__("app.models.crm", fromlist=["CrmLead"]).CrmLead))
+            lead_count = db.scalar(select(func.count()).select_from(__import__("app.modules.crm.infrastructure.models", fromlist=["CrmLead"]).CrmLead))
         self.assertIsNotNone(message)
         self.assertEqual(message.lead_id, lead_id)
         self.assertEqual(lead_count, 1)
@@ -224,7 +225,7 @@ class WhatsAppWebhookTests(Integration2ATestCase):
 
         self.assertEqual(response.status_code, 200)
         with SessionLocal() as db:
-            lead_count = db.scalar(select(func.count()).select_from(__import__("app.models.crm", fromlist=["CrmLead"]).CrmLead))
+            lead_count = db.scalar(select(func.count()).select_from(__import__("app.modules.crm.infrastructure.models", fromlist=["CrmLead"]).CrmLead))
             event = db.scalar(select(TenantIntegrationEvent).where(TenantIntegrationEvent.event_type == "whatsapp_inbound_unmatched"))
         self.assertEqual(lead_count, 0)
         self.assertIsNotNone(event)

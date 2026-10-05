@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.analytics import Agent
-from app.models.crm import CrmCallContext, CrmLead
+from app.modules.crm.public import CrmFacade
 from app.modules.scheduling.public import SchedulingFacade
 
 
@@ -30,18 +30,10 @@ class VoiceBookingContextService:
         did: str | None = None,
     ) -> VoiceBookingContext:
         if call_context_id:
-            context = self.db.scalar(
-                select(CrmCallContext).where(
-                    (CrmCallContext.id == call_context_id) | (CrmCallContext.context_id == call_context_id)
-                )
-            )
+            crm = CrmFacade(self.db)
+            context = crm.find_call_context(call_context_id)
             if context:
-                lead = self.db.scalar(
-                    select(CrmLead).where(
-                        CrmLead.tenant_id == context.tenant_id,
-                        CrmLead.context_id == context.context_id,
-                    )
-                )
+                lead = crm.get_lead_profile_for_context(context.tenant_id, context.context_id)
                 return VoiceBookingContext(
                     tenant_id=context.tenant_id,
                     lead_id=lead.id if lead else None,

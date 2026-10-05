@@ -33,7 +33,7 @@ from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.db.base import Base
-from app.models.crm import CrmContact, CrmLead, CrmPipelineStage
+from app.modules.crm.infrastructure.models import CrmContact, CrmLead, CrmPipelineStage
 from app.models.identity import Tenant
 from app.modules.scheduling.application.booking_service import BookingService
 from app.modules.scheduling.application.ports import SchedulingPorts

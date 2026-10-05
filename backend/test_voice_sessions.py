@@ -4,7 +4,7 @@ import unittest
 
 from _integrations_2a_test_base import Integration2ATestCase
 from app.db.session import SessionLocal
-from app.models.crm import CrmContact, CrmLead, CrmPipelineStage
+from app.modules.crm.infrastructure.models import CrmContact, CrmLead, CrmPipelineStage
 from app.modules.agents.infrastructure.models import TenantAgent, TenantAgentVersion
 from app.modules.crm.public import ContactRef, CrmFacade, LeadRef
 from app.modules.voice.application.context_resolution import ContactResolutionError

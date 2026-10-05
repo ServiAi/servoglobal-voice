@@ -8,7 +8,6 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.config import settings
-from app.models.crm import CrmLead
 from app.models.integrations import (
     TenantForm,
     TenantFormField,
@@ -16,10 +15,9 @@ from app.models.integrations import (
     TenantFormSubmissionAnswer,
     TenantFormToken,
 )
+from app.modules.crm.public import CrmFacade, LeadProfile
 from app.schemas.forms import FormCreateRequest
-from app.services.crm_activity_service import CrmActivityService
 from app.services.integration_event_service import IntegrationEventService
-
 
 FIELD_TYPES = {"text", "email", "phone", "textarea", "select", "checkbox"}
 DEFAULT_FIELDS = [
@@ -36,7 +34,7 @@ DEFAULT_FIELDS = [
 class FormService:
     def __init__(self, db: Session) -> None:
         self.db = db
-        self.activity_service = CrmActivityService(db)
+        self.crm = CrmFacade(db)
         self.event_service = IntegrationEventService(db)
 
     def list_forms(self, tenant_id: str) -> list[TenantForm]:
@@ -169,13 +167,13 @@ class FormService:
         form_token.used_at = datetime.now(UTC)
         self.db.commit()
         self.db.refresh(submission)
-        self.activity_service.create_activity(
+        self.crm.record_activity(
             tenant_id=form_token.tenant_id,
             lead_id=form_token.lead_id,
             contact_id=form_token.contact_id,
             activity_type="form_submitted",
             title="Formulario enviado",
-            payload_json={"form_id": form.id, "submission_id": submission.id},
+            payload={"form_id": form.id, "submission_id": submission.id},
         )
         self.event_service.record_event(
             tenant_id=form_token.tenant_id,
@@ -200,18 +198,18 @@ class FormService:
         if form_token.status != "active" or expires_at <= datetime.now(UTC):
             raise ValueError("Form link is invalid or expired.")
         if mark_opened:
-            self.activity_service.create_activity(
+            self.crm.record_activity(
                 tenant_id=form_token.tenant_id,
                 lead_id=form_token.lead_id,
                 contact_id=form_token.contact_id,
                 activity_type="form_opened",
                 title="Formulario abierto",
-                payload_json={"form_id": form_token.form_id},
+                payload={"form_id": form_token.form_id},
             )
         return form_token
 
-    def _get_lead(self, tenant_id: str, lead_id: str) -> CrmLead:
-        lead = self.db.scalar(select(CrmLead).where(CrmLead.tenant_id == tenant_id, CrmLead.id == lead_id))
+    def _get_lead(self, tenant_id: str, lead_id: str) -> LeadProfile:
+        lead = self.crm.get_lead_profile(tenant_id, lead_id)
         if lead is None:
             raise ValueError("Lead not found")
         return lead

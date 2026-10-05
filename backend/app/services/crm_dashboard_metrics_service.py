@@ -1,14 +1,14 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta, time
-from sqlalchemy import func, select, and_, or_, case
-from sqlalchemy.orm import Session, joinedload
+from datetime import UTC, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
-from app.models.crm import CrmContact, CrmLead, CrmActivity, CrmTask, CrmPipelineStage, CrmCallContext
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
 from app.models.analytics import Call
 from app.models.identity import Tenant
-from app.services.crm_pipeline_service import CrmPipelineService
+from app.modules.crm.public import CrmFacade
 from app.services.voice_capacity_report_service import VoiceCapacityReportService
 
 
@@ -35,72 +35,28 @@ class CrmDashboardMetricsService:
         date_from_utc = date_from.astimezone(UTC)
         date_to_utc = date_to.astimezone(UTC)
 
-        # 1. Base pipeline stages setup
-        pipeline_service = CrmPipelineService(self.db)
-        stages = pipeline_service.ensure_default_pipeline(tenant_id)
-        stage_key_to_id = {s.key: s.id for s in stages}
-        stage_id_to_key = {s.id: s.key for s in stages}
-
-        # 2. Base lead query filters
-        lead_filters = [CrmLead.tenant_id == tenant_id]
-        if date_from_utc:
-            lead_filters.append(CrmLead.created_at >= date_from_utc)
-        if date_to_utc:
-            lead_filters.append(CrmLead.created_at <= date_to_utc)
-        if source:
-            lead_filters.append(CrmLead.source == source)
-        if campaign:
-            lead_filters.append(CrmLead.campaign == campaign)
-
-        # 3. Get stage counts for active leads
-        counts_query = (
-            select(CrmLead.current_stage_id, func.count())
-            .where(*lead_filters)
-            .group_by(CrmLead.current_stage_id)
-        )
-        counts_res = self.db.execute(counts_query).all()
-        counts_by_stage_id = {stage_id: cnt for stage_id, cnt in counts_res}
+        crm = CrmFacade(self.db)
+        funnel_snapshot = crm.dashboard_funnel(tenant_id, date_from_utc, date_to_utc, source, campaign)
+        stage_counts = funnel_snapshot.stage_counts
 
         # Stage specific counts
-        new_leads = counts_by_stage_id.get(stage_key_to_id.get("new"), 0)
-        contacted_leads = counts_by_stage_id.get(stage_key_to_id.get("contacted"), 0)
-        connected_leads = counts_by_stage_id.get(stage_key_to_id.get("connected"), 0)
-        qualified_leads = counts_by_stage_id.get(stage_key_to_id.get("qualified"), 0)
-        scheduled_leads = counts_by_stage_id.get(stage_key_to_id.get("scheduled"), 0)
-        voicemail_leads = counts_by_stage_id.get(stage_key_to_id.get("voicemail"), 0)
-        follow_up_leads = counts_by_stage_id.get(stage_key_to_id.get("follow_up"), 0)
-        not_interested_leads = counts_by_stage_id.get(stage_key_to_id.get("not_interested"), 0)
-        won_leads = counts_by_stage_id.get(stage_key_to_id.get("won"), 0)
-        lost_leads = counts_by_stage_id.get(stage_key_to_id.get("lost"), 0)
+        new_leads = stage_counts.get("new", 0)
+        contacted_leads = stage_counts.get("contacted", 0)
+        connected_leads = stage_counts.get("connected", 0)
+        qualified_leads = stage_counts.get("qualified", 0)
+        scheduled_leads = stage_counts.get("scheduled", 0)
+        voicemail_leads = stage_counts.get("voicemail", 0)
+        follow_up_leads = stage_counts.get("follow_up", 0)
+        not_interested_leads = stage_counts.get("not_interested", 0)
+        won_leads = stage_counts.get("won", 0)
+        lost_leads = stage_counts.get("lost", 0)
 
         # Calculate general KPIs
-        total_leads = sum(counts_by_stage_id.values())
-
-        open_leads = self.db.scalar(
-            select(func.count()).select_from(CrmLead)
-            .where(*lead_filters, CrmLead.status == "open")
-        ) or 0
-
-        pending_tasks = self.db.scalar(
-            select(func.count()).select_from(CrmTask)
-            .where(CrmTask.tenant_id == tenant_id, CrmTask.status == "pending")
-        ) or 0
-
-        now_utc = datetime.now(UTC)
-        overdue_tasks = self.db.scalar(
-            select(func.count()).select_from(CrmTask)
-            .where(
-                CrmTask.tenant_id == tenant_id,
-                CrmTask.status == "pending",
-                CrmTask.due_at.isnot(None),
-                CrmTask.due_at < now_utc
-            )
-        ) or 0
-
-        leads_with_next_action = self.db.scalar(
-            select(func.count()).select_from(CrmLead)
-            .where(*lead_filters, CrmLead.next_action.isnot(None), CrmLead.next_action != "")
-        ) or 0
+        total_leads = funnel_snapshot.total_leads
+        open_leads = funnel_snapshot.open_leads
+        pending_tasks = funnel_snapshot.pending_tasks
+        overdue_tasks = funnel_snapshot.overdue_tasks
+        leads_with_next_action = funnel_snapshot.leads_with_next_action
 
         kpis = {
             "total_leads": total_leads,
@@ -122,7 +78,7 @@ class CrmDashboardMetricsService:
 
         # 4. Conversion Rates (Cumulative Logic)
         def get_count_of_keys(keys_list: list[str]) -> int:
-            return sum(counts_by_stage_id.get(stage_key_to_id.get(k), 0) for k in keys_list if k in stage_key_to_id)
+            return sum(stage_counts.get(k, 0) for k in keys_list if k in stage_counts)
 
         contacted_cum = get_count_of_keys(["contacted", "connected", "qualified", "scheduled", "won", "voicemail", "follow_up", "not_interested", "lost"])
         connected_cum = get_count_of_keys(["connected", "qualified", "scheduled", "won", "follow_up", "not_interested", "lost"])
@@ -155,25 +111,13 @@ class CrmDashboardMetricsService:
         ]
 
         # 6. Source Breakdown
-        source_query = (
-            select(
-                CrmLead.source,
-                func.count().label("total"),
-                func.sum(case((CrmLead.current_stage_id.in_([stage_key_to_id.get(k) for k in ["qualified", "scheduled", "won"] if k in stage_key_to_id]), 1), else_=0)).label("qualified"),
-                func.sum(case((CrmLead.current_stage_id.in_([stage_key_to_id.get(k) for k in ["scheduled", "won"] if k in stage_key_to_id]), 1), else_=0)).label("scheduled"),
-                func.sum(case((CrmLead.current_stage_id == stage_key_to_id.get("won"), 1), else_=0)).label("won")
-            )
-            .where(*lead_filters, CrmLead.source.isnot(None), CrmLead.source != "")
-            .group_by(CrmLead.source)
-        )
-        source_rows = self.db.execute(source_query).all()
         sources_list = []
-        for r in source_rows:
+        for r in funnel_snapshot.sources:
             tot = r.total or 0
             wn = r.won or 0
             conv_rate = round((wn / tot * 100), 2) if tot > 0 else 0.0
             sources_list.append({
-                "source": r.source,
+                "source": r.name,
                 "total_leads": tot,
                 "qualified_leads": r.qualified or 0,
                 "scheduled_leads": r.scheduled or 0,
@@ -182,25 +126,13 @@ class CrmDashboardMetricsService:
             })
 
         # 7. Campaign Breakdown
-        campaign_query = (
-            select(
-                CrmLead.campaign,
-                func.count().label("total"),
-                func.sum(case((CrmLead.current_stage_id.in_([stage_key_to_id.get(k) for k in ["qualified", "scheduled", "won"] if k in stage_key_to_id]), 1), else_=0)).label("qualified"),
-                func.sum(case((CrmLead.current_stage_id.in_([stage_key_to_id.get(k) for k in ["scheduled", "won"] if k in stage_key_to_id]), 1), else_=0)).label("scheduled"),
-                func.sum(case((CrmLead.current_stage_id == stage_key_to_id.get("won"), 1), else_=0)).label("won")
-            )
-            .where(*lead_filters, CrmLead.campaign.isnot(None), CrmLead.campaign != "")
-            .group_by(CrmLead.campaign)
-        )
-        campaign_rows = self.db.execute(campaign_query).all()
         campaigns_list = []
-        for r in campaign_rows:
+        for r in funnel_snapshot.campaigns:
             tot = r.total or 0
             wn = r.won or 0
             conv_rate = round((wn / tot * 100), 2) if tot > 0 else 0.0
             campaigns_list.append({
-                "campaign": r.campaign,
+                "campaign": r.name,
                 "total_leads": tot,
                 "qualified_leads": r.qualified or 0,
                 "scheduled_leads": r.scheduled or 0,
@@ -216,21 +148,8 @@ class CrmDashboardMetricsService:
             call_filters.append(Call.started_at <= date_to_utc)
 
         if source or campaign:
-            lead_sub = select(CrmLead.id).where(CrmLead.tenant_id == tenant_id)
-            if source:
-                lead_sub = lead_sub.where(CrmLead.source == source)
-            if campaign:
-                lead_sub = lead_sub.where(CrmLead.campaign == campaign)
-            lead_ids = self.db.scalars(lead_sub).all()
-            call_ids = set()
-            if lead_ids:
-                lc_ids = self.db.scalars(select(CrmLead.last_call_id).where(CrmLead.id.in_(lead_ids), CrmLead.last_call_id.isnot(None))).all()
-                call_ids.update(lc_ids)
-                cfc_ids = self.db.scalars(select(CrmLead.created_from_call_id).where(CrmLead.id.in_(lead_ids), CrmLead.created_from_call_id.isnot(None))).all()
-                call_ids.update(cfc_ids)
-                act_cids = self.db.scalars(select(CrmActivity.call_id).where(CrmActivity.lead_id.in_(lead_ids), CrmActivity.call_id.isnot(None))).all()
-                call_ids.update(act_cids)
-            call_filters.append(Call.id.in_(list(call_ids) if call_ids else ["non-existent-id"]))
+            call_ids = crm.dashboard_call_ids(tenant_id, source, campaign)
+            call_filters.append(Call.id.in_(call_ids if call_ids else ["non-existent-id"]))
 
         calls_list = self.db.scalars(select(Call).where(*call_filters)).all()
 
@@ -255,66 +174,45 @@ class CrmDashboardMetricsService:
         }
 
         # 9. Pending Actions (Human intervention required)
-        follow_up_stage_id = stage_key_to_id.get("follow_up")
-        contacted_stage_id = stage_key_to_id.get("contacted")
-
-        task_lead_sub = select(CrmTask.lead_id).where(CrmTask.tenant_id == tenant_id, CrmTask.status == "pending")
-
-        pending_actions_conditions = []
-        if follow_up_stage_id:
-            pending_actions_conditions.append(CrmLead.current_stage_id == follow_up_stage_id)
-        if contacted_stage_id:
-            pending_actions_conditions.append(
-                and_(
-                    CrmLead.current_stage_id == contacted_stage_id,
-                    or_(
-                        CrmLead.last_call_id.is_(None),
-                        Call.normalized_status != "answered"
-                    )
-                )
-            )
-        pending_actions_conditions.append(
-            and_(
-                CrmLead.next_action.isnot(None),
-                CrmLead.next_action != ""
-            )
-        )
-        pending_actions_conditions.append(
-            CrmLead.id.in_(task_lead_sub)
-        )
-
-        pending_actions_query = (
-            select(CrmLead)
-            .outerjoin(Call, Call.id == CrmLead.last_call_id)
-            .where(
-                CrmLead.tenant_id == tenant_id,
-                or_(*pending_actions_conditions)
-            )
-            .options(
-                joinedload(CrmLead.contact),
-                joinedload(CrmLead.stage)
-            )
-        )
-
-        if source:
-            pending_actions_query = pending_actions_query.where(CrmLead.source == source)
-        if campaign:
-            pending_actions_query = pending_actions_query.where(CrmLead.campaign == campaign)
-
-        pending_actions_query = pending_actions_query.order_by(CrmLead.updated_at.desc()).limit(20)
-        pending_leads = self.db.scalars(pending_actions_query).unique().all()
-
+        # CRM lists the candidates (newest first); whether a "contacted" lead's last
+        # call was answered is Analytics' fact, checked here.
         pending_actions_list = []
-        for pl in pending_leads:
-            pending_actions_list.append({
-                "lead_id": pl.id,
-                "contact_name": self._display_contact_name(pl),
-                "stage": pl.stage.key,
-                "next_action": pl.next_action,
-                "source": pl.source,
-                "campaign": pl.campaign,
-                "updated_at": pl.updated_at,
-            })
+        offset, page = 0, 100
+        while len(pending_actions_list) < 20:
+            candidates = crm.dashboard_pending_action_candidates(tenant_id, source, campaign, offset=offset, limit=page)
+            if not candidates:
+                break
+            statuses: dict[str, str | None] = {}
+            check_ids = [c.last_call_id for c in candidates if c.requires_call_check and c.last_call_id]
+            if check_ids:
+                statuses = dict(
+                    self.db.execute(
+                        select(Call.id, Call.normalized_status).where(Call.id.in_(check_ids))
+                    ).all()
+                )
+            for candidate in candidates:
+                qualifies = candidate.qualifies_without_call or (
+                    candidate.requires_call_check
+                    and candidate.last_call_id is not None
+                    and statuses.get(candidate.last_call_id) is not None
+                    and statuses[candidate.last_call_id] != "answered"
+                )
+                if not qualifies:
+                    continue
+                pending_actions_list.append({
+                    "lead_id": candidate.lead_id,
+                    "contact_name": candidate.contact_name,
+                    "stage": candidate.stage_key,
+                    "next_action": candidate.next_action,
+                    "source": candidate.source,
+                    "campaign": candidate.campaign,
+                    "updated_at": candidate.updated_at,
+                })
+                if len(pending_actions_list) >= 20:
+                    break
+            if len(candidates) < page:
+                break
+            offset += page
 
         # Period payload
         period = {
@@ -389,20 +287,3 @@ class CrmDashboardMetricsService:
             dt = today_end
 
         return df, dt
-
-    def _display_contact_name(self, lead: CrmLead) -> str:
-        filters = []
-        if lead.context_id:
-            filters.append(CrmCallContext.context_id == lead.context_id)
-        if lead.form_submission_id:
-            filters.append(CrmCallContext.form_submission_id == lead.form_submission_id)
-        if filters:
-            context = self.db.scalar(
-                select(CrmCallContext)
-                .where(CrmCallContext.tenant_id == lead.tenant_id, or_(*filters))
-                .order_by(CrmCallContext.created_at.desc())
-                .limit(1)
-            )
-            if context and context.name:
-                return context.name
-        return lead.contact.name or "Lead sin nombre"

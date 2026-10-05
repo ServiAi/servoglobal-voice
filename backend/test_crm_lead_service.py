@@ -3,8 +3,8 @@ from __future__ import annotations
 from sqlalchemy import select
 
 from _integrations_2a_test_base import Integration2ATestCase, SessionLocal
-from app.models.crm import CrmContact, CrmLead, CrmPipelineStage
-from app.services.crm_lead_service import CrmLeadService
+from app.modules.crm.infrastructure.models import CrmContact, CrmLead, CrmPipelineStage
+from app.modules.crm.application.lead_service import CrmLeadService
 
 
 class CrmLeadServiceDeleteAllTests(Integration2ATestCase):

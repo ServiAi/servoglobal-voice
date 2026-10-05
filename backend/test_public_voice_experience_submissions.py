@@ -16,7 +16,7 @@ from app.api.endpoints.voice_public import (
 from app.core.config import settings
 from app.db.session import SessionLocal
 from app.main import app
-from app.models.crm import CrmActivity, CrmContact, CrmLead
+from app.modules.crm.infrastructure.models import CrmActivity, CrmContact, CrmLead
 from app.models.integrations import TenantIntegrationEvent, TenantVoiceAgentConfig
 from app.models.voice_context import TenantVoiceContextField, TenantVoiceContextSchema
 from app.models.voice_experiences import TenantVoiceExperience, TenantVoiceExperienceVersion
@@ -626,7 +626,7 @@ class PublicVoiceExperienceSubmissionTests(Integration2ATestCase):
 
     def test_crm_failure_isolated_after_primary_commit(self) -> None:
         with patch(
-            "app.services.public_voice_submission_service.CrmContactService.get_or_create_contact",
+            "app.modules.crm.public.CrmFacade.get_or_create_contact",
             side_effect=RuntimeError("database unavailable"),
         ):
             response = self._post()

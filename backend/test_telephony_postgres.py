@@ -35,7 +35,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.db.base import Base
 from app.db.session import SessionLocal as AppSessionLocal
-from app.models.crm import CrmContact, CrmLead, CrmPipelineStage, CrmVoiceCall
+from app.modules.crm.infrastructure.models import CrmContact, CrmLead, CrmPipelineStage, CrmVoiceCall
 from app.models.identity import Tenant
 from app.modules.agents.infrastructure.models import TenantAgent, TenantAgentVersion
 from app.modules.telephony.infrastructure.livekit_sip import LiveKitSipDialResult

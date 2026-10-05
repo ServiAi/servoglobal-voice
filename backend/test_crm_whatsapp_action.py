@@ -3,7 +3,8 @@ from __future__ import annotations
 from sqlalchemy import func, select
 
 from _integrations_2a_test_base import Integration2ATestCase, SessionLocal
-from app.models.crm import CrmActivity, CrmWhatsAppMessage
+from app.modules.crm.infrastructure.models import CrmActivity
+from app.models.crm import CrmWhatsAppMessage
 from app.models.integrations import TenantIntegrationEvent, TenantWhatsAppTemplate
 from app.schemas.integrations import WhatsAppTestMessageRequest
 from app.services.whatsapp_client import WhatsAppCloudClient
@@ -63,7 +64,7 @@ class CrmWhatsAppActionTests(Integration2ATestCase):
             self.assertIsNone(message)
             self.assertIsNone(lead)
         with SessionLocal() as db:
-            from app.models.crm import CrmContact, CrmLead
+            from app.modules.crm.infrastructure.models import CrmContact, CrmLead
 
             lead = db.get(CrmLead, lead_id)
             contact = db.get(CrmContact, lead.contact_id)

@@ -14,9 +14,9 @@ from app.api.endpoints.voice_public import get_public_rate_limiter, get_public_t
 from app.core.config import settings
 from app.db.session import SessionLocal
 from app.main import app
-from app.models.crm import CrmVoiceCall
+from app.modules.crm.infrastructure.models import CrmVoiceCall
 from app.models.analytics import Call, CallEvent
-from app.models.crm import CrmVoiceCallEvent
+from app.modules.crm.infrastructure.models import CrmVoiceCallEvent
 from app.models.integrations import TenantVoiceAgentConfig, TenantVoiceProviderConfig
 from app.models.voice_submissions import TenantVoiceContextSession, TenantVoiceRuntimeCall
 from app.services.secret_manager_service import SecretManager

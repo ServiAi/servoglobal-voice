@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 from _integrations_2a_test_base import Integration2ATestCase, SessionLocal
 from app.models.analytics import Agent
-from app.models.crm import CrmVoiceCall, CrmVoiceCallEvent, CrmActivity
+from app.modules.crm.infrastructure.models import CrmVoiceCall, CrmVoiceCallEvent, CrmActivity
 from app.models.integrations import TenantVoiceProviderConfig, TenantVoiceAgentConfig, TenantIntegrationEvent
 from app.services.voice_client import VoiceClient
 from app.modules.telephony.application.route_service import SipRouteService

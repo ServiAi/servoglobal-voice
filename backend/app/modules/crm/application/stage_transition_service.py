@@ -1,26 +1,13 @@
 from __future__ import annotations
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.models.crm import CrmActivity, CrmLead, CrmPipelineStage
-from app.models.identity import _utcnow
-from app.services.crm_pipeline_service import CrmPipelineService
-
-
-TERMINAL_STAGES = {"not_interested", "won", "lost"}
-AUTOMATIC_TRANSITIONS = {
-    "new": {"contacted", "connected", "qualified", "scheduled", "voicemail", "follow_up", "not_interested"},
-    "contacted": {"connected", "qualified", "scheduled", "voicemail", "follow_up", "not_interested"},
-    "connected": {"qualified", "scheduled", "voicemail", "follow_up", "not_interested"},
-    "qualified": {"scheduled", "voicemail", "follow_up", "not_interested"},
-    "voicemail": {"contacted", "connected", "qualified", "scheduled", "follow_up", "not_interested"},
-    "follow_up": {"contacted", "connected", "qualified", "scheduled", "voicemail", "not_interested"},
-    "scheduled": set(),
-    "not_interested": set(),
-    "won": set(),
-    "lost": set(),
-}
+from app.db.mixins import _utcnow
+from app.modules.crm.application.pipeline_service import CrmPipelineService
+from app.modules.crm.domain.pipeline import AUTOMATIC_TRANSITIONS, TERMINAL_STAGES
+from app.modules.crm.infrastructure.models import CrmActivity, CrmLead, CrmPipelineStage
 
 
 class CrmStageTransitionService:
@@ -177,9 +164,10 @@ class CrmStageTransitionService:
         description: str,
         from_stage_id: str | None,
     ) -> CrmActivity:
-        existing_activity = None
-        if call_id:
-            existing_activity = self.db.scalar(
+        def existing() -> CrmActivity | None:
+            if not call_id:
+                return None
+            return self.db.scalar(
                 select(CrmActivity).where(
                     CrmActivity.tenant_id == tenant_id,
                     CrmActivity.call_id == call_id,
@@ -187,6 +175,8 @@ class CrmStageTransitionService:
                     CrmActivity.deduplication_key == target_stage.key,
                 )
             )
+
+        existing_activity = existing()
         if existing_activity is not None:
             return existing_activity
 
@@ -206,6 +196,14 @@ class CrmStageTransitionService:
             deduplication_key=target_stage.key,
         )
         self.db.add(activity)
-        self.db.commit()
+        try:
+            self.db.commit()
+        except IntegrityError:
+            # A concurrent request recorded the same transition (unique per call/type/key): keep theirs.
+            self.db.rollback()
+            winner = existing()
+            if winner is None:
+                raise
+            return winner
         self.db.refresh(activity)
         return activity
