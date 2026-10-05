@@ -86,12 +86,12 @@ WIRING_LEGACY_ALLOWED = {
     "app.services.onboarding_service",  # Identity
     "app.services.secret_manager_service",
     "app.services.storage_service",
-    "app.services.tenant_feature_service",
     "app.services.voice_config_service",  # Voice Legacy (catalog status)
 }
 # Other modules Integrations may talk to, always through their public API.
 FOREIGN_PUBLIC_ALLOWED = {
     "app.modules.crm.public",
+    "app.modules.identity.public",
     "app.modules.notifications.public",
     "app.modules.scheduling.public",
 }
@@ -105,6 +105,29 @@ def _imports(path: Path) -> set[str]:
         elif isinstance(node, ast.ImportFrom) and node.module:
             found.add(node.module)
     return found
+
+
+def _import_targets(path: Path) -> set[str]:
+    """Imported module names, plus ``module.name`` for ``from module import name`` (catches
+    ``from app.services import notification_service``)."""
+    found: set[str] = set()
+    for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+        if isinstance(node, ast.Import):
+            found.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            found.add(node.module)
+            found.update(f"{node.module}.{alias.name}" for alias in node.names)
+    return found
+
+
+def _importers(target: str) -> set[str]:
+    """App files (relative, forward slashes, excluding the target itself) importing ``target``."""
+    own = target.replace(".", "/").removeprefix("app/") + ".py"
+    return {
+        path.relative_to(APP).as_posix()
+        for path in APP.rglob("*.py")
+        if path.relative_to(APP).as_posix() != own and target in _import_targets(path)
+    }
 
 
 def _layer(layer: str) -> list[Path]:
@@ -290,12 +313,44 @@ assert not loaded, loaded
         self.assertEqual(offenders, [])
 
     def test_meta_client_is_only_used_by_the_legacy_notification_workflow(self) -> None:
-        users = [
-            str(path.relative_to(APP))
-            for path in APP.rglob("*.py")
-            if "app.services.meta_client" in _imports(path)
+        # Global env-configured Meta credentials, hardcoded owner phones and fixed templates: a legacy demo
+        # workflow that is neither tenant-scoped nor part of Integrations. It must not gain consumers.
+        self.assertEqual(_importers("app.services.meta_client"), {"services/notification_service.py"})
+
+    def test_legacy_notification_service_is_surrounded_not_spread(self) -> None:
+        self.assertEqual(
+            _importers("app.services.notification_service"),
+            {"api/endpoints/notifications.py", "api/endpoints/voice.py"},
+        )
+
+    def test_no_real_module_depends_on_the_legacy_notification_workflow(self) -> None:
+        offenders = [
+            f"{path.relative_to(APP)} -> {target}"
+            for path in (APP / "modules").rglob("*.py")
+            for target in _import_targets(path)
+            if target in {"app.services.notification_service", "app.services.meta_client"}
         ]
-        self.assertEqual(users, ["services\\notification_service.py"] if "\\" in str(Path("a/b")) else ["services/notification_service.py"])
+        self.assertEqual(offenders, [])
+
+    def test_legacy_workflow_stays_out_of_the_integrations_module(self) -> None:
+        text = "\n".join(path.read_text(encoding="utf-8") for path in MODULE.rglob("*.py"))
+        for legacy_marker in ("OWNER_PHONES", "alerta_lead_owner", "cita_confirmada_cliente", "demo-iniciada"):
+            self.assertNotIn(legacy_marker, text)
+
+    def test_legacy_notification_routes_keep_their_contract(self) -> None:
+        from app.main import app
+
+        routes = {
+            (method.upper(), path) for path, operations in app.openapi()["paths"].items() for method in operations
+        }
+        for expected in (
+            ("POST", "/api/v1/notifications/booking"),
+            ("GET", "/api/v1/notifications/webhook"),
+            ("POST", "/api/v1/notifications/webhook"),
+            ("GET", "/api/v1/webhook/whatsapp"),
+            ("POST", "/api/v1/webhook/whatsapp"),
+        ):
+            self.assertIn(expected, routes)
 
 
 class IntegrationsOwnershipTests(unittest.TestCase):
