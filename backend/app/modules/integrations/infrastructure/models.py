@@ -312,7 +312,17 @@ class CrmWhatsAppMessage(Base, TimestampMixin):
         Index("ix_crm_whatsapp_messages_tenant_lead", "tenant_id", "lead_id"),
         Index("ix_crm_whatsapp_messages_tenant_contact", "tenant_id", "contact_id"),
         Index("ix_crm_whatsapp_messages_tenant_status", "tenant_id", "status"),
-        Index("ix_crm_whatsapp_messages_tenant_provider_message", "tenant_id", "provider_message_id"),
+        # One row per (tenant, provider message id); NULL ids (queued / outcome unknown) may repeat.
+        # Identity is tenant-scoped because a tenant has a single WhatsApp provider today; with several
+        # providers per tenant this would become (tenant_id, provider, provider_message_id).
+        Index(
+            "uq_crm_whatsapp_messages_tenant_provider_message",
+            "tenant_id",
+            "provider_message_id",
+            unique=True,
+            postgresql_where=sa.text("provider_message_id IS NOT NULL"),
+            sqlite_where=sa.text("provider_message_id IS NOT NULL"),
+        ),
         Index("ix_crm_whatsapp_messages_tenant_created_at", "tenant_id", "created_at"),
         Index(
             "ix_crm_whatsapp_messages_tenant_notification_delivery",

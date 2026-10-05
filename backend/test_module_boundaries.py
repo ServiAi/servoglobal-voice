@@ -1025,6 +1025,7 @@ CRITICAL_PUBLIC_APIS = {
         "WhatsAppFacade",
         "EmailFacade",
         "ChatwootFacade",
+        "ChatwootGateway",
         "IntegrationEvents",
     ],
     "app.modules.notifications.public": [

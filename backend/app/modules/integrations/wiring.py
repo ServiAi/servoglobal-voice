@@ -8,7 +8,7 @@ Application code depends on the Protocols in ``application/ports.py`` only.
 Temporary legacy exceptions (allowlisted in ``test_integrations_boundaries``):
 Identity (``OnboardingService``), Voice Legacy (``VoiceConfigService``), Forms
 (``TenantFormToken``), Voice Context (``TenantVoiceContextSchema``), the shared
-``SecretManager`` / ``StorageService`` / ``TenantFeatureService`` / ``CallSummaryService``.
+``SecretManager`` / ``StorageService`` / ``CallSummaryService``. Feature flags go through ``identity.public``.
 Each disappears behind that module's ``public.py`` when it is migrated.
 """
 
@@ -73,9 +73,9 @@ def default_secrets():
 
 
 def default_features(db: Session):
-    from app.services.tenant_feature_service import TenantFeatureService
+    from app.modules.identity.public import FeatureFlags
 
-    return TenantFeatureService(db)
+    return FeatureFlags(db)
 
 
 def default_whatsapp_provider():

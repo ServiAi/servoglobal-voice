@@ -19,6 +19,11 @@ from typing import TYPE_CHECKING, Any, Protocol
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from sqlalchemy.orm import Session
 
+    from app.modules.integrations.application.email.send_service import (
+        EmailActionResult,
+    )
+    from app.modules.integrations.infrastructure.models import CrmWhatsAppMessage
+
 __all__ = [
     "ChatwootFacade",
     "ChatwootGateway",
@@ -312,7 +317,7 @@ class IntegrationEvents:
         )
 
 
-def _receipt(message: Any) -> WhatsAppMessageReceipt:
+def _receipt(message: CrmWhatsAppMessage) -> WhatsAppMessageReceipt:
     return WhatsAppMessageReceipt(
         id=message.id,
         tenant_id=message.tenant_id,
@@ -328,7 +333,7 @@ def _receipt(message: Any) -> WhatsAppMessageReceipt:
     )
 
 
-def _message_view(message: Any) -> WhatsAppMessageView:
+def _message_view(message: CrmWhatsAppMessage) -> WhatsAppMessageView:
     return WhatsAppMessageView(
         id=message.id,
         direction=message.direction,
@@ -463,7 +468,7 @@ class WhatsAppFacade:
         return tuple(_message_view(message) for message in self._messages().list_lead_messages(tenant_id, lead_id))
 
 
-def _email_result(result: Any) -> LeadEmailResult:
+def _email_result(result: EmailActionResult) -> LeadEmailResult:
     return LeadEmailResult(
         status=result.status,
         email_send_id=result.email_send_id,
@@ -569,11 +574,26 @@ class EmailFacade:
         )
 
 
+class _ChatwootGatewayClient(Protocol):
+    """What the gateway needs from a Chatwoot client. The module's concrete client satisfies it
+    structurally; ``public`` never imports it, its configuration or ``httpx``."""
+
+    async def get_or_create_contact(self, phone: str, name: str = "", email: str = "") -> int | None: ...
+
+    async def get_or_create_conversation(self, contact_id: int, inbox_id: int | None = None) -> int | None: ...
+
+    async def assign_team(self, conversation_id: int, team_id: int) -> bool: ...
+
+    async def send_message(self, conversation_id: int, content: str, private: bool = False) -> bool: ...
+
+    async def add_label(self, conversation_id: int, labels: list[str]) -> bool: ...
+
+
 class ChatwootGateway:
     """A tenant's Chatwoot Account, ready to use. Only the operations other modules need;
     credentials and the HTTP client stay inside the module."""
 
-    def __init__(self, client: Any) -> None:
+    def __init__(self, client: _ChatwootGatewayClient) -> None:
         self._client = client
 
     async def get_or_create_contact(self, phone: str, name: str = "", email: str = "") -> int | None:
