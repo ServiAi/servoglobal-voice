@@ -200,6 +200,91 @@ class WhatsAppWebhookTests(Integration2ATestCase):
         self.assertEqual(message.lead_id, lead_id)
         self.assertEqual(lead_count, 1)
 
+    def _post_statuses(self, *statuses, phone_number_id="phone-number-1"):
+        return self.client.post(
+            "/api/v1/webhook/whatsapp",
+            json={"entry": [{"changes": [{"value": {
+                "metadata": {"phone_number_id": phone_number_id},
+                "statuses": list(statuses),
+            }}]}]},
+        )
+
+    def test_whatsapp_late_delivered_does_not_downgrade_read(self):
+        self.configure_whatsapp()
+        with SessionLocal() as db:
+            db.add(CrmWhatsAppMessage(
+                tenant_id=self.tenant.id,
+                provider_message_id="wamid.order-1",
+                direction="outbound",
+                to_phone="573001112233",
+                status="sent",
+                metadata_json={},
+                sent_at=datetime.now(timezone.utc),
+            ))
+            db.commit()
+
+        # Meta may deliver webhooks out of order: read arrives before delivered.
+        self.assertEqual(self._post_statuses({"id": "wamid.order-1", "status": "read"}).status_code, 200)
+        self.assertEqual(self._post_statuses({"id": "wamid.order-1", "status": "delivered"}).status_code, 200)
+
+        with SessionLocal() as db:
+            message = db.scalar(select(CrmWhatsAppMessage).where(CrmWhatsAppMessage.provider_message_id == "wamid.order-1"))
+            delivered_events = db.scalar(
+                select(func.count()).select_from(TenantIntegrationEvent).where(
+                    TenantIntegrationEvent.event_type == "whatsapp_status_delivered"
+                )
+            )
+        self.assertEqual(message.status, "read")
+        self.assertIsNotNone(message.read_at)
+        self.assertIsNone(message.delivered_at)
+        self.assertEqual(delivered_events, 0)
+
+    def test_whatsapp_failed_status_is_still_recorded_after_sent(self):
+        self.configure_whatsapp()
+        with SessionLocal() as db:
+            db.add(CrmWhatsAppMessage(
+                tenant_id=self.tenant.id,
+                provider_message_id="wamid.fail-1",
+                direction="outbound",
+                to_phone="573001112233",
+                status="sent",
+                metadata_json={},
+                sent_at=datetime.now(timezone.utc),
+            ))
+            db.commit()
+
+        self._post_statuses({"id": "wamid.fail-1", "status": "failed", "errors": [{"code": 131026}]})
+
+        with SessionLocal() as db:
+            message = db.scalar(select(CrmWhatsAppMessage).where(CrmWhatsAppMessage.provider_message_id == "wamid.fail-1"))
+        self.assertEqual(message.status, "failed")
+        self.assertIsNotNone(message.failed_at)
+
+    def test_whatsapp_inbound_webhook_retry_does_not_duplicate_message_or_activity(self):
+        self.configure_whatsapp()
+        lead_id, _ = self.seed_lead()
+        payload = {"entry": [{"changes": [{"value": {
+            "metadata": {"phone_number_id": "phone-number-1"},
+            "messages": [{"id": "wamid.retry-1", "from": "573001112233", "text": {"body": "Hola"}}],
+        }}]}]}
+
+        first = self.client.post("/api/v1/webhook/whatsapp", json=payload)
+        retry = self.client.post("/api/v1/webhook/whatsapp", json=payload)
+
+        self.assertEqual((first.json()["inbound"], retry.json()["inbound"]), (1, 0))
+        with SessionLocal() as db:
+            messages = db.scalar(
+                select(func.count()).select_from(CrmWhatsAppMessage).where(
+                    CrmWhatsAppMessage.provider_message_id == "wamid.retry-1"
+                )
+            )
+            activities = db.scalar(
+                select(func.count()).select_from(CrmActivity).where(
+                    CrmActivity.lead_id == lead_id, CrmActivity.activity_type == "whatsapp_inbound_received"
+                )
+            )
+        self.assertEqual((messages, activities), (1, 1))
+
     def test_whatsapp_webhook_unmatched_inbound_does_not_create_lead(self):
         self.configure_whatsapp()
 

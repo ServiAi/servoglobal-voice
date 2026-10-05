@@ -143,11 +143,10 @@ CRM_LEGACY_ALLOWED = {
     "app.db.session",
 }
 # Composition-root exceptions (TEMPORARY, each retires with its owner's migration): CRM's lead
-# deletion still clears Messaging (``CrmWhatsAppMessage``), Email and Forms rows through
-# ``crm.wiring.LegacyLeadHistory``, and the Ultravox payload parsing is a Voice Legacy adapter.
+# deletion still clears Forms rows through ``crm.wiring.LegacyLeadHistory`` (Messaging/Email go
+# through integrations.public), and the Ultravox payload parsing is a Voice Legacy adapter.
 CRM_WIRING_ALLOWED = {
-    "app.models.crm",  # CrmWhatsAppMessage: Messaging debt, not CRM's
-    "app.models.integrations",  # TenantEmailSend / TenantFormToken / TenantFormSubmission
+    "app.models.integrations",  # TenantFormToken / TenantFormSubmission (Forms, not yet a module)
     "app.services.legacy_call_payload_adapter",
 }
 # Only these application modules may lazily default their ports via wiring.
@@ -165,7 +164,7 @@ CRM_DOMAIN_FORBIDDEN = (
 )
 # Words a pure CRM domain must not know (providers/integrations).
 CRM_DOMAIN_FORBIDDEN_WORDS = ("ultravox", "livekit", "google", "cal.com", "calcom", "whatsapp", "resend", "chatwoot")
-# The ORM classes CRM owns (``CrmWhatsAppMessage`` is Messaging's and stays in app.models.crm).
+# The ORM classes CRM owns.
 CRM_MODELS = {
     "CrmContact", "CrmPipelineStage", "CrmLead", "CrmCallContext", "CrmActivity", "CrmTask",
     "CrmVoiceCall", "CrmVoiceCallEvent",
@@ -637,26 +636,11 @@ class ModuleBoundaryTests(unittest.TestCase):
         for old in gone:
             self.assertFalse((APP.parent / (old.replace(".", "/") + ".py")).exists(), old)
 
-    def test_app_models_crm_holds_only_the_messaging_model_and_reexports_nothing(self) -> None:
-        # CrmWhatsAppMessage is Messaging's (pending its migration); app.models.crm must not become a
-        # shim for the models CRM owns now.
-        path = APP / "models" / "crm.py"
-        tree = ast.parse(_source(path))
-        classes = {node.name for node in tree.body if isinstance(node, ast.ClassDef)}
-        self.assertEqual(classes, {"CrmWhatsAppMessage"})
-        imported = {
-            alias.name
-            for node in ast.walk(tree)
-            if isinstance(node, (ast.Import, ast.ImportFrom))
-            for alias in node.names
-        }
-        self.assertFalse(imported & CRM_MODELS, "app.models.crm must not re-export CRM's models")
-        self.assertFalse(
-            self._violations(
-                lambda s, t: t == "app.models.crm" and s.startswith(("app.modules.crm.application", "app.modules.crm.domain"))
-            ),
-            "CRM application/domain must not know CrmWhatsAppMessage",
-        )
+    def test_app_models_crm_is_gone_and_the_message_model_belongs_to_integrations(self) -> None:
+        # CrmWhatsAppMessage moved to Integrations / Messaging (table name unchanged); the legacy
+        # app.models.crm module must not come back, nor be imported by anyone.
+        self.assertFalse((APP / "models" / "crm.py").exists())
+        self.assertEqual(self._violations(lambda s, t: t == "app.models.crm"), [])
 
     def test_nobody_imports_crm_models_from_the_legacy_module(self) -> None:
         offenders = []
@@ -1036,7 +1020,13 @@ CRITICAL_PUBLIC_APIS = {
     ],
     "app.modules.analytics.public": ["VoiceCallProjectionFacade"],
     "app.modules.crm.public": ["CrmFacade", "CrmVoiceCalls", "OutboundCallLedger"],
-    "app.modules.integrations.public": ["WhatsAppFacade"],
+    "app.modules.integrations.public": [
+        "IntegrationsFacade",
+        "WhatsAppFacade",
+        "EmailFacade",
+        "ChatwootFacade",
+        "IntegrationEvents",
+    ],
     "app.modules.notifications.public": [
         "publish_booking_event",
         "publish_call_event",
@@ -1060,6 +1050,7 @@ CRITICAL_PUBLIC_APIS = {
         "CrmToolPort",
         "MessagingToolPort",
         "VoiceSessionToolPort",
+        "ToolAuditPort",
     ],
 }
 PUBLIC_DTOS = {
@@ -1100,6 +1091,13 @@ PUBLIC_DTOS = {
         "WhatsAppSendOutcome",
         "WhatsAppDeliveryEvidence",
         "WhatsAppMessageReceipt",
+        "WhatsAppMessageView",
+        "LeadWhatsAppResult",
+        "LeadEmailResult",
+        "EmailAssetRef",
+        "IntegrationAvailability",
+        "IntegrationEventRecord",
+        "IntegrationEventSummary",
     ],
     "app.modules.notifications.public": [
         "NotificationTemplate",
@@ -1237,7 +1235,7 @@ class ToolPortsTests(unittest.TestCase):
             def enrich_context(self, session_id, **kw):
                 calls.append(("enrich", session_id, kw["contact"], kw["lead"], kw["event_source"]))
 
-        self.ports = ToolPorts(scheduling=Scheduling(), crm=Crm(), messaging=None, sessions=Sessions())
+        self.ports = ToolPorts(scheduling=Scheduling(), crm=Crm(), messaging=None, sessions=Sessions(), audit=None)
         self.session = ToolSessionView(
             id="s1", tenant_id="t1", status="connected", agent_id="a1", agent_status="active",
             tool_bindings=(), context=SessionContextV1(),

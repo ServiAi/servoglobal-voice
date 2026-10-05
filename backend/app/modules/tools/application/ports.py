@@ -83,9 +83,25 @@ class VoiceSessionToolPort(Protocol):
     ) -> None: ...
 
 
+class ToolAuditPort(Protocol):
+    def record(
+        self,
+        *,
+        tenant_id: str,
+        provider: str,
+        event_type: str,
+        status: str,
+        resource_type: str | None = None,
+        resource_id: str | None = None,
+        message: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> None: ...
+
+
 @dataclass(frozen=True)
 class ToolPorts:
     scheduling: SchedulingToolPort
     crm: CrmToolPort
     messaging: MessagingToolPort
     sessions: VoiceSessionToolPort
+    audit: ToolAuditPort

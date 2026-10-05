@@ -445,6 +445,16 @@ class WhatsAppFacade:
         return tuple(_message_view(message) for message in self._messages().list_lead_messages(tenant_id, lead_id))
 
 
+def _email_result(result: Any) -> LeadEmailResult:
+    return LeadEmailResult(
+        status=result.status,
+        email_send_id=result.email_send_id,
+        provider_email_id=result.provider_email_id,
+        preview=result.preview,
+        error_message=result.error_message,
+    )
+
+
 class EmailFacade:
     def __init__(self, db: Session) -> None:
         self.db = db
@@ -454,16 +464,32 @@ class EmailFacade:
 
         return EmailSendService(self.db)
 
-    def preview_lead_email(self, **command: Any) -> LeadEmailResult:
-        """Same keyword arguments as ``send_lead_email``. Raises ValueError."""
-        result = self._sends().preview_lead_email(**command)
-        return LeadEmailResult(
-            status=result.status,
-            email_send_id=result.email_send_id,
-            provider_email_id=result.provider_email_id,
-            preview=result.preview,
-            error_message=result.error_message,
+    def preview_lead_email(
+        self,
+        *,
+        tenant_id: str,
+        lead_id: str,
+        template_key: str,
+        subject: str | None = None,
+        message: str | None = None,
+        content_format: str | None = None,
+        content: str | None = None,
+        asset_ids: Sequence[str] | None = None,
+        form_token_ids: Sequence[str] | None = None,
+    ) -> LeadEmailResult:
+        """Render without sending or persisting. Raises ValueError."""
+        result = self._sends().preview_lead_email(
+            tenant_id=tenant_id,
+            lead_id=lead_id,
+            template_key=template_key,
+            subject=subject,
+            message=message,
+            content_format=content_format,
+            content=content,
+            asset_ids=list(asset_ids) if asset_ids else None,
+            form_token_ids=list(form_token_ids) if form_token_ids else None,
         )
+        return _email_result(result)
 
     def send_lead_email(
         self,
@@ -490,13 +516,7 @@ class EmailFacade:
             asset_ids=list(asset_ids) if asset_ids else None,
             form_token_ids=list(form_token_ids) if form_token_ids else None,
         )
-        return LeadEmailResult(
-            status=result.status,
-            email_send_id=result.email_send_id,
-            provider_email_id=result.provider_email_id,
-            preview=result.preview,
-            error_message=result.error_message,
-        )
+        return _email_result(result)
 
     def create_asset(
         self,

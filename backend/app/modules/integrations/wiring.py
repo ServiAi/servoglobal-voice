@@ -208,14 +208,14 @@ class PublicNotifications:
     """NotificationsPort over ``notifications.public`` (resolved at call time)."""
 
     def delivery_exists(self, *, tenant_id: str, delivery_id: str) -> bool:
-        from app.modules.notifications import public
+        from app.modules.notifications.public import delivery_exists
 
-        return public.delivery_exists(tenant_id=tenant_id, delivery_id=delivery_id)
+        return delivery_exists(tenant_id=tenant_id, delivery_id=delivery_id)
 
     def report_delivery_status(self, *, tenant_id, provider_message_id, status, occurred_at, error_message) -> None:
-        from app.modules.notifications import public
+        from app.modules.notifications.public import report_delivery_status
 
-        public.report_delivery_status(
+        report_delivery_status(
             tenant_id=tenant_id,
             provider_message_id=provider_message_id,
             status=status,
