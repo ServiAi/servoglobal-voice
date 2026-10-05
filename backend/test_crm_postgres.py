@@ -212,6 +212,55 @@ class CrmPostgresTests(unittest.TestCase):
         self.assertEqual(self._open_count(tenant_id, contact_id), 1)
         self.assertEqual(len(set(results)), 1)
 
+    def _progressed_lead(self, tenant_id: str, contact_id: str, stage_key: str) -> str:
+        with self.SessionLocal() as db:
+            lead = CrmLeadService(db).get_or_create_open_lead(tenant_id, contact_id)
+            lead_id = lead.id
+            CrmStageTransitionService(db).move(tenant_id, lead, stage_key, description="test", manual=True)
+        return lead_id
+
+    def test_connected_call_and_service_reuse_the_open_lead_whatever_its_stage(self) -> None:
+        for stage_key in ("connected", "qualified", "follow_up"):
+            with self.subTest(stage=stage_key):
+                tenant_id = self._tenant()
+                contact_id = self._contact_id(tenant_id)
+                existing_id = self._progressed_lead(tenant_id, contact_id, stage_key)
+                call_id = self._call_row(tenant_id)
+                with self.SessionLocal() as db:
+                    # resolver path with no call/context correlation, then the plain service path
+                    contact = db.get(CrmContact, contact_id)
+                    ref = CallRef(id=call_id, tenant_id=tenant_id, external_provider="x", external_call_id="no-match")
+                    via_resolver = CrmLeadResolverService(db).lead_service.claim_or_create_open_lead(
+                        tenant_id, contact.id, stage_key="connected", call_id=call_id,
+                        find_existing=lambda: None,
+                    )
+                    via_service = CrmLeadService(db).claim_or_create_open_lead(tenant_id, contact_id)
+                self.assertEqual((via_resolver[0].id, via_resolver[1]), (existing_id, False))
+                self.assertEqual((via_service[0].id, via_service[1]), (existing_id, False))
+                self.assertEqual(self._open_count(tenant_id, contact_id), 1)
+
+    def test_form_first_keeps_its_rule_a_new_context_opens_a_new_lead_once_the_previous_progressed(self) -> None:
+        tenant_id = self._tenant()
+        contact_id = self._contact_id(tenant_id)
+        first = self._progressed_lead(tenant_id, contact_id, "qualified")
+        second = self._new_context(tenant_id, contact_id, "next-form")
+        self.assertNotEqual(first, second)
+        # ...and concurrent submissions of that new form still converge on one lead
+        results = self._in_threads(
+            lambda: self._new_context(tenant_id, contact_id, "another-form"),
+            lambda: self._new_context(tenant_id, contact_id, "yet-another-form"),
+        )
+        self.assertFalse([r for r in results if isinstance(r, Exception)], results)
+        self.assertEqual(len(set(results)), 1)
+
+    def test_claiming_an_open_lead_for_an_unknown_contact_fails_cleanly(self) -> None:
+        tenant_id, other_tenant = self._tenant(), self._tenant()
+        contact_id = self._contact_id(other_tenant)
+        with self.SessionLocal() as db:
+            with self.assertRaisesRegex(ValueError, "Contact not found"):
+                CrmLeadService(db).claim_or_create_open_lead(tenant_id, contact_id)
+        self.assertEqual(self._count(CrmLead), 0)
+
     def test_open_lead_invariant_is_scoped_per_contact(self) -> None:
         tenant_id = self._tenant()
         c1 = self._contact_id(tenant_id, "+573001110001", "one@example.com")

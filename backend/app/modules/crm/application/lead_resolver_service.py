@@ -116,6 +116,7 @@ class CrmLeadResolverService:
                 call_id=call.id if call and call.id else None,
                 metadata=meta,
                 find_existing=existing,
+                reuse_any_open_lead=False,  # form-first: a new submission may open a new lead
             )
             if created:
                 return lead

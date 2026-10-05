@@ -73,6 +73,7 @@ class CrmLeadService:
         call_id: str | None = None,
         metadata: dict | None = None,
         find_existing: Callable[[], CrmLead | None] | None = None,
+        reuse_any_open_lead: bool = True,
     ) -> tuple[CrmLead, bool]:
         """THE way to create an open lead: no other application service may build a
         ``CrmLead``. Serialises concurrent requests for the same contact on the
@@ -83,15 +84,30 @@ class CrmLeadService:
 
         The default stages are ensured BEFORE locking (that step commits); there is no
         external I/O under the lock. A unique-index race on call/context/form is
-        resolved once by reloading the winner, otherwise re-raised."""
+        resolved once by reloading the winner, otherwise re-raised.
+
+        ``reuse_any_open_lead`` (default) falls back to ANY open lead of the contact, in any
+        stage, so tenant + contact keeps at most one open lead. The only caller that opts out
+        is the form-first resolver, whose product rule is that a new form submission opens a new
+        lead once the previous one has progressed past ``new``."""
         meta = metadata or {}
         stage = self.pipeline_service.get_stage_by_key(tenant_id, stage_key)
-        self.db.execute(
+        locked_contact_id = self.db.scalar(
             select(CrmContact.id)
             .where(CrmContact.id == contact_id, CrmContact.tenant_id == tenant_id)
             .with_for_update()
         )
-        finder = find_existing or (lambda: self._existing_open_lead(tenant_id, contact_id, call_id, meta))
+        if locked_contact_id is None:
+            raise ValueError("Contact not found in this tenant")
+        specific = find_existing or (lambda: self._existing_open_lead(tenant_id, contact_id, call_id, meta))
+
+        def finder() -> CrmLead | None:
+            # The caller's correlation first, then (unless it opted out) any open lead.
+            found = specific()
+            if found is None and reuse_any_open_lead:
+                found = self._open_lead(tenant_id, contact_id)
+            return found
+
         existing = finder()
         if existing is not None:
             return existing, False
