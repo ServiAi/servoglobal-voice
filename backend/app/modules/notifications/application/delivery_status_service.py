@@ -5,8 +5,8 @@ from datetime import datetime
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.notifications import NotificationDelivery
-from app.services.whatsapp_client import sanitize_whatsapp_error
+from app.modules.notifications.infrastructure.models import NotificationDelivery
+from app.modules.integrations.public import sanitize_whatsapp_error
 
 _ACCEPTED_STATUSES = {"sent", "delivered", "read", "failed"}
 _STATUS_RANK = {"sent": 1, "delivered": 2, "read": 3}
@@ -35,6 +35,7 @@ class NotificationDeliveryStatusService:
                 NotificationDelivery.id == delivery_id,
             )
         )
+
 
     def get_by_provider_message_id(
         self, *, tenant_id: str, provider_message_id: str
@@ -101,3 +102,15 @@ class NotificationDeliveryStatusService:
 
         self.db.add(delivery)
         return delivery
+
+
+def delivery_exists(*, tenant_id: str, delivery_id: str) -> bool:
+    from app.db.session import SessionLocal
+
+    db = SessionLocal()
+    try:
+        return NotificationDeliveryStatusService(db).get_delivery(
+            tenant_id=tenant_id, delivery_id=delivery_id
+        ) is not None
+    finally:
+        db.close()

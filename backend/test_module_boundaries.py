@@ -101,7 +101,7 @@ SCHEDULING_LEGACY_ALLOWED = {
 # Composition-root exception: only ``wiring`` may reach the platform's existing
 # domain-event infrastructure. Retired when Notifications subscribes to
 # ``domain_events`` by itself (see MODULAR_MONOLITH_MIGRATION.md).
-SCHEDULING_WIRING_ALLOWED = {"app.services.notification_event_pipeline"}
+SCHEDULING_WIRING_ALLOWED = {"app.modules.notifications.public"}
 # Only these application modules may lazily default their ports via wiring.
 SCHEDULING_APPLICATION_MAY_IMPORT_WIRING = {
     "app.modules.scheduling.application.booking_service",
@@ -110,15 +110,19 @@ SCHEDULING_APPLICATION_MAY_IMPORT_WIRING = {
 # Never reachable from Scheduling code (outside wiring): CRM and Notifications.
 SCHEDULING_FORBIDDEN_PREFIXES = (
     "app.models.crm",
-    "app.models.notifications",
+    "app.modules.notifications.infrastructure.models",
     "app.schemas.crm",
     "app.services.crm_",
     "app.services.notification_",
-    "app.services.domain_event_service",
+    "app.modules.notifications.application.domain_event_service",
     "app.services.whatsapp_",
     "app.modules.crm.application",
     "app.modules.crm.infrastructure",
-    "app.modules.notifications",
+    "app.modules.notifications.api",
+    "app.modules.notifications.application",
+    "app.modules.notifications.domain",
+    "app.modules.notifications.infrastructure",
+    "app.modules.notifications.runtime",
 )
 # Imports that must never appear in the pure domain.
 SCHEDULING_DOMAIN_FORBIDDEN = (
@@ -1033,6 +1037,13 @@ CRITICAL_PUBLIC_APIS = {
     "app.modules.analytics.public": ["VoiceCallProjectionFacade"],
     "app.modules.crm.public": ["CrmFacade", "CrmVoiceCalls", "OutboundCallLedger"],
     "app.modules.integrations.public": ["WhatsAppFacade"],
+    "app.modules.notifications.public": [
+        "publish_booking_event",
+        "publish_call_event",
+        "report_delivery_status",
+        "delivery_exists",
+        "run_worker_cli",
+    ],
     "app.modules.scheduling.public": ["SchedulingFacade"],
 
     "app.modules.identity.public": ["FeatureFlags"],
@@ -1084,7 +1095,18 @@ PUBLIC_DTOS = {
     ],
     "app.modules.agents.public": ["AgentToolBindingView", "PublishedAgent", "AgentDisplay", "ImportedAgent"],
     "app.modules.voice_legacy.public": ["LegacyVoiceDefaults"],
-    "app.modules.integrations.public": ["WhatsAppTemplateContract", "WhatsAppSendOutcome"],
+    "app.modules.integrations.public": [
+        "WhatsAppTemplateContract",
+        "WhatsAppSendOutcome",
+        "WhatsAppDeliveryEvidence",
+        "WhatsAppMessageReceipt",
+    ],
+    "app.modules.notifications.public": [
+        "NotificationTemplate",
+        "NotificationMessageReceipt",
+        "NotificationSendResult",
+        "NotificationDeliveryEvidence",
+    ],
     "app.modules.scheduling.public": ["BookingSummary", "BookingView", "BookingCustomer", "CreateBookingCommand"],
 }
 # Genuinely dynamic payloads, not entities: the raw LLM argument as the Tool

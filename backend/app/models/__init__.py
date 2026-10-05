@@ -19,7 +19,7 @@ from app.models.integrations import (
     TenantWhatsAppFlow,
     TenantWhatsAppTemplate,
 )
-from app.models.notifications import (
+from app.modules.notifications.infrastructure.models import (
     DomainEvent,
     NotificationDelivery,
     TenantCapability,

@@ -11,7 +11,6 @@ from sqlalchemy.orm import Session
 
 from app.models.crm import CrmWhatsAppMessage
 from app.models.integrations import TenantWhatsAppConfig
-from app.models.notifications import NotificationDelivery
 from app.modules.crm.public import ContactProfile, CrmFacade, LeadProfile
 from app.schemas.crm import WhatsAppActionRequest, WhatsAppActionResponse
 from app.schemas.integrations import (
@@ -19,9 +18,6 @@ from app.schemas.integrations import (
     WhatsAppTestMessageResponse,
 )
 from app.services.integration_event_service import IntegrationEventService
-from app.services.notification_delivery_status_service import (
-    NotificationDeliveryStatusService,
-)
 from app.services.whatsapp_client import (
     WhatsAppCloudClient,
     WhatsAppCloudClientError,
@@ -88,7 +84,6 @@ class WhatsAppMessageService:
         self.templates = WhatsAppTemplateService(db)
         self.events = IntegrationEventService(db)
         self.crm = CrmFacade(db)
-        self.delivery_status = NotificationDeliveryStatusService(db)
 
     def _get_lead(self, tenant_id: str, lead_id: str) -> LeadProfile:
         lead = self.crm.get_lead_profile(tenant_id, lead_id)
@@ -256,13 +251,9 @@ class WhatsAppMessageService:
         # finalizing the delivery is WhatsAppNotificationExecutor's job,
         # since only it knows and can validate the current claim token.
         if notification_delivery_id:
-            delivery_exists = self.db.scalar(
-                select(NotificationDelivery.id).where(
-                    NotificationDelivery.tenant_id == tenant_id,
-                    NotificationDelivery.id == notification_delivery_id,
-                )
-            )
-            if delivery_exists is None:
+            from app.modules.notifications.public import delivery_exists
+
+            if not delivery_exists(tenant_id=tenant_id, delivery_id=notification_delivery_id):
                 raise ValueError("Notification delivery not found for tenant")
 
         config, client_config = self.configs.get_active_client_config(tenant_id)
@@ -527,14 +518,16 @@ class WhatsAppMessageService:
                 error = item.get("errors")
                 status_error_message = sanitize_whatsapp_error(str(error)) if error else "WhatsApp delivery failed"
                 message.error_message = status_error_message
-            self.delivery_status.apply_provider_status(
+            self.db.commit()
+            from app.modules.notifications.public import report_delivery_status
+
+            report_delivery_status(
                 tenant_id=config.tenant_id,
                 provider_message_id=provider_message_id,
                 status=status,
                 occurred_at=now,
                 error_message=status_error_message,
             )
-            self.db.commit()
             self.events.record_event(
                 tenant_id=message.tenant_id,
                 provider=self.provider,

@@ -8,11 +8,11 @@ from datetime import datetime, timedelta
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.domain.notification_delivery_state import (
+from app.modules.notifications.domain.delivery_state import (
     FINAL_NON_RETRYABLE_STATUSES,
     NON_RETRYABLE_ERROR_CODES,
 )
-from app.models.notifications import NotificationDelivery
+from app.modules.notifications.infrastructure.models import NotificationDelivery
 
 _STALE_OWNER_ERROR_CODE = "stale_delivery_owner"
 

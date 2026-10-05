@@ -37,6 +37,7 @@ jobs:
     env:
       DATABASE_URL: postgresql+psycopg://serviai:serviai@localhost:5432/serviai
       VOICE_RUNTIME_TEST_DATABASE_URL: postgresql+psycopg://serviai:serviai@localhost:5432/serviai_voice_runtime_test
+      NOTIFICATION_TEST_DATABASE_URL: postgresql+psycopg://serviai:serviai@localhost:5432/serviai_notification_worker_test
       ULTRAVOX_API_KEY: ci_test_ultravox_key
     steps:
       - uses: actions/checkout@v4
@@ -44,7 +45,7 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install -r backend/requirements.txt
-      - name: Create Voice Runtime PostgreSQL test database
+      - name: Create Voice Runtime and Notification PostgreSQL test databases
         run: |
           python - <<'PY'
           import psycopg
@@ -55,19 +56,17 @@ jobs:
           )
           try:
               with conn.cursor() as cur:
-                  cur.execute(
-                      "SELECT 1 FROM pg_database WHERE datname = %s",
-                      ("serviai_voice_runtime_test",),
-                  )
-                  if cur.fetchone() is None:
-                      cur.execute("CREATE DATABASE serviai_voice_runtime_test OWNER serviai")
+                  for name in ("serviai_voice_runtime_test", "serviai_notification_worker_test"):
+                      cur.execute("SELECT 1 FROM pg_database WHERE datname = %s", (name,))
+                      if cur.fetchone() is None:
+                          cur.execute(f"CREATE DATABASE {name} OWNER serviai")
           finally:
               conn.close()
           PY
       - name: Backend test suite (excludes test_endpoints.py / test_kpis.py / test_db.py / test_db_user.py / test_db_validation.py - hardcoded staging DB creds, no network to staging from CI; excludes test_crm_sprint_2.py - known pre-existing assertion drift vs voice_call_service/voice_config_service error messages, unrelated to this branch, tracked separately)
         working-directory: backend
         run: |
-          modules=$(ls test_*.py | grep -v -e test_endpoints.py -e test_kpis.py -e test_db.py -e test_db_user.py -e test_db_validation.py -e test_crm_sprint_2.py -e test_voice_runtime_postgres.py -e test_telephony_postgres.py -e test_scheduling_postgres.py -e test_crm_postgres.py | sed 's/\.py$//')
+          modules=$(ls test_*.py | grep -v -e test_endpoints.py -e test_kpis.py -e test_db.py -e test_db_user.py -e test_db_validation.py -e test_crm_sprint_2.py -e test_voice_runtime_postgres.py -e test_telephony_postgres.py -e test_scheduling_postgres.py -e test_crm_postgres.py -e test_notification_worker_postgres.py | sed 's/\.py$//')
           status=0
           for module in $modules; do
             # Most test modules pin DATABASE_URL to their own sqlite file at import time,
@@ -103,6 +102,14 @@ jobs:
       - name: CRM PostgreSQL concurrency (get-or-create contact/lead, timeline and call-event dedup)
         working-directory: backend
         run: python -m unittest test_crm_postgres -v
+      - name: Notifications PostgreSQL concurrency (claim lease, SKIP LOCKED, recovery)
+        # Explicit shell enables -o pipefail, so a unittest failure is not masked by tee.
+        shell: bash
+        working-directory: backend
+        run: |
+          python -m unittest test_notification_worker_postgres -v 2>&1 | tee /tmp/notif_pg.log
+          # Fail if the suite was skipped instead of executed (env var missing/misconfigured).
+          ! grep -q "skipped" /tmp/notif_pg.log
       - name: Compile check
         working-directory: backend
         run: python -m compileall app

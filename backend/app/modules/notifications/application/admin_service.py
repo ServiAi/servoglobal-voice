@@ -7,13 +7,13 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.domain.events import SUPPORTED_DOMAIN_EVENT_TYPES, validate_domain_event_payload
-from app.domain.notification_event_schemas import (
+from app.modules.notifications.domain.events import SUPPORTED_DOMAIN_EVENT_TYPES, validate_domain_event_payload
+from app.modules.notifications.domain.event_schemas import (
     get_notification_event_schema,
     list_notification_event_schemas,
     notification_capabilities_metadata,
 )
-from app.domain.notification_delivery_state import (
+from app.modules.notifications.domain.delivery_state import (
     CANCELLED,
     DEAD_LETTER,
     DELIVERED,
@@ -24,7 +24,7 @@ from app.domain.notification_delivery_state import (
     READ,
     SENT,
 )
-from app.domain.notification_rules import (
+from app.modules.notifications.domain.rules import (
     NotificationConditionOperator,
     NotificationRuleConfigurationError,
     SUPPORTED_NOTIFICATION_ACTIONS,
@@ -33,26 +33,25 @@ from app.domain.notification_rules import (
     SUPPORTED_SCHEDULE_MODES,
     validate_notification_rule,
 )
-from app.domain.notification_variables import (
+from app.modules.notifications.domain.variables import (
     NotificationVariableConfigurationError,
     NotificationVariableFormat,
     NotificationVariableSource,
     NotificationVariableSpec,
     validate_variable_mapping,
 )
-from app.models.integrations import TenantWhatsAppTemplate
-from app.models.notifications import (
+from app.modules.notifications.infrastructure.models import (
     DomainEvent,
     NotificationDelivery,
     TenantCapability,
     TenantNotificationRecipient,
     TenantNotificationRule,
 )
-from app.services.whatsapp_message_service import mask_phone, normalize_phone
-from app.services.whatsapp_template_service import WhatsAppTemplateService
-from app.services.notification_condition_service import NotificationConditionService
-from app.services.notification_recipient_service import NotificationRecipientService
-from app.services.notification_variable_mapper import NotificationVariableMapper
+from app.modules.integrations.public import get_whatsapp_template
+from app.modules.notifications.domain.destinations import mask_recipient, normalize_recipient
+from app.modules.notifications.application.condition_service import NotificationConditionService
+from app.modules.notifications.application.recipient_service import NotificationRecipientService
+from app.modules.notifications.application.variable_mapper import NotificationVariableMapper
 
 KNOWN_CAPABILITY_KEYS = ("booking_notifications", "call_notifications")
 _RECIPIENT_STATUSES = {"active", "inactive"}
@@ -405,20 +404,18 @@ class NotificationAdminService:
                 code=getattr(exc, "code", "dry_run_resolution_failed"),
                 kind="unprocessable",
             ) from None
-        template = self.db.scalar(
-            select(TenantWhatsAppTemplate).where(
-                TenantWhatsAppTemplate.tenant_id == tenant_id,
-                TenantWhatsAppTemplate.template_key == rule.template_key,
-            )
-        )
-        preview = template.body if template is not None else ""
+        try:
+            template = get_whatsapp_template(tenant_id=tenant_id, template_key=rule.template_key)
+            preview = template.body
+        except ValueError:
+            preview = ""
         for key, value in variables.items():
             preview = preview.replace("{{" + key + "}}", value)
         return {
             "matches": matches,
             "condition_results": condition_results,
             "variables": variables,
-            "recipients_masked": [mask_phone(recipient) for recipient in recipients],
+            "recipients_masked": [mask_recipient(recipient) for recipient in recipients],
             "preview": preview,
         }
 
@@ -451,19 +448,12 @@ class NotificationAdminService:
         variable_mapping: dict[str, NotificationVariableSpec],
     ) -> None:
         try:
-            template = WhatsAppTemplateService(self.db).get_synced_template(
-                tenant_id, template_key=template_key, provider_template_name=None
-            )
+            template = get_whatsapp_template(tenant_id=tenant_id, template_key=template_key)
         except ValueError:
             raise NotificationAdminError(code="whatsapp_template_not_approved", kind="unprocessable") from None
 
-        try:
-            required_keys = WhatsAppTemplateService(self.db).get_approved_parameter_keys(template)
-        except ValueError:
-            raise NotificationAdminError(code="template_variables_malformed", kind="unprocessable") from None
-
         missing = [
-            key for key in required_keys if not self._is_effective_variable_mapping(variable_mapping.get(key))
+            key for key in template.required_variables if not self._is_effective_variable_mapping(variable_mapping.get(key))
         ]
         if missing:
             raise NotificationAdminError(code="template_variable_mapping_missing", kind="unprocessable")
@@ -551,7 +541,7 @@ class NotificationAdminService:
 
     @staticmethod
     def _normalize_destination_or_raise(raw_destination: str) -> str:
-        destination = normalize_phone(raw_destination)
+        destination = normalize_recipient(raw_destination)
         if not destination or not (_MIN_DESTINATION_LENGTH <= len(destination) <= _MAX_DESTINATION_LENGTH):
             raise NotificationAdminError(code="invalid_destination", kind="unprocessable")
         return destination
@@ -628,7 +618,7 @@ class NotificationAdminService:
             "rule_name": rule_name,
             "event_type": event_type_value,
             "channel": delivery.channel,
-            "recipient_masked": mask_phone(delivery.recipient),
+            "recipient_masked": mask_recipient(delivery.recipient),
             "template_key": delivery.template_key,
             "status": delivery.status,
             "scheduled_for": delivery.scheduled_for,

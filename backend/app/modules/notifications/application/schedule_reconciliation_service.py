@@ -6,7 +6,7 @@ from datetime import datetime
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.notifications import DomainEvent, NotificationDelivery
+from app.modules.notifications.infrastructure.models import DomainEvent, NotificationDelivery
 
 _RELEVANT_EVENT_TYPES = {"booking.cancelled", "booking.rescheduled"}
 _CANCELLABLE_STATUSES = {"pending", "failed"}

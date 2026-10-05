@@ -10,8 +10,8 @@ os.environ["DATABASE_URL"] = f"sqlite:///./{TEST_DB_PATH.as_posix()}"
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.models.identity import Tenant
-from app.models.notifications import DomainEvent, NotificationDelivery, TenantNotificationRule
-from app.services.notification_retry_policy import NotificationRetryDecision, NotificationRetryPolicy
+from app.modules.notifications.infrastructure.models import DomainEvent, NotificationDelivery, TenantNotificationRule
+from app.modules.notifications.application.retry_policy import NotificationRetryDecision, NotificationRetryPolicy
 
 FIXED_NOW = datetime(2026, 8, 1, 10, 0, 0, tzinfo=timezone.utc)
 

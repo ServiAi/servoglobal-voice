@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
-from app.models.notifications import TenantNotificationRule
+from app.modules.notifications.infrastructure.models import TenantNotificationRule
 
 
 class NotificationRuleService:

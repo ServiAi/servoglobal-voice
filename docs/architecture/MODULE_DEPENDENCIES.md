@@ -135,7 +135,7 @@ Aplicadas por `backend/test_module_boundaries.py`:
 26. `app.modules.telephony.domain` es puro (sin SQLAlchemy/FastAPI/LiveKit/CRM/Voice/httpx) y `application` no importa `api`.
 27. El ORM de Telephony (`TenantSipRoute`) sólo lo importa Telephony y el registro de modelos; nadie importa las rutas viejas (`voice_phone_service`, `livekit_sip_service`, `voice_sip_route_service`, `voice_capacity_service`, `voice_session_sip_service`, `asterisk_provisioning_*`).
 28. No hay shims: `KNOWN_SHIMS` está vacío; un shim nuevo debe registrarse ahí. Los procesos de entrada (`app.workers.asterisk_provisioner`) pueden importar el agente directamente (raíz de composición).
-30. Scheduling sólo toca código legacy compartido (`SCHEDULING_LEGACY_ALLOWED`: `api.auth.deps`, `core.config`, `db.*`, `models.integrations` + `integration_event_service` como auditoría compartida, `secret_manager_service`) y a otros módulos sólo por `<módulo>.public`. Nunca `models.crm`, `schemas.crm`, `crm_*`, `notification_*`, `domain_event_service` ni WhatsApp; la única excepción es `wiring → notification_event_pipeline` (`SCHEDULING_WIRING_ALLOWED`).
+30. Scheduling sólo toca código legacy compartido (`SCHEDULING_LEGACY_ALLOWED`: `api.auth.deps`, `core.config`, `db.*`, `models.integrations` + `integration_event_service` como auditoría compartida, `secret_manager_service`) y a otros módulos sólo por `<módulo>.public`. Nunca `models.crm`, `schemas.crm`, `crm_*`, `notification_*`, `domain_event_service` ni WhatsApp; la única excepción es `wiring → notifications.public` (`SCHEDULING_WIRING_ALLOWED`).
 31. `app.modules.scheduling.domain` es puro (sin SQLAlchemy/FastAPI/httpx/Google/CRM/Notifications); `application` no importa `api` ni `wiring` (salvo `booking_service`/`calcom_webhook` para sus puertos por defecto); `infrastructure` no importa `api` ni `booking_service`.
 32. Los routers de Scheduling no importan el ORM; el ORM de Scheduling sólo lo importan el módulo y el registro `app.models`; el resto accede por `scheduling.public` (el entrypoint monta los routers).
 33. Las rutas antiguas (`services/booking_service`, `scheduling_*`, `calcom_*`, `google_calendar_*`, `api/endpoints/{scheduling,calcom}`, `schemas/scheduling`, `core/scheduling_exceptions`, …) no existen ni se importan; `scheduling.public` carga sólo contratos (import ligero) y ningún contrato público expone tokens/claves/secretos.
@@ -211,7 +211,7 @@ Mismo grafo AST (imports perezosos incluidos), `develop@90bf9d2` → esta rama. 
 | Métrica | Antes | Después |
 | --- | --- | --- |
 | Scheduling → internals de CRM | 12 | **0** (`crm.public` vía puertos) |
-| Scheduling → internals de Notifications | 3 | **1** (sólo `wiring → notification_event_pipeline`, allowlist temporal) |
+| Scheduling -> Notifications internals | 3 | **0** (`notifications.public`) |
 | Scheduling → internals de Integrations | 16 | 4 (auditoría compartida: `integration_event_service` ×2, `models.integrations` ×2 para `TenantIntegrationEvent`) |
 | Scheduling → internals de Agents/Voice/Telephony | 0 | **0** |
 | ORM de CRM cruzando Scheduling (`→ app.models.crm`) | 6 | **0** |
@@ -223,7 +223,7 @@ Mismo grafo AST (imports perezosos incluidos), `develop@90bf9d2` → esta rama. 
 | Imports de `CrmBooking` desde `app.models.crm` | app 9 · tests 9 | **app 0 · tests 0** |
 | `BookingService → CrmActivityService` | 1 | **0** |
 | `BookingService → NotificationEventPipeline` | 1 | **0** |
-| Componentes conexas con Scheduling | 0 | 1 (6 archivos, 3 de Scheduling: `public`, `wiring`, `booking_service` ↔ `crm.public`, `crm_lead_service`, `notification_event_pipeline`; sólo por `public.py`/wiring perezoso). La componente grande (28) no incluye Scheduling |
+| Componentes conexas con Scheduling | 0 | 1 (6 archivos, 3 de Scheduling: `public`, `wiring`, `booking_service` ↔ `crm.public`, `crm_lead_service`, `notifications.public`; sólo por `public.py`/wiring perezoso). La componente grande (28) no incluye Scheduling |
 | Shims/reexports temporales | 4→0 (Voice) | **0** (ninguno creado) |
 | Tests backend (métodos `test_*`) | 1789 | 1828 |
 | Tests PostgreSQL (métodos en `test_*postgres.py`) | 23 | 28 (+5 de Scheduling: Round Robin ×3, ciclo de vida, doble cancelación; cifra al cierre de la migración: el PR #121 llevó `test_scheduling_postgres` a 24 tests) |
@@ -244,3 +244,25 @@ Mismo grafo AST (imports perezosos incluidos), `develop@90bf9d2` → esta rama. 
 | Tests PostgreSQL | 47 | 56 (+9: `test_crm_postgres`) |
 | Heads de Alembic | 1 (`202609240001`) | 1 (`202609240001`) |
 | Rutas OpenAPI | 257 paths / 336 operaciones | idénticas |
+
+
+## Notifications after migration (module 7, 2026-10-05)
+
+Local measurements on `refactor/modular-notifications`, based on `develop` at `ad90c8a5` after PR #122:
+
+| Metric | Before | After |
+| --- | --- | --- |
+| App files importing `app.models.notifications` | 16 | **0** |
+| Imports of migrated Notification service paths | 11 modules | **0** (legacy `notification_service` remains outside the module) |
+| Notification imports of foreign WhatsApp/CRM/Integrations implementations | 13 edges | **0** |
+| External imports of Notification private paths | 6 files | **0** (2 allowed composition roots mount router and register ORM) |
+| OpenAPI paths / schemas | 257 / 293 | **257 / 293**, identical snapshot |
+| Tables / Alembic head | 79 / `202609240001` | **79 / `202609240001`**, identical signatures |
+| New migrations | 0 | **0** |
+| Backend test methods | 1913 | **1920** (+7 boundary tests) |
+| PostgreSQL test methods | 64 | **64**; worker suite: 15 skipped locally |
+| Ruff | unavailable before | unavailable after (`ruff` not installed) |
+| Focused tests | not captured before | **279 Notifications, 116 pipeline/worker and 122 CRM/Scheduling/Tools/Voice tests passed**; worker PostgreSQL suite skipped (15 tests) |
+| Full backend suite | not run | blocked during discovery: `test_endpoints.py` makes an auth DB connection at import time; test DB is unavailable |
+
+The file-level import graph includes legacy files, shared model registration and composition roots: its largest SCC containing Notifications files measures 42 nodes / 2 Notifications files before and 48 / 8 after. The graph does not isolate domain-level SCCs; the meaningful boundary check is that private cross-module import edges are zero after migration. Live PostgreSQL and Ruff measurements remain unavailable here (no test database / Docker daemon; Ruff is not installed). OpenAPI and table signatures were compared with the pre-change snapshot.

@@ -3,13 +3,13 @@ from __future__ import annotations
 import unittest
 from types import SimpleNamespace
 
-from app.domain.notification_event_schemas import (
+from app.modules.notifications.domain.event_schemas import (
     NotificationEventSchemaError,
     get_notification_event_schema,
     validate_rule_event_schema,
 )
-from app.domain.notification_rules import NotificationCondition, NotificationConditionOperator
-from app.services.notification_condition_service import NotificationConditionService
+from app.modules.notifications.domain.rules import NotificationCondition, NotificationConditionOperator
+from app.modules.notifications.application.condition_service import NotificationConditionService
 
 
 class NotificationEventSchemaTests(unittest.TestCase):

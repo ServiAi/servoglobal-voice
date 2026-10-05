@@ -35,12 +35,12 @@ from sqlalchemy.orm import sessionmaker
 from app.db.base import Base
 from app.models.crm import CrmWhatsAppMessage
 from app.models.identity import Tenant
-from app.models.notifications import DomainEvent, NotificationDelivery, TenantNotificationRule
-from app.services.notification_delivery_claim_service import NotificationDeliveryClaimService
-from app.services.notification_delivery_recovery_service import NotificationDeliveryRecoveryService
-from app.services.notification_retry_policy import NotificationRetryPolicy
+from app.modules.notifications.infrastructure.models import DomainEvent, NotificationDelivery, TenantNotificationRule
+from app.modules.notifications.application.delivery_claim_service import NotificationDeliveryClaimService
+from app.modules.notifications.application.delivery_recovery_service import NotificationDeliveryRecoveryService
+from app.modules.notifications.application.retry_policy import NotificationRetryPolicy
 from app.services.whatsapp_message_service import WhatsAppSendResult
-from app.services.whatsapp_notification_executor import WhatsAppNotificationExecutor
+from app.modules.notifications.infrastructure.whatsapp_executor import WhatsAppNotificationExecutor
 
 FIXED_NOW = datetime(2026, 8, 1, 10, 0, 0, tzinfo=timezone.utc)
 PAST = FIXED_NOW - timedelta(hours=1)

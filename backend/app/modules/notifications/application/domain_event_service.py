@@ -7,8 +7,8 @@ from typing import Any
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.domain.events import validate_domain_event_payload
-from app.models.notifications import DomainEvent
+from app.modules.notifications.domain.events import validate_domain_event_payload
+from app.modules.notifications.infrastructure.models import DomainEvent
 
 _MAX_SOURCE_LENGTH = 80
 _MAX_IDEMPOTENCY_KEY_LENGTH = 255

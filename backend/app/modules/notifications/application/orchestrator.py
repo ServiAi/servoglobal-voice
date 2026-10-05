@@ -7,18 +7,18 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.domain.notification_rules import (
+from app.modules.notifications.domain.rules import (
     NotificationConditionEvaluationError,
     NotificationEventProcessingError,
     NotificationRecipientResolutionError,
     NotificationRuleConfigurationError,
     validate_notification_rule,
 )
-from app.models.notifications import DomainEvent, NotificationDelivery, TenantNotificationRule
-from app.services.notification_capability_service import NotificationCapabilityService
-from app.services.notification_condition_service import NotificationConditionService
-from app.services.notification_recipient_service import NotificationRecipientService
-from app.services.notification_rule_service import NotificationRuleService
+from app.modules.notifications.infrastructure.models import DomainEvent, NotificationDelivery, TenantNotificationRule
+from app.modules.notifications.application.capability_service import NotificationCapabilityService
+from app.modules.notifications.application.condition_service import NotificationConditionService
+from app.modules.notifications.application.recipient_service import NotificationRecipientService
+from app.modules.notifications.application.rule_service import NotificationRuleService
 
 
 @dataclass(frozen=True)

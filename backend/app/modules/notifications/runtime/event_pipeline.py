@@ -10,25 +10,24 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.db.session import SessionLocal
-from app.domain.events import _check_json_safe
-from app.models.notifications import DomainEvent
+from app.modules.notifications.domain.events import _check_json_safe
+from app.modules.notifications.infrastructure.models import DomainEvent
 from app.modules.crm.public import CrmFacade, CrmVoiceCalls, VoiceCallView
 from app.modules.scheduling.public import (
     BookingNotFoundError,
     BookingView,
     SchedulingFacade,
 )
-from app.services.domain_event_service import (
+from app.modules.notifications.application.domain_event_service import (
     DomainEventIdempotencyConflictError,
     DomainEventService,
 )
-from app.services.notification_orchestrator import NotificationOrchestrator
-from app.services.notification_retry_policy import NotificationRetryPolicy
-from app.services.notification_schedule_reconciliation_service import (
+from app.modules.notifications.application.orchestrator import NotificationOrchestrator
+from app.modules.notifications.application.retry_policy import NotificationRetryPolicy
+from app.modules.notifications.application.schedule_reconciliation_service import (
     NotificationScheduleReconciliationService,
 )
-from app.services.whatsapp_client import WhatsAppCloudClient
-from app.services.whatsapp_notification_executor import WhatsAppNotificationExecutor
+from app.modules.notifications.infrastructure.whatsapp_executor import WhatsAppNotificationExecutor
 
 logger = logging.getLogger(__name__)
 
@@ -94,7 +93,7 @@ def _ignored_result(*, error_code: str) -> NotificationEventPipelineResult:
 
 
 class NotificationEventPipeline:
-    def __init__(self, db: Session, whatsapp_client: WhatsAppCloudClient | None = None) -> None:
+    def __init__(self, db: Session, whatsapp_client: object | None = None) -> None:
         self.db = db
         self._whatsapp_client = whatsapp_client
         self._domain_events = DomainEventService(db)

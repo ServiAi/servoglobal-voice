@@ -12,15 +12,15 @@ os.environ["DATABASE_URL"] = f"sqlite:///./{TEST_DB_PATH.as_posix()}"
 
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
-from app.domain.events import (
+from app.modules.notifications.domain.events import (
     DomainEventPayloadValidationError,
     DomainEventType,
     UnsupportedDomainEventTypeError,
     validate_domain_event_payload,
 )
 from app.models.identity import Tenant
-from app.models.notifications import DomainEvent, NotificationDelivery
-from app.services.domain_event_service import (
+from app.modules.notifications.infrastructure.models import DomainEvent, NotificationDelivery
+from app.modules.notifications.application.domain_event_service import (
     DomainEventIdempotencyConflictError,
     DomainEventService,
 )

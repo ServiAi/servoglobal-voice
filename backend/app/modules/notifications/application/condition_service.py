@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from app.domain.notification_rules import (
+from app.modules.notifications.domain.rules import (
     NotificationCondition,
     NotificationConditionEvaluationError,
     NotificationConditionOperator,
