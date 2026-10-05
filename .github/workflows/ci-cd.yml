@@ -125,7 +125,7 @@ jobs:
           python -m unittest test_integrations_postgres -v 2>&1 | tee /tmp/integrations_pg.log
           # Fail if the suite was skipped instead of executed (env var missing/misconfigured).
           ! grep -q "skipped" /tmp/integrations_pg.log
-      - name: Integrations PostgreSQL migration (provider message identity: upgrade, duplicate abort, downgrade)
+      - name: Integrations PostgreSQL migration (provider message identity - upgrade, duplicate abort, downgrade)
         # Explicit shell enables -o pipefail, so a unittest failure is not masked by tee.
         shell: bash
         working-directory: backend
