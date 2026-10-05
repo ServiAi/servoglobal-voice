@@ -7,23 +7,20 @@ from datetime import UTC, datetime
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.integrations import (
-    TenantEmailSend,
-    TenantEmailSendAsset,
-    TenantFormToken,
-)
+from app.models.integrations import TenantFormToken
+from app.modules.integrations.infrastructure.models import TenantEmailSend, TenantEmailSendAsset
 from app.modules.crm.public import CrmFacade, LeadProfile
 from app.services.call_summary_service import CallSummaryService
-from app.services.email_asset_service import EmailAssetService
-from app.services.email_config_service import EmailConfigService, validate_email
-from app.services.email_render_service import EmailRenderService
-from app.services.email_template_service import (
+from app.modules.integrations.application.email.asset_service import EmailAssetService
+from app.modules.integrations.application.email.config_service import EmailConfigService, validate_email
+from app.modules.integrations.domain.email_render import EmailRenderService
+from app.modules.integrations.application.email.template_service import (
     EmailTemplateService,
     RenderedEmailTemplate,
 )
-from app.services.integration_event_service import IntegrationEventService
-from app.services.integration_service import IntegrationService
-from app.services.resend_service import (
+from app.modules.integrations.application.event_service import IntegrationEventService
+from app.modules.integrations.application.integration_service import IntegrationService
+from app.modules.integrations.infrastructure.email.resend import (
     ResendService,
     ResendServiceError,
     _sanitize_resend_error,

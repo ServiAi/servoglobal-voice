@@ -46,8 +46,8 @@ import logging
 
 from sqlalchemy.orm import Session
 
-from app.services.chatwoot_config_service import ChatwootConfigService
-from app.services.chatwoot_client import ChatwootClient
+from app.modules.integrations.application.chatwoot.config_service import ChatwootConfigService
+from app.modules.integrations.infrastructure.chatwoot.client import ChatwootClient
 from app.services.meta_client import meta_client
 
 logger = logging.getLogger(__name__)

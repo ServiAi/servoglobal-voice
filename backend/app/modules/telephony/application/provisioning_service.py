@@ -16,7 +16,7 @@ from app.modules.telephony.application.provisioning_schemas import (
 from app.modules.telephony.application.route_service import SipRouteService
 from app.modules.telephony.domain.routes import sip_username_for_route
 from app.modules.telephony.infrastructure.models import TenantSipRoute
-from app.services.integration_event_service import (
+from app.modules.integrations.application.event_service import (
     IntegrationEventService,  # shared audit trail
 )
 

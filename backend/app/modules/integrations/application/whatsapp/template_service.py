@@ -8,8 +8,8 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.crm import CrmWhatsAppMessage
-from app.models.integrations import TenantWhatsAppTemplate
+from app.modules.integrations.infrastructure.models import CrmWhatsAppMessage
+from app.modules.integrations.infrastructure.models import TenantWhatsAppTemplate
 from app.schemas.integrations import WhatsAppTemplateCreateRequest, WhatsAppTemplateUpdateRequest
 from app.services.tenant_feature_service import TenantFeatureService, WHATSAPP_BUSINESS_CALLING
 

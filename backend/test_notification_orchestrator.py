@@ -20,7 +20,7 @@ from app.modules.notifications.domain.rules import (
     NotificationRecipientResolutionError,
     NotificationRuleConfigurationError,
 )
-from app.models.crm import CrmWhatsAppMessage
+from app.modules.integrations.infrastructure.models import CrmWhatsAppMessage
 from app.models.identity import Tenant
 from app.modules.notifications.infrastructure.models import (
     DomainEvent,

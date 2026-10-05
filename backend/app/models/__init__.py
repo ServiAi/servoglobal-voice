@@ -4,17 +4,22 @@ from app.models.billing import (
     TenantBillingPlan,
     TenantUsageAlert,
 )
-from app.models.crm import CrmWhatsAppMessage
 from app.models.identity import AccessAuditLog, Tenant, TenantMembership, User
-from app.models.integrations import (
+from app.models.integrations import (  # noqa: F401  (residual: Forms + Voice config)
+    TenantVoiceAgentConfig,
+    TenantVoiceProviderConfig,
+)
+from app.modules.integrations.infrastructure.models import (  # noqa: F401  (registers the tables)
+    CrmWhatsAppMessage,
+    TenantChatwootConfig,
+    TenantChatwootInbox,
     TenantEmailAsset,
     TenantEmailConfig,
     TenantEmailSend,
+    TenantEmailSendAsset,
     TenantEmailTemplate,
     TenantIntegration,
     TenantIntegrationEvent,
-    TenantVoiceAgentConfig,
-    TenantVoiceProviderConfig,
     TenantWhatsAppConfig,
     TenantWhatsAppFlow,
     TenantWhatsAppTemplate,

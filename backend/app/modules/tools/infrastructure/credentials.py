@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.modules.tools.infrastructure.models import TenantTool, TenantToolCredential
-from app.services.integration_event_service import IntegrationEventService
+from app.modules.integrations.application.event_service import IntegrationEventService
 from app.services.secret_manager_service import SecretManager, SecretManagerError
 
 _REQUIRED_SECRET_KEYS: dict[str, frozenset[str]] = {

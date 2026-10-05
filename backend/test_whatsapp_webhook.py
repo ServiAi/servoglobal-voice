@@ -10,8 +10,8 @@ from sqlalchemy import func, select
 from _integrations_2a_test_base import Integration2ATestCase, SessionLocal
 from app.core.config import settings
 from app.modules.crm.infrastructure.models import CrmActivity
-from app.models.crm import CrmWhatsAppMessage
-from app.models.integrations import TenantIntegrationEvent, TenantWhatsAppConfig
+from app.modules.integrations.infrastructure.models import CrmWhatsAppMessage
+from app.modules.integrations.infrastructure.models import TenantIntegrationEvent, TenantWhatsAppConfig
 
 
 class WhatsAppWebhookTests(Integration2ATestCase):

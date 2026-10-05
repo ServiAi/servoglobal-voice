@@ -19,7 +19,11 @@ from app.db.session import SessionLocal, engine
 from app.modules.crm.infrastructure.models import CrmContact, CrmLead, CrmPipelineStage, CrmVoiceCall
 from app.modules.scheduling.infrastructure.models import CrmBooking, CrmBookingEvent
 from app.models.identity import Tenant
-from app.models.integrations import TenantIntegrationEvent, TenantWhatsAppConfig, TenantWhatsAppTemplate
+from app.modules.integrations.infrastructure.models import (
+    TenantIntegrationEvent,
+    TenantWhatsAppConfig,
+    TenantWhatsAppTemplate,
+)
 from app.modules.notifications.infrastructure.models import (
     DomainEvent,
     NotificationDelivery,
@@ -28,7 +32,7 @@ from app.modules.notifications.infrastructure.models import (
     TenantNotificationRule,
 )
 from app.services.secret_manager_service import SecretManager
-from app.services.whatsapp_client import WhatsAppCloudClient, WhatsAppCloudClientError
+from app.modules.integrations.infrastructure.whatsapp.meta_client import WhatsAppCloudClient, WhatsAppCloudClientError
 from app.modules.notifications.runtime import event_pipeline as pipeline_module
 from app.modules.notifications.runtime.event_pipeline import (
     NotificationEventPipeline,
@@ -853,7 +857,7 @@ class PlanningAndExecutionTests(_BasePipelineTestCase):
         self._setup_immediate_rule(tenant_id)
         booking = self._create_booking(tenant_id)
 
-        with patch("app.services.whatsapp_client.httpx.Client") as real_http_client:
+        with patch("app.modules.integrations.infrastructure.whatsapp.meta_client.httpx.Client") as real_http_client:
             self.pipeline.process_booking_event(
                 tenant_id=tenant_id, booking_id=booking.id, event_type="booking.created", now=NOW
             )

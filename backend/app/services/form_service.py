@@ -17,7 +17,7 @@ from app.models.integrations import (
 )
 from app.modules.crm.public import CrmFacade, LeadProfile
 from app.schemas.forms import FormCreateRequest
-from app.services.integration_event_service import IntegrationEventService
+from app.modules.integrations.application.event_service import IntegrationEventService
 
 FIELD_TYPES = {"text", "email", "phone", "textarea", "select", "checkbox"}
 DEFAULT_FIELDS = [

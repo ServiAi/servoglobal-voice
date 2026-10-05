@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 
-from app.schemas.whatsapp_flows import FlowBuilder, FlowComponent
+from app.modules.integrations.domain.whatsapp_flows import FlowBuilder, FlowComponent
 
 
 FLOW_JSON_VERSION = "7.3"

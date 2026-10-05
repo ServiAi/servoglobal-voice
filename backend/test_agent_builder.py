@@ -9,7 +9,8 @@ from sqlalchemy import select
 
 from _integrations_2a_test_base import Integration2ATestCase
 from app.db.session import SessionLocal
-from app.models.integrations import TenantIntegrationEvent, TenantVoiceAgentConfig, TenantWhatsAppConfig
+from app.models.integrations import TenantVoiceAgentConfig
+from app.modules.integrations.infrastructure.models import TenantIntegrationEvent, TenantWhatsAppConfig
 from app.modules.agents.api.schemas import AgentCreateRequest
 from app.modules.agents.application.service import AgentService
 from app.services.secret_manager_service import SecretManager
@@ -239,7 +240,7 @@ class AgentBuilderTests(Integration2ATestCase):
 
     @staticmethod
     def _create_approved_whatsapp_template(tenant_id: str, *, template_key: str = "booking_confirmation") -> None:
-        from app.models.integrations import TenantWhatsAppTemplate
+        from app.modules.integrations.infrastructure.models import TenantWhatsAppTemplate
 
         with SessionLocal() as db:
             db.add(TenantWhatsAppTemplate(

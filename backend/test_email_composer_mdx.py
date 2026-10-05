@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from app.services.email_render_service import EmailRenderService
+from app.modules.integrations.domain.email_render import EmailRenderService
 
 
 class EmailComposerMdxTests(unittest.TestCase):

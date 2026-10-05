@@ -11,7 +11,8 @@ from sqlalchemy.exc import IntegrityError
 from _integrations_2a_test_base import Integration2ATestCase
 from app.db.session import SessionLocal
 from app.models.identity import TenantMembership, User
-from app.models.integrations import TenantIntegrationEvent, TenantVoiceAgentConfig
+from app.models.integrations import TenantVoiceAgentConfig
+from app.modules.integrations.infrastructure.models import TenantIntegrationEvent
 from app.models.voice_context import TenantVoiceContextSchema
 from app.models.voice_experiences import (
     TenantVoiceExperience,

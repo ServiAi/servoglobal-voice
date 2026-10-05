@@ -13,7 +13,7 @@ from datetime import datetime
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models.integrations import TenantIntegrationEvent
+from app.modules.integrations.infrastructure.models import TenantIntegrationEvent
 from app.modules.telephony.public import (
     CAPACITY_EVENT_TYPES,
     VOICE_CALLBACK_FORCED_RELEASE,

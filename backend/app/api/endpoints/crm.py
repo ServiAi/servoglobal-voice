@@ -37,7 +37,7 @@ from app.schemas.crm import (
 )
 from app.services.call_summary_service import CallSummaryService
 from app.services.crm_dashboard_metrics_service import CrmDashboardMetricsService
-from app.services.email_send_service import EmailSendService
+from app.modules.integrations.application.email.send_service import EmailSendService
 
 _BOOKING_CONFLICTS = (SlotConflictError, IdempotencyConflictError, BookingOperationInProgressError)
 

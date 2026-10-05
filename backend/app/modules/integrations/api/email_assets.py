@@ -12,10 +12,10 @@ from sqlalchemy.orm import Session
 
 from app.api.auth.deps import AuthContext, get_current_auth_context, require_roles
 from app.db.session import get_db
-from app.models.integrations import TenantEmailAsset
+from app.modules.integrations.infrastructure.models import TenantEmailAsset
 from app.models.identity import Tenant, User
 from app.schemas.integrations import EmailAssetItem
-from app.services.email_asset_service import EmailAssetService
+from app.modules.integrations.application.email.asset_service import EmailAssetService
 from app.services.onboarding_service import OnboardingService
 
 

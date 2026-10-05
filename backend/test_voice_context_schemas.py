@@ -14,7 +14,7 @@ from app.models.identity import TenantMembership, User
 from app.models.integrations import TenantVoiceAgentConfig
 from app.models.voice_context import TenantVoiceContextField, TenantVoiceContextSchema
 from app.models.voice_experiences import TenantVoiceExperience, TenantVoiceExperienceVersion
-from app.services.integration_event_service import IntegrationEventService
+from app.modules.integrations.application.event_service import IntegrationEventService
 from app.services.tenant_feature_service import TenantFeatureService, VOICE_EXPERIENCES
 from app.services.voice_context_service import (
     ACTIVE_LINEAGE_INDEX,

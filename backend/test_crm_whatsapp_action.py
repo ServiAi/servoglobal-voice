@@ -4,10 +4,10 @@ from sqlalchemy import func, select
 
 from _integrations_2a_test_base import Integration2ATestCase, SessionLocal
 from app.modules.crm.infrastructure.models import CrmActivity
-from app.models.crm import CrmWhatsAppMessage
-from app.models.integrations import TenantIntegrationEvent, TenantWhatsAppTemplate
+from app.modules.integrations.infrastructure.models import CrmWhatsAppMessage
+from app.modules.integrations.infrastructure.models import TenantIntegrationEvent, TenantWhatsAppTemplate
 from app.schemas.integrations import WhatsAppTestMessageRequest
-from app.services.whatsapp_client import WhatsAppCloudClient
+from app.modules.integrations.infrastructure.whatsapp.meta_client import WhatsAppCloudClient
 
 
 class _Client(WhatsAppCloudClient):
@@ -80,7 +80,7 @@ class CrmWhatsAppActionTests(Integration2ATestCase):
         lead_id, _ = self.seed_lead()
         client = _Client()
         with SessionLocal() as db:
-            from app.services.whatsapp_message_service import WhatsAppMessageService
+            from app.modules.integrations.application.whatsapp.message_service import WhatsAppMessageService
 
             result = WhatsAppMessageService(db, client=client).preview_lead_whatsapp(
                 self.tenant.id,
@@ -103,7 +103,7 @@ class CrmWhatsAppActionTests(Integration2ATestCase):
         client = _Client()
         with SessionLocal() as db:
             from app.schemas.crm import WhatsAppActionRequest
-            from app.services.whatsapp_message_service import WhatsAppMessageService
+            from app.modules.integrations.application.whatsapp.message_service import WhatsAppMessageService
 
             result = WhatsAppMessageService(db, client=client).send_lead_whatsapp(
                 self.tenant.id,
@@ -134,7 +134,7 @@ class CrmWhatsAppActionTests(Integration2ATestCase):
         self.configure_whatsapp()
         self.seed_synced_template()
         with SessionLocal() as db:
-            from app.services.whatsapp_message_service import WhatsAppMessageService
+            from app.modules.integrations.application.whatsapp.message_service import WhatsAppMessageService
 
             result = WhatsAppMessageService(db, client=_Client()).send_test_template_message(
                 self.tenant.id,
@@ -161,7 +161,7 @@ class CrmWhatsAppActionTests(Integration2ATestCase):
         self.configure_whatsapp()
         self.seed_synced_template()
         with SessionLocal() as db:
-            from app.services.whatsapp_message_service import WhatsAppMessageService
+            from app.modules.integrations.application.whatsapp.message_service import WhatsAppMessageService
 
             with self.assertRaisesRegex(ValueError, "Missing template variables: 1, 2"):
                 WhatsAppMessageService(db, client=_Client()).send_test_template_message(
@@ -172,7 +172,7 @@ class CrmWhatsAppActionTests(Integration2ATestCase):
     def test_send_whatsapp_test_message_rejects_unapproved_template(self):
         self.configure_whatsapp()
         with SessionLocal() as db:
-            from app.services.whatsapp_message_service import WhatsAppMessageService
+            from app.modules.integrations.application.whatsapp.message_service import WhatsAppMessageService
 
             with self.assertRaisesRegex(ValueError, "approved by Meta"):
                 WhatsAppMessageService(db, client=_Client()).send_test_template_message(

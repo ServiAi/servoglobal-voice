@@ -14,12 +14,12 @@ from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.modules.crm.infrastructure.models import CrmContact, CrmLead, CrmPipelineStage
 from app.models.identity import Tenant
-from app.models.integrations import TenantWhatsAppConfig, TenantWhatsAppTemplate
+from app.modules.integrations.infrastructure.models import TenantWhatsAppConfig, TenantWhatsAppTemplate
 from app.modules.notifications.infrastructure.models import DomainEvent, NotificationDelivery, TenantNotificationRule
 from app.modules.notifications.application.domain_event_service import DomainEventService
 from app.modules.notifications.application.delivery_recovery_service import NotificationDeliveryRecoveryService
 from app.services.secret_manager_service import SecretManager
-from app.services.whatsapp_client import WhatsAppCloudClient, WhatsAppCloudClientError
+from app.modules.integrations.infrastructure.whatsapp.meta_client import WhatsAppCloudClient, WhatsAppCloudClientError
 from app.modules.notifications.runtime import worker as worker_module
 
 FIXED_NOW = datetime(2026, 8, 1, 10, 0, 0, tzinfo=timezone.utc)

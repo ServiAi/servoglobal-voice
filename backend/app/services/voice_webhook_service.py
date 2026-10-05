@@ -15,7 +15,7 @@ from app.modules.crm.public import (
     UpdateVoiceCallCommand,
     VoiceCallView,
 )
-from app.services.integration_event_service import IntegrationEventService
+from app.modules.integrations.application.event_service import IntegrationEventService
 from app.services.voice_config_service import VoiceConfigService
 
 _PLATFORM_TENANT_ID = "platform"

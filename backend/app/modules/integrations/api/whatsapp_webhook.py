@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.db.session import get_db
-from app.services.whatsapp_message_service import WhatsAppMessageService
+from app.modules.integrations.application.whatsapp.message_service import WhatsAppMessageService
 
 
 logger = logging.getLogger(__name__)

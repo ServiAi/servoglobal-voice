@@ -3,9 +3,9 @@ from __future__ import annotations
 from sqlalchemy import select
 
 from _integrations_2a_test_base import Integration2ATestCase, SessionLocal
-from app.models.integrations import TenantIntegrationEvent
+from app.modules.integrations.infrastructure.models import TenantIntegrationEvent
 from app.schemas.integrations import ChatwootConfigRequest
-from app.services.chatwoot_config_service import ChatwootConfigService
+from app.modules.integrations.application.chatwoot.config_service import ChatwootConfigService
 
 
 class ChatwootWebhookTests(Integration2ATestCase):

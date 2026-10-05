@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from app.services.chatwoot_client import sanitize_chatwoot_error
+from app.modules.integrations.infrastructure.chatwoot.client import sanitize_chatwoot_error
 
 
 class SanitizeChatwootErrorTests(unittest.TestCase):

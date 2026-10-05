@@ -3,12 +3,12 @@ from __future__ import annotations
 from sqlalchemy import select
 
 from _integrations_2a_test_base import Integration2ATestCase, SessionLocal
-from app.models.crm import CrmWhatsAppMessage
-from app.models.integrations import TenantIntegrationEvent, TenantWhatsAppTemplate
+from app.modules.integrations.infrastructure.models import CrmWhatsAppMessage
+from app.modules.integrations.infrastructure.models import TenantIntegrationEvent, TenantWhatsAppTemplate
 from app.models.tenant_features import TenantFeatureGrant
-from app.services.whatsapp_client import WhatsAppCloudClient
-from app.services.whatsapp_config_service import WhatsAppConfigService
-from app.services.whatsapp_template_service import WhatsAppTemplateService
+from app.modules.integrations.infrastructure.whatsapp.meta_client import WhatsAppCloudClient
+from app.modules.integrations.application.whatsapp.config_service import WhatsAppConfigService
+from app.modules.integrations.application.whatsapp.template_service import WhatsAppTemplateService
 
 
 def _whatsapp_config_payload(**overrides):

@@ -22,11 +22,11 @@ from app.db.session import SessionLocal, engine
 from app.main import app
 from app.modules.crm.infrastructure.models import CrmActivity, CrmContact, CrmLead
 from app.models.identity import Tenant, TenantMembership, User
-from app.models.integrations import TenantEmailAsset, TenantEmailSendAsset
+from app.modules.integrations.infrastructure.models import TenantEmailAsset, TenantEmailSendAsset
 from app.modules.crm.application.pipeline_service import CrmPipelineService
-from app.services.email_config_service import EmailConfigService
+from app.modules.integrations.application.email.config_service import EmailConfigService
 from app.services.form_service import FormService
-from app.services.integration_service import IntegrationService
+from app.modules.integrations.application.integration_service import IntegrationService
 from app.services.storage_service import StorageService
 
 
@@ -119,7 +119,7 @@ class CrmEmailComposerActionTests(unittest.TestCase):
             return token_row.id, link
 
     def test_preview_does_not_send_email(self):
-        with patch("app.services.email_send_service.ResendService") as service_cls:
+        with patch("app.modules.integrations.application.email.send_service.ResendService") as service_cls:
             response = self.client.post(
                 f"/api/v1/crm/leads/{self.lead_id}/actions/email",
                 json={
@@ -135,7 +135,7 @@ class CrmEmailComposerActionTests(unittest.TestCase):
 
     def test_email_send_persists_send_assets(self):
         asset_id = self._asset()
-        with patch("app.services.email_send_service.ResendService") as service_cls:
+        with patch("app.modules.integrations.application.email.send_service.ResendService") as service_cls:
             service_cls.return_value.send_email.return_value = "email_1"
             response = self.client.post(
                 f"/api/v1/crm/leads/{self.lead_id}/actions/email",
@@ -149,7 +149,7 @@ class CrmEmailComposerActionTests(unittest.TestCase):
 
     def test_email_with_form_link_records_form_link_sent(self):
         token_id, link = self._form_token()
-        with patch("app.services.email_send_service.ResendService") as service_cls:
+        with patch("app.modules.integrations.application.email.send_service.ResendService") as service_cls:
             service_cls.return_value.send_email.return_value = "email_1"
             response = self.client.post(
                 f"/api/v1/crm/leads/{self.lead_id}/actions/email",

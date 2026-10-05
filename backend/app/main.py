@@ -30,7 +30,7 @@ app.add_middleware(
 )
 
 from app.api.endpoints import notifications
-from app.api.endpoints import chatwoot_webhook
+from app.modules.integrations.api import chatwoot_webhook
 from app.api.endpoints import voice
 from app.api.endpoints import voice_booking_tools
 from app.modules.scheduling.api import calcom_router as calcom
@@ -44,10 +44,10 @@ from app.api.endpoints import crm
 from app.modules.crm.api import router as crm_core
 from app.api.endpoints import integrations
 from app.api.endpoints import forms
-from app.api.endpoints import email_assets
+from app.modules.integrations.api import email_assets
 from app.api.endpoints import crm_whatsapp
-from app.api.endpoints import whatsapp_webhook
-from app.api.endpoints import whatsapp_flows
+from app.modules.integrations.api import whatsapp_webhook
+from app.modules.integrations.api import whatsapp_flows
 from app.api.endpoints import crm_voice
 from app.api.endpoints import voice_webhook
 from app.modules.notifications.api import router as notification_admin

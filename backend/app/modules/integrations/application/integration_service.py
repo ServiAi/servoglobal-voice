@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.integrations import TenantIntegration
+from app.modules.integrations.infrastructure.models import TenantIntegration
 from app.services.secret_manager_service import SecretManager
 
 

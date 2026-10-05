@@ -5,10 +5,8 @@ from unittest.mock import patch
 
 from _integrations_2a_test_base import Integration2ATestCase, SessionLocal
 from app.modules.telephony.infrastructure.models import TenantSipRoute
-from app.models.integrations import (
-    TenantIntegrationEvent,
-    TenantVoiceProviderConfig,
-)
+from app.models.integrations import TenantVoiceProviderConfig
+from app.modules.integrations.infrastructure.models import TenantIntegrationEvent
 
 
 class VoiceEndpointTests(Integration2ATestCase):

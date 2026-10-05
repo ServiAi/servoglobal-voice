@@ -20,7 +20,7 @@ from app.schemas.voice_context import (
     VoiceContextSchemaResponse,
     VoiceContextSchemaSummaryResponse,
 )
-from app.services.integration_event_service import IntegrationEventService
+from app.modules.integrations.application.event_service import IntegrationEventService
 from app.services.tenant_feature_service import TenantFeatureService, VOICE_EXPERIENCES
 from app.services.voice_agent_service import VoiceAgentService
 

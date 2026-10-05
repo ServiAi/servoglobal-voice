@@ -29,8 +29,8 @@ class LegacyLeadHistory:
         self.db = db
 
     def clear_references(self, *, tenant_id: str, lead_ids: Sequence[str], contact_ids: Sequence[str]) -> None:
-        from app.models.crm import CrmWhatsAppMessage
-        from app.models.integrations import TenantEmailSend
+        from app.modules.integrations.infrastructure.models import CrmWhatsAppMessage
+        from app.modules.integrations.infrastructure.models import TenantEmailSend
 
         for model in (CrmWhatsAppMessage, TenantEmailSend):
             self.db.execute(

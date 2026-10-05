@@ -18,23 +18,27 @@ from app.modules.notifications.domain.variables import (
     NotificationVariableMappingError,
 )
 from app.modules.crm.infrastructure.models import CrmActivity, CrmContact, CrmLead, CrmPipelineStage
-from app.models.crm import CrmWhatsAppMessage
+from app.modules.integrations.infrastructure.models import CrmWhatsAppMessage
 from app.models.identity import Tenant
-from app.models.integrations import TenantIntegrationEvent, TenantWhatsAppConfig, TenantWhatsAppTemplate
+from app.modules.integrations.infrastructure.models import (
+    TenantIntegrationEvent,
+    TenantWhatsAppConfig,
+    TenantWhatsAppTemplate,
+)
 from app.modules.notifications.infrastructure.models import DomainEvent, NotificationDelivery, TenantNotificationRule
 from app.modules.notifications.application.domain_event_service import DomainEventService
 from app.modules.notifications.application.delivery_claim_service import NotificationDeliveryClaimService
 from app.modules.notifications.application.retry_policy import NotificationRetryPolicy
 from app.modules.notifications.application.variable_mapper import NotificationVariableMapper
 from app.services.secret_manager_service import SecretManager
-from app.services.whatsapp_client import WhatsAppCloudClient, WhatsAppCloudClientError
-from app.services.whatsapp_message_service import WhatsAppMessageService
+from app.modules.integrations.infrastructure.whatsapp.meta_client import WhatsAppCloudClient, WhatsAppCloudClientError
+from app.modules.integrations.application.whatsapp.message_service import WhatsAppMessageService
 from app.modules.notifications.infrastructure import whatsapp_executor as executor_module
 from app.modules.notifications.infrastructure.whatsapp_executor import (
     WhatsAppNotificationExecutionError,
     WhatsAppNotificationExecutor,
 )
-from app.services.whatsapp_template_service import WhatsAppTemplateService
+from app.modules.integrations.application.whatsapp.template_service import WhatsAppTemplateService
 
 
 @sa_event.listens_for(engine, "connect")

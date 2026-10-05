@@ -17,7 +17,8 @@ from app.models.analytics import Agent, Call, CallEvent
 from app.models.identity import Tenant, User, TenantMembership
 from app.modules.crm.infrastructure.models import CrmContact, CrmPipelineStage, CrmLead, CrmActivity, CrmTask, CrmVoiceCall
 from app.modules.telephony.infrastructure.models import TenantSipRoute
-from app.models.integrations import TenantIntegrationEvent, TenantVoiceProviderConfig
+from app.models.integrations import TenantVoiceProviderConfig
+from app.modules.integrations.infrastructure.models import TenantIntegrationEvent
 from app.modules.crm.application.pipeline_service import CrmPipelineService
 from app.services.crm_dashboard_metrics_service import CrmDashboardMetricsService
 

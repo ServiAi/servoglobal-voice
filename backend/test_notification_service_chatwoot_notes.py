@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, patch
 
 os.environ.setdefault("ULTRAVOX_API_KEY", "test")
 
-from app.services.chatwoot_client import ChatwootClientConfig
+from app.modules.integrations.infrastructure.chatwoot.client import ChatwootClientConfig
 from app.services.notification_service import NotificationService
 
 _TENANT_ID = "tenant-1"

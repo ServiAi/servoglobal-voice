@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.models.integrations import TenantEmailAsset
+from app.modules.integrations.infrastructure.models import TenantEmailAsset
 from app.services.storage_service import StorageService
 
 ALLOWED_EXTENSIONS = {".pdf", ".docx", ".xlsx", ".csv", ".png", ".jpg", ".jpeg", ".md", ".txt"}

@@ -14,11 +14,8 @@ from app.db.session import SessionLocal
 from app.main import app
 from app.modules.crm.infrastructure.models import CrmActivity, CrmVoiceCall
 from app.modules.telephony.infrastructure.models import TenantSipRoute
-from app.models.integrations import (
-    TenantIntegrationEvent,
-    TenantVoiceAgentConfig,
-    TenantVoiceProviderConfig,
-)
+from app.models.integrations import TenantVoiceAgentConfig, TenantVoiceProviderConfig
+from app.modules.integrations.infrastructure.models import TenantIntegrationEvent
 from app.models.voice_context import TenantVoiceContextField
 from app.services.secret_manager_service import SecretManager
 from app.services.tenant_feature_service import TenantFeatureService, VOICE_EXPERIENCES

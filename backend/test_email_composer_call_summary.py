@@ -22,8 +22,8 @@ from app.main import app
 from app.modules.crm.infrastructure.models import CrmActivity, CrmContact, CrmLead
 from app.models.identity import Tenant, TenantMembership, User
 from app.modules.crm.application.pipeline_service import CrmPipelineService
-from app.services.email_config_service import EmailConfigService
-from app.services.integration_service import IntegrationService
+from app.modules.integrations.application.email.config_service import EmailConfigService
+from app.modules.integrations.application.integration_service import IntegrationService
 
 
 class EmailComposerCallSummaryTests(unittest.TestCase):

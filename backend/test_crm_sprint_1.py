@@ -20,9 +20,10 @@ from app.api.auth.deps import AuthContext, get_current_auth_context
 from app.models.analytics import Agent, Call, CallEvent
 from app.models.identity import Tenant, User, TenantMembership
 from app.modules.crm.infrastructure.models import CrmContact, CrmPipelineStage, CrmLead, CrmActivity, CrmTask, CrmVoiceCall
-from app.models.crm import CrmWhatsAppMessage
+from app.modules.integrations.infrastructure.models import CrmWhatsAppMessage
 from app.modules.scheduling.infrastructure.models import CrmBooking
-from app.models.integrations import TenantEmailSend, TenantForm, TenantFormToken, TenantFormSubmission
+from app.models.integrations import TenantForm, TenantFormToken, TenantFormSubmission
+from app.modules.integrations.infrastructure.models import TenantEmailSend
 from app.modules.crm.application.pipeline_service import CrmPipelineService
 from app.modules.crm.application.contact_service import CrmContactService
 from app.modules.crm.domain.contacts import normalize_phone

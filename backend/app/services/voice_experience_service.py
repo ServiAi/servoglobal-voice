@@ -26,7 +26,7 @@ from app.schemas.voice_experiences import (
     VoiceExperienceVersionResponse,
     VoiceExperienceWriteRequest,
 )
-from app.services.integration_event_service import IntegrationEventService
+from app.modules.integrations.application.event_service import IntegrationEventService
 from app.services.tenant_feature_service import VOICE_EXPERIENCES, TenantFeatureService
 from app.services.voice_agent_service import VoiceAgentService
 

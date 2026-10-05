@@ -78,7 +78,7 @@ from app.modules.scheduling.infrastructure.models import (
     TenantSchedulingEventType,
     TenantVoiceBookingConfig,
 )
-from app.services.integration_event_service import IntegrationEventService
+from app.modules.integrations.application.event_service import IntegrationEventService
 
 logger = logging.getLogger(__name__)
 

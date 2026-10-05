@@ -19,7 +19,7 @@ from app.schemas.integrations import (
     VoiceCallActionResponse,
     VoiceCallResponse,
 )
-from app.services.integration_event_service import IntegrationEventService
+from app.modules.integrations.application.event_service import IntegrationEventService
 from app.services.voice_agent_service import VoiceAgentService
 from app.services.voice_client import (
     VoiceClient,

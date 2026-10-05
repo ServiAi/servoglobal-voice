@@ -428,7 +428,7 @@ class NotificationModelsTests(unittest.TestCase):
             self.assertIsNotNone(reloaded.claim_expires_at)
 
     def test_crm_whatsapp_message_notification_delivery_fk(self):
-        from app.models.crm import CrmWhatsAppMessage
+        from app.modules.integrations.infrastructure.models import CrmWhatsAppMessage
 
         tenant_id = self._create_tenant("empresa-message-fk")
         event_id, rule_id = self._seed_event_and_rule(tenant_id, "message-fk")
@@ -462,7 +462,7 @@ class NotificationModelsTests(unittest.TestCase):
             self.assertEqual(message.notification_delivery_id, delivery_id)
 
     def test_crm_whatsapp_message_allows_multiple_messages_per_delivery(self):
-        from app.models.crm import CrmWhatsAppMessage
+        from app.modules.integrations.infrastructure.models import CrmWhatsAppMessage
 
         tenant_id = self._create_tenant("empresa-message-fk-multi")
         event_id, rule_id = self._seed_event_and_rule(tenant_id, "message-fk-multi")
@@ -514,7 +514,7 @@ class NotificationModelsTests(unittest.TestCase):
             self.assertEqual(count, 2)
 
     def test_crm_whatsapp_message_notification_delivery_fk_rejects_unknown_id(self):
-        from app.models.crm import CrmWhatsAppMessage
+        from app.modules.integrations.infrastructure.models import CrmWhatsAppMessage
 
         tenant_id = self._create_tenant("empresa-message-fk-bad")
 

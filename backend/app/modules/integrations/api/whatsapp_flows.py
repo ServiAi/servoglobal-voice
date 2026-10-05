@@ -8,13 +8,13 @@ from sqlalchemy.orm import Session
 from app.api.auth.deps import AuthContext
 from app.api.endpoints.integrations import require_enabled_integration
 from app.db.session import get_db
-from app.schemas.whatsapp_flows import (
+from app.modules.integrations.domain.whatsapp_flows import (
     WhatsAppFlowCompileResponse,
     WhatsAppFlowCreateRequest,
     WhatsAppFlowResponse,
     WhatsAppFlowUpdateRequest,
 )
-from app.services.whatsapp_flow_service import (
+from app.modules.integrations.application.whatsapp.flow_service import (
     WhatsAppFlowConflictError,
     WhatsAppFlowNotFoundError,
     WhatsAppFlowProviderError,

@@ -4,7 +4,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.models.integrations import TenantIntegrationEvent
+from app.modules.integrations.infrastructure.models import TenantIntegrationEvent
 
 SENSITIVE_KEYS = {"api_key", "authorization", "payload", "html", "text", "base64", "phone", "email"}
 

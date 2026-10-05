@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.models.integrations import TenantChatwootConfig
+from app.modules.integrations.infrastructure.models import TenantChatwootConfig
 from app.schemas.integrations import (
     ChatwootAgentSummary,
     ChatwootConfigRequest,
@@ -16,9 +16,9 @@ from app.schemas.integrations import (
     ChatwootTeamSummary,
     ChatwootTestResponse,
 )
-from app.services.chatwoot_client import ChatwootClient, ChatwootClientConfig, ChatwootClientError, sanitize_chatwoot_error
-from app.services.chatwoot_platform_client import ChatwootPlatformClient, ChatwootPlatformError
-from app.services.integration_event_service import IntegrationEventService
+from app.modules.integrations.infrastructure.chatwoot.client import ChatwootClient, ChatwootClientConfig, ChatwootClientError, sanitize_chatwoot_error
+from app.modules.integrations.infrastructure.chatwoot.platform_client import ChatwootPlatformClient, ChatwootPlatformError
+from app.modules.integrations.application.event_service import IntegrationEventService
 from app.services.secret_manager_service import SecretManager
 
 _WEBHOOK_PATH = "/api/v1/webhooks/chatwoot"

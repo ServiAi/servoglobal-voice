@@ -20,8 +20,8 @@ from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.main import app
 from app.models.identity import Tenant, TenantMembership, User
-from app.models.integrations import TenantIntegration
-from app.services.resend_service import ResendService, ResendServiceError, _sanitize_resend_error
+from app.modules.integrations.infrastructure.models import TenantIntegration
+from app.modules.integrations.infrastructure.email.resend import ResendService, ResendServiceError, _sanitize_resend_error
 
 
 class _Response:
@@ -125,7 +125,7 @@ class ResendIntegrationTests(unittest.TestCase):
 
     def test_resend_test_email_sends_with_mock(self):
         self._configure()
-        with patch("app.services.email_send_service.ResendService") as service_cls:
+        with patch("app.modules.integrations.application.email.send_service.ResendService") as service_cls:
             service_cls.return_value.send_test_email.return_value = "email_test_1"
             response = self.client.post("/api/v1/integrations/resend/test", json={"to_email": "dest@example.com"})
 
@@ -134,13 +134,13 @@ class ResendIntegrationTests(unittest.TestCase):
 
     def test_resend_test_failure_does_not_disable_retry(self):
         self._configure()
-        with patch("app.services.email_send_service.ResendService") as service_cls:
+        with patch("app.modules.integrations.application.email.send_service.ResendService") as service_cls:
             service_cls.return_value.send_test_email.side_effect = ResendServiceError("resend down")
             response = self.client.post("/api/v1/integrations/resend/test", json={"to_email": "dest@example.com"})
 
         self.assertEqual(response.status_code, 502)
 
-        with patch("app.services.email_send_service.ResendService") as service_cls:
+        with patch("app.modules.integrations.application.email.send_service.ResendService") as service_cls:
             service_cls.return_value.send_test_email.return_value = "email_test_2"
             response = self.client.post("/api/v1/integrations/resend/test", json={"to_email": "dest@example.com"})
 
@@ -149,8 +149,8 @@ class ResendIntegrationTests(unittest.TestCase):
 
     def test_logs_do_not_include_resend_api_key_or_full_email_or_payload(self):
         service = ResendService()
-        with patch("app.services.resend_service.httpx.Client", _Client):
-            with self.assertLogs("app.services.resend_service", level="INFO") as logs:
+        with patch("app.modules.integrations.infrastructure.email.resend.httpx.Client", _Client):
+            with self.assertLogs("app.modules.integrations.infrastructure.email.resend", level="INFO") as logs:
                 service.send_email(
                     api_key="re_secret_test",
                     from_email="sender@example.com",

@@ -31,7 +31,7 @@ from app.modules.voice.public import (
     ToolSessionView,
     VoiceSessionError,
 )
-from app.services.integration_event_service import IntegrationEventService
+from app.modules.integrations.application.event_service import IntegrationEventService
 
 # Handlers reach other modules only through ToolPorts (scheduling, CRM,
 # messaging, voice sessions) -- never by importing their services, and they

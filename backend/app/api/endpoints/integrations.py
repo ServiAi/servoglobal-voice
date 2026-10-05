@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.api.auth.deps import AuthContext, require_roles
 from app.db.session import get_db
-from app.models.integrations import TenantEmailTemplate, TenantWhatsAppTemplate
+from app.modules.integrations.infrastructure.models import TenantEmailTemplate, TenantWhatsAppTemplate
 from app.modules.scheduling.public import SchedulingFacade
 from app.schemas.integrations import (
     ChatwootAgentInviteRequest,
@@ -50,21 +50,21 @@ from app.schemas.integrations import (
     WhatsAppTestRequest,
     WhatsAppTestResponse,
 )
-from app.services.chatwoot_client import ChatwootClientError, sanitize_chatwoot_error
-from app.services.chatwoot_config_service import (
+from app.modules.integrations.infrastructure.chatwoot.client import ChatwootClientError, sanitize_chatwoot_error
+from app.modules.integrations.application.chatwoot.config_service import (
     ChatwootAccountConflictError,
     ChatwootConfigService,
 )
-from app.services.email_config_service import EmailConfigService
-from app.services.email_send_service import EmailSendService
-from app.services.email_template_service import EmailTemplateService
-from app.services.integration_event_service import IntegrationEventService
-from app.services.integration_service import IntegrationService
+from app.modules.integrations.application.email.config_service import EmailConfigService
+from app.modules.integrations.application.email.send_service import EmailSendService
+from app.modules.integrations.application.email.template_service import EmailTemplateService
+from app.modules.integrations.application.event_service import IntegrationEventService
+from app.modules.integrations.application.integration_service import IntegrationService
 from app.services.voice_agent_service import VoiceAgentService
 from app.services.voice_config_service import VoiceConfigService
-from app.services.whatsapp_config_service import WhatsAppConfigService
-from app.services.whatsapp_message_service import WhatsAppMessageService
-from app.services.whatsapp_template_service import WhatsAppTemplateService
+from app.modules.integrations.application.whatsapp.config_service import WhatsAppConfigService
+from app.modules.integrations.application.whatsapp.message_service import WhatsAppMessageService
+from app.modules.integrations.application.whatsapp.template_service import WhatsAppTemplateService
 
 router = APIRouter(prefix="/api/v1/integrations", tags=["Integrations"])
 

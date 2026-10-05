@@ -43,7 +43,7 @@ from app.modules.voice_providers.public import (
     validate_model_settings,
     validate_runtime_selection,
 )
-from app.services.integration_event_service import (
+from app.modules.integrations.application.event_service import (
     IntegrationEventService,  # shared audit trail
 )
 

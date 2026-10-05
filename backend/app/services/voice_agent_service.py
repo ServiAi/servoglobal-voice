@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.models.analytics import Agent
 from app.models.integrations import TenantVoiceAgentConfig, TenantVoiceProviderConfig
 from app.schemas.integrations import VoiceAgentConfigRequest, VoiceAgentConfigResponse
-from app.services.integration_event_service import IntegrationEventService
+from app.modules.integrations.application.event_service import IntegrationEventService
 
 
 class VoiceAgentService:

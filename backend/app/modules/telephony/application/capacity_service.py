@@ -23,7 +23,7 @@ from app.modules.telephony.domain.capacity import (
     VOICE_CALLBACK_RECONCILED,
     VOICE_CAPACITY_REACHED,
 )
-from app.services.integration_event_service import (
+from app.modules.integrations.application.event_service import (
     IntegrationEventService,  # shared audit trail
 )
 

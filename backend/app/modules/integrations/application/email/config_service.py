@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.integrations import TenantEmailConfig
+from app.modules.integrations.infrastructure.models import TenantEmailConfig
 
 
 def validate_email(value: str | None, field_name: str = "email") -> str:

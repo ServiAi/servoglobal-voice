@@ -412,7 +412,7 @@ class AgentToolInvokeEndpointTests(Integration2ATestCase):
             )
 
     def _configure_whatsapp(self, tenant_id: str) -> None:
-        from app.models.integrations import TenantWhatsAppConfig
+        from app.modules.integrations.infrastructure.models import TenantWhatsAppConfig
         from app.services.secret_manager_service import SecretManager
 
         with SessionLocal() as db:
@@ -425,7 +425,7 @@ class AgentToolInvokeEndpointTests(Integration2ATestCase):
             db.commit()
 
     def _create_approved_whatsapp_template(self, tenant_id: str, *, template_key: str = "booking_confirmation") -> None:
-        from app.models.integrations import TenantWhatsAppTemplate
+        from app.modules.integrations.infrastructure.models import TenantWhatsAppTemplate
 
         with SessionLocal() as db:
             db.add(TenantWhatsAppTemplate(
@@ -512,9 +512,9 @@ class AgentToolInvokeEndpointTests(Integration2ATestCase):
             caller_phone="+573000000001",
         )
         with patch(
-            "app.services.whatsapp_message_service.WhatsAppMessageService.send_template_notification"
+            "app.modules.integrations.application.whatsapp.message_service.WhatsAppMessageService.send_template_notification"
         ) as mocked:
-            from app.services.whatsapp_message_service import WhatsAppSendResult
+            from app.modules.integrations.application.whatsapp.message_service import WhatsAppSendResult
 
             mocked.return_value = WhatsAppSendResult(status="sent", provider_message_id="wamid.123")
             # The LLM only ever supplies the one variable mapped source=llm --
@@ -588,9 +588,9 @@ class AgentToolInvokeEndpointTests(Integration2ATestCase):
             caller_phone="+573000000001",
         )
         with patch(
-            "app.services.whatsapp_message_service.WhatsAppMessageService.send_template_notification"
+            "app.modules.integrations.application.whatsapp.message_service.WhatsAppMessageService.send_template_notification"
         ) as mocked:
-            from app.services.whatsapp_message_service import WhatsAppSendResult
+            from app.modules.integrations.application.whatsapp.message_service import WhatsAppSendResult
 
             mocked.return_value = WhatsAppSendResult(status="sent", provider_message_id="wamid.123")
             self._invoke(session_id, "whatsapp.send_message", {"appointment_date": "2026-09-25"})
@@ -624,9 +624,9 @@ class AgentToolInvokeEndpointTests(Integration2ATestCase):
             caller_phone="+573000000001",
         )
         with patch(
-            "app.services.whatsapp_message_service.WhatsAppMessageService.send_template_notification"
+            "app.modules.integrations.application.whatsapp.message_service.WhatsAppMessageService.send_template_notification"
         ) as mocked:
-            from app.services.whatsapp_message_service import WhatsAppSendResult
+            from app.modules.integrations.application.whatsapp.message_service import WhatsAppSendResult
 
             mocked.return_value = WhatsAppSendResult(status="sent", provider_message_id="wamid.123")
             response = self._invoke(session_id, "whatsapp.send_message", {"appointment_date": "2026-09-25"})

@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.api.auth.deps import AuthContext, require_roles
 from app.db.session import get_db
 from app.schemas.crm import WhatsAppActionRequest, WhatsAppActionResponse, WhatsAppMessageResponse
-from app.services.whatsapp_message_service import WhatsAppMessageService
+from app.modules.integrations.application.whatsapp.message_service import WhatsAppMessageService
 
 
 router = APIRouter(prefix="/api/v1/crm", tags=["CRM"])

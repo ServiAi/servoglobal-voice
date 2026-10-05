@@ -27,7 +27,7 @@ from app.schemas.public_voice_submissions import (
     PublicVoiceExperienceSubmissionRequest,
     PublicVoiceExperienceSubmissionResponse,
 )
-from app.services.integration_event_service import IntegrationEventService
+from app.modules.integrations.application.event_service import IntegrationEventService
 from app.services.public_voice_experience_service import (
     PublicVoiceExperienceService,
     PublicVoiceSnapshot,

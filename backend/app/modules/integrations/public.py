@@ -90,7 +90,7 @@ class WhatsAppFacade:
 
     def is_configured(self, tenant_id: str) -> bool:
         """Same resolution WhatsApp sends use at call time."""
-        from app.services.whatsapp_config_service import WhatsAppConfigService
+        from app.modules.integrations.application.whatsapp.config_service import WhatsAppConfigService
 
         try:
             WhatsAppConfigService(self.db).get_active_client_config(tenant_id)
@@ -101,8 +101,8 @@ class WhatsAppFacade:
     def get_approved_template_contract(self, tenant_id: str, template_key: str) -> WhatsAppTemplateContract | None:
         """None if the tenant has no such template. Raises ValueError if an
         approved template's parameters are malformed."""
-        from app.models.integrations import TenantWhatsAppTemplate
-        from app.services.whatsapp_template_service import WhatsAppTemplateService
+        from app.modules.integrations.infrastructure.models import TenantWhatsAppTemplate
+        from app.modules.integrations.application.whatsapp.template_service import WhatsAppTemplateService
 
         row = self.db.scalar(
             select(TenantWhatsAppTemplate).where(
@@ -133,7 +133,7 @@ class WhatsAppFacade:
         notification_delivery_id: str | None = None,
     ) -> WhatsAppSendOutcome:
         """Raises ValueError on configuration/provider failures."""
-        from app.services.whatsapp_message_service import WhatsAppMessageService
+        from app.modules.integrations.application.whatsapp.message_service import WhatsAppMessageService
 
         result = WhatsAppMessageService(self.db, client=self._transport).send_template_notification(
             tenant_id=tenant_id,
@@ -176,7 +176,7 @@ class IntegrationsFacade:
         self.db = db
 
     def is_enabled(self, tenant_id: str, provider: str) -> bool:
-        from app.services.integration_service import IntegrationService
+        from app.modules.integrations.application.integration_service import IntegrationService
 
         return IntegrationService(self.db).is_enabled(tenant_id, provider)
 
@@ -201,7 +201,7 @@ def find_whatsapp_delivery_evidence(
     *, tenant_id: str, delivery_id: str, fallback_message_id: str | None = None
 ):
     from app.db.session import SessionLocal
-    from app.models.crm import CrmWhatsAppMessage
+    from app.modules.integrations.infrastructure.models import CrmWhatsAppMessage
     from app.modules.integrations.public import WhatsAppDeliveryEvidence
 
     db = SessionLocal()
@@ -237,6 +237,6 @@ def find_whatsapp_delivery_evidence(
 
 
 def sanitize_whatsapp_error(value: str | None) -> str | None:
-    from app.services.whatsapp_client import sanitize_whatsapp_error as sanitize
+    from app.modules.integrations.infrastructure.whatsapp.meta_client import sanitize_whatsapp_error as sanitize
 
     return sanitize(value)

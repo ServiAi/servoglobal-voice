@@ -9,22 +9,22 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.crm import CrmWhatsAppMessage
-from app.models.integrations import TenantWhatsAppConfig
+from app.modules.integrations.infrastructure.models import CrmWhatsAppMessage
+from app.modules.integrations.infrastructure.models import TenantWhatsAppConfig
 from app.modules.crm.public import ContactProfile, CrmFacade, LeadProfile
 from app.schemas.crm import WhatsAppActionRequest, WhatsAppActionResponse
 from app.schemas.integrations import (
     WhatsAppTestMessageRequest,
     WhatsAppTestMessageResponse,
 )
-from app.services.integration_event_service import IntegrationEventService
-from app.services.whatsapp_client import (
+from app.modules.integrations.application.event_service import IntegrationEventService
+from app.modules.integrations.infrastructure.whatsapp.meta_client import (
     WhatsAppCloudClient,
     WhatsAppCloudClientError,
     sanitize_whatsapp_error,
 )
-from app.services.whatsapp_config_service import WhatsAppConfigService
-from app.services.whatsapp_template_service import WhatsAppTemplateService
+from app.modules.integrations.application.whatsapp.config_service import WhatsAppConfigService
+from app.modules.integrations.application.whatsapp.template_service import WhatsAppTemplateService
 
 logger = logging.getLogger(__name__)
 

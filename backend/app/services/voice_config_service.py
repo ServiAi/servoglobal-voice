@@ -12,7 +12,7 @@ from app.schemas.integrations import (
     VoiceProviderConfigResponse,
     VoiceSipRouteResponse,
 )
-from app.services.integration_event_service import IntegrationEventService
+from app.modules.integrations.application.event_service import IntegrationEventService
 from app.services.secret_manager_service import SecretManager
 from app.services.voice_provider_config_store import VoiceProviderConfigStore
 

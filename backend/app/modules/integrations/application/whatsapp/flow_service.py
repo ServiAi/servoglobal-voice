@@ -6,9 +6,9 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models.integrations import TenantWhatsAppFlow
+from app.modules.integrations.infrastructure.models import TenantWhatsAppFlow
 from app.models.voice_context import TenantVoiceContextSchema
-from app.schemas.whatsapp_flows import (
+from app.modules.integrations.domain.whatsapp_flows import (
     FlowBuilder,
     MetaFlowValidationError,
     WhatsAppFlowCompileResponse,
@@ -16,15 +16,15 @@ from app.schemas.whatsapp_flows import (
     WhatsAppFlowResponse,
     WhatsAppFlowUpdateRequest,
 )
-from app.services.integration_event_service import IntegrationEventService
-from app.services.whatsapp_client import (
+from app.modules.integrations.application.event_service import IntegrationEventService
+from app.modules.integrations.infrastructure.whatsapp.meta_client import (
     WhatsAppCloudClient,
     WhatsAppCloudClientError,
     sanitize_whatsapp_error,
 )
-from app.services.whatsapp_config_service import WhatsAppConfigService
-from app.services.whatsapp_flow_compiler import WhatsAppFlowCompiler
-from app.services.whatsapp_flow_context_adapter import blank_builder, builder_from_context_schema
+from app.modules.integrations.application.whatsapp.config_service import WhatsAppConfigService
+from app.modules.integrations.domain.whatsapp_flow_compiler import WhatsAppFlowCompiler
+from app.modules.integrations.domain.whatsapp_flow_context import blank_builder, builder_from_context_schema
 
 
 class WhatsAppFlowNotFoundError(ValueError):

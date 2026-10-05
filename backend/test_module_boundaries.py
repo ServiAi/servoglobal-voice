@@ -33,7 +33,7 @@ TOOLS_LEGACY_ALLOWED = {
     "app.db.base",
     "app.db.mixins",
     "app.db.session",
-    "app.services.integration_event_service",  # shared audit trail (tenant_integration_events)
+    "app.modules.integrations.application.event_service",  # shared audit trail (tenant_integration_events)
     "app.services.secret_manager_service",  # shared encryption (Fernet)
 }
 
@@ -43,7 +43,7 @@ AGENTS_LEGACY_ALLOWED = {
     "app.db.base",
     "app.db.mixins",
     "app.db.session",
-    "app.services.integration_event_service",  # shared audit trail (tenant_integration_events)
+    "app.modules.integrations.application.event_service",  # shared audit trail (tenant_integration_events)
 }
 
 # Legacy modules Voice Orchestration may still import: shared kernel only.
@@ -71,7 +71,7 @@ TELEPHONY_LEGACY_ALLOWED = {
     "app.db.base",
     "app.db.mixins",
     "app.db.session",
-    "app.services.integration_event_service",  # shared audit trail
+    "app.modules.integrations.application.event_service",  # shared audit trail
     "app.services.secret_manager_service",  # shared encryption (Fernet)
 }
 
@@ -95,7 +95,7 @@ SCHEDULING_LEGACY_ALLOWED = {
     "app.db.mixins",
     "app.db.session",
     "app.models.integrations",
-    "app.services.integration_event_service",
+    "app.modules.integrations.application.event_service",
     "app.services.secret_manager_service",
 }
 # Composition-root exception: only ``wiring`` may reach the platform's existing

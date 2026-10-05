@@ -14,7 +14,7 @@ from app.modules.scheduling.domain.contracts import (
     BookingConfigRequest,
     BookingConfigResponse,
 )
-from app.services.integration_event_service import IntegrationEventService
+from app.modules.integrations.application.event_service import IntegrationEventService
 
 
 def configure_calcom(db: Session, tenant_id: str, request: BookingConfigRequest) -> BookingConfigResponse:

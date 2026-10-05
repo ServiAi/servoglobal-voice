@@ -7,7 +7,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.integrations import TenantIntegrationEvent
+from app.modules.integrations.infrastructure.models import TenantIntegrationEvent
 from app.modules.scheduling.application.booking_config_service import (
     BookingConfigService,
 )
