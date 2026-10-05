@@ -103,6 +103,8 @@ jobs:
         working-directory: backend
         run: python -m unittest test_crm_postgres -v
       - name: Notifications PostgreSQL concurrency (claim lease, SKIP LOCKED, recovery)
+        # Explicit shell enables -o pipefail, so a unittest failure is not masked by tee.
+        shell: bash
         working-directory: backend
         run: |
           python -m unittest test_notification_worker_postgres -v 2>&1 | tee /tmp/notif_pg.log
