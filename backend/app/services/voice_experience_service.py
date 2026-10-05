@@ -102,7 +102,7 @@ class VoiceExperienceService:
                 TenantVoiceExperience.status != "archived",
             )
         ) or 0
-        limits = VoiceExperienceLimits.model_validate(grant.limits_json)
+        limits = VoiceExperienceLimits.model_validate(grant.limits)
         if count >= limits.max_experiences:
             raise VoiceExperienceValidationError("Maximum voice experiences limit reached.")
         experience = TenantVoiceExperience(

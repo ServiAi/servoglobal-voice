@@ -498,7 +498,7 @@ class VoiceContextService:
 
     @staticmethod
     def _limits(grant) -> VoiceExperienceLimits:
-        return VoiceExperienceLimits.model_validate(grant.limits_json)
+        return VoiceExperienceLimits.model_validate(grant.limits)
 
     def _commit_field(self, field: TenantVoiceContextField) -> None:
         try:

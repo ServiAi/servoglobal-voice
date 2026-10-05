@@ -118,9 +118,10 @@ class FeatureFlags:
         from app.modules.identity.application.feature_service import TenantFeatureService
         return TenantFeatureService(self.db).is_enabled(tenant_id, feature_key)
 
-    def require_enabled(self, tenant_id: str, feature_key: str) -> None:
+    def require_enabled(self, tenant_id: str, feature_key: str) -> FeatureGrantView:
         from app.modules.identity.application.feature_service import TenantFeatureService
-        TenantFeatureService(self.db).require_enabled(tenant_id, feature_key)
+        grant = TenantFeatureService(self.db).require_enabled(tenant_id, feature_key)
+        return _feature_view(grant)
 
     def list_features(self, tenant_id: str) -> tuple[FeatureGrantView, ...]:
         from app.modules.identity.application.feature_service import TenantFeatureService
