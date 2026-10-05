@@ -12,11 +12,11 @@ from sqlalchemy.orm import Session
 
 from app.api.auth.deps import AuthContext, get_current_auth_context
 from app.db.session import get_db
-from app.modules.integrations.wiring import require_tenant
-from typing import Any
-from fastapi import Depends, HTTPException, status
-from sqlalchemy.orm import Session
-from app.modules.integrations.api.router import _integration_catalog_statuses, _resend_response, _whatsapp_template_detail
+from app.modules.integrations.api.router import (
+    _integration_catalog_statuses,
+    _resend_response,
+    _whatsapp_template_detail,
+)
 from app.modules.integrations.api.schemas import (
     ChatwootAgentInviteRequest,
     ChatwootAgentSummary,
@@ -52,16 +52,31 @@ from app.modules.integrations.api.schemas import (
     WhatsAppTestRequest,
     WhatsAppTestResponse,
 )
-from app.modules.integrations.infrastructure.chatwoot.client import ChatwootClientError, sanitize_chatwoot_error
-from app.modules.integrations.application.chatwoot.config_service import ChatwootAccountConflictError, ChatwootConfigService
+from app.modules.integrations.application.chatwoot.config_service import (
+    ChatwootAccountConflictError,
+    ChatwootConfigService,
+)
 from app.modules.integrations.application.email.config_service import EmailConfigService
 from app.modules.integrations.application.email.send_service import EmailSendService
-from app.modules.integrations.application.email.template_service import EmailTemplateService
+from app.modules.integrations.application.email.template_service import (
+    EmailTemplateService,
+)
 from app.modules.integrations.application.event_service import IntegrationEventService
 from app.modules.integrations.application.integration_service import IntegrationService
-from app.modules.integrations.application.whatsapp.config_service import WhatsAppConfigService
-from app.modules.integrations.application.whatsapp.message_service import WhatsAppMessageService
-from app.modules.integrations.application.whatsapp.template_service import WhatsAppTemplateService
+from app.modules.integrations.application.whatsapp.config_service import (
+    WhatsAppConfigService,
+)
+from app.modules.integrations.application.whatsapp.message_service import (
+    WhatsAppMessageService,
+)
+from app.modules.integrations.application.whatsapp.template_service import (
+    WhatsAppTemplateService,
+)
+from app.modules.integrations.infrastructure.chatwoot.client import (
+    ChatwootClientError,
+    sanitize_chatwoot_error,
+)
+from app.modules.integrations.wiring import require_tenant
 
 router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
 

@@ -1,15 +1,18 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Any
-
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.modules.integrations.domain.events import MAX_MESSAGE_LENGTH, sanitize_event_metadata
+from app.modules.integrations.domain.events import (
+    MAX_MESSAGE_LENGTH,
+    sanitize_event_metadata,
+)
 from app.modules.integrations.infrastructure.models import TenantIntegrationEvent
+
 
 class IntegrationEventService:
     def __init__(self, db: Session) -> None:

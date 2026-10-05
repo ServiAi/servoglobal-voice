@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from app.api.auth.deps import AuthContext, require_roles
 from app.db.session import get_db
 from app.modules.crm.public import CrmFacade, LeadProfile
+from app.modules.integrations.public import EmailFacade
 from app.modules.scheduling.public import (
     BookingOperationInProgressError,
     CreateBookingCommand,
@@ -37,7 +38,6 @@ from app.schemas.crm import (
 )
 from app.services.call_summary_service import CallSummaryService
 from app.services.crm_dashboard_metrics_service import CrmDashboardMetricsService
-from app.modules.integrations.public import EmailFacade
 
 _BOOKING_CONFLICTS = (SlotConflictError, IdempotencyConflictError, BookingOperationInProgressError)
 

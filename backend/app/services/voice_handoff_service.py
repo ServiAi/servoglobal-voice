@@ -18,8 +18,8 @@ from sqlalchemy.orm import Session
 
 from app.models.integrations import TenantVoiceAgentConfig
 from app.modules.crm.public import CrmFacade, LeadProfile
-from app.schemas.integrations import HANDOFF_TRIGGER_LEAD_SCORE
 from app.modules.integrations.public import ChatwootFacade, IntegrationEvents
+from app.schemas.integrations import HANDOFF_TRIGGER_LEAD_SCORE
 
 logger = logging.getLogger(__name__)
 

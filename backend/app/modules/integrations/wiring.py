@@ -79,7 +79,9 @@ def default_features(db: Session):
 
 
 def default_whatsapp_provider():
-    from app.modules.integrations.infrastructure.whatsapp.meta_client import WhatsAppCloudClient
+    from app.modules.integrations.infrastructure.whatsapp.meta_client import (
+        WhatsAppCloudClient,
+    )
 
     return WhatsAppCloudClient()
 
@@ -92,7 +94,9 @@ def default_email_provider():
 
 def default_chatwoot_client_factory():
     def build(config):
-        from app.modules.integrations.infrastructure.chatwoot.client import ChatwootClient
+        from app.modules.integrations.infrastructure.chatwoot.client import (
+            ChatwootClient,
+        )
 
         return ChatwootClient(config)
 
@@ -101,7 +105,9 @@ def default_chatwoot_client_factory():
 
 def default_chatwoot_platform_factory():
     def build(base_url: str, platform_token: str):
-        from app.modules.integrations.infrastructure.chatwoot.platform_client import ChatwootPlatformClient
+        from app.modules.integrations.infrastructure.chatwoot.platform_client import (
+            ChatwootPlatformClient,
+        )
 
         return ChatwootPlatformClient(base_url, platform_token)
 

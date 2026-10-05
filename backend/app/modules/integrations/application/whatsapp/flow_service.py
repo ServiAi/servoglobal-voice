@@ -6,7 +6,22 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.modules.integrations.infrastructure.models import TenantWhatsAppFlow
+from app.modules.integrations.application.event_service import IntegrationEventService
+from app.modules.integrations.application.ports import (
+    VoiceContextSchemaPort,
+    WhatsAppProviderPort,
+)
+from app.modules.integrations.application.whatsapp.config_service import (
+    WhatsAppConfigService,
+)
+from app.modules.integrations.domain.errors import ProviderError
+from app.modules.integrations.domain.whatsapp import sanitize_whatsapp_error
+from app.modules.integrations.domain.whatsapp_flow_compiler import WhatsAppFlowCompiler
+from app.modules.integrations.domain.whatsapp_flow_context import (
+    ContextSchemaSnapshot,
+    blank_builder,
+    builder_from_context_schema,
+)
 from app.modules.integrations.domain.whatsapp_flows import (
     FlowBuilder,
     MetaFlowValidationError,
@@ -15,17 +30,7 @@ from app.modules.integrations.domain.whatsapp_flows import (
     WhatsAppFlowResponse,
     WhatsAppFlowUpdateRequest,
 )
-from app.modules.integrations.application.event_service import IntegrationEventService
-from app.modules.integrations.application.ports import VoiceContextSchemaPort, WhatsAppProviderPort
-from app.modules.integrations.domain.errors import ProviderError
-from app.modules.integrations.domain.whatsapp import sanitize_whatsapp_error
-from app.modules.integrations.application.whatsapp.config_service import WhatsAppConfigService
-from app.modules.integrations.domain.whatsapp_flow_compiler import WhatsAppFlowCompiler
-from app.modules.integrations.domain.whatsapp_flow_context import (
-    ContextSchemaSnapshot,
-    blank_builder,
-    builder_from_context_schema,
-)
+from app.modules.integrations.infrastructure.models import TenantWhatsAppFlow
 
 
 class WhatsAppFlowNotFoundError(ValueError):

@@ -5,7 +5,6 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.modules.integrations.infrastructure.models import TenantWhatsAppConfig
 from app.modules.integrations.api.schemas import (
     WhatsAppConfigRequest,
     WhatsAppConfigResponse,
@@ -14,14 +13,21 @@ from app.modules.integrations.api.schemas import (
     WhatsAppTestResponse,
 )
 from app.modules.integrations.application.event_service import IntegrationEventService
-from app.modules.integrations.application.whatsapp.template_service import WhatsAppTemplateService
-from app.modules.integrations.application.ports import FeatureGatePort, SecretsPort, WhatsAppProviderPort
+from app.modules.integrations.application.ports import (
+    FeatureGatePort,
+    SecretsPort,
+    WhatsAppProviderPort,
+)
+from app.modules.integrations.application.whatsapp.template_service import (
+    WhatsAppTemplateService,
+)
 from app.modules.integrations.domain.errors import ProviderError
 from app.modules.integrations.domain.whatsapp import (
     WHATSAPP_BUSINESS_CALLING_FEATURE,
     WhatsAppClientConfig,
     sanitize_whatsapp_error,
 )
+from app.modules.integrations.infrastructure.models import TenantWhatsAppConfig
 
 
 class WhatsAppConfigService:

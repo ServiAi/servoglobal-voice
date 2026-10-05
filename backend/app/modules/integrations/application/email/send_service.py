@@ -4,23 +4,34 @@ import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.modules.integrations.infrastructure.models import TenantEmailSend, TenantEmailSendAsset
 from app.modules.crm.public import CrmFacade, LeadProfile
 from app.modules.integrations.application.email.asset_service import EmailAssetService
-from app.modules.integrations.application.email.config_service import EmailConfigService, validate_email
-from app.modules.integrations.domain.email_render import EmailRenderService
+from app.modules.integrations.application.email.config_service import (
+    EmailConfigService,
+    validate_email,
+)
 from app.modules.integrations.application.email.template_service import (
     EmailTemplateService,
     RenderedEmailTemplate,
 )
 from app.modules.integrations.application.event_service import IntegrationEventService
 from app.modules.integrations.application.integration_service import IntegrationService
-from app.modules.integrations.application.ports import CallSummaryPort, EmailProviderPort, FormLinkPort
-from app.modules.integrations.domain.email import sanitize_resend_error as _sanitize_resend_error
+from app.modules.integrations.application.ports import (
+    CallSummaryPort,
+    EmailProviderPort,
+    FormLinkPort,
+)
+from app.modules.integrations.domain.email import (
+    sanitize_resend_error as _sanitize_resend_error,
+)
+from app.modules.integrations.domain.email_render import EmailRenderService
 from app.modules.integrations.domain.errors import ProviderError
+from app.modules.integrations.infrastructure.models import (
+    TenantEmailSend,
+    TenantEmailSendAsset,
+)
 
 
 @dataclass(frozen=True)

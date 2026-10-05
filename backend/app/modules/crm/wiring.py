@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from sqlalchemy import delete, or_, update
+from sqlalchemy import delete
 from sqlalchemy.orm import Session
 
 from app.modules.crm.application.ports import CrmPorts

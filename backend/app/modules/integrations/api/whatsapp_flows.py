@@ -8,12 +8,6 @@ from sqlalchemy.orm import Session
 from app.api.auth.deps import AuthContext
 from app.api.deps import require_enabled_integration
 from app.db.session import get_db
-from app.modules.integrations.domain.whatsapp_flows import (
-    WhatsAppFlowCompileResponse,
-    WhatsAppFlowCreateRequest,
-    WhatsAppFlowResponse,
-    WhatsAppFlowUpdateRequest,
-)
 from app.modules.integrations.application.whatsapp.flow_service import (
     WhatsAppFlowConflictError,
     WhatsAppFlowNotFoundError,
@@ -21,7 +15,12 @@ from app.modules.integrations.application.whatsapp.flow_service import (
     WhatsAppFlowService,
     WhatsAppFlowValidationError,
 )
-
+from app.modules.integrations.domain.whatsapp_flows import (
+    WhatsAppFlowCompileResponse,
+    WhatsAppFlowCreateRequest,
+    WhatsAppFlowResponse,
+    WhatsAppFlowUpdateRequest,
+)
 
 router = APIRouter(prefix="/api/v1/integrations/whatsapp/flows", tags=["WhatsApp Flows"])
 READ_ROLES = ["platform_admin", "tenant_admin", "tenant_analyst", "tenant_viewer"]

@@ -7,9 +7,9 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.modules.integrations.infrastructure.models import TenantIntegration
 from app.modules.integrations.application.ports import SecretsPort
 from app.modules.integrations.domain.catalog import SUPPORTED_PROVIDERS
+from app.modules.integrations.infrastructure.models import TenantIntegration
 
 
 class IntegrationService:

@@ -184,12 +184,16 @@ class IntegrationsFacade:
         self.db = db
 
     def is_enabled(self, tenant_id: str, provider: str) -> bool:
-        from app.modules.integrations.application.integration_service import IntegrationService
+        from app.modules.integrations.application.integration_service import (
+            IntegrationService,
+        )
 
         return IntegrationService(self.db).is_enabled(tenant_id, provider)
 
     def list_availability(self, tenant_id: str) -> tuple[IntegrationAvailability, ...]:
-        from app.modules.integrations.application.integration_service import IntegrationService
+        from app.modules.integrations.application.integration_service import (
+            IntegrationService,
+        )
 
         return tuple(
             IntegrationAvailability(provider=item["provider"], enabled=bool(item["enabled"]))
@@ -201,7 +205,9 @@ class IntegrationsFacade:
     ) -> None:
         """Null the lead/contact references of WhatsApp messages and email sends (CRM deletes the rows).
         Part of the caller's transaction: nothing is committed here."""
-        from app.modules.integrations.application.lead_references import detach_lead_references
+        from app.modules.integrations.application.lead_references import (
+            detach_lead_references,
+        )
 
         detach_lead_references(self.db, tenant_id=tenant_id, lead_ids=lead_ids, contact_ids=contact_ids)
 
@@ -226,7 +232,9 @@ class IntegrationEvents:
         metadata: Mapping[str, Any] | None = None,
     ) -> None:
         """Persist the event in its own commit."""
-        from app.modules.integrations.application.event_service import IntegrationEventService
+        from app.modules.integrations.application.event_service import (
+            IntegrationEventService,
+        )
 
         IntegrationEventService(self.db).record_event(
             tenant_id=tenant_id,
@@ -252,7 +260,9 @@ class IntegrationEvents:
         metadata: Mapping[str, Any] | None = None,
     ) -> None:
         """Add the event to the caller's transaction (not committed)."""
-        from app.modules.integrations.application.event_service import IntegrationEventService
+        from app.modules.integrations.application.event_service import (
+            IntegrationEventService,
+        )
 
         IntegrationEventService(self.db).add_event(
             tenant_id=tenant_id,
@@ -275,7 +285,9 @@ class IntegrationEvents:
         date_to: datetime,
         recent_limit: int = 10,
     ) -> IntegrationEventSummary:
-        from app.modules.integrations.application.event_service import IntegrationEventService
+        from app.modules.integrations.application.event_service import (
+            IntegrationEventService,
+        )
 
         counts, rows = IntegrationEventService(self.db).summarize(
             tenant_id=tenant_id,
@@ -343,13 +355,17 @@ class WhatsAppFacade:
         self._transport = transport
 
     def _messages(self):
-        from app.modules.integrations.application.whatsapp.message_service import WhatsAppMessageService
+        from app.modules.integrations.application.whatsapp.message_service import (
+            WhatsAppMessageService,
+        )
 
         return WhatsAppMessageService(self.db, client=self._transport)
 
     def is_configured(self, tenant_id: str) -> bool:
         """Same resolution WhatsApp sends use at call time."""
-        from app.modules.integrations.application.whatsapp.config_service import WhatsAppConfigService
+        from app.modules.integrations.application.whatsapp.config_service import (
+            WhatsAppConfigService,
+        )
 
         try:
             WhatsAppConfigService(self.db).get_active_client_config(tenant_id)
@@ -360,7 +376,9 @@ class WhatsAppFacade:
     def get_approved_template_contract(self, tenant_id: str, template_key: str) -> WhatsAppTemplateContract | None:
         """None if the tenant has no such template. Raises ValueError if an
         approved template's parameters are malformed."""
-        from app.modules.integrations.application.whatsapp.template_service import WhatsAppTemplateService
+        from app.modules.integrations.application.whatsapp.template_service import (
+            WhatsAppTemplateService,
+        )
 
         service = WhatsAppTemplateService(self.db)
         row = service.find_by_key(tenant_id, template_key)
@@ -460,7 +478,9 @@ class EmailFacade:
         self.db = db
 
     def _sends(self):
-        from app.modules.integrations.application.email.send_service import EmailSendService
+        from app.modules.integrations.application.email.send_service import (
+            EmailSendService,
+        )
 
         return EmailSendService(self.db)
 
@@ -528,7 +548,9 @@ class EmailFacade:
         content: bytes,
         folder: str = "assets",
     ) -> EmailAssetRef:
-        from app.modules.integrations.application.email.asset_service import EmailAssetService
+        from app.modules.integrations.application.email.asset_service import (
+            EmailAssetService,
+        )
 
         asset = EmailAssetService(self.db).create_asset(
             tenant_id=tenant_id,
@@ -577,7 +599,9 @@ class ChatwootFacade:
     def gateway_for(self, tenant_id: str) -> ChatwootGateway:
         """Raises ValueError if the tenant has no active Chatwoot configuration."""
         from app.modules.integrations import wiring
-        from app.modules.integrations.application.chatwoot.config_service import ChatwootConfigService
+        from app.modules.integrations.application.chatwoot.config_service import (
+            ChatwootConfigService,
+        )
 
         _, client_config = ChatwootConfigService(self.db).get_active_client_config(tenant_id)
         return ChatwootGateway(wiring.default_chatwoot_client_factory()(client_config))
@@ -605,7 +629,9 @@ def find_whatsapp_delivery_evidence(
     *, tenant_id: str, delivery_id: str, fallback_message_id: str | None = None
 ) -> WhatsAppDeliveryEvidence | None:
     from app.db.session import SessionLocal
-    from app.modules.integrations.application.whatsapp.evidence import find_delivery_message
+    from app.modules.integrations.application.whatsapp.evidence import (
+        find_delivery_message,
+    )
 
     db = SessionLocal()
     try:
@@ -628,6 +654,8 @@ def find_whatsapp_delivery_evidence(
 
 
 def sanitize_whatsapp_error(value: str | None) -> str | None:
-    from app.modules.integrations.domain.whatsapp import sanitize_whatsapp_error as sanitize
+    from app.modules.integrations.domain.whatsapp import (
+        sanitize_whatsapp_error as sanitize,
+    )
 
     return sanitize(value)

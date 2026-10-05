@@ -4,7 +4,6 @@ import html
 import re
 from dataclasses import dataclass
 
-
 ALLOWED_COMPONENTS = {"Button", "Callout", "Divider", "Signature", "KeyValueList"}
 DISALLOWED_PATTERNS = [
     r"<\s*(script|iframe|form|input|select|textarea|style)\b",

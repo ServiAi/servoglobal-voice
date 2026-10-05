@@ -7,7 +7,6 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.modules.integrations.infrastructure.models import TenantChatwootConfig
 from app.modules.integrations.api.schemas import (
     ChatwootAgentSummary,
     ChatwootConfigRequest,
@@ -16,10 +15,18 @@ from app.modules.integrations.api.schemas import (
     ChatwootTeamSummary,
     ChatwootTestResponse,
 )
-from app.modules.integrations.application.ports import ChatwootClientFactory, ChatwootPlatformFactory, SecretsPort
-from app.modules.integrations.domain.chatwoot import ChatwootClientConfig, sanitize_chatwoot_error
-from app.modules.integrations.domain.errors import ProviderError
 from app.modules.integrations.application.event_service import IntegrationEventService
+from app.modules.integrations.application.ports import (
+    ChatwootClientFactory,
+    ChatwootPlatformFactory,
+    SecretsPort,
+)
+from app.modules.integrations.domain.chatwoot import (
+    ChatwootClientConfig,
+    sanitize_chatwoot_error,
+)
+from app.modules.integrations.domain.errors import ProviderError
+from app.modules.integrations.infrastructure.models import TenantChatwootConfig
 
 _WEBHOOK_PATH = "/api/v1/webhooks/chatwoot"
 _DEFAULT_PLATFORM_BASE_URL = "https://crm.serviglobal-ia.com"

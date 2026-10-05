@@ -10,7 +10,6 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.modules.integrations.public import IntegrationEvents

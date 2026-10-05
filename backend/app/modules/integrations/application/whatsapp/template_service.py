@@ -8,12 +8,16 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.modules.integrations.infrastructure.models import CrmWhatsAppMessage
-from app.modules.integrations.infrastructure.models import TenantWhatsAppTemplate
-from app.modules.integrations.api.schemas import WhatsAppTemplateCreateRequest, WhatsAppTemplateUpdateRequest
+from app.modules.integrations.api.schemas import (
+    WhatsAppTemplateCreateRequest,
+    WhatsAppTemplateUpdateRequest,
+)
 from app.modules.integrations.application.ports import FeatureGatePort
 from app.modules.integrations.domain.whatsapp import WHATSAPP_BUSINESS_CALLING_FEATURE
-
+from app.modules.integrations.infrastructure.models import (
+    CrmWhatsAppMessage,
+    TenantWhatsAppTemplate,
+)
 
 DEFAULT_WHATSAPP_TEMPLATES = [
     {

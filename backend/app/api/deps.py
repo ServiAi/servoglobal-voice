@@ -1,6 +1,8 @@
-from fastapi import HTTPException
 import httpx
+from fastapi import HTTPException
+
 from app.core.config import settings
+
 
 async def verify_turnstile(token: str):
     secret_key = settings.TURNSTILE_SECRET_KEY

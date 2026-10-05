@@ -7,7 +7,10 @@ import httpx
 
 from app.core.config import settings
 from app.modules.integrations.domain.errors import ProviderRejected
-from app.modules.integrations.domain.whatsapp import WhatsAppClientConfig, sanitize_whatsapp_error
+from app.modules.integrations.domain.whatsapp import (
+    WhatsAppClientConfig,
+    sanitize_whatsapp_error,
+)
 
 WHATSAPP_GRAPH_VERSION = settings.WHATSAPP_GRAPH_VERSION
 

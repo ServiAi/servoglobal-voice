@@ -1,27 +1,36 @@
 from __future__ import annotations
 
 import logging
-import re
-from dataclasses import dataclass
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
-from app.modules.integrations.infrastructure.models import CrmWhatsAppMessage
-from app.modules.integrations.infrastructure.models import TenantWhatsAppConfig
 from app.modules.crm.public import ContactProfile, CrmFacade, LeadProfile
-from app.modules.integrations.api.schemas import WhatsAppTestMessageRequest, WhatsAppTestMessageResponse
+from app.modules.integrations.api.schemas import (
+    WhatsAppTestMessageRequest,
+    WhatsAppTestMessageResponse,
+)
 from app.modules.integrations.application.event_service import IntegrationEventService
-from app.modules.integrations.application.ports import NotificationsPort, WhatsAppProviderPort
+from app.modules.integrations.application.ports import (
+    NotificationsPort,
+    WhatsAppProviderPort,
+)
+from app.modules.integrations.application.whatsapp.config_service import (
+    WhatsAppConfigService,
+)
+from app.modules.integrations.application.whatsapp.template_service import (
+    WhatsAppTemplateService,
+)
 from app.modules.integrations.domain.errors import ProviderError
 from app.modules.integrations.domain.whatsapp import (
+    MISSING_PROVIDER_MESSAGE_ID_ERROR,
     WhatsAppInboundMessage,
     WhatsAppStatusUpdate,
     WhatsAppWebhookEvent,
-    MISSING_PROVIDER_MESSAGE_ID_ERROR,
     can_advance_status,
     extract_provider_message_id,
     mask_phone,
@@ -29,8 +38,10 @@ from app.modules.integrations.domain.whatsapp import (
     safe_preview,
     sanitize_whatsapp_error,
 )
-from app.modules.integrations.application.whatsapp.config_service import WhatsAppConfigService
-from app.modules.integrations.application.whatsapp.template_service import WhatsAppTemplateService
+from app.modules.integrations.infrastructure.models import (
+    CrmWhatsAppMessage,
+    TenantWhatsAppConfig,
+)
 
 logger = logging.getLogger(__name__)
 

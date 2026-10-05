@@ -18,7 +18,10 @@ import logging
 
 import httpx
 
-from app.modules.integrations.domain.chatwoot import ChatwootClientConfig, sanitize_chatwoot_error
+from app.modules.integrations.domain.chatwoot import (
+    ChatwootClientConfig,
+    sanitize_chatwoot_error,
+)
 from app.modules.integrations.domain.errors import ProviderRejected
 
 logger = logging.getLogger(__name__)

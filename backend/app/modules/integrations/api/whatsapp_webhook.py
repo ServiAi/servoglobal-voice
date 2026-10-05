@@ -11,9 +11,12 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.db.session import get_db
-from app.modules.integrations.application.whatsapp.message_service import WhatsAppMessageService
-from app.modules.integrations.infrastructure.whatsapp.webhook_parser import parse_webhook_payload
-
+from app.modules.integrations.application.whatsapp.message_service import (
+    WhatsAppMessageService,
+)
+from app.modules.integrations.infrastructure.whatsapp.webhook_parser import (
+    parse_webhook_payload,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/webhook/whatsapp", tags=["WhatsApp"])

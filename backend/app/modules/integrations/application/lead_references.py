@@ -7,7 +7,10 @@ from collections.abc import Sequence
 from sqlalchemy import or_, update
 from sqlalchemy.orm import Session
 
-from app.modules.integrations.infrastructure.models import CrmWhatsAppMessage, TenantEmailSend
+from app.modules.integrations.infrastructure.models import (
+    CrmWhatsAppMessage,
+    TenantEmailSend,
+)
 
 
 def detach_lead_references(

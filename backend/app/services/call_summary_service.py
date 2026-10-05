@@ -9,8 +9,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.analytics import Call
-from app.modules.integrations.public import EmailAssetRef, EmailFacade
 from app.modules.crm.public import CrmFacade, LeadProfile
+from app.modules.integrations.public import EmailAssetRef, EmailFacade
 
 
 @dataclass(frozen=True)

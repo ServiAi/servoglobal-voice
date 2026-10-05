@@ -9,9 +9,6 @@ from sqlalchemy.orm import Session
 from app.api.auth.deps import AuthContext, require_roles
 from app.api.deps import require_enabled_integration
 from app.db.session import get_db
-from app.modules.integrations.infrastructure.models import TenantEmailTemplate, TenantWhatsAppTemplate
-from app.modules.integrations.domain.catalog import catalog_status
-from app.modules.integrations.wiring import foreign_catalog_inputs
 from app.modules.integrations.api.schemas import (
     ChatwootAgentInviteRequest,
     ChatwootAgentSummary,
@@ -48,19 +45,36 @@ from app.modules.integrations.api.schemas import (
     WhatsAppTestRequest,
     WhatsAppTestResponse,
 )
-from app.modules.integrations.infrastructure.chatwoot.client import ChatwootClientError, sanitize_chatwoot_error
 from app.modules.integrations.application.chatwoot.config_service import (
     ChatwootAccountConflictError,
     ChatwootConfigService,
 )
 from app.modules.integrations.application.email.config_service import EmailConfigService
 from app.modules.integrations.application.email.send_service import EmailSendService
-from app.modules.integrations.application.email.template_service import EmailTemplateService
+from app.modules.integrations.application.email.template_service import (
+    EmailTemplateService,
+)
 from app.modules.integrations.application.event_service import IntegrationEventService
 from app.modules.integrations.application.integration_service import IntegrationService
-from app.modules.integrations.application.whatsapp.config_service import WhatsAppConfigService
-from app.modules.integrations.application.whatsapp.message_service import WhatsAppMessageService
-from app.modules.integrations.application.whatsapp.template_service import WhatsAppTemplateService
+from app.modules.integrations.application.whatsapp.config_service import (
+    WhatsAppConfigService,
+)
+from app.modules.integrations.application.whatsapp.message_service import (
+    WhatsAppMessageService,
+)
+from app.modules.integrations.application.whatsapp.template_service import (
+    WhatsAppTemplateService,
+)
+from app.modules.integrations.domain.catalog import catalog_status
+from app.modules.integrations.infrastructure.chatwoot.client import (
+    ChatwootClientError,
+    sanitize_chatwoot_error,
+)
+from app.modules.integrations.infrastructure.models import (
+    TenantEmailTemplate,
+    TenantWhatsAppTemplate,
+)
+from app.modules.integrations.wiring import foreign_catalog_inputs
 
 router = APIRouter(prefix="/api/v1/integrations", tags=["Integrations"])
 

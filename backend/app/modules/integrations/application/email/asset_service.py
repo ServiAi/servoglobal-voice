@@ -10,8 +10,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.modules.integrations.infrastructure.models import TenantEmailAsset
 from app.modules.integrations.application.ports import AssetStoragePort
+from app.modules.integrations.infrastructure.models import TenantEmailAsset
 
 ALLOWED_EXTENSIONS = {".pdf", ".docx", ".xlsx", ".csv", ".png", ".jpg", ".jpeg", ".md", ".txt"}
 BLOCKED_EXTENSIONS = {".exe", ".js", ".html", ".php", ".bat", ".cmd", ".ps1", ".zip"}

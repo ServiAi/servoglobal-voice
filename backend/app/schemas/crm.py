@@ -6,7 +6,7 @@ from typing import Any, List, Literal, Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 # Re-exported for the endpoints and services that import these from ``app.schemas.crm``.
-from app.schemas.integrations import VoiceCallActionRequest, VoiceCallActionResponse, VoiceCallResponse
+from app.schemas.integrations import VoiceCallActionRequest, VoiceCallActionResponse, VoiceCallResponse  # noqa: F401
 
 # --- Pipeline ---
 

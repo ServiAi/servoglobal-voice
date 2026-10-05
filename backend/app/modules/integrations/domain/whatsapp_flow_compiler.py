@@ -5,7 +5,6 @@ import json
 
 from app.modules.integrations.domain.whatsapp_flows import FlowBuilder, FlowComponent
 
-
 FLOW_JSON_VERSION = "7.3"
 INPUT_TYPES = {
     "text_input": ("TextInput", "text"),

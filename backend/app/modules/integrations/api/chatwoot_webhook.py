@@ -7,9 +7,11 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.modules.integrations.infrastructure.models import TenantIntegrationEvent
-from app.modules.integrations.application.chatwoot.config_service import ChatwootConfigService
+from app.modules.integrations.application.chatwoot.config_service import (
+    ChatwootConfigService,
+)
 from app.modules.integrations.application.event_service import IntegrationEventService
+from app.modules.integrations.infrastructure.models import TenantIntegrationEvent
 
 logger = logging.getLogger(__name__)
 

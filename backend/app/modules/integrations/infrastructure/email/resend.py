@@ -6,7 +6,9 @@ from typing import Any
 import httpx
 
 from app.modules.integrations.domain.email import mask_email as _mask_email
-from app.modules.integrations.domain.email import sanitize_resend_error as _sanitize_resend_error
+from app.modules.integrations.domain.email import (
+    sanitize_resend_error as _sanitize_resend_error,
+)
 from app.modules.integrations.domain.errors import ProviderRejected
 
 logger = logging.getLogger(__name__)

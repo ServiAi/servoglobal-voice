@@ -7,8 +7,8 @@ from string import Template
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.modules.integrations.infrastructure.models import TenantEmailTemplate
 from app.modules.crm.public import LeadProfile
+from app.modules.integrations.infrastructure.models import TenantEmailTemplate
 
 ALLOWED_VARIABLES = [
     "contact_name",
