@@ -19,9 +19,7 @@ from sqlalchemy.orm import Session
 from app.models.integrations import TenantVoiceAgentConfig
 from app.modules.crm.public import CrmFacade, LeadProfile
 from app.schemas.integrations import HANDOFF_TRIGGER_LEAD_SCORE
-from app.modules.integrations.infrastructure.chatwoot.client import ChatwootClient
-from app.modules.integrations.application.chatwoot.config_service import ChatwootConfigService
-from app.modules.integrations.application.event_service import IntegrationEventService
+from app.modules.integrations.public import ChatwootFacade, IntegrationEvents
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +33,7 @@ class VoiceHandoffService:
     def __init__(self, db: Session) -> None:
         self.db = db
         self.crm = CrmFacade(db)
-        self.events = IntegrationEventService(db)
+        self.events = IntegrationEvents(db)
 
     async def maybe_handoff_for_lead_score(
         self, tenant_id: str, *, agent: TenantVoiceAgentConfig, lead: LeadProfile
@@ -63,11 +61,10 @@ class VoiceHandoffService:
             return {"status": "skipped", "reason": "contact_without_phone"}
 
         try:
-            _, client_config = ChatwootConfigService(self.db).get_active_client_config(tenant_id)
+            client = ChatwootFacade(self.db).gateway_for(tenant_id)
         except ValueError:
             return {"status": "skipped", "reason": "chatwoot_not_configured"}
 
-        client = ChatwootClient(client_config)
         try:
             chatwoot_contact_id = await client.get_or_create_contact(
                 contact.phone, name=contact.name, email=contact.email or ""
@@ -90,7 +87,7 @@ class VoiceHandoffService:
             await client.send_message(conversation_id, content=f"[Handoff automatico] {note}", private=True)
         except Exception as exc:
             logger.error("[VoiceHandoff] Error en handoff lead=%s trigger=%s: %s", lead.id, trigger, exc)
-            self.events.record_event(
+            self.events.record(
                 tenant_id=tenant_id,
                 provider="chatwoot",
                 event_type="voice_handoff",
@@ -110,7 +107,7 @@ class VoiceHandoffService:
             description=note,
             deduplication_key=dedup_key,
         )
-        self.events.record_event(
+        self.events.record(
             tenant_id=tenant_id,
             provider="chatwoot",
             event_type="voice_handoff",

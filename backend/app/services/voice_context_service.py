@@ -20,7 +20,7 @@ from app.schemas.voice_context import (
     VoiceContextSchemaResponse,
     VoiceContextSchemaSummaryResponse,
 )
-from app.modules.integrations.application.event_service import IntegrationEventService
+from app.modules.integrations.public import IntegrationEvents
 from app.services.tenant_feature_service import TenantFeatureService, VOICE_EXPERIENCES
 from app.services.voice_agent_service import VoiceAgentService
 
@@ -69,7 +69,7 @@ class VoiceContextService:
         self.db = db
         self.feature_service = TenantFeatureService(db)
         self.agent_service = VoiceAgentService(db)
-        self.event_service = IntegrationEventService(db)
+        self.event_service = IntegrationEvents(db)
 
     def list_schemas(
         self, tenant_id: str, agent_config_id: str
@@ -333,7 +333,7 @@ class VoiceContextService:
                 raise VoiceContextConflictError(VERSION_SCHEMA_REFERENCE_ERROR) from exc
             raise
 
-        self.event_service.record_event(
+        self.event_service.record(
             tenant_id=tenant_id,
             provider=agent.provider,
             event_type="context_schema_deleted",
@@ -549,7 +549,7 @@ class VoiceContextService:
         event_type: str,
         user_id: str | None = None,
     ) -> None:
-        self.event_service.record_event(
+        self.event_service.record(
             tenant_id=schema.tenant_id,
             provider=provider,
             event_type=event_type,

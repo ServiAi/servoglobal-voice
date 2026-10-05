@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import base64
+import hashlib
+import re
+import uuid
 from pathlib import Path
 
 from sqlalchemy import select
@@ -23,12 +26,75 @@ ALLOWED_MIME_PREFIXES = (
 )
 
 
+def _safe_filename(filename: str) -> str:
+    cleaned = re.sub(r"[^A-Za-z0-9._-]", "_", Path(filename or "").name)
+    if not cleaned or cleaned in {".", ".."}:
+        raise ValueError("Attachment filename is required.")
+    return cleaned
+
+
 class EmailAssetService:
     def __init__(self, db: Session, storage: AssetStoragePort | None = None) -> None:
         from app.modules.integrations.wiring import default_asset_storage
 
         self.db = db
         self.storage = storage or default_asset_storage()
+
+    def create_asset(
+        self,
+        *,
+        tenant_id: str,
+        uploaded_by_user_id: str | None,
+        filename: str,
+        mime_type: str,
+        content: bytes,
+        folder: str = "assets",
+    ) -> TenantEmailAsset:
+        from app.modules.integrations.wiring import require_tenant
+
+        tenant = require_tenant(self.db, tenant_id)
+        safe_filename = _safe_filename(filename)
+        self._validate_file_metadata(safe_filename, mime_type, len(content))
+        asset_id = str(uuid.uuid4())
+        storage_key = self.storage.tenant_object_key(tenant.slug, folder, asset_id, safe_filename)
+        self.storage.upload_bytes(storage_key, content)
+        asset = TenantEmailAsset(
+            id=asset_id,
+            tenant_id=tenant_id,
+            uploaded_by_user_id=uploaded_by_user_id,
+            original_filename=safe_filename,
+            storage_key=storage_key,
+            mime_type=mime_type,
+            file_size_bytes=len(content),
+            checksum_sha256=hashlib.sha256(content).hexdigest(),
+            visibility="private",
+            status="uploaded",
+        )
+        self.db.add(asset)
+        self.db.commit()
+        self.db.refresh(asset)
+        return asset
+
+    def list_assets(self, tenant_id: str) -> list[TenantEmailAsset]:
+        return list(
+            self.db.scalars(
+                select(TenantEmailAsset)
+                .where(TenantEmailAsset.tenant_id == tenant_id, TenantEmailAsset.status.in_(["uploaded", "approved"]))
+                .order_by(TenantEmailAsset.created_at.desc())
+            ).all()
+        )
+
+    def delete_asset(self, tenant_id: str, asset_id: str) -> bool:
+        """Soft-delete the asset and its stored object. False if the tenant has no such asset."""
+        asset = self.db.scalar(
+            select(TenantEmailAsset).where(TenantEmailAsset.tenant_id == tenant_id, TenantEmailAsset.id == asset_id)
+        )
+        if asset is None:
+            return False
+        asset.status = "deleted"
+        self.storage.delete(asset.storage_key)
+        self.db.commit()
+        return True
 
     def validate_assets(self, tenant_id: str, asset_ids: list[str] | None) -> list[TenantEmailAsset]:
         if not asset_ids:

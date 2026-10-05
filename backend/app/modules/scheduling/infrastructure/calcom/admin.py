@@ -7,7 +7,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.modules.integrations.infrastructure.models import TenantIntegrationEvent
+from app.modules.integrations.public import IntegrationEvents
 from app.modules.scheduling.application.booking_config_service import (
     BookingConfigService,
 )
@@ -111,16 +111,14 @@ class CalComSchedulingAdminProvider(SchedulingAdminProvider):
         self.db.add(local_sched)
 
         # 3. Audit event
-        self.db.add(
-            TenantIntegrationEvent(
-                tenant_id=self.tenant_id,
-                provider="calcom",
-                event_type="schedule_created",
-                status="success",
-                resource_type="schedule",
-                resource_id=sched_id,
-                metadata_json={"name": local_sched.name},
-            )
+        IntegrationEvents(self.db).add(
+            tenant_id=self.tenant_id,
+            provider="calcom",
+            event_type="schedule_created",
+            status="success",
+            resource_type="schedule",
+            resource_id=sched_id,
+            metadata={"name": local_sched.name},
         )
         self.db.commit()
         return sched_data
@@ -153,16 +151,14 @@ class CalComSchedulingAdminProvider(SchedulingAdminProvider):
             local_sched.sync_status = "synced"
 
         # 3. Audit event
-        self.db.add(
-            TenantIntegrationEvent(
-                tenant_id=self.tenant_id,
-                provider="calcom",
-                event_type="schedule_updated",
-                status="success",
-                resource_type="schedule",
-                resource_id=str(schedule_id),
-                metadata_json={"name": sched_data.get("name")},
-            )
+        IntegrationEvents(self.db).add(
+            tenant_id=self.tenant_id,
+            provider="calcom",
+            event_type="schedule_updated",
+            status="success",
+            resource_type="schedule",
+            resource_id=str(schedule_id),
+            metadata={"name": sched_data.get("name")},
         )
         self.db.commit()
         return sched_data
@@ -186,16 +182,14 @@ class CalComSchedulingAdminProvider(SchedulingAdminProvider):
             local_sched.last_synced_at = now
 
         # 3. Audit event
-        self.db.add(
-            TenantIntegrationEvent(
-                tenant_id=self.tenant_id,
-                provider="calcom",
-                event_type="schedule_deleted",
-                status="success",
-                resource_type="schedule",
-                resource_id=str(schedule_id),
-                metadata_json={},
-            )
+        IntegrationEvents(self.db).add(
+            tenant_id=self.tenant_id,
+            provider="calcom",
+            event_type="schedule_deleted",
+            status="success",
+            resource_type="schedule",
+            resource_id=str(schedule_id),
+            metadata={},
         )
         self.db.commit()
         return True
@@ -239,16 +233,14 @@ class CalComSchedulingAdminProvider(SchedulingAdminProvider):
         self.db.add(local_et)
 
         # 3. Audit event
-        self.db.add(
-            TenantIntegrationEvent(
-                tenant_id=self.tenant_id,
-                provider="calcom",
-                event_type="event_type_created",
-                status="success",
-                resource_type="event_type",
-                resource_id=et_id,
-                metadata_json={"title": local_et.name, "slug": local_et.slug},
-            )
+        IntegrationEvents(self.db).add(
+            tenant_id=self.tenant_id,
+            provider="calcom",
+            event_type="event_type_created",
+            status="success",
+            resource_type="event_type",
+            resource_id=et_id,
+            metadata={"title": local_et.name, "slug": local_et.slug},
         )
         self.db.commit()
         return et_data
@@ -283,16 +275,14 @@ class CalComSchedulingAdminProvider(SchedulingAdminProvider):
             local_et.sync_status = "synced"
 
         # 3. Audit event
-        self.db.add(
-            TenantIntegrationEvent(
-                tenant_id=self.tenant_id,
-                provider="calcom",
-                event_type="event_type_updated",
-                status="success",
-                resource_type="event_type",
-                resource_id=str(event_type_id),
-                metadata_json={"title": et_data.get("title") or et_data.get("name")},
-            )
+        IntegrationEvents(self.db).add(
+            tenant_id=self.tenant_id,
+            provider="calcom",
+            event_type="event_type_updated",
+            status="success",
+            resource_type="event_type",
+            resource_id=str(event_type_id),
+            metadata={"title": et_data.get("title") or et_data.get("name")},
         )
         self.db.commit()
         return et_data
@@ -316,16 +306,14 @@ class CalComSchedulingAdminProvider(SchedulingAdminProvider):
             local_et.last_synced_at = now
 
         # 3. Audit event
-        self.db.add(
-            TenantIntegrationEvent(
-                tenant_id=self.tenant_id,
-                provider="calcom",
-                event_type="event_type_deleted",
-                status="success",
-                resource_type="event_type",
-                resource_id=str(event_type_id),
-                metadata_json={},
-            )
+        IntegrationEvents(self.db).add(
+            tenant_id=self.tenant_id,
+            provider="calcom",
+            event_type="event_type_deleted",
+            status="success",
+            resource_type="event_type",
+            resource_id=str(event_type_id),
+            metadata={},
         )
         self.db.commit()
         return True

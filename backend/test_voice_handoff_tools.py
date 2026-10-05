@@ -93,10 +93,10 @@ class VoiceHandoffToolsTests(Integration2ATestCase):
         self._seed_agent(handoff_triggers=["customer_request"])
 
         with (
-            patch("app.services.voice_handoff_service.ChatwootClient.get_or_create_contact", new_callable=AsyncMock) as get_contact,
-            patch("app.services.voice_handoff_service.ChatwootClient.get_or_create_conversation", new_callable=AsyncMock) as get_conv,
-            patch("app.services.voice_handoff_service.ChatwootClient.assign_team", new_callable=AsyncMock) as assign_team,
-            patch("app.services.voice_handoff_service.ChatwootClient.send_message", new_callable=AsyncMock) as send_message,
+            patch("app.modules.integrations.infrastructure.chatwoot.client.ChatwootClient.get_or_create_contact", new_callable=AsyncMock) as get_contact,
+            patch("app.modules.integrations.infrastructure.chatwoot.client.ChatwootClient.get_or_create_conversation", new_callable=AsyncMock) as get_conv,
+            patch("app.modules.integrations.infrastructure.chatwoot.client.ChatwootClient.assign_team", new_callable=AsyncMock) as assign_team,
+            patch("app.modules.integrations.infrastructure.chatwoot.client.ChatwootClient.send_message", new_callable=AsyncMock) as send_message,
         ):
             get_contact.return_value = 555
             get_conv.return_value = 321
@@ -132,10 +132,10 @@ class VoiceHandoffToolsTests(Integration2ATestCase):
         self._seed_agent(handoff_triggers=["customer_request"])
 
         with (
-            patch("app.services.voice_handoff_service.ChatwootClient.get_or_create_contact", new_callable=AsyncMock, return_value=555),
-            patch("app.services.voice_handoff_service.ChatwootClient.get_or_create_conversation", new_callable=AsyncMock, return_value=321),
-            patch("app.services.voice_handoff_service.ChatwootClient.assign_team", new_callable=AsyncMock, return_value=True),
-            patch("app.services.voice_handoff_service.ChatwootClient.send_message", new_callable=AsyncMock, return_value=True) as send_message,
+            patch("app.modules.integrations.infrastructure.chatwoot.client.ChatwootClient.get_or_create_contact", new_callable=AsyncMock, return_value=555),
+            patch("app.modules.integrations.infrastructure.chatwoot.client.ChatwootClient.get_or_create_conversation", new_callable=AsyncMock, return_value=321),
+            patch("app.modules.integrations.infrastructure.chatwoot.client.ChatwootClient.assign_team", new_callable=AsyncMock, return_value=True),
+            patch("app.modules.integrations.infrastructure.chatwoot.client.ChatwootClient.send_message", new_callable=AsyncMock, return_value=True) as send_message,
         ):
             first = self.client.post(
                 "/api/v1/voice/tools/request-human-handoff",
@@ -170,10 +170,10 @@ class VoiceHandoffToolsTests(Integration2ATestCase):
 
         with (
             patch("app.modules.scheduling.application.booking_service.CalComClient.get_available_slots") as get_slots,
-            patch("app.services.voice_handoff_service.ChatwootClient.get_or_create_contact", new_callable=AsyncMock, return_value=555),
-            patch("app.services.voice_handoff_service.ChatwootClient.get_or_create_conversation", new_callable=AsyncMock, return_value=321),
-            patch("app.services.voice_handoff_service.ChatwootClient.assign_team", new_callable=AsyncMock, return_value=True),
-            patch("app.services.voice_handoff_service.ChatwootClient.send_message", new_callable=AsyncMock, return_value=True) as send_message,
+            patch("app.modules.integrations.infrastructure.chatwoot.client.ChatwootClient.get_or_create_contact", new_callable=AsyncMock, return_value=555),
+            patch("app.modules.integrations.infrastructure.chatwoot.client.ChatwootClient.get_or_create_conversation", new_callable=AsyncMock, return_value=321),
+            patch("app.modules.integrations.infrastructure.chatwoot.client.ChatwootClient.assign_team", new_callable=AsyncMock, return_value=True),
+            patch("app.modules.integrations.infrastructure.chatwoot.client.ChatwootClient.send_message", new_callable=AsyncMock, return_value=True) as send_message,
         ):
             get_slots.return_value = {"date": "2026-07-02", "jornada": "all", "available_slots": [], "summary": ""}
             response = self.client.post(
@@ -204,7 +204,7 @@ class VoiceHandoffToolsTests(Integration2ATestCase):
 
         with (
             patch("app.modules.scheduling.application.booking_service.CalComClient.get_available_slots") as get_slots,
-            patch("app.services.voice_handoff_service.ChatwootClient.get_or_create_contact", new_callable=AsyncMock) as get_contact,
+            patch("app.modules.integrations.infrastructure.chatwoot.client.ChatwootClient.get_or_create_contact", new_callable=AsyncMock) as get_contact,
         ):
             get_slots.return_value = {"date": "2026-07-02", "jornada": "all", "available_slots": [], "summary": ""}
             response = self.client.post(

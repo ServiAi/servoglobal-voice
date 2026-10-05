@@ -26,7 +26,7 @@ from app.schemas.voice_experiences import (
     VoiceExperienceVersionResponse,
     VoiceExperienceWriteRequest,
 )
-from app.modules.integrations.application.event_service import IntegrationEventService
+from app.modules.integrations.public import IntegrationEvents
 from app.services.tenant_feature_service import VOICE_EXPERIENCES, TenantFeatureService
 from app.services.voice_agent_service import VoiceAgentService
 
@@ -61,7 +61,7 @@ class VoiceExperienceService:
     def __init__(self, db: Session) -> None:
         self.db = db
         self.feature_service = TenantFeatureService(db)
-        self.event_service = IntegrationEventService(db)
+        self.event_service = IntegrationEvents(db)
         self.agent_service = VoiceAgentService(db)
 
     def list_experiences(self, tenant_id: str) -> list[VoiceExperienceResponse]:
@@ -313,7 +313,7 @@ class VoiceExperienceService:
         ).delete(synchronize_session=False)
         self.db.delete(experience)
         self.db.commit()
-        self.event_service.record_event(
+        self.event_service.record(
             tenant_id=tenant_id,
             provider=provider,
             event_type="voice_experience_deleted",
@@ -376,7 +376,7 @@ class VoiceExperienceService:
             raise VoiceExperienceConflictError(
                 "A referenced voice experience version cannot be deleted."
             ) from exc
-        self.event_service.record_event(
+        self.event_service.record(
             tenant_id=tenant_id,
             provider=self.agent_service.validate_agent_belongs_to_tenant(
                 tenant_id, experience.agent_config_id
@@ -462,7 +462,7 @@ class VoiceExperienceService:
             "theme_json": experience.theme_json,
         }
         metadata.update(extra_metadata or {})
-        self.event_service.record_event(
+        self.event_service.record(
             tenant_id=experience.tenant_id,
             provider=provider,
             event_type=event_type,

@@ -31,7 +31,7 @@ from app.modules.voice.public import (
     ToolSessionView,
     VoiceSessionError,
 )
-from app.modules.integrations.application.event_service import IntegrationEventService
+from app.modules.integrations.public import IntegrationEvents
 
 # Handlers reach other modules only through ToolPorts (scheduling, CRM,
 # messaging, voice sessions) -- never by importing their services, and they
@@ -332,7 +332,7 @@ class ToolDispatchService:
         # Deliberately logs only the tool key and outcome, never the call
         # arguments (phone numbers, dates) or the result payload -- same
         # "no PII in audit metadata" discipline as AgentService._record_event.
-        IntegrationEventService(self.db).record_event(
+        IntegrationEvents(self.db).record(
             tenant_id=tenant_id,
             provider="agent_builder",
             event_type="agent_tool_invoked",

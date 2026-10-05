@@ -5,11 +5,10 @@ call is this?", "detach bookings", and how provider payloads are parsed.
 Application code depends on the Protocols in ``application/ports.py`` only.
 
 Temporary legacy exceptions (allowlisted in ``test_crm_boundaries``):
-``LegacyLeadHistory`` still touches Messaging (``CrmWhatsAppMessage``), Email
-(``TenantEmailSend``) and Forms (``TenantFormToken``/``TenantFormSubmission``)
-ORM, and ``UltravoxCallPayloadAdapter`` is a Voice Legacy adapter. Each is
-replaced by that module's ``public.py`` when it is migrated (Messaging debt, not
-CRM debt).
+``LegacyLeadHistory`` still touches Forms (``TenantFormToken``/``TenantFormSubmission``)
+ORM, and ``UltravoxCallPayloadAdapter`` is a Voice Legacy adapter. Messaging and Email
+history go through ``integrations.public``; the Forms/Voice adapters are replaced by
+their module's ``public.py`` when migrated.
 """
 
 from __future__ import annotations
@@ -29,18 +28,11 @@ class LegacyLeadHistory:
         self.db = db
 
     def clear_references(self, *, tenant_id: str, lead_ids: Sequence[str], contact_ids: Sequence[str]) -> None:
-        from app.modules.integrations.infrastructure.models import CrmWhatsAppMessage
-        from app.modules.integrations.infrastructure.models import TenantEmailSend
+        from app.modules.integrations.public import IntegrationsFacade
 
-        for model in (CrmWhatsAppMessage, TenantEmailSend):
-            self.db.execute(
-                update(model)
-                .where(
-                    model.tenant_id == tenant_id,
-                    or_(model.lead_id.in_(lead_ids), model.contact_id.in_(contact_ids)),
-                )
-                .values(lead_id=None, contact_id=None)
-            )
+        IntegrationsFacade(self.db).detach_lead_references(
+            tenant_id=tenant_id, lead_ids=lead_ids, contact_ids=contact_ids
+        )
 
     def delete_form_artifacts(self, *, tenant_id: str, lead_ids: Sequence[str]) -> None:
         from app.models.integrations import TenantFormSubmission, TenantFormToken

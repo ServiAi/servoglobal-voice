@@ -37,7 +37,7 @@ from app.schemas.crm import (
 )
 from app.services.call_summary_service import CallSummaryService
 from app.services.crm_dashboard_metrics_service import CrmDashboardMetricsService
-from app.modules.integrations.application.email.send_service import EmailSendService
+from app.modules.integrations.public import EmailFacade
 
 _BOOKING_CONFLICTS = (SlotConflictError, IdempotencyConflictError, BookingOperationInProgressError)
 
@@ -226,7 +226,7 @@ def lead_action_email(
 ) -> Any:
     tenant_id = context.tenant.id
     body = body or EmailActionRequest()
-    service = EmailSendService(db)
+    service = EmailFacade(db)
     try:
         if body.preview_only:
             result = service.preview_lead_email(

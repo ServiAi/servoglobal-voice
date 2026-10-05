@@ -17,7 +17,7 @@ from app.models.integrations import (
 )
 from app.modules.crm.public import CrmFacade, LeadProfile
 from app.schemas.forms import FormCreateRequest
-from app.modules.integrations.application.event_service import IntegrationEventService
+from app.modules.integrations.public import IntegrationEvents
 
 FIELD_TYPES = {"text", "email", "phone", "textarea", "select", "checkbox"}
 DEFAULT_FIELDS = [
@@ -35,7 +35,7 @@ class FormService:
     def __init__(self, db: Session) -> None:
         self.db = db
         self.crm = CrmFacade(db)
-        self.event_service = IntegrationEventService(db)
+        self.event_service = IntegrationEvents(db)
 
     def list_forms(self, tenant_id: str) -> list[TenantForm]:
         self.ensure_default_form(tenant_id)
@@ -175,7 +175,7 @@ class FormService:
             title="Formulario enviado",
             payload={"form_id": form.id, "submission_id": submission.id},
         )
-        self.event_service.record_event(
+        self.event_service.record(
             tenant_id=form_token.tenant_id,
             provider="forms",
             event_type="form_submitted",

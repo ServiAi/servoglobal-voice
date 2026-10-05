@@ -112,24 +112,6 @@ class EmailAssetItem(BaseModel):
     status: str
 
 
-class EmailActionRequest(BaseModel):
-    template_key: str = Field(default="lead_proposal", min_length=1, max_length=80)
-    subject: Optional[str] = Field(None, max_length=255)
-    message: Optional[str] = None
-    content_format: str = "mdx"
-    content: Optional[str] = None
-    asset_ids: list[str] = Field(default_factory=list)
-    form_token_ids: list[str] = Field(default_factory=list)
-    preview_only: bool = False
-
-
-class EmailActionResponse(BaseModel):
-    status: str
-    email_send_id: Optional[str] = None
-    provider_email_id: Optional[str] = None
-    preview: Optional[dict] = None
-
-
 class WhatsAppConfigRequest(BaseModel):
     phone_number_id: str = Field(..., min_length=1, max_length=120)
     business_account_id: Optional[str] = Field(None, max_length=120)

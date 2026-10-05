@@ -16,9 +16,7 @@ from app.modules.telephony.application.provisioning_schemas import (
 from app.modules.telephony.application.route_service import SipRouteService
 from app.modules.telephony.domain.routes import sip_username_for_route
 from app.modules.telephony.infrastructure.models import TenantSipRoute
-from app.modules.integrations.application.event_service import (
-    IntegrationEventService,  # shared audit trail
-)
+from app.modules.integrations.public import IntegrationEvents
 
 
 class AsteriskProvisioningService:
@@ -69,7 +67,7 @@ class AsteriskProvisioningService:
         accepted = 0
         ignored = 0
         now = datetime.now(timezone.utc)
-        audit = IntegrationEventService(self.db)
+        audit = IntegrationEvents(self.db)
         for result in results:
             route = self.db.get(TenantSipRoute, result.route_id)
             if route is None or route.desired_revision != result.revision:
@@ -91,7 +89,7 @@ class AsteriskProvisioningService:
             else:
                 route.provision_status = "failed"
                 route.provision_error_code = result.error_code or "apply_failed"
-            audit.add_event(
+            audit.add(
                 tenant_id=route.tenant_id,
                 provider="voice",
                 event_type="asterisk_route_provisioned" if result.success else "asterisk_route_failed",

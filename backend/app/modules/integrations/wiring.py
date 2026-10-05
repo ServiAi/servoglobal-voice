@@ -25,6 +25,7 @@ from app.modules.integrations.domain.catalog import CatalogFacts
 class TenantRef:
     id: str
     name: str
+    slug: str
 
 
 def require_tenant(db: Session, tenant_id: str) -> TenantRef:
@@ -32,7 +33,7 @@ def require_tenant(db: Session, tenant_id: str) -> TenantRef:
     from app.services.onboarding_service import OnboardingService
 
     tenant = OnboardingService(db).get_tenant(tenant_id)
-    return TenantRef(id=tenant.id, name=tenant.name)
+    return TenantRef(id=tenant.id, name=tenant.name, slug=tenant.slug)
 
 
 def foreign_catalog_inputs(db: Session, tenant_id: str, selected: set[str]) -> dict[str, CatalogFacts]:

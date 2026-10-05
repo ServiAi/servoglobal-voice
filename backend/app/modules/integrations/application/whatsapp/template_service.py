@@ -97,6 +97,14 @@ class WhatsAppTemplateService:
         self.db = db
         self.features = features or default_features(db)
 
+    def find_by_key(self, tenant_id: str, template_key: str) -> TenantWhatsAppTemplate | None:
+        return self.db.scalar(
+            select(TenantWhatsAppTemplate).where(
+                TenantWhatsAppTemplate.tenant_id == tenant_id,
+                TenantWhatsAppTemplate.template_key == template_key,
+            )
+        )
+
     def ensure_default_templates(self, tenant_id: str) -> None:
         existing = {
             item.template_key

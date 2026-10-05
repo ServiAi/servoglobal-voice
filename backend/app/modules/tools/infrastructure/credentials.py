@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.modules.tools.infrastructure.models import TenantTool, TenantToolCredential
-from app.modules.integrations.application.event_service import IntegrationEventService
+from app.modules.integrations.public import IntegrationEvents
 from app.services.secret_manager_service import SecretManager, SecretManagerError
 
 _REQUIRED_SECRET_KEYS: dict[str, frozenset[str]] = {
@@ -110,7 +110,7 @@ class TenantToolCredentialService:
         self.db.commit()
         self.db.refresh(credential)
 
-        IntegrationEventService(self.db).record_event(
+        IntegrationEvents(self.db).record(
             tenant_id=tenant_id,
             provider="custom_tool",
             event_type="tool_credential_rotated" if is_rotation else "tool_credential_set",
@@ -225,7 +225,7 @@ class TenantToolCredentialService:
             return
         self.db.delete(credential)
         self.db.commit()
-        IntegrationEventService(self.db).record_event(
+        IntegrationEvents(self.db).record(
             tenant_id=tenant_id,
             provider="custom_tool",
             event_type="tool_credential_deleted",

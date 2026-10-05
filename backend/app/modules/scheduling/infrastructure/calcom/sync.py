@@ -7,7 +7,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.modules.integrations.infrastructure.models import TenantIntegrationEvent
+from app.modules.integrations.public import IntegrationEvents
 from app.modules.scheduling.application.booking_config_service import (
     BookingConfigService,
 )
@@ -57,15 +57,13 @@ class CalComSyncService:
         except Exception as exc:
             error_msg = sanitize_calcom_error(str(exc))
             booking_config.last_error_message = error_msg
-            self.db.add(
-                TenantIntegrationEvent(
-                    tenant_id=tenant_id,
-                    provider="calcom",
-                    event_type="calcom_sync",
-                    status="error",
-                    message=f"Sync failed: {error_msg}",
-                    metadata_json={"error": error_msg},
-                )
+            IntegrationEvents(self.db).add(
+                tenant_id=tenant_id,
+                provider="calcom",
+                event_type="calcom_sync",
+                status="error",
+                message=f"Sync failed: {error_msg}",
+                metadata={"error": error_msg},
             )
             self.db.commit()
             raise
@@ -317,21 +315,13 @@ class CalComSyncService:
             booking_config.default_username = user_info["username"]
 
         # 5. Record integration audit event
-        self.db.add(
-            TenantIntegrationEvent(
-                tenant_id=tenant_id,
-                provider="calcom",
-                event_type="calcom_sync",
-                status="success",
-                message=f"Sync exitoso: {len(synced_schedule_ext_ids)} horarios, {len(synced_et_ext_ids)} tipos de cita, {len(synced_team_ext_ids)} equipos.",
-                metadata_json={
-                    "schedules_count": len(synced_schedule_ext_ids),
-                    "event_types_count": len(synced_et_ext_ids),
-                    "teams_count": len(synced_team_ext_ids),
-                    "username": user_info.get("username"),
-                    "email": user_info.get("email"),
-                },
-            )
+        IntegrationEvents(self.db).add(
+            tenant_id=tenant_id,
+            provider="calcom",
+            event_type="calcom_sync",
+            status="success",
+            message=f"Sync exitoso: {len(synced_schedule_ext_ids)} horarios, {len(synced_et_ext_ids)} tipos de cita, {len(synced_team_ext_ids)} equipos.",
+            metadata={"schedules_count": len(synced_schedule_ext_ids), "event_types_count": len(synced_et_ext_ids), "teams_count": len(synced_team_ext_ids), "username": user_info.get("username"), "email": user_info.get("email")},
         )
         self.db.commit()
 

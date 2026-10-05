@@ -12,7 +12,7 @@ from app.schemas.integrations import (
     VoiceProviderConfigResponse,
     VoiceSipRouteResponse,
 )
-from app.modules.integrations.application.event_service import IntegrationEventService
+from app.modules.integrations.public import IntegrationEvents
 from app.services.secret_manager_service import SecretManager
 from app.services.voice_provider_config_store import VoiceProviderConfigStore
 
@@ -24,7 +24,7 @@ class VoiceConfigService(VoiceProviderConfigStore):
 
     def __init__(self, db: Session, secret_manager: SecretManager | None = None) -> None:
         super().__init__(db, secret_manager)
-        self.event_service = IntegrationEventService(db)
+        self.event_service = IntegrationEvents(db)
         self.route_service = SipRouteFacade(db, self.secret_manager)
 
     def upsert_provider_config(self, tenant_id: str, body: VoiceProviderConfigRequest) -> TenantVoiceProviderConfig:
@@ -73,7 +73,7 @@ class VoiceConfigService(VoiceProviderConfigStore):
         self.db.commit()
         self.db.refresh(config)
 
-        self.event_service.record_event(
+        self.event_service.record(
             tenant_id=tenant_id,
             provider=body.provider,
             event_type="config_updated",
