@@ -56,7 +56,7 @@ Datos de otros módulos que Tool Platform usa, siempre vía API pública y como 
 | `crm_pipeline_stages`, `crm_tasks`, `crm_call_contexts` | `CrmPipelineStage`, `CrmTask`, `CrmCallContext` | ✅ CRM. `assigned_to_user_id` se valida por `TaskAssigneePort` → `identity.public`; sin relaciones ORM a Identity |
 | `crm_activities` | `CrmActivity` | ✅ CRM. Los demás módulos escriben por `crm.public` (`record_activity`, `stage_activity` en su transacción, `upsert_call_activity`); `call_id` es sólo un id hacia Analytics |
 | `crm_voice_calls`, `crm_voice_call_events` | `CrmVoiceCall`, `CrmVoiceCallEvent` | ✅ CRM (propietario único). Telephony vía `OutboundCallLedger`/`CallLoadPort`; Voice Legacy (webhooks, callbacks, workers) y la proyección de Analytics vía `crm.public.CrmVoiceCalls`, que escribe en la transacción del llamador y nunca hace commit |
-| `crm_whatsapp_messages` | `CrmWhatsAppMessage` | 🔴 propietario objetivo: Messaging (el mensaje es del canal; CRM lo muestra en timeline). Sigue en `app/models/crm.py` (único modelo que queda ahí, sin reexports); CRM sólo lo toca desde `wiring.LegacyLeadHistory` — deuda de Messaging |
+| `crm_whatsapp_messages` | `CrmWhatsAppMessage` | ✅ propietario: **Integrations / Messaging** (ORM en `modules/integrations/infrastructure/models.py`; el nombre histórico de la tabla no determina el dueño; mismas columnas, FKs e índices). CRM ya no lo importa: el borrado de leads lo desreferencia por `integrations.public.detach_lead_references`, y la acción WhatsApp/historial del lead se piden a `WhatsAppFacade`; Messaging escribe la actividad en `crm.public` |
 | `crm_bookings`, `crm_booking_events` | `CrmBooking`, `CrmBookingEvent` | ✅ propietario: **Scheduling** (ORM en `modules/scheduling/infrastructure/models.py`; CRM sólo ve `BookingView`; FKs a `crm_leads`/`crm_contacts` a nivel DB, sin relaciones ORM) |
 
 ## Scheduling
@@ -71,7 +71,7 @@ Ahora en `app/modules/scheduling/infrastructure/models.py` (en la migración de 
 | `tenant_agent_scheduling_configs` | `TenantAgentSchedulingConfig` | ✅ Scheduling; Agent Builder sólo pregunta `is_booking_configured` |
 | `crm_bookings`, `crm_booking_events` | `CrmBooking`, `CrmBookingEvent` | ✅ Scheduling. Historia propia del booking (≠ eventos de dominio). `scheduling_resource_id` (FK a `tenant_scheduling_resources`) es el recurso canónico y base de la guarda de solapes |
 | `tenant_booking_operations` | `BookingOperation` | ✅ Scheduling. Operaciones idempotentes de booking (create/cancel/reschedule): unique `(tenant_id, operation_type, idempotency_key)`; `result_json` sólo ids/estado, nunca tokens ni PII |
-| `tenant_integration_events` (`calcom_sync`, `booking_create`, `availability_lookup`, …) | `TenantIntegrationEvent` | 🟡 auditoría compartida de integraciones (temporal, allowlist `SCHEDULING_LEGACY_ALLOWED`) |
+| `tenant_integration_events` (`calcom_sync`, `booking_create`, `availability_lookup`, …) | `TenantIntegrationEvent` | ✅ propietario: **Integrations**; Scheduling escribe por `IntegrationEvents.record/add` (metadata sanitizada), nunca construye la fila |
 | `domain_events` (`booking.*`) | `DomainEvent` | 🟡 los crea la infraestructura existente al anunciarse el hecho (`wiring.NotificationBookingEvents`); Scheduling no importa Notifications |
 
 ## Notifications
@@ -84,11 +84,22 @@ Ahora en `app/modules/scheduling/infrastructure/models.py` (en la migración de 
 
 ## Integrations / Messaging
 
-`tenant_integrations`, `tenant_integration_events` (auditoría transversal → shared), `tenant_whatsapp_configs`, `tenant_whatsapp_templates`, `tenant_whatsapp_flows`, `tenant_email_configs`, `tenant_email_templates`, `tenant_email_assets`, `tenant_email_sends`, `tenant_email_send_assets`, `tenant_chatwoot_configs`, `tenant_chatwoot_inboxes`. Estado 🟡. `TenantWhatsAppTemplate` ya se consulta desde tools vía `WhatsAppFacade` ✅.
+ORM en `app/modules/integrations/infrastructure/models.py` (13 tablas; mismas columnas, FKs, índices y constraints; sin migración). Sin relaciones ORM hacia `Tenant`, `User`, `CrmLead`, `CrmContact` ni `TenantVoiceContextSchema`: sólo FKs. Las relaciones entre sus propias tablas se conservan.
+
+| Tabla | Modelo | Estado |
+| --- | --- | --- |
+| `tenant_integrations` | `TenantIntegration` | ✅ catálogo on/off + salud genérica (`resend`, `voice`, `whatsapp`, `calcom`, `google_calendar`, `chatwoot`). No hace a Integrations dueño del proveedor: la config de Voice es de Voice y la de Cal.com/Google es de Scheduling |
+| `tenant_integration_events` | `TenantIntegrationEvent` | ✅ auditoría transversal; se escribe sólo por `IntegrationEvents` (`api_key`, `authorization`, `payload`, `html`, `text`, `base64`, `phone`, `email` se redactan; los no escalares se omiten) |
+| `tenant_whatsapp_configs`, `tenant_whatsapp_templates`, `tenant_whatsapp_flows` | `TenantWhatsApp*` | ✅ Messaging. Tokens cifrados (`access_token_encrypted`, `webhook_verify_token_encrypted`), nunca en DTOs/respuestas/logs. Flows lee el schema de contexto de Voice por `VoiceContextSchemaPort` (snapshot, sin ORM) |
+| `crm_whatsapp_messages` | `CrmWhatsAppMessage` | ✅ ledger de mensajes (queued/sent/delivered/read/failed/received, `provider_message_id`, `notification_delivery_id`); el estado nunca retrocede |
+| `tenant_email_configs`, `tenant_email_templates`, `tenant_email_assets`, `tenant_email_sends`, `tenant_email_send_assets` | `TenantEmail*` | ✅ Messaging. Los archivos viven en Storage (`AssetStoragePort`); el enlace a formularios se valida por `FormLinkPort` |
+| `tenant_chatwoot_configs`, `tenant_chatwoot_inboxes` | `TenantChatwoot*` | ✅ Messaging. `api_token_encrypted`; `webhook_key` opaco; unique `(base_url, account_id)` |
+
+**Residuo temporal** en `app/models/integrations.py` (no son de Messaging, sin alias ni reexport): Forms (`tenant_forms`, `tenant_form_fields`, `tenant_form_tokens`, `tenant_form_submissions`, `tenant_form_submission_answers`) y config legacy de Voice (`tenant_voice_provider_configs`, `tenant_voice_agent_configs`). `test_integrations_boundaries.py` impide que una clase de Messaging vuelva allí y `app/models/crm.py` ya no existe.
 
 ## Voice Experiences
 
-`tenant_voice_experiences`, `tenant_voice_experience_versions`, `tenant_voice_context_schemas`, `tenant_voice_context_fields`, `tenant_voice_experience_submissions` y derivadas, `tenant_voice_context_sessions`, `tenant_voice_runtime_calls`, `voice_public_rate_limit_windows`, `tenant_forms`, `tenant_form_fields`, `tenant_form_tokens`, `tenant_form_submissions`, `tenant_form_submission_answers`. Estado 🟡 (`voice_context` es leído por WhatsApp Flows para generar formularios).
+`tenant_voice_experiences`, `tenant_voice_experience_versions`, `tenant_voice_context_schemas`, `tenant_voice_context_fields`, `tenant_voice_experience_submissions` y derivadas, `tenant_voice_context_sessions`, `tenant_voice_runtime_calls`, `voice_public_rate_limit_windows`, `tenant_forms`, `tenant_form_fields`, `tenant_form_tokens`, `tenant_form_submissions`, `tenant_form_submission_answers` (Forms, hoy residuo de `app/models/integrations.py`). Estado 🟡 (WhatsApp Flows lee `voice_context` por `VoiceContextSchemaPort`, adaptador en `integrations.wiring`; el envío de email valida enlaces de formulario por `FormLinkPort`).
 
 ## Voice Legacy y Billing/Analytics
 

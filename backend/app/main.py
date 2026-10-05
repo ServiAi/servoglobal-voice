@@ -30,7 +30,7 @@ app.add_middleware(
 )
 
 from app.api.endpoints import notifications
-from app.api.endpoints import chatwoot_webhook
+from app.modules.integrations.api import chatwoot_webhook
 from app.api.endpoints import voice
 from app.api.endpoints import voice_booking_tools
 from app.modules.scheduling.api import calcom_router as calcom
@@ -42,12 +42,13 @@ from app.api.endpoints.admin import tenant_features as admin_tenant_features
 from app.api.endpoints import auth0 as auth0_endpoint
 from app.api.endpoints import crm
 from app.modules.crm.api import router as crm_core
-from app.api.endpoints import integrations
+from app.api.endpoints import voice_integrations
+from app.modules.integrations.api import router as integrations_router, admin_router as integrations_admin_router
 from app.api.endpoints import forms
-from app.api.endpoints import email_assets
+from app.modules.integrations.api import email_assets
 from app.api.endpoints import crm_whatsapp
-from app.api.endpoints import whatsapp_webhook
-from app.api.endpoints import whatsapp_flows
+from app.modules.integrations.api import whatsapp_webhook
+from app.modules.integrations.api import whatsapp_flows
 from app.api.endpoints import crm_voice
 from app.api.endpoints import voice_webhook
 from app.modules.notifications.api import router as notification_admin
@@ -72,12 +73,14 @@ app.include_router(dashboard.router)
 app.include_router(me.router)
 app.include_router(ultravox_webhook.router)
 app.include_router(admin_tenants.router)
+app.include_router(integrations_admin_router.router)
 app.include_router(admin_tenant_features.router)
 app.include_router(auth0_endpoint.router)
 app.include_router(crm_core.router)
 app.include_router(crm.router)
 app.include_router(scheduling_integrations.router)
-app.include_router(integrations.router)
+app.include_router(integrations_router.router)
+app.include_router(voice_integrations.router)
 app.include_router(forms.router)
 app.include_router(email_assets.router)
 app.include_router(crm_whatsapp.router)

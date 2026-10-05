@@ -3,8 +3,12 @@ from __future__ import annotations
 from sqlalchemy import select
 
 from _integrations_2a_test_base import Integration2ATestCase, SessionLocal
-from app.models.integrations import TenantIntegrationEvent, TenantWhatsAppConfig, TenantWhatsAppTemplate
-from app.services.whatsapp_client import WhatsAppCloudClient, sanitize_whatsapp_error
+from app.modules.integrations.infrastructure.models import (
+    TenantIntegrationEvent,
+    TenantWhatsAppConfig,
+    TenantWhatsAppTemplate,
+)
+from app.modules.integrations.infrastructure.whatsapp.meta_client import WhatsAppCloudClient, sanitize_whatsapp_error
 
 
 class WhatsAppIntegrationTests(Integration2ATestCase):
@@ -54,14 +58,14 @@ class WhatsAppIntegrationTests(Integration2ATestCase):
 
     def test_whatsapp_test_connection_marks_health_with_mock(self):
         self.client.post("/api/v1/integrations/whatsapp/config", json=self._payload())
-        from app.services.whatsapp_client import WhatsAppCloudClient
+        from app.modules.integrations.infrastructure.whatsapp.meta_client import WhatsAppCloudClient
 
         class _Client(WhatsAppCloudClient):
             def get_phone_number_info(self, config):
                 return {"display_phone_number": "+573001112233"}
 
         with SessionLocal() as db:
-            from app.services.whatsapp_config_service import WhatsAppConfigService
+            from app.modules.integrations.application.whatsapp.config_service import WhatsAppConfigService
 
             result = WhatsAppConfigService(db, client=_Client()).test_connection(self.tenant.id)
 
@@ -85,7 +89,7 @@ class WhatsAppIntegrationTests(Integration2ATestCase):
 
         client = _Client()
         with SessionLocal() as db:
-            from app.services.whatsapp_config_service import WhatsAppConfigService
+            from app.modules.integrations.application.whatsapp.config_service import WhatsAppConfigService
 
             result = WhatsAppConfigService(db, client=client).test_connection(self.tenant.id)
 
@@ -121,7 +125,7 @@ class WhatsAppIntegrationTests(Integration2ATestCase):
                 ]}
 
         with SessionLocal() as db:
-            from app.services.whatsapp_config_service import WhatsAppConfigService
+            from app.modules.integrations.application.whatsapp.config_service import WhatsAppConfigService
 
             service = WhatsAppConfigService(db, client=_Client())
             first = service.sync_templates(self.tenant.id)
@@ -150,7 +154,7 @@ class WhatsAppIntegrationTests(Integration2ATestCase):
 
         client = _Client()
         with SessionLocal() as db:
-            from app.services.whatsapp_config_service import WhatsAppConfigService
+            from app.modules.integrations.application.whatsapp.config_service import WhatsAppConfigService
 
             WhatsAppConfigService(db, client=client).sync_templates(self.tenant.id)
             config = db.scalar(select(TenantWhatsAppConfig).where(TenantWhatsAppConfig.tenant_id == self.tenant.id))

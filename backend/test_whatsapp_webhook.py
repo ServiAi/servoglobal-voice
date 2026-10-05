@@ -10,8 +10,8 @@ from sqlalchemy import func, select
 from _integrations_2a_test_base import Integration2ATestCase, SessionLocal
 from app.core.config import settings
 from app.modules.crm.infrastructure.models import CrmActivity
-from app.models.crm import CrmWhatsAppMessage
-from app.models.integrations import TenantIntegrationEvent, TenantWhatsAppConfig
+from app.modules.integrations.infrastructure.models import CrmWhatsAppMessage
+from app.modules.integrations.infrastructure.models import TenantIntegrationEvent, TenantWhatsAppConfig
 
 
 class WhatsAppWebhookTests(Integration2ATestCase):
@@ -199,6 +199,109 @@ class WhatsAppWebhookTests(Integration2ATestCase):
         self.assertIsNotNone(message)
         self.assertEqual(message.lead_id, lead_id)
         self.assertEqual(lead_count, 1)
+
+    def _post_statuses(self, *statuses, phone_number_id="phone-number-1"):
+        return self.client.post(
+            "/api/v1/webhook/whatsapp",
+            json={"entry": [{"changes": [{"value": {
+                "metadata": {"phone_number_id": phone_number_id},
+                "statuses": list(statuses),
+            }}]}]},
+        )
+
+    def test_whatsapp_late_delivered_does_not_downgrade_read(self):
+        self.configure_whatsapp()
+        with SessionLocal() as db:
+            db.add(CrmWhatsAppMessage(
+                tenant_id=self.tenant.id,
+                provider_message_id="wamid.order-1",
+                direction="outbound",
+                to_phone="573001112233",
+                status="sent",
+                metadata_json={},
+                sent_at=datetime.now(timezone.utc),
+            ))
+            db.commit()
+
+        # Meta may deliver webhooks out of order: read arrives before delivered.
+        self.assertEqual(self._post_statuses({"id": "wamid.order-1", "status": "read"}).status_code, 200)
+        self.assertEqual(self._post_statuses({"id": "wamid.order-1", "status": "delivered"}).status_code, 200)
+
+        with SessionLocal() as db:
+            message = db.scalar(select(CrmWhatsAppMessage).where(CrmWhatsAppMessage.provider_message_id == "wamid.order-1"))
+            delivered_events = db.scalar(
+                select(func.count()).select_from(TenantIntegrationEvent).where(
+                    TenantIntegrationEvent.event_type == "whatsapp_status_delivered"
+                )
+            )
+        self.assertEqual(message.status, "read")
+        self.assertIsNotNone(message.read_at)
+        self.assertIsNone(message.delivered_at)
+        self.assertEqual(delivered_events, 0)
+
+    def _seed_outbound(self, wamid: str, status: str) -> None:
+        with SessionLocal() as db:
+            db.add(CrmWhatsAppMessage(
+                tenant_id=self.tenant.id,
+                provider_message_id=wamid,
+                direction="outbound",
+                to_phone="573001112233",
+                status=status,
+                metadata_json={},
+            ))
+            db.commit()
+
+    def _status_of(self, wamid: str) -> str:
+        with SessionLocal() as db:
+            return db.scalar(select(CrmWhatsAppMessage.status).where(CrmWhatsAppMessage.provider_message_id == wamid))
+
+    def test_whatsapp_late_failed_does_not_overwrite_a_confirmed_status(self):
+        self.configure_whatsapp()
+        for confirmed in ("delivered", "read"):
+            wamid = f"wamid.late-fail-{confirmed}"
+            self._seed_outbound(wamid, confirmed)
+            self._post_statuses({"id": wamid, "status": "failed", "errors": [{"code": 131026}]})
+            self.assertEqual(self._status_of(wamid), confirmed)
+
+    def test_whatsapp_failed_is_recorded_for_a_message_that_was_never_confirmed(self):
+        self.configure_whatsapp()
+        self._seed_outbound("wamid.fail-queued", "sent")
+        self._post_statuses({"id": "wamid.fail-queued", "status": "failed", "errors": [{"code": 131026}]})
+        with SessionLocal() as db:
+            message = db.scalar(select(CrmWhatsAppMessage).where(CrmWhatsAppMessage.provider_message_id == "wamid.fail-queued"))
+        self.assertEqual(message.status, "failed")
+        self.assertIsNotNone(message.failed_at)
+
+    def test_whatsapp_unmodelled_provider_status_is_ignored(self):
+        self.configure_whatsapp()
+        self._seed_outbound("wamid.unknown-status", "sent")
+        self._post_statuses({"id": "wamid.unknown-status", "status": "deleted"})
+        self.assertEqual(self._status_of("wamid.unknown-status"), "sent")
+
+    def test_whatsapp_inbound_webhook_retry_does_not_duplicate_message_or_activity(self):
+        self.configure_whatsapp()
+        lead_id, _ = self.seed_lead()
+        payload = {"entry": [{"changes": [{"value": {
+            "metadata": {"phone_number_id": "phone-number-1"},
+            "messages": [{"id": "wamid.retry-1", "from": "573001112233", "text": {"body": "Hola"}}],
+        }}]}]}
+
+        first = self.client.post("/api/v1/webhook/whatsapp", json=payload)
+        retry = self.client.post("/api/v1/webhook/whatsapp", json=payload)
+
+        self.assertEqual((first.json()["inbound"], retry.json()["inbound"]), (1, 0))
+        with SessionLocal() as db:
+            messages = db.scalar(
+                select(func.count()).select_from(CrmWhatsAppMessage).where(
+                    CrmWhatsAppMessage.provider_message_id == "wamid.retry-1"
+                )
+            )
+            activities = db.scalar(
+                select(func.count()).select_from(CrmActivity).where(
+                    CrmActivity.lead_id == lead_id, CrmActivity.activity_type == "whatsapp_inbound_received"
+                )
+            )
+        self.assertEqual((messages, activities), (1, 1))
 
     def test_whatsapp_webhook_unmatched_inbound_does_not_create_lead(self):
         self.configure_whatsapp()

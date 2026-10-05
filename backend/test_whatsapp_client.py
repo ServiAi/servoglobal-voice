@@ -4,9 +4,9 @@ import unittest
 from unittest.mock import patch
 
 from app.core.config import settings
-from app.services import whatsapp_client
+from app.modules.integrations.infrastructure.whatsapp import meta_client as whatsapp_client
 from app.services.meta_client import MetaClient
-from app.services.whatsapp_client import WhatsAppClientConfig, WhatsAppCloudClient
+from app.modules.integrations.infrastructure.whatsapp.meta_client import WhatsAppClientConfig, WhatsAppCloudClient
 
 
 class _Response:
@@ -44,7 +44,7 @@ class WhatsAppGraphVersionTests(unittest.TestCase):
 
     def test_request_builds_url_with_configured_version(self):
         _RecordingClient.requested_url = None
-        with patch("app.services.whatsapp_client.httpx.Client", _RecordingClient):
+        with patch("app.modules.integrations.infrastructure.whatsapp.meta_client.httpx.Client", _RecordingClient):
             WhatsAppCloudClient()._request(
                 "GET", "phone-id", WhatsAppClientConfig(access_token="tok", phone_number_id="phone-id")
             )
@@ -60,7 +60,7 @@ class WhatsAppGraphVersionTests(unittest.TestCase):
         self.assertEqual(client._base_url, "https://graph.facebook.com/v99.0/phone-id/messages")
 
     def test_flow_asset_upload_uses_multipart_without_manual_content_type(self):
-        with patch("app.services.whatsapp_client.httpx.Client", _RecordingClient):
+        with patch("app.modules.integrations.infrastructure.whatsapp.meta_client.httpx.Client", _RecordingClient):
             WhatsAppCloudClient().upload_flow_json(
                 WhatsAppClientConfig(access_token="tok", phone_number_id="phone-id"),
                 flow_id="flow-1",
@@ -73,7 +73,7 @@ class WhatsAppGraphVersionTests(unittest.TestCase):
         self.assertNotIn("Content-Type", kwargs["headers"])
 
     def test_flow_creation_uses_multipart_fields(self):
-        with patch("app.services.whatsapp_client.httpx.Client", _RecordingClient):
+        with patch("app.modules.integrations.infrastructure.whatsapp.meta_client.httpx.Client", _RecordingClient):
             WhatsAppCloudClient().create_flow(
                 WhatsAppClientConfig(access_token="tok", phone_number_id="phone-id"),
                 waba_id="waba-1",

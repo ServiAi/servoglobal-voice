@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, patch
 
 os.environ.setdefault("ULTRAVOX_API_KEY", "test")
 
-from app.services.chatwoot_client import ChatwootClientConfig
+from app.modules.integrations.infrastructure.chatwoot.client import ChatwootClientConfig
 from app.services.notification_service import NotificationService
 
 _TENANT_ID = "tenant-1"
@@ -57,9 +57,9 @@ class NotificationServiceChatwootNotesTests(unittest.IsolatedAsyncioTestCase):
         fake_client.add_label = AsyncMock(return_value=True)
 
         with patch(
-            "app.services.notification_service.ChatwootConfigService.get_active_client_config",
+            "app.modules.integrations.application.chatwoot.config_service.ChatwootConfigService.get_active_client_config",
             return_value=(object(), _CLIENT_CONFIG),
-        ), patch("app.services.notification_service.ChatwootClient", return_value=fake_client):
+        ), patch("app.modules.integrations.infrastructure.chatwoot.client.ChatwootClient", return_value=fake_client):
             ok = await service._crm_private_note(
                 None,
                 _TENANT_ID,
@@ -82,9 +82,9 @@ class NotificationServiceChatwootNotesTests(unittest.IsolatedAsyncioTestCase):
         fake_client.add_label = AsyncMock(return_value=True)
 
         with patch(
-            "app.services.notification_service.ChatwootConfigService.get_active_client_config",
+            "app.modules.integrations.application.chatwoot.config_service.ChatwootConfigService.get_active_client_config",
             return_value=(object(), _CLIENT_CONFIG),
-        ), patch("app.services.notification_service.ChatwootClient", return_value=fake_client):
+        ), patch("app.modules.integrations.infrastructure.chatwoot.client.ChatwootClient", return_value=fake_client):
             ok = await service._crm_private_note(
                 None,
                 _TENANT_ID,
@@ -101,7 +101,7 @@ class NotificationServiceChatwootNotesTests(unittest.IsolatedAsyncioTestCase):
         service = NotificationService()
 
         with patch(
-            "app.services.notification_service.ChatwootConfigService.get_active_client_config",
+            "app.modules.integrations.application.chatwoot.config_service.ChatwootConfigService.get_active_client_config",
             side_effect=ValueError("Chatwoot integration is not configured"),
         ):
             ok = await service._crm_private_note(

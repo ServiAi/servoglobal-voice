@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from app.api.auth.deps import AuthContext, require_roles
 from app.db.session import get_db
 from app.modules.crm.public import CrmFacade, LeadProfile
+from app.modules.integrations.public import EmailFacade
 from app.modules.scheduling.public import (
     BookingOperationInProgressError,
     CreateBookingCommand,
@@ -37,7 +38,6 @@ from app.schemas.crm import (
 )
 from app.services.call_summary_service import CallSummaryService
 from app.services.crm_dashboard_metrics_service import CrmDashboardMetricsService
-from app.services.email_send_service import EmailSendService
 
 _BOOKING_CONFLICTS = (SlotConflictError, IdempotencyConflictError, BookingOperationInProgressError)
 
@@ -226,7 +226,7 @@ def lead_action_email(
 ) -> Any:
     tenant_id = context.tenant.id
     body = body or EmailActionRequest()
-    service = EmailSendService(db)
+    service = EmailFacade(db)
     try:
         if body.preview_only:
             result = service.preview_lead_email(

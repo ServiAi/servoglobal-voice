@@ -1,0 +1,116 @@
+from __future__ import annotations
+
+import json
+from datetime import UTC, datetime
+
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
+
+from app.modules.integrations.application.ports import SecretsPort
+from app.modules.integrations.domain.catalog import SUPPORTED_PROVIDERS
+from app.modules.integrations.infrastructure.models import TenantIntegration
+
+
+class IntegrationService:
+    supported_providers = SUPPORTED_PROVIDERS
+
+    def __init__(self, db: Session, secret_manager: SecretsPort | None = None) -> None:
+        from app.modules.integrations.wiring import default_secrets
+
+        self.db = db
+        self.secret_manager = secret_manager or default_secrets()
+
+    def list_integrations(self, tenant_id: str) -> list[TenantIntegration]:
+        return list(self.db.scalars(select(TenantIntegration).where(TenantIntegration.tenant_id == tenant_id)).all())
+
+    def get_integration(self, tenant_id: str, provider: str) -> TenantIntegration | None:
+        return self.db.scalar(
+            select(TenantIntegration).where(
+                TenantIntegration.tenant_id == tenant_id,
+                TenantIntegration.provider == provider,
+            )
+        )
+
+    def is_enabled(self, tenant_id: str, provider: str) -> bool:
+        integration = self.get_integration(tenant_id, provider)
+        return integration.enabled if integration else True
+
+    def list_availability(self, tenant_id: str) -> list[dict[str, object]]:
+        integrations = {item.provider: item for item in self.list_integrations(tenant_id)}
+        return [
+            {"provider": provider, "enabled": integrations.get(provider).enabled if provider in integrations else True}
+            for provider in self.supported_providers
+        ]
+
+    def _get_or_create(self, tenant_id: str, provider: str, **defaults) -> TenantIntegration:
+        """The (tenant, provider) row. A concurrent creator that wins the unique constraint is
+        adopted instead of failing, so concurrent writers converge on one row."""
+        integration = self.get_integration(tenant_id, provider)
+        if integration is not None:
+            return integration
+        integration = TenantIntegration(
+            tenant_id=tenant_id, provider=provider, status="inactive", config_json={}, **defaults
+        )
+        try:
+            with self.db.begin_nested():
+                self.db.add(integration)
+        except IntegrityError:
+            integration = self.get_integration(tenant_id, provider)
+            if integration is None:
+                raise
+        return integration
+
+    def set_enabled(self, tenant_id: str, provider: str, enabled: bool) -> TenantIntegration:
+        if provider not in self.supported_providers:
+            raise ValueError("Unsupported integration provider.")
+        integration = self._get_or_create(tenant_id, provider, enabled=enabled)
+        integration.enabled = enabled
+        self.db.commit()
+        self.db.refresh(integration)
+        return integration
+
+    def upsert_resend(
+        self,
+        *,
+        tenant_id: str,
+        display_name: str,
+        config: dict,
+        api_key: str | None,
+    ) -> TenantIntegration:
+        integration = self._get_or_create(tenant_id, "resend", display_name=display_name)
+
+        integration.display_name = display_name
+        integration.config_json = config
+        integration.status = "active"
+        integration.last_error_message = None
+        if api_key:
+            integration.secrets_json_encrypted = self.secret_manager.encrypt_secret(json.dumps({"api_key": api_key}))
+        self.db.commit()
+        self.db.refresh(integration)
+        return integration
+
+    def has_secret(self, integration: TenantIntegration | None) -> bool:
+        return bool(integration and integration.secrets_json_encrypted)
+
+    def get_secret_value(self, integration: TenantIntegration, key: str) -> str:
+        if not integration.secrets_json_encrypted:
+            raise ValueError("Integration secret is not configured.")
+        decrypted = self.secret_manager.decrypt_secret(integration.secrets_json_encrypted)
+        payload = json.loads(decrypted)
+        value = payload.get(key)
+        if not value:
+            raise ValueError("Integration secret is not configured.")
+        return value
+
+    def mark_health(
+        self,
+        integration: TenantIntegration,
+        *,
+        status: str,
+        error_message: str | None = None,
+    ) -> None:
+        integration.status = status
+        integration.last_health_check_at = datetime.now(UTC)
+        integration.last_error_message = error_message
+        self.db.commit()

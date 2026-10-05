@@ -4,9 +4,9 @@ from sqlalchemy import select
 
 from _integrations_2a_test_base import Integration2ATestCase, SessionLocal
 from app.core.config import settings
-from app.models.integrations import TenantChatwootConfig, TenantIntegrationEvent
-from app.services.chatwoot_client import ChatwootClient, ChatwootClientError
-from app.services.chatwoot_platform_client import ChatwootPlatformError
+from app.modules.integrations.infrastructure.models import TenantChatwootConfig, TenantIntegrationEvent
+from app.modules.integrations.infrastructure.chatwoot.client import ChatwootClient, ChatwootClientError
+from app.modules.integrations.infrastructure.chatwoot.platform_client import ChatwootPlatformError
 
 
 class ChatwootConfigServiceTests(Integration2ATestCase):
@@ -147,13 +147,13 @@ class ChatwootConfigServiceTests(Integration2ATestCase):
             def get_account_profile(self):
                 return {"id": 17, "name": "Clinica ABC"}
 
-        import app.services.chatwoot_config_service as module
+        import app.modules.integrations.infrastructure.chatwoot.client as module
 
         original = module.ChatwootClient
         module.ChatwootClient = _Client
         try:
             with SessionLocal() as db:
-                from app.services.chatwoot_config_service import ChatwootConfigService
+                from app.modules.integrations.application.chatwoot.config_service import ChatwootConfigService
 
                 result = ChatwootConfigService(db).test_connection(self.tenant.id)
         finally:
@@ -173,13 +173,13 @@ class ChatwootConfigServiceTests(Integration2ATestCase):
             def get_account_profile(self):
                 raise ChatwootClientError("Chatwoot request failed")
 
-        import app.services.chatwoot_config_service as module
+        import app.modules.integrations.infrastructure.chatwoot.client as module
 
         original = module.ChatwootClient
         module.ChatwootClient = _FailingClient
         try:
             with SessionLocal() as db:
-                from app.services.chatwoot_config_service import ChatwootConfigService
+                from app.modules.integrations.application.chatwoot.config_service import ChatwootConfigService
 
                 result = ChatwootConfigService(db).test_connection(self.tenant.id)
         finally:
@@ -220,7 +220,7 @@ class ChatwootConfigServiceTests(Integration2ATestCase):
             def create_account_webhook(self, *, account_id, user_token, url):
                 return {"payload": {"webhook": {"id": 1, "url": url}}}
 
-        import app.services.chatwoot_config_service as module
+        import app.modules.integrations.infrastructure.chatwoot.platform_client as module
 
         original_client = module.ChatwootPlatformClient
         original_token = settings.CHATWOOT_PLATFORM_API_TOKEN
@@ -258,7 +258,7 @@ class ChatwootConfigServiceTests(Integration2ATestCase):
             def create_account(self, *, name):
                 raise ChatwootPlatformError("Chatwoot platform request failed (401)")
 
-        import app.services.chatwoot_config_service as module
+        import app.modules.integrations.infrastructure.chatwoot.platform_client as module
 
         original_client = module.ChatwootPlatformClient
         original_token = settings.CHATWOOT_PLATFORM_API_TOKEN
@@ -291,7 +291,7 @@ class ChatwootConfigServiceTests(Integration2ATestCase):
             def create_user(self, *, name, email, password):
                 raise ChatwootPlatformError("Chatwoot platform request failed (401)")
 
-        import app.services.chatwoot_config_service as module
+        import app.modules.integrations.infrastructure.chatwoot.platform_client as module
 
         original_client = module.ChatwootPlatformClient
         original_token = settings.CHATWOOT_PLATFORM_API_TOKEN
@@ -360,7 +360,7 @@ class ChatwootConfigServiceTests(Integration2ATestCase):
             db.add(config)
             db.commit()
 
-        import app.services.chatwoot_config_service as module
+        import app.modules.integrations.infrastructure.chatwoot.platform_client as module
 
         original_client = module.ChatwootPlatformClient
         module.ChatwootPlatformClient = _FakePlatformClient

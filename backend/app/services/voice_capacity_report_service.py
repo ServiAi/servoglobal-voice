@@ -10,10 +10,9 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models.integrations import TenantIntegrationEvent
+from app.modules.integrations.public import IntegrationEvents
 from app.modules.telephony.public import (
     CAPACITY_EVENT_TYPES,
     VOICE_CALLBACK_FORCED_RELEASE,
@@ -41,26 +40,16 @@ class VoiceCapacityReportService:
 
         active_calls = CapacityFacade(self.db).callbacks_in_flight(tenant_id=tenant_id, route_id=route.id)
         limit = route.max_concurrent_calls
-        event_filters = (
-            TenantIntegrationEvent.tenant_id == tenant_id,
-            TenantIntegrationEvent.provider.in_(("telephony", "ultravox")),
-            TenantIntegrationEvent.event_type.in_(CAPACITY_EVENT_TYPES),
-            TenantIntegrationEvent.created_at >= date_from,
-            TenantIntegrationEvent.created_at <= date_to,
+        summary = IntegrationEvents(self.db).summarize(
+            tenant_id=tenant_id,
+            providers=("telephony", "ultravox"),
+            event_types=CAPACITY_EVENT_TYPES,
+            date_from=date_from,
+            date_to=date_to,
+            recent_limit=10,
         )
-        counts = dict(
-            self.db.execute(
-                select(TenantIntegrationEvent.event_type, func.count())
-                .where(*event_filters)
-                .group_by(TenantIntegrationEvent.event_type)
-            ).all()
-        )
-        events = self.db.scalars(
-            select(TenantIntegrationEvent)
-            .where(*event_filters)
-            .order_by(TenantIntegrationEvent.created_at.desc())
-            .limit(10)
-        ).all()
+        counts = summary.counts
+        events = summary.recent
 
         event_labels = {
             VOICE_CAPACITY_REACHED: "capacity_reached",
@@ -69,7 +58,7 @@ class VoiceCapacityReportService:
         }
         recent_events = []
         for event in events:
-            metadata = event.metadata_json or {}
+            metadata = event.metadata
             recent_events.append(
                 {
                     "event_type": event_labels[event.event_type],

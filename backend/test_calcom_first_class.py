@@ -17,7 +17,7 @@ from app.modules.scheduling.domain.errors import (
     SchedulingValidationError,
 )
 from app.models.identity import Tenant, TenantMembership, User
-from app.models.integrations import TenantIntegrationEvent
+from app.modules.integrations.infrastructure.models import TenantIntegrationEvent
 from app.modules.scheduling.infrastructure.models import (
     TenantAgentSchedulingConfig,
     TenantBookingConfig,

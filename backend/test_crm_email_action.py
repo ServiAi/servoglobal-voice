@@ -21,11 +21,11 @@ from app.db.session import SessionLocal, engine
 from app.main import app
 from app.modules.crm.infrastructure.models import CrmActivity, CrmContact, CrmLead
 from app.models.identity import Tenant, TenantMembership, User
-from app.models.integrations import TenantEmailSend
+from app.modules.integrations.infrastructure.models import TenantEmailSend
 from app.modules.crm.application.pipeline_service import CrmPipelineService
-from app.services.email_config_service import EmailConfigService
-from app.services.integration_service import IntegrationService
-from app.services.resend_service import ResendServiceError
+from app.modules.integrations.application.email.config_service import EmailConfigService
+from app.modules.integrations.application.integration_service import IntegrationService
+from app.modules.integrations.infrastructure.email.resend import ResendServiceError
 
 
 class CrmEmailActionTests(unittest.TestCase):
@@ -131,7 +131,7 @@ class CrmEmailActionTests(unittest.TestCase):
         self._configure_resend()
         lead_id = self._seed_lead(self.tenant.id)
 
-        with patch("app.services.email_send_service.ResendService") as service_cls:
+        with patch("app.modules.integrations.infrastructure.email.resend.ResendService") as service_cls:
             service_cls.return_value.send_email.return_value = "email_provider_1"
             response = self.client.post(f"/api/v1/crm/leads/{lead_id}/actions/email", json=self._payload())
 
@@ -141,7 +141,7 @@ class CrmEmailActionTests(unittest.TestCase):
     def test_email_action_creates_email_send_record(self):
         self._configure_resend()
         lead_id = self._seed_lead(self.tenant.id)
-        with patch("app.services.email_send_service.ResendService") as service_cls:
+        with patch("app.modules.integrations.infrastructure.email.resend.ResendService") as service_cls:
             service_cls.return_value.send_email.return_value = "email_provider_1"
             self.client.post(f"/api/v1/crm/leads/{lead_id}/actions/email", json=self._payload())
 
@@ -153,7 +153,7 @@ class CrmEmailActionTests(unittest.TestCase):
     def test_email_action_creates_crm_activity_email_sent(self):
         self._configure_resend()
         lead_id = self._seed_lead(self.tenant.id)
-        with patch("app.services.email_send_service.ResendService") as service_cls:
+        with patch("app.modules.integrations.infrastructure.email.resend.ResendService") as service_cls:
             service_cls.return_value.send_email.return_value = "email_provider_1"
             self.client.post(f"/api/v1/crm/leads/{lead_id}/actions/email", json=self._payload())
 
@@ -169,7 +169,7 @@ class CrmEmailActionTests(unittest.TestCase):
     def test_email_action_records_failed_send(self):
         self._configure_resend()
         lead_id = self._seed_lead(self.tenant.id)
-        with patch("app.services.email_send_service.ResendService") as service_cls:
+        with patch("app.modules.integrations.infrastructure.email.resend.ResendService") as service_cls:
             service_cls.return_value.send_email.side_effect = ResendServiceError("resend down")
             response = self.client.post(f"/api/v1/crm/leads/{lead_id}/actions/email", json=self._payload())
 
@@ -196,7 +196,7 @@ class CrmEmailActionTests(unittest.TestCase):
     def test_email_action_preview_does_not_send(self):
         self._configure_resend()
         lead_id = self._seed_lead(self.tenant.id)
-        with patch("app.services.email_send_service.ResendService") as service_cls:
+        with patch("app.modules.integrations.infrastructure.email.resend.ResendService") as service_cls:
             response = self.client.post(
                 f"/api/v1/crm/leads/{lead_id}/actions/email",
                 json=self._payload(preview_only=True),

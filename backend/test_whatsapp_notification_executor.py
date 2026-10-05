@@ -18,23 +18,27 @@ from app.modules.notifications.domain.variables import (
     NotificationVariableMappingError,
 )
 from app.modules.crm.infrastructure.models import CrmActivity, CrmContact, CrmLead, CrmPipelineStage
-from app.models.crm import CrmWhatsAppMessage
+from app.modules.integrations.infrastructure.models import CrmWhatsAppMessage
 from app.models.identity import Tenant
-from app.models.integrations import TenantIntegrationEvent, TenantWhatsAppConfig, TenantWhatsAppTemplate
+from app.modules.integrations.infrastructure.models import (
+    TenantIntegrationEvent,
+    TenantWhatsAppConfig,
+    TenantWhatsAppTemplate,
+)
 from app.modules.notifications.infrastructure.models import DomainEvent, NotificationDelivery, TenantNotificationRule
 from app.modules.notifications.application.domain_event_service import DomainEventService
 from app.modules.notifications.application.delivery_claim_service import NotificationDeliveryClaimService
 from app.modules.notifications.application.retry_policy import NotificationRetryPolicy
 from app.modules.notifications.application.variable_mapper import NotificationVariableMapper
 from app.services.secret_manager_service import SecretManager
-from app.services.whatsapp_client import WhatsAppCloudClient, WhatsAppCloudClientError
-from app.services.whatsapp_message_service import WhatsAppMessageService
+from app.modules.integrations.infrastructure.whatsapp.meta_client import WhatsAppCloudClient, WhatsAppCloudClientError
+from app.modules.integrations.application.whatsapp.message_service import WhatsAppMessageService
 from app.modules.notifications.infrastructure import whatsapp_executor as executor_module
 from app.modules.notifications.infrastructure.whatsapp_executor import (
     WhatsAppNotificationExecutionError,
     WhatsAppNotificationExecutor,
 )
-from app.services.whatsapp_template_service import WhatsAppTemplateService
+from app.modules.integrations.application.whatsapp.template_service import WhatsAppTemplateService
 
 
 @sa_event.listens_for(engine, "connect")
@@ -68,6 +72,12 @@ def _make_payload(*, lead_id=None, advisor_name="Ana", start_at="2026-08-10T15:3
     if lead_id:
         payload["lead"] = {"id": lead_id, "status": "qualified"}
     return payload
+
+
+def _handle_payload(db, payload):
+    from app.modules.integrations.infrastructure.whatsapp.webhook_parser import parse_webhook_payload
+
+    return WhatsAppMessageService(db).handle_events(parse_webhook_payload(payload))
 
 
 class _FakeWhatsAppClient(WhatsAppCloudClient):
@@ -794,7 +804,8 @@ class WhatsAppWebhookDeliverySyncTests(_BaseExecutorTestCase):
 
     def test_webhook_sent_updates_delivery(self):
         ctx = self._seed_webhook_pair(delivery_status="pending")
-        WhatsAppMessageService(self.db).handle_webhook_payload(
+        _handle_payload(
+            self.db,
             self._webhook_payload(
                 phone_number_id=ctx["phone_number_id"],
                 provider_message_id=ctx["provider_message_id"],
@@ -807,7 +818,8 @@ class WhatsAppWebhookDeliverySyncTests(_BaseExecutorTestCase):
 
     def test_webhook_delivered_updates_delivery(self):
         ctx = self._seed_webhook_pair(delivery_status="sent")
-        WhatsAppMessageService(self.db).handle_webhook_payload(
+        _handle_payload(
+            self.db,
             self._webhook_payload(
                 phone_number_id=ctx["phone_number_id"],
                 provider_message_id=ctx["provider_message_id"],
@@ -820,7 +832,8 @@ class WhatsAppWebhookDeliverySyncTests(_BaseExecutorTestCase):
 
     def test_webhook_read_updates_delivery(self):
         ctx = self._seed_webhook_pair(delivery_status="delivered")
-        WhatsAppMessageService(self.db).handle_webhook_payload(
+        _handle_payload(
+            self.db,
             self._webhook_payload(
                 phone_number_id=ctx["phone_number_id"],
                 provider_message_id=ctx["provider_message_id"],
@@ -836,7 +849,8 @@ class WhatsAppWebhookDeliverySyncTests(_BaseExecutorTestCase):
         # apply here (unlike "sent", which must never be degraded — see
         # test_webhook_sent_is_never_degraded_by_failed below).
         ctx = self._seed_webhook_pair(delivery_status="pending")
-        WhatsAppMessageService(self.db).handle_webhook_payload(
+        _handle_payload(
+            self.db,
             self._webhook_payload(
                 phone_number_id=ctx["phone_number_id"],
                 provider_message_id=ctx["provider_message_id"],
@@ -853,7 +867,8 @@ class WhatsAppWebhookDeliverySyncTests(_BaseExecutorTestCase):
 
     def test_webhook_sent_is_never_degraded_by_failed(self):
         ctx = self._seed_webhook_pair(delivery_status="sent")
-        WhatsAppMessageService(self.db).handle_webhook_payload(
+        _handle_payload(
+            self.db,
             self._webhook_payload(
                 phone_number_id=ctx["phone_number_id"],
                 provider_message_id=ctx["provider_message_id"],
@@ -865,7 +880,8 @@ class WhatsAppWebhookDeliverySyncTests(_BaseExecutorTestCase):
 
     def test_webhook_delivered_is_never_degraded_by_failed(self):
         ctx = self._seed_webhook_pair(delivery_status="delivered")
-        WhatsAppMessageService(self.db).handle_webhook_payload(
+        _handle_payload(
+            self.db,
             self._webhook_payload(
                 phone_number_id=ctx["phone_number_id"],
                 provider_message_id=ctx["provider_message_id"],
@@ -877,7 +893,8 @@ class WhatsAppWebhookDeliverySyncTests(_BaseExecutorTestCase):
 
     def test_webhook_read_is_never_degraded_by_failed(self):
         ctx = self._seed_webhook_pair(delivery_status="read")
-        WhatsAppMessageService(self.db).handle_webhook_payload(
+        _handle_payload(
+            self.db,
             self._webhook_payload(
                 phone_number_id=ctx["phone_number_id"],
                 provider_message_id=ctx["provider_message_id"],
@@ -889,7 +906,8 @@ class WhatsAppWebhookDeliverySyncTests(_BaseExecutorTestCase):
 
     def test_webhook_cancelled_is_never_degraded_by_failed(self):
         ctx = self._seed_webhook_pair(delivery_status="cancelled")
-        WhatsAppMessageService(self.db).handle_webhook_payload(
+        _handle_payload(
+            self.db,
             self._webhook_payload(
                 phone_number_id=ctx["phone_number_id"],
                 provider_message_id=ctx["provider_message_id"],
@@ -901,7 +919,8 @@ class WhatsAppWebhookDeliverySyncTests(_BaseExecutorTestCase):
 
     def test_webhook_manual_review_promotes_to_sent(self):
         ctx = self._seed_webhook_pair(delivery_status="manual_review")
-        WhatsAppMessageService(self.db).handle_webhook_payload(
+        _handle_payload(
+            self.db,
             self._webhook_payload(
                 phone_number_id=ctx["phone_number_id"],
                 provider_message_id=ctx["provider_message_id"],
@@ -913,7 +932,8 @@ class WhatsAppWebhookDeliverySyncTests(_BaseExecutorTestCase):
 
     def test_webhook_manual_review_promotes_to_delivered(self):
         ctx = self._seed_webhook_pair(delivery_status="manual_review")
-        WhatsAppMessageService(self.db).handle_webhook_payload(
+        _handle_payload(
+            self.db,
             self._webhook_payload(
                 phone_number_id=ctx["phone_number_id"],
                 provider_message_id=ctx["provider_message_id"],
@@ -929,7 +949,8 @@ class WhatsAppWebhookDeliverySyncTests(_BaseExecutorTestCase):
         ctx["delivery"].delivered_at = FIXED_NOW
         self.db.add(ctx["delivery"])
         self.db.commit()
-        WhatsAppMessageService(self.db).handle_webhook_payload(
+        _handle_payload(
+            self.db,
             self._webhook_payload(
                 phone_number_id=ctx["phone_number_id"],
                 provider_message_id=ctx["provider_message_id"],
@@ -942,7 +963,8 @@ class WhatsAppWebhookDeliverySyncTests(_BaseExecutorTestCase):
     def test_webhook_other_tenant_not_updated(self):
         ctx_a = self._seed_webhook_pair(phone_number_id="phone-a", provider_message_id="wamid.shared", delivery_status="sent")
         ctx_b = self._seed_webhook_pair(phone_number_id="phone-b", provider_message_id="wamid.shared", delivery_status="sent")
-        WhatsAppMessageService(self.db).handle_webhook_payload(
+        _handle_payload(
+            self.db,
             self._webhook_payload(phone_number_id="phone-a", provider_message_id="wamid.shared", status="delivered")
         )
         self.db.refresh(ctx_a["delivery"])
@@ -952,7 +974,7 @@ class WhatsAppWebhookDeliverySyncTests(_BaseExecutorTestCase):
 
     def test_webhook_message_without_delivery_still_works(self):
         ctx = self._seed_webhook_pair(delivery_status="pending", link_delivery=False)
-        response = WhatsAppMessageService(self.db).handle_webhook_payload(
+        response = _handle_payload(self.db,
             self._webhook_payload(
                 phone_number_id=ctx["phone_number_id"],
                 provider_message_id=ctx["provider_message_id"],
@@ -967,7 +989,8 @@ class WhatsAppWebhookDeliverySyncTests(_BaseExecutorTestCase):
 
     def test_webhook_does_not_store_full_payload(self):
         ctx = self._seed_webhook_pair(delivery_status="sent")
-        WhatsAppMessageService(self.db).handle_webhook_payload(
+        _handle_payload(
+            self.db,
             self._webhook_payload(
                 phone_number_id=ctx["phone_number_id"],
                 provider_message_id=ctx["provider_message_id"],
@@ -981,7 +1004,8 @@ class WhatsAppWebhookDeliverySyncTests(_BaseExecutorTestCase):
 
     def test_webhook_preserves_crm_whatsapp_message_update(self):
         ctx = self._seed_webhook_pair(delivery_status="sent")
-        WhatsAppMessageService(self.db).handle_webhook_payload(
+        _handle_payload(
+            self.db,
             self._webhook_payload(
                 phone_number_id=ctx["phone_number_id"],
                 provider_message_id=ctx["provider_message_id"],
@@ -994,7 +1018,8 @@ class WhatsAppWebhookDeliverySyncTests(_BaseExecutorTestCase):
 
     def test_webhook_preserves_integration_events_and_activities(self):
         ctx = self._seed_webhook_pair(delivery_status="sent", with_lead=True)
-        WhatsAppMessageService(self.db).handle_webhook_payload(
+        _handle_payload(
+            self.db,
             self._webhook_payload(
                 phone_number_id=ctx["phone_number_id"],
                 provider_message_id=ctx["provider_message_id"],

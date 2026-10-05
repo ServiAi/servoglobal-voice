@@ -7,7 +7,7 @@ from __future__ import annotations
 from sqlalchemy.orm import Session
 
 from app.modules.crm.public import CrmFacade
-from app.modules.integrations.public import WhatsAppFacade
+from app.modules.integrations.public import IntegrationEvents, WhatsAppFacade
 from app.modules.scheduling.public import SchedulingFacade
 from app.modules.tools.application.ports import ToolPorts
 from app.modules.voice.public import VoiceSessionFacade
@@ -19,4 +19,5 @@ def default_tool_ports(db: Session) -> ToolPorts:
         crm=CrmFacade(db),
         messaging=WhatsAppFacade(db),
         sessions=VoiceSessionFacade(db),
+        audit=IntegrationEvents(db),
     )

@@ -78,7 +78,7 @@ from app.modules.scheduling.infrastructure.models import (
     TenantSchedulingEventType,
     TenantVoiceBookingConfig,
 )
-from app.services.integration_event_service import IntegrationEventService
+from app.modules.integrations.public import IntegrationEvents
 
 logger = logging.getLogger(__name__)
 
@@ -162,7 +162,7 @@ class BookingService:
                 reference_datetime=reference_datetime,
             )
             audited_provider = CALCOM_PROVIDER
-        IntegrationEventService(self.db).record_event(
+        IntegrationEvents(self.db).record(
             tenant_id=tenant_id,
             provider=audited_provider,
             event_type="availability_lookup",
@@ -321,7 +321,7 @@ class BookingService:
             booking.status,
             {"provider_booking_id": booking.provider_booking_id, "status": booking.status},
         )
-        IntegrationEventService(self.db).record_event(
+        IntegrationEvents(self.db).record(
             tenant_id=tenant_id,
             provider=GOOGLE_PROVIDER,
             event_type="booking_create",
@@ -427,7 +427,7 @@ class BookingService:
             self.operations.complete(op, booking_id=booking.id, result={"booking_id": booking.id, "status": booking.status})
         self.record_crm_activity(booking, "booking_created")
         self.record_crm_booking_event(booking, "booking_created", booking.status, safe_provider_summary(result))
-        IntegrationEventService(self.db).record_event(
+        IntegrationEvents(self.db).record(
             tenant_id=tenant_id,
             provider=CALCOM_PROVIDER,
             event_type="booking_create",
@@ -446,7 +446,7 @@ class BookingService:
         self.db.commit()
         self.record_crm_activity(booking, "booking_failed", message)
         self.record_crm_booking_event(booking, "booking_failed", "failed", {"error": message})
-        IntegrationEventService(self.db).record_event(
+        IntegrationEvents(self.db).record(
             tenant_id=booking.tenant_id,
             provider=provider,
             event_type="booking_create",

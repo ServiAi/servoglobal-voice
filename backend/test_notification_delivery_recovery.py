@@ -10,7 +10,7 @@ os.environ["DATABASE_URL"] = f"sqlite:///./{TEST_DB_PATH.as_posix()}"
 
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
-from app.models.crm import CrmWhatsAppMessage
+from app.modules.integrations.infrastructure.models import CrmWhatsAppMessage
 from app.models.identity import Tenant
 from app.modules.notifications.infrastructure.models import DomainEvent, NotificationDelivery, TenantNotificationRule
 from app.modules.notifications.application.delivery_recovery_service import NotificationDeliveryRecoveryService
@@ -440,7 +440,7 @@ class RecoveryTransactionalBatchTests(_BaseRecoveryTestCase):
         tenant_id = self._create_tenant()
         delivery = self._create_processing_delivery(tenant_id, claim_expires_at=FIXED_NOW - timedelta(seconds=1))
         self._create_message(tenant_id, delivery, status="sent", provider_message_id="wamid.no-client-call")
-        with mock.patch("app.services.whatsapp_client.WhatsAppCloudClient") as client_cls:
+        with mock.patch("app.modules.integrations.infrastructure.whatsapp.meta_client.WhatsAppCloudClient") as client_cls:
             self.service.recover_batch(now=FIXED_NOW, legacy_stale_seconds=300, max_attempts=5, batch_size=50)
             client_cls.assert_not_called()
 

@@ -43,9 +43,7 @@ from app.modules.voice_providers.public import (
     validate_model_settings,
     validate_runtime_selection,
 )
-from app.services.integration_event_service import (
-    IntegrationEventService,  # shared audit trail
-)
+from app.modules.integrations.public import IntegrationEvents
 
 if TYPE_CHECKING:
     from app.modules.agents.api.schemas import (
@@ -73,7 +71,7 @@ class AgentService:
             ports = default_agent_ports(db)
         self.ports = ports
         self.feature_service = FeatureFlags(db)
-        self.event_service = IntegrationEventService(db)
+        self.event_service = IntegrationEvents(db)
 
     def list_agents(self, tenant_id: str) -> list[TenantAgent]:
         self.feature_service.require_enabled(tenant_id, AGENT_BUILDER)
@@ -425,7 +423,7 @@ class AgentService:
         self.db.flush()
         self.db.delete(agent)
         self.db.commit()
-        self.event_service.record_event(
+        self.event_service.record(
             tenant_id=agent.tenant_id,
             provider="agent_builder",
             event_type="agent_deleted",
@@ -696,7 +694,7 @@ class AgentService:
     ) -> None:
         metadata = {"actor_user_id": user_id, "status": agent.status}
         metadata.update(extra_metadata)
-        self.event_service.record_event(
+        self.event_service.record(
             tenant_id=agent.tenant_id,
             provider="agent_builder",
             event_type=event_type,

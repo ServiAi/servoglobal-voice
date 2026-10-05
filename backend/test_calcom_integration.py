@@ -12,7 +12,7 @@ from sqlalchemy import select
 from _integrations_2a_test_base import Integration2ATestCase, SessionLocal
 from app.modules.crm.infrastructure.models import CrmActivity
 from app.modules.scheduling.infrastructure.models import CrmBooking, CrmBookingEvent
-from app.models.integrations import TenantIntegrationEvent
+from app.modules.integrations.infrastructure.models import TenantIntegrationEvent
 from app.modules.scheduling.infrastructure.models import TenantBookingConfig
 from app.modules.scheduling.infrastructure.calcom.client import CalComClient, CalComClientConfig
 

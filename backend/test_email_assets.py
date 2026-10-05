@@ -22,8 +22,8 @@ from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.main import app
 from app.models.identity import Tenant, TenantMembership, User
-from app.models.integrations import TenantEmailAsset
-from app.services.email_asset_service import EmailAssetService
+from app.modules.integrations.infrastructure.models import TenantEmailAsset
+from app.modules.integrations.application.email.asset_service import EmailAssetService
 from app.services.storage_service import StorageService
 
 

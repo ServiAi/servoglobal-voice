@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 
 from app.services.voice_call_service import VoiceCallService
-from app.services.whatsapp_message_service import mask_phone as whatsapp_mask_phone
+from app.modules.integrations.application.whatsapp.message_service import mask_phone as whatsapp_mask_phone
 
 
 class MaskPhoneConsistencyTests(unittest.TestCase):

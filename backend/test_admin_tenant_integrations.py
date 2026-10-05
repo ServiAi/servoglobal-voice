@@ -20,10 +20,14 @@ from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.main import app
 from app.models.identity import Tenant, TenantMembership, User
-from app.models.crm import CrmWhatsAppMessage
-from app.models.integrations import TenantIntegration, TenantWhatsAppConfig, TenantWhatsAppTemplate
+from app.modules.integrations.infrastructure.models import CrmWhatsAppMessage
+from app.modules.integrations.infrastructure.models import (
+    TenantIntegration,
+    TenantWhatsAppConfig,
+    TenantWhatsAppTemplate,
+)
 from app.modules.scheduling.infrastructure.models import TenantBookingConfig
-from app.services.resend_service import ResendService
+from app.modules.integrations.infrastructure.email.resend import ResendService
 
 
 class AdminTenantIntegrationTests(unittest.TestCase):
@@ -213,7 +217,7 @@ class AdminTenantIntegrationTests(unittest.TestCase):
         self.is_internal = True
         self._configure(self.tenant.id)
         
-        with patch("app.services.email_send_service.ResendService") as service_cls:
+        with patch("app.modules.integrations.infrastructure.email.resend.ResendService") as service_cls:
             service_cls.return_value.send_test_email.return_value = "email_test_admin"
             response = self.client.post(
                 f"/api/v1/admin/tenants/{self.tenant.id}/integrations/resend/test",
@@ -364,7 +368,7 @@ class AdminTenantIntegrationTests(unittest.TestCase):
             "category": "UTILITY",
             "components": [{"type": "BODY", "text": "Hola {{1}}"}],
         }]}
-        with patch("app.services.whatsapp_client.WhatsAppCloudClient.get_message_templates", return_value=provider_payload):
+        with patch("app.modules.integrations.infrastructure.whatsapp.meta_client.WhatsAppCloudClient.get_message_templates", return_value=provider_payload):
             response = self.client.post(
                 f"/api/v1/admin/tenants/{self.tenant.id}/integrations/whatsapp/templates/sync"
             )
@@ -388,7 +392,7 @@ class AdminTenantIntegrationTests(unittest.TestCase):
             ))
             db.commit()
         with patch(
-            "app.services.whatsapp_client.WhatsAppCloudClient.send_template_message",
+            "app.modules.integrations.infrastructure.whatsapp.meta_client.WhatsAppCloudClient.send_template_message",
             return_value={"messages": [{"id": "wamid.admin-test"}]},
         ):
             response = self.client.post(

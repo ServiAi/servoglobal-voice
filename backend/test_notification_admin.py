@@ -20,7 +20,7 @@ from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.main import app
 from app.models.identity import AccessAuditLog, Tenant, TenantMembership, User
-from app.models.integrations import TenantWhatsAppTemplate
+from app.modules.integrations.infrastructure.models import TenantWhatsAppTemplate
 from app.modules.notifications.infrastructure.models import DomainEvent, NotificationDelivery, TenantNotificationRule
 
 _BASE = "/api/v1/admin/notifications"

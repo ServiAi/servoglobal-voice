@@ -17,7 +17,8 @@ from app.core.config import settings
 from app.db.session import SessionLocal
 from app.main import app
 from app.modules.crm.infrastructure.models import CrmActivity, CrmContact, CrmLead
-from app.models.integrations import TenantIntegrationEvent, TenantVoiceAgentConfig
+from app.models.integrations import TenantVoiceAgentConfig
+from app.modules.integrations.infrastructure.models import TenantIntegrationEvent
 from app.models.voice_context import TenantVoiceContextField, TenantVoiceContextSchema
 from app.models.voice_experiences import TenantVoiceExperience, TenantVoiceExperienceVersion
 from app.models.voice_submissions import (

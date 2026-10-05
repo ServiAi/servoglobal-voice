@@ -4,7 +4,7 @@ import unittest
 from unittest.mock import patch, MagicMock
 
 from _integrations_2a_test_base import Integration2ATestCase, SessionLocal
-from app.models.integrations import TenantIntegrationEvent
+from app.modules.integrations.infrastructure.models import TenantIntegrationEvent
 from app.modules.crm.infrastructure.models import CrmActivity, CrmVoiceCall
 
 

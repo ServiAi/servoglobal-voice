@@ -14,7 +14,7 @@ from app.models.identity import TenantMembership, User
 from app.models.integrations import TenantVoiceAgentConfig
 from app.models.voice_context import TenantVoiceContextField, TenantVoiceContextSchema
 from app.models.voice_experiences import TenantVoiceExperience, TenantVoiceExperienceVersion
-from app.services.integration_event_service import IntegrationEventService
+from app.modules.integrations.public import IntegrationEvents
 from app.services.tenant_feature_service import TenantFeatureService, VOICE_EXPERIENCES
 from app.services.voice_context_service import (
     ACTIVE_LINEAGE_INDEX,
@@ -456,8 +456,8 @@ class VoiceContextSchemaTests(Integration2ATestCase):
         self._enable_feature()
         schema_id = self._create_ready_schema(schema_key="concurrent")
         with patch.object(
-            IntegrationEventService,
-            "record_event",
+            IntegrationEvents,
+            "record",
             side_effect=self._integrity_error(ACTIVE_LINEAGE_INDEX),
         ):
             response = self.client.post(

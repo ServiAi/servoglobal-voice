@@ -14,14 +14,14 @@ from app.modules.scheduling.domain.contracts import (
     BookingConfigRequest,
     BookingConfigResponse,
 )
-from app.services.integration_event_service import IntegrationEventService
+from app.modules.integrations.public import IntegrationEvents
 
 
 def configure_calcom(db: Session, tenant_id: str, request: BookingConfigRequest) -> BookingConfigResponse:
     """Upsert the tenant's Cal.com config, audit it, return the safe view."""
     service = BookingConfigService(db)
     config = service.upsert_calcom_config(tenant_id, request)
-    IntegrationEventService(db).record_event(
+    IntegrationEvents(db).record(
         tenant_id=tenant_id,
         provider="calcom",
         event_type="config_updated",

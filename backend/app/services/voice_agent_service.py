@@ -6,13 +6,13 @@ from sqlalchemy.orm import Session
 from app.models.analytics import Agent
 from app.models.integrations import TenantVoiceAgentConfig, TenantVoiceProviderConfig
 from app.schemas.integrations import VoiceAgentConfigRequest, VoiceAgentConfigResponse
-from app.services.integration_event_service import IntegrationEventService
+from app.modules.integrations.public import IntegrationEvents
 
 
 class VoiceAgentService:
     def __init__(self, db: Session) -> None:
         self.db = db
-        self.event_service = IntegrationEventService(db)
+        self.event_service = IntegrationEvents(db)
 
     def list_agent_configs(self, tenant_id: str) -> list[TenantVoiceAgentConfig]:
         return list(
@@ -78,7 +78,7 @@ class VoiceAgentService:
         self.db.commit()
         self.db.refresh(agent)
 
-        self.event_service.record_event(
+        self.event_service.record(
             tenant_id=tenant_id,
             provider=body.provider,
             event_type="agent_config_updated",

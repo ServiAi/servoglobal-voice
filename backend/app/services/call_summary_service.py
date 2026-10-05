@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
@@ -10,10 +9,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.analytics import Call
-from app.models.identity import Tenant
-from app.models.integrations import TenantEmailAsset
 from app.modules.crm.public import CrmFacade, LeadProfile
-from app.services.storage_service import StorageService
+from app.modules.integrations.public import EmailAssetRef, EmailFacade
 
 
 @dataclass(frozen=True)
@@ -31,9 +28,8 @@ class CallSummaryResult:
 
 
 class CallSummaryService:
-    def __init__(self, db: Session, storage: StorageService | None = None) -> None:
+    def __init__(self, db: Session) -> None:
         self.db = db
-        self.storage = storage or StorageService()
 
     def get_lead(self, tenant_id: str, lead_id: str) -> LeadProfile:
         lead = CrmFacade(self.db).get_lead_profile(tenant_id, lead_id)
@@ -74,38 +70,23 @@ class CallSummaryService:
         lead_id: str,
         uploaded_by_user_id: str | None,
         file_format: str,
-    ) -> TenantEmailAsset:
+    ) -> EmailAssetRef:
         lead = self.get_lead(tenant_id, lead_id)
         result = self.get_summary(tenant_id, lead_id)
         if not result.available or not result.summary:
             raise ValueError("Call summary is not available for this lead.")
-        tenant = self.db.get(Tenant, tenant_id)
-        if tenant is None:
-            raise ValueError("Tenant not found")
         fmt = file_format.lower().strip()
         if fmt not in {"md", "txt"}:
             raise ValueError("Unsupported call summary asset format.")
         content = self._render_asset_content(lead, result, fmt).encode("utf-8")
-        filename = f"resumen-llamada-{lead_id}.{fmt}"
-        mime_type = "text/markdown" if fmt == "md" else "text/plain"
-        asset = TenantEmailAsset(
+        asset = EmailFacade(self.db).create_asset(
             tenant_id=tenant_id,
             uploaded_by_user_id=uploaded_by_user_id,
-            original_filename=filename,
-            storage_key="pending",
-            mime_type=mime_type,
-            file_size_bytes=len(content),
-            checksum_sha256=hashlib.sha256(content).hexdigest(),
-            visibility="private",
-            status="uploaded",
+            filename=f"resumen-llamada-{lead_id}.{fmt}",
+            mime_type="text/markdown" if fmt == "md" else "text/plain",
+            content=content,
+            folder="resumenes-llamada",
         )
-        self.db.add(asset)
-        self.db.flush()
-        storage_key = self.storage.tenant_object_key(tenant.slug, "resumenes-llamada", asset.id, filename)
-        self.storage.upload_bytes(storage_key, content)
-        asset.storage_key = storage_key
-        self.db.commit()
-        self.db.refresh(asset)
         CrmFacade(self.db).record_activity(
             tenant_id=tenant_id,
             lead_id=lead.id,

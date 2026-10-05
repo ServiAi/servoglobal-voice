@@ -19,7 +19,7 @@ from app.schemas.integrations import (
     VoiceCallActionResponse,
     VoiceCallResponse,
 )
-from app.services.integration_event_service import IntegrationEventService
+from app.modules.integrations.public import IntegrationEvents
 from app.services.voice_agent_service import VoiceAgentService
 from app.services.voice_client import (
     VoiceClient,
@@ -39,7 +39,7 @@ class VoiceCallService:
         self.agent_service = VoiceAgentService(db)
         self.crm = CrmFacade(db)
         self.calls = CrmVoiceCalls(db)
-        self.integration_event_service = IntegrationEventService(db)
+        self.integration_event_service = IntegrationEvents(db)
 
     def start_lead_call(
         self,
@@ -246,7 +246,7 @@ class VoiceCallService:
         message: str | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> None:
-        self.integration_event_service.record_event(
+        self.integration_event_service.record(
             tenant_id=tenant_id,
             provider=provider,
             event_type=event_type,

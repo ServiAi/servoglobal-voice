@@ -23,10 +23,10 @@ from app.db.session import SessionLocal, engine
 from app.main import app
 from app.modules.crm.infrastructure.models import CrmActivity, CrmContact, CrmLead
 from app.models.identity import Tenant, TenantMembership, User
-from app.models.integrations import TenantEmailAsset
+from app.modules.integrations.infrastructure.models import TenantEmailAsset
 from app.modules.crm.application.pipeline_service import CrmPipelineService
-from app.services.email_config_service import EmailConfigService
-from app.services.integration_service import IntegrationService
+from app.modules.integrations.application.email.config_service import EmailConfigService
+from app.modules.integrations.application.integration_service import IntegrationService
 from app.services.storage_service import StorageService
 
 
@@ -177,7 +177,7 @@ class CallSummaryAssetTests(unittest.TestCase):
 
     def test_email_send_with_call_summary_asset_succeeds(self):
         payload = self._create_asset("md")
-        with patch("app.services.email_send_service.ResendService") as service_cls:
+        with patch("app.modules.integrations.infrastructure.email.resend.ResendService") as service_cls:
             service_cls.return_value.send_email.return_value = "email_1"
             response = self.client.post(
                 f"/api/v1/crm/leads/{self.lead_id}/actions/email",

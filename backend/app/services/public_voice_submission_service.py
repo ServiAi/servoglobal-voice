@@ -27,7 +27,7 @@ from app.schemas.public_voice_submissions import (
     PublicVoiceExperienceSubmissionRequest,
     PublicVoiceExperienceSubmissionResponse,
 )
-from app.services.integration_event_service import IntegrationEventService
+from app.modules.integrations.public import IntegrationEvents
 from app.services.public_voice_experience_service import (
     PublicVoiceExperienceService,
     PublicVoiceSnapshot,
@@ -257,7 +257,7 @@ class PublicVoiceSubmissionService:
                     submission.crm_lead_id = lead.id
                     db.commit()
                     status = "success"
-                IntegrationEventService(db).record_event(
+                IntegrationEvents(db).record(
                     tenant_id=persisted.tenant_id,
                     provider="voice",
                     event_type="voice_experience_submission_crm",
@@ -269,7 +269,7 @@ class PublicVoiceSubmissionService:
             except Exception:
                 db.rollback()
                 try:
-                    IntegrationEventService(db).record_event(
+                    IntegrationEvents(db).record(
                         tenant_id=persisted.tenant_id,
                         provider="voice",
                         event_type="voice_experience_submission_crm",

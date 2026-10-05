@@ -23,9 +23,7 @@ from app.modules.telephony.domain.capacity import (
     VOICE_CALLBACK_RECONCILED,
     VOICE_CAPACITY_REACHED,
 )
-from app.services.integration_event_service import (
-    IntegrationEventService,  # shared audit trail
-)
+from app.modules.integrations.public import IntegrationEvents
 
 
 class CapacityService:
@@ -44,7 +42,7 @@ class CapacityService:
         active_calls: int,
         max_concurrent_calls: int,
     ) -> None:
-        IntegrationEventService(self.db).record_event(
+        IntegrationEvents(self.db).record(
             tenant_id=tenant_id,
             provider="telephony",
             event_type=VOICE_CAPACITY_REACHED,
@@ -67,7 +65,7 @@ class CapacityService:
         resulting_status: str,
         forced: bool,
     ) -> None:
-        IntegrationEventService(self.db).record_event(
+        IntegrationEvents(self.db).record(
             tenant_id=tenant_id,
             provider="telephony",
             event_type=(

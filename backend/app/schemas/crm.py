@@ -6,13 +6,7 @@ from typing import Any, List, Literal, Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 # Re-exported for the endpoints and services that import these from ``app.schemas.crm``.
-from app.schemas.integrations import (  # noqa: F401
-    EmailActionRequest,
-    EmailActionResponse,
-    VoiceCallActionRequest,
-    VoiceCallActionResponse,
-    VoiceCallResponse,
-)
+from app.schemas.integrations import VoiceCallActionRequest, VoiceCallActionResponse, VoiceCallResponse  # noqa: F401
 
 # --- Pipeline ---
 
@@ -34,6 +28,24 @@ class CallSummaryAssetResponse(BaseModel):
     filename: str
     mime_type: str
     file_size_bytes: int
+
+
+class EmailActionRequest(BaseModel):
+    template_key: str = Field(default="lead_proposal", min_length=1, max_length=80)
+    subject: Optional[str] = Field(None, max_length=255)
+    message: Optional[str] = None
+    content_format: str = "mdx"
+    content: Optional[str] = None
+    asset_ids: list[str] = Field(default_factory=list)
+    form_token_ids: list[str] = Field(default_factory=list)
+    preview_only: bool = False
+
+
+class EmailActionResponse(BaseModel):
+    status: str
+    email_send_id: Optional[str] = None
+    provider_email_id: Optional[str] = None
+    preview: Optional[dict] = None
 
 
 class WhatsAppActionRequest(BaseModel):

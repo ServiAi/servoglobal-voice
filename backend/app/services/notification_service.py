@@ -46,8 +46,7 @@ import logging
 
 from sqlalchemy.orm import Session
 
-from app.services.chatwoot_config_service import ChatwootConfigService
-from app.services.chatwoot_client import ChatwootClient
+from app.modules.integrations.public import ChatwootFacade
 from app.services.meta_client import meta_client
 
 logger = logging.getLogger(__name__)
@@ -279,11 +278,10 @@ class NotificationService:
         """
         try:
             try:
-                _, client_config = ChatwootConfigService(db).get_active_client_config(tenant_id)
+                client = ChatwootFacade(db).gateway_for(tenant_id)
             except ValueError:
                 logger.warning("[CRM] Chatwoot integration is not configured for tenant_id=%s", tenant_id)
                 return False
-            client = ChatwootClient(client_config)
 
             contact_id = await client.get_or_create_contact(phone, contact_name, contact_email)
             if not contact_id:

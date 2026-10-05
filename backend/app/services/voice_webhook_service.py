@@ -15,7 +15,7 @@ from app.modules.crm.public import (
     UpdateVoiceCallCommand,
     VoiceCallView,
 )
-from app.services.integration_event_service import IntegrationEventService
+from app.modules.integrations.public import IntegrationEvents
 from app.services.voice_config_service import VoiceConfigService
 
 _PLATFORM_TENANT_ID = "platform"
@@ -29,7 +29,7 @@ class VoiceWebhookService:
         self.config_service = VoiceConfigService(db)
         self.crm = CrmFacade(db)
         self.calls = CrmVoiceCalls(db)
-        self.integration_event_service = IntegrationEventService(db)
+        self.integration_event_service = IntegrationEvents(db)
 
     def verify_webhook_signature(
         self,
@@ -151,7 +151,7 @@ class VoiceWebhookService:
                 },
             )
 
-        self.integration_event_service.record_event(
+        self.integration_event_service.record(
             tenant_id=tenant_id,
             provider=provider,
             event_type="call_status",

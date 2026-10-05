@@ -87,7 +87,7 @@ Leyenda: ✅ permitida · ⚠️ cuestionable · ❌ eliminar · 🔁 circular.
 | CRM → Integrations (email, WhatsApp) | acciones del lead | ✅ si vía `integrations.public` | Commands. |
 | CRM ↔ Scheduling 🔁 | CRM endpoint → `SchedulingFacade`; Scheduling → `crm.public` (cliente, timeline) | ✅ | **Resuelto**: `BookingCustomerPort`/`CrmActivityPort`; CRM ya no gobierna el booking. |
 | Scheduling → Notifications | booking crea hechos `booking.*` | ✅ | **Resuelto**: puerto `BookingEventPublisherPort`; único puente temporal en `wiring.py` (allowlist) hasta que Notifications se suscriba a `domain_events`. |
-| Integrations ↔ Notifications 🔁 | `whatsapp_message_service` → `NotificationDeliveryStatusService`; notificaciones → WhatsApp | ⚠️ | Notifications → `integrations.public` (command send); el status de entrega vuelve como callback/evento, no import directo. |
+| Integrations ↔ Notifications 🔁 | `whatsapp_message_service` → `NotificationDeliveryStatusService`; notificaciones → WhatsApp | ✅ **Resuelto (módulo 8)** | Notifications → `integrations.public` (command send); el status vuelve por `NotificationsPort` (→ `notifications.public`), enlazado en `integrations.wiring`; nunca imports de internals en ningún sentido. |
 | Integrations → CRM (antes `crm_activity_service`, `models.crm`) | timeline de mensajes/emails, lead/contacto de la acción | ✅ **resuelto** (2026-10-04) | `crm.public` (`record_activity`, `get_lead_profile`, `find_contact_by_phone_digits`). Sólo queda `CrmWhatsAppMessage` (Messaging). |
 | Identity → Integrations (`admin/tenants.py` → 10 servicios) | panel admin | ⚠️ | Es un BFF de administración: consumir `public.py` de cada módulo. |
 | Identity ↔ Billing 🔁 | onboarding crea plan/uso; billing lee tenant | ⚠️ | Onboarding → `billing.public.provision_plan`. |
@@ -266,3 +266,25 @@ Local measurements on `refactor/modular-notifications`, based on `develop` at `a
 | Full backend suite | not run | blocked during discovery: `test_endpoints.py` makes an auth DB connection at import time; test DB is unavailable |
 
 The file-level import graph includes legacy files, shared model registration and composition roots: its largest SCC containing Notifications files measures 42 nodes / 2 Notifications files before and 48 / 8 after. The graph does not isolate domain-level SCCs; the meaningful boundary check is that private cross-module import edges are zero after migration. Live PostgreSQL and Ruff measurements remain unavailable here (no test database / Docker daemon; Ruff is not installed). OpenAPI and table signatures were compared with the pre-change snapshot.
+
+## Integrations / Messaging after migration (module 8, 2026-10-05)
+
+Mismo grafo AST (imports perezosos incluidos), `develop@9c220d3` (PR #123) → `refactor/modular-integrations`. "Integrations antes" = `services/{whatsapp_*,email_*,chatwoot_*,integration_*,resend_service}`, sus endpoints/webhooks, `schemas/{integrations,whatsapp_flows}` (parte Messaging), `models/crm.py` y el `public.py` mínimo.
+
+| Métrica | Antes | Después |
+| --- | --- | --- |
+| Archivos de app que importan `app.models.integrations` (todas sus clases) | 31 | 13 (sólo los 7 modelos residuales de Forms/Voice config; **0** importan una clase de Messaging por esa ruta) |
+| Archivos de app que importan `app.models.crm` | 5 | **0** (`app/models/crm.py` eliminado) |
+| Archivos que importan `app.services.whatsapp_*` / `email_*` (+`resend_service`) / `chatwoot_*` / `integration_*` | 9 / 5 / 7 / 25 | **0 / 0 / 0 / 0** |
+| Código externo → implementación/internals de Integrations (sin `*.public`, `main.py` ni el registro de modelos) | 40 | **0** |
+| Integrations → internals ajenos (`app.services.*`, `app.models.*`, `app.schemas.*`, módulos sin `.public`) | 41 | **8**, todos en `wiring.py` (allowlisted: Identity, Voice Legacy, Forms, Voice context, `SecretManager`, `StorageService`, `TenantFeatureService`, `CallSummaryService`); `domain`/`application`/`infrastructure`: **0** |
+| Archivos fuera de Integrations que importan `TenantIntegrationEvent` | 4 (Scheduling `calcom/admin` y `calcom/sync` la construían a mano; reporte de capacidad y webhook de Chatwoot la consultaban) | **0** (`IntegrationEvents.record/add/summarize`) |
+| Componente conexa del grafo de archivos con Integrations | 48 nodos / 1 archivo de Integrations | 60 nodos / 10 archivos (crece por los puertos de `wiring.py` y las lecturas lazy a `*.public`; no hay aristas privadas entre módulos) |
+| Tablas / head Alembic | 79 / `202609240001` | **79 / `202609240001`**, firmas completas idénticas |
+| OpenAPI | 257 paths / 293 schemas | **257 / 293**, idénticos (paths y schemas comparados completos) |
+| Métodos de test backend | 1920 | **1972** (+52) |
+| Métodos de test PostgreSQL | 64 | **70** (`test_integrations_postgres`: 6, en CI sobre la base `serviai_integrations_test`) |
+| Shims | 0 | **0** |
+| Ruff (`app`, `uvx ruff` 0.16.10, reglas del repo) | 1400 hallazgos | **1398**, sin hallazgos `F` nuevos (el gate de CI sigue siendo informativo) |
+
+La componente conexa crece por la misma razón que en CRM: `wiring.py` y `public.py` apuntan perezosamente a otros módulos. Lo relevante es la frontera: **0 aristas privadas** entre Integrations y los demás módulos, verificadas por `test_integrations_boundaries.py` y `test_module_boundaries.py`.
