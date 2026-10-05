@@ -288,3 +288,24 @@ Mismo grafo AST (imports perezosos incluidos), `develop@9c220d3` (PR #123) → `
 | Ruff (`app`, `uvx ruff` 0.16.10, reglas del repo) | 1400 hallazgos | **1398**, sin hallazgos `F` nuevos (el gate de CI sigue siendo informativo) |
 
 La componente conexa crece por la misma razón que en CRM: `wiring.py` y `public.py` apuntan perezosamente a otros módulos. Lo relevante es la frontera: **0 aristas privadas** entre Integrations y los demás módulos, verificadas por `test_integrations_boundaries.py` y `test_module_boundaries.py`.
+
+## Integrations reliability & data integrity (Sprint 8.1, 2026-10-05)
+
+`develop@07d6e71` (PR #124) → `fix/integrations-reliability-data-integrity`.
+
+| Métrica | Antes | Después |
+| --- | --- | --- |
+| Tablas | 79 | **79** (columnas y FKs idénticas; única diferencia DDL: `crm_whatsapp_messages`, índice no unique → unique parcial) |
+| OpenAPI | 257 paths / 293 schemas | **257 / 293**, idénticos |
+| Head de Alembic | `202609240001` | **`202610050001`** (única) |
+| Tests PostgreSQL de Integrations | 6 | **16** (`test_integrations_postgres` 10 + `test_integrations_migration_postgres` 6) |
+| Tests PostgreSQL de Notifications | 15 | **15** |
+| Métodos de test PostgreSQL (total) | 70 | **80** |
+| Métodos de test backend | 1972 | **1992** |
+| Importadores de `notification_service` (app) | 2 (`notifications.py`, `voice.py`) | **2**, fijados por test |
+| Importadores de `meta_client` (app) | 1 (`notification_service`) | **1**, fijado por test |
+| Imports legacy en `integrations/wiring.py` (módulos distintos) | 8 | **7** (sale `tenant_feature_service`; feature flags por `identity.public`) |
+| `Any` desnudo en `integrations.public` (parámetros/retornos) | 4 (`ChatwootGateway.__init__` y 3 mappers privados) | **0** (sólo como valor de `Mapping`/`dict` en payloads) |
+| Externo → internals de Integrations | 0 | **0** |
+| Ruff `app` | 1401 | **1401** (sin hallazgos `F` nuevos) |
+| Componente conexa con Integrations | 60 nodos / 10 archivos | no se persigue como métrica; lo relevante es 0 aristas privadas |

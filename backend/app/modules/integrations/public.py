@@ -19,7 +19,9 @@ from typing import TYPE_CHECKING, Any, Protocol
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from sqlalchemy.orm import Session
 
-    from app.modules.integrations.application.email.send_service import EmailActionResult
+    from app.modules.integrations.application.email.send_service import (
+        EmailActionResult,
+    )
     from app.modules.integrations.infrastructure.models import CrmWhatsAppMessage
 
 __all__ = [
