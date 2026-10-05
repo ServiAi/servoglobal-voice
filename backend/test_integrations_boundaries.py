@@ -4,12 +4,15 @@ from __future__ import annotations
 
 import ast
 import dataclasses
+import inspect
 import re
 import subprocess
 import sys
 import typing
 import unittest
 from pathlib import Path
+
+from sqlalchemy.orm import Session
 
 APP = Path(__file__).resolve().parent / "app"
 MODULE = APP / "modules" / "integrations"
@@ -396,6 +399,37 @@ class IntegrationsPublicApiTests(unittest.TestCase):
                     any(word in lowered for word in SECRET_FIELD_WORDS), f"{cls.__name__}.{field.name} looks like a secret"
                 )
                 self.assertNotIn(Base, getattr(hints[field.name], "__mro__", ()), f"{cls.__name__}.{field.name}")
+
+    def test_chatwoot_gateway_is_typed_and_exposes_no_provider_type(self) -> None:
+        import inspect
+
+        public = self._public()
+        for cls in (public.ChatwootFacade, public.ChatwootGateway):
+            for name, member in vars(cls).items():
+                if not callable(member) or (name.startswith("_") and name != "__init__"):
+                    continue
+                hints = typing.get_type_hints(member, {**vars(public), "Session": Session})
+                for parameter, annotation in hints.items():
+                    where = f"{cls.__name__}.{name}({parameter})"
+                    self.assertIsNot(annotation, typing.Any, where)
+                    module = getattr(annotation, "__module__", "") or ""
+                    self.assertNotIn("infrastructure", module, where)
+                    self.assertFalse(module.startswith(("httpx", "app.modules.integrations.domain.chatwoot")), where)
+        client_hint = typing.get_type_hints(public.ChatwootGateway.__init__, vars(public))["client"]
+        self.assertTrue(inspect.isclass(client_hint) and typing.Protocol in client_hint.__mro__)
+
+    def test_chatwoot_client_satisfies_the_gateway_protocol_structurally(self) -> None:
+        from app.modules.integrations.infrastructure.chatwoot.client import ChatwootClient
+
+        public = self._public()
+        protocol = typing.get_type_hints(public.ChatwootGateway.__init__, vars(public))["client"]
+        for name in ("get_or_create_contact", "get_or_create_conversation", "assign_team", "send_message", "add_label"):
+            self.assertTrue(inspect.iscoroutinefunction(getattr(ChatwootClient, name)), name)
+            self.assertEqual(
+                list(inspect.signature(getattr(protocol, name)).parameters),
+                list(inspect.signature(getattr(ChatwootClient, name)).parameters),
+                name,
+            )
 
     def test_public_facades_exist(self) -> None:
         public = self._public()
