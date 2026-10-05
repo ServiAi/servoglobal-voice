@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.modules.integrations.infrastructure.models import TenantEmailAsset
-from app.services.storage_service import StorageService
+from app.modules.integrations.application.ports import AssetStoragePort
 
 ALLOWED_EXTENSIONS = {".pdf", ".docx", ".xlsx", ".csv", ".png", ".jpg", ".jpeg", ".md", ".txt"}
 BLOCKED_EXTENSIONS = {".exe", ".js", ".html", ".php", ".bat", ".cmd", ".ps1", ".zip"}
@@ -24,9 +24,11 @@ ALLOWED_MIME_PREFIXES = (
 
 
 class EmailAssetService:
-    def __init__(self, db: Session, storage: StorageService | None = None) -> None:
+    def __init__(self, db: Session, storage: AssetStoragePort | None = None) -> None:
+        from app.modules.integrations.wiring import default_asset_storage
+
         self.db = db
-        self.storage = storage or StorageService()
+        self.storage = storage or default_asset_storage()
 
     def validate_assets(self, tenant_id: str, asset_ids: list[str] | None) -> list[TenantEmailAsset]:
         if not asset_ids:

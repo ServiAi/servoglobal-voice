@@ -7,15 +7,18 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.modules.integrations.infrastructure.models import TenantIntegration
-from app.services.secret_manager_service import SecretManager
+from app.modules.integrations.application.ports import SecretsPort
+from app.modules.integrations.domain.catalog import SUPPORTED_PROVIDERS
 
 
 class IntegrationService:
-    supported_providers = ("resend", "voice", "whatsapp", "calcom", "google_calendar", "chatwoot")
+    supported_providers = SUPPORTED_PROVIDERS
 
-    def __init__(self, db: Session, secret_manager: SecretManager | None = None) -> None:
+    def __init__(self, db: Session, secret_manager: SecretsPort | None = None) -> None:
+        from app.modules.integrations.wiring import default_secrets
+
         self.db = db
-        self.secret_manager = secret_manager or SecretManager()
+        self.secret_manager = secret_manager or default_secrets()
 
     def list_integrations(self, tenant_id: str) -> list[TenantIntegration]:
         return list(self.db.scalars(select(TenantIntegration).where(TenantIntegration.tenant_id == tenant_id)).all())

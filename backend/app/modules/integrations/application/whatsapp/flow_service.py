@@ -7,7 +7,6 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.modules.integrations.infrastructure.models import TenantWhatsAppFlow
-from app.models.voice_context import TenantVoiceContextSchema
 from app.modules.integrations.domain.whatsapp_flows import (
     FlowBuilder,
     MetaFlowValidationError,
@@ -17,14 +16,16 @@ from app.modules.integrations.domain.whatsapp_flows import (
     WhatsAppFlowUpdateRequest,
 )
 from app.modules.integrations.application.event_service import IntegrationEventService
-from app.modules.integrations.infrastructure.whatsapp.meta_client import (
-    WhatsAppCloudClient,
-    WhatsAppCloudClientError,
-    sanitize_whatsapp_error,
-)
+from app.modules.integrations.application.ports import VoiceContextSchemaPort, WhatsAppProviderPort
+from app.modules.integrations.domain.errors import ProviderError
+from app.modules.integrations.domain.whatsapp import sanitize_whatsapp_error
 from app.modules.integrations.application.whatsapp.config_service import WhatsAppConfigService
 from app.modules.integrations.domain.whatsapp_flow_compiler import WhatsAppFlowCompiler
-from app.modules.integrations.domain.whatsapp_flow_context import blank_builder, builder_from_context_schema
+from app.modules.integrations.domain.whatsapp_flow_context import (
+    ContextSchemaSnapshot,
+    blank_builder,
+    builder_from_context_schema,
+)
 
 
 class WhatsAppFlowNotFoundError(ValueError):
@@ -59,9 +60,18 @@ COMPATIBLE_BINDINGS = {
 class WhatsAppFlowService:
     provider = "whatsapp_cloud"
 
-    def __init__(self, db: Session, client: WhatsAppCloudClient | None = None) -> None:
+    def __init__(
+        self,
+        db: Session,
+        client: WhatsAppProviderPort | None = None,
+        *,
+        context_schemas: VoiceContextSchemaPort | None = None,
+    ) -> None:
+        from app.modules.integrations import wiring
+
         self.db = db
-        self.client = client or WhatsAppCloudClient()
+        self.client = client or wiring.default_whatsapp_provider()
+        self.context_schemas = context_schemas or wiring.default_voice_context(db)
         self.compiler = WhatsAppFlowCompiler()
         self.events = IntegrationEventService(db)
 
@@ -404,13 +414,8 @@ class WhatsAppFlowService:
             updated_at=flow.updated_at,
         )
 
-    def _get_context_schema(self, tenant_id: str, schema_id: str) -> TenantVoiceContextSchema:
-        schema = self.db.scalar(
-            select(TenantVoiceContextSchema).where(
-                TenantVoiceContextSchema.id == schema_id,
-                TenantVoiceContextSchema.tenant_id == tenant_id,
-            )
-        )
+    def _get_context_schema(self, tenant_id: str, schema_id: str) -> ContextSchemaSnapshot:
+        schema = self.context_schemas.get_schema_snapshot(tenant_id, schema_id)
         if schema is None:
             raise WhatsAppFlowNotFoundError("Context Schema not found.")
         return schema
@@ -449,7 +454,7 @@ class WhatsAppFlowService:
     def _provider_call(self, flow: TenantWhatsAppFlow, failed_event: str, method, *args, **kwargs) -> dict:
         try:
             return method(*args, **kwargs)
-        except (ValueError, WhatsAppCloudClientError) as exc:
+        except (ValueError, ProviderError) as exc:
             message = sanitize_whatsapp_error(str(exc)) or "WhatsApp Flow provider request failed."
             self._event(flow, failed_event, status="failed", message=message)
             raise WhatsAppFlowProviderError(message) from exc

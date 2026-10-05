@@ -125,7 +125,7 @@ class ResendIntegrationTests(unittest.TestCase):
 
     def test_resend_test_email_sends_with_mock(self):
         self._configure()
-        with patch("app.modules.integrations.application.email.send_service.ResendService") as service_cls:
+        with patch("app.modules.integrations.infrastructure.email.resend.ResendService") as service_cls:
             service_cls.return_value.send_test_email.return_value = "email_test_1"
             response = self.client.post("/api/v1/integrations/resend/test", json={"to_email": "dest@example.com"})
 
@@ -134,13 +134,13 @@ class ResendIntegrationTests(unittest.TestCase):
 
     def test_resend_test_failure_does_not_disable_retry(self):
         self._configure()
-        with patch("app.modules.integrations.application.email.send_service.ResendService") as service_cls:
+        with patch("app.modules.integrations.infrastructure.email.resend.ResendService") as service_cls:
             service_cls.return_value.send_test_email.side_effect = ResendServiceError("resend down")
             response = self.client.post("/api/v1/integrations/resend/test", json={"to_email": "dest@example.com"})
 
         self.assertEqual(response.status_code, 502)
 
-        with patch("app.modules.integrations.application.email.send_service.ResendService") as service_cls:
+        with patch("app.modules.integrations.infrastructure.email.resend.ResendService") as service_cls:
             service_cls.return_value.send_test_email.return_value = "email_test_2"
             response = self.client.post("/api/v1/integrations/resend/test", json={"to_email": "dest@example.com"})
 

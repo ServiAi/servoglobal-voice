@@ -1,8 +1,31 @@
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 
-from app.models.voice_context import TenantVoiceContextSchema
+
+@dataclass(frozen=True)
+class ContextFieldSnapshot:
+    key: str
+    label: str
+    description: str | None
+    field_type: str
+    collection_mode: str
+    required: bool
+    position: int
+    options: tuple[dict, ...] = ()
+
+
+@dataclass(frozen=True)
+class ContextSchemaSnapshot:
+    """Read-only view of a Voice context schema; the ORM never crosses the module boundary."""
+
+    id: str
+    schema_key: str
+    version: int
+    name: str
+    description: str | None
+    fields: tuple[ContextFieldSnapshot, ...]
 
 
 FIELD_TYPE_MAP = {
@@ -18,7 +41,7 @@ FIELD_TYPE_MAP = {
 VISIBLE_COLLECTION_MODES = {"ask_if_missing", "prefill_and_confirm"}
 
 
-def builder_from_context_schema(schema: TenantVoiceContextSchema) -> tuple[dict, dict]:
+def builder_from_context_schema(schema: ContextSchemaSnapshot) -> tuple[dict, dict]:
     components: list[dict] = [
         {"id": "intro_heading", "type": "heading", "text": schema.name},
     ]
@@ -34,7 +57,7 @@ def builder_from_context_schema(schema: TenantVoiceContextSchema) -> tuple[dict,
                 "collection_mode": field.collection_mode,
                 "required": field.required,
                 "position": field.position,
-                "options": field.options_json or [],
+                "options": list(field.options),
             }
         )
         if field.collection_mode not in VISIBLE_COLLECTION_MODES:
@@ -57,7 +80,7 @@ def builder_from_context_schema(schema: TenantVoiceContextSchema) -> tuple[dict,
                     "title": str(option["label"])[:30],
                     "context_value": value,
                 }
-                for index, option in enumerate(field.options_json or [])
+                for index, option in enumerate(field.options)
                 for value in [str(option["value"])]
             ]
         components.append(component)

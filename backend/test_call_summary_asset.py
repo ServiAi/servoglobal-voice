@@ -177,7 +177,7 @@ class CallSummaryAssetTests(unittest.TestCase):
 
     def test_email_send_with_call_summary_asset_succeeds(self):
         payload = self._create_asset("md")
-        with patch("app.modules.integrations.application.email.send_service.ResendService") as service_cls:
+        with patch("app.modules.integrations.infrastructure.email.resend.ResendService") as service_cls:
             service_cls.return_value.send_email.return_value = "email_1"
             response = self.client.post(
                 f"/api/v1/crm/leads/{self.lead_id}/actions/email",

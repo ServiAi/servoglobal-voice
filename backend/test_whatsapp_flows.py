@@ -12,7 +12,7 @@ from app.modules.integrations.api.schemas import WhatsAppConfigRequest
 from app.modules.integrations.domain.whatsapp_flows import WhatsAppFlowCreateRequest, WhatsAppFlowUpdateRequest
 from app.modules.integrations.application.whatsapp.config_service import WhatsAppConfigService
 from app.modules.integrations.domain.whatsapp_flow_compiler import WhatsAppFlowCompiler
-from app.modules.integrations.domain.whatsapp_flow_context import builder_from_context_schema
+from app.modules.integrations.domain.whatsapp_flow_context import builder_from_context_schema, ContextFieldSnapshot, ContextSchemaSnapshot
 from app.modules.integrations.application.whatsapp.flow_service import (
     WhatsAppFlowConflictError,
     WhatsAppFlowNotFoundError,
@@ -100,12 +100,14 @@ class WhatsAppFlowCompilerTests(unittest.TestCase):
         modes = ["ask_if_missing", "prefill_and_confirm", "trust_prefill", "internal_only", "collect_during_call"]
         types = ["text", "email", "phone", "integer", "select", "checkbox", "date", "textarea"]
         for index, field_type in enumerate(types):
-            fields.append(SimpleNamespace(
+            fields.append(ContextFieldSnapshot(
                 key=f"field_{index}", label=f"Field {index}", description=None,
                 field_type=field_type, collection_mode=modes[index % len(modes)], required=False,
-                position=index, options_json=[{"value": "one", "label": "One"}] if field_type == "select" else [],
+                position=index, options=({"value": "one", "label": "One"},) if field_type == "select" else (),
             ))
-        schema = SimpleNamespace(schema_key="lead", version=3, name="Lead", description=None, fields=fields)
+        schema = ContextSchemaSnapshot(
+            id="schema-1", schema_key="lead", version=3, name="Lead", description=None, fields=tuple(fields)
+        )
         builder, snapshot = builder_from_context_schema(schema)
         visible_ids = {item["id"] for item in builder["screens"][0]["components"]}
         self.assertIn("field_0", visible_ids)

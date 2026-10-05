@@ -4,10 +4,8 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app.modules.integrations.domain.events import MAX_MESSAGE_LENGTH, sanitize_event_metadata
 from app.modules.integrations.infrastructure.models import TenantIntegrationEvent
-
-SENSITIVE_KEYS = {"api_key", "authorization", "payload", "html", "text", "base64", "phone", "email"}
-
 
 class IntegrationEventService:
     def __init__(self, db: Session) -> None:
@@ -60,20 +58,8 @@ class IntegrationEventService:
             status=status,
             resource_type=resource_type,
             resource_id=resource_id,
-            message=message[:500] if message else None,
-            metadata_json=self._sanitize_metadata(metadata or {}),
+            message=message[:MAX_MESSAGE_LENGTH] if message else None,
+            metadata_json=sanitize_event_metadata(metadata or {}),
         )
         self.db.add(event)
         return event
-
-    def _sanitize_metadata(self, metadata: dict[str, Any]) -> dict[str, Any]:
-        sanitized: dict[str, Any] = {}
-        for key, value in metadata.items():
-            key_l = key.lower()
-            if any(sensitive in key_l for sensitive in SENSITIVE_KEYS):
-                sanitized[key] = "[redacted]"
-            elif isinstance(value, (str, int, float, bool)) or value is None:
-                sanitized[key] = value
-            else:
-                sanitized[key] = "[omitted]"
-        return sanitized

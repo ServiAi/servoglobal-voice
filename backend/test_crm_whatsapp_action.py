@@ -85,10 +85,7 @@ class CrmWhatsAppActionTests(Integration2ATestCase):
             result = WhatsAppMessageService(db, client=client).preview_lead_whatsapp(
                 self.tenant.id,
                 lead_id,
-                __import__("app.schemas.crm", fromlist=["WhatsAppActionRequest"]).WhatsAppActionRequest(
-                    template_key="lead_follow_up",
-                    preview_only=True,
-                ),
+                template_key="lead_follow_up",
             )
 
         self.assertEqual(result.status, "preview")
@@ -102,13 +99,12 @@ class CrmWhatsAppActionTests(Integration2ATestCase):
         lead_id, _ = self.seed_lead()
         client = _Client()
         with SessionLocal() as db:
-            from app.schemas.crm import WhatsAppActionRequest
             from app.modules.integrations.application.whatsapp.message_service import WhatsAppMessageService
 
             result = WhatsAppMessageService(db, client=client).send_lead_whatsapp(
                 self.tenant.id,
                 lead_id,
-                WhatsAppActionRequest(template_key="lead_follow_up"),
+                template_key="lead_follow_up",
             )
 
         self.assertEqual(result.status, "sent")

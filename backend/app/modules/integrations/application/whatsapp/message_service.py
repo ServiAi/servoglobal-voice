@@ -12,12 +12,17 @@ from sqlalchemy.orm import Session
 from app.modules.integrations.infrastructure.models import CrmWhatsAppMessage
 from app.modules.integrations.infrastructure.models import TenantWhatsAppConfig
 from app.modules.crm.public import ContactProfile, CrmFacade, LeadProfile
-from app.schemas.crm import WhatsAppActionRequest, WhatsAppActionResponse
 from app.modules.integrations.api.schemas import WhatsAppTestMessageRequest, WhatsAppTestMessageResponse
 from app.modules.integrations.application.event_service import IntegrationEventService
-from app.modules.integrations.infrastructure.whatsapp.meta_client import (
-    WhatsAppCloudClient,
-    WhatsAppCloudClientError,
+from app.modules.integrations.application.ports import NotificationsPort, WhatsAppProviderPort
+from app.modules.integrations.domain.errors import ProviderError
+from app.modules.integrations.domain.whatsapp import (
+    MISSING_PROVIDER_MESSAGE_ID_ERROR,
+    can_advance_status,
+    extract_provider_message_id,
+    mask_phone,
+    normalize_phone,
+    safe_preview,
     sanitize_whatsapp_error,
 )
 from app.modules.integrations.application.whatsapp.config_service import WhatsAppConfigService
@@ -33,9 +38,6 @@ _ALLOWED_NOTIFICATION_METADATA_KEYS = {
     "template_key",
 }
 
-_MISSING_PROVIDER_MESSAGE_ID_ERROR = "whatsapp_provider_message_id_missing"
-
-
 @dataclass
 class WhatsAppSendResult:
     status: str
@@ -45,42 +47,25 @@ class WhatsAppSendResult:
     error_message: str | None = None
 
 
-def normalize_phone(phone: str | None) -> str | None:
-    if not phone:
-        return None
-    digits = re.sub(r"\D", "", phone)
-    return digits or None
-
-
-def safe_preview(value: str | None) -> str | None:
-    if value is None:
-        return None
-    return value.replace("\r", " ").replace("\n", " ")[:240]
-
-
-def mask_phone(phone: str) -> str:
-    digits = normalize_phone(phone) or ""
-    return f"***{digits[-4:]}" if len(digits) > 4 else "***"
-
-
-def extract_provider_message_id(payload: dict[str, Any]) -> str | None:
-    messages = payload.get("messages")
-    if isinstance(messages, list) and messages and isinstance(messages[0], dict):
-        value = messages[0].get("id")
-        return value if isinstance(value, str) else None
-    return None
-
-
 class WhatsAppMessageService:
     provider = "whatsapp_cloud"
 
-    def __init__(self, db: Session, client: WhatsAppCloudClient | None = None) -> None:
+    def __init__(
+        self,
+        db: Session,
+        client: WhatsAppProviderPort | None = None,
+        *,
+        notifications: NotificationsPort | None = None,
+    ) -> None:
+        from app.modules.integrations import wiring
+
         self.db = db
-        self.client = client or WhatsAppCloudClient()
+        self.client = client or wiring.default_whatsapp_provider()
         self.configs = WhatsAppConfigService(db, client=self.client)
         self.templates = WhatsAppTemplateService(db)
         self.events = IntegrationEventService(db)
         self.crm = CrmFacade(db)
+        self.notifications = notifications or wiring.default_notifications()
 
     def _get_lead(self, tenant_id: str, lead_id: str) -> LeadProfile:
         lead = self.crm.get_lead_profile(tenant_id, lead_id)
@@ -88,23 +73,25 @@ class WhatsAppMessageService:
             raise ValueError("Lead not found")
         return lead
 
-    def _lead_variables(self, lead: LeadProfile, request: WhatsAppActionRequest) -> dict[str, Any]:
+    def _lead_variables(self, lead: LeadProfile, variables: dict[str, Any]) -> dict[str, Any]:
         contact = lead.contact
         return {
             "contact_name": contact.name,
             "agent_name": "ServiGlobal AI",
             "interest": lead.interest or lead.use_case or "nuestros servicios",
-            **request.variables,
+            **variables,
         }
 
-    def preview_lead_whatsapp(self, tenant_id: str, lead_id: str, request: WhatsAppActionRequest) -> WhatsAppSendResult:
+    def preview_lead_whatsapp(
+        self, tenant_id: str, lead_id: str, *, template_key: str, message_text: str | None = None, variables: dict[str, Any] | None = None
+    ) -> WhatsAppSendResult:
         lead = self._get_lead(tenant_id, lead_id)
         phone = lead.contact.phone or lead.contact.phone_normalized
         if not phone:
             raise ValueError("Lead contact does not have a phone number")
-        template = self.templates.get_template(tenant_id, request.template_key)
-        variables = self._lead_variables(lead, request)
-        body = request.message or self.templates.render_template(template, variables)
+        template = self.templates.get_template(tenant_id, template_key)
+        rendered_variables = self._lead_variables(lead, variables or {})
+        body = message_text or self.templates.render_template(template, rendered_variables)
         return WhatsAppSendResult(
             status="preview",
             preview={
@@ -112,11 +99,13 @@ class WhatsAppMessageService:
                 "template_key": template.template_key,
                 "provider_template_name": template.provider_template_name,
                 "message": body,
-                "variables": variables,
+                "variables": rendered_variables,
             },
         )
 
-    def send_lead_whatsapp(self, tenant_id: str, lead_id: str, request: WhatsAppActionRequest) -> WhatsAppSendResult:
+    def send_lead_whatsapp(
+        self, tenant_id: str, lead_id: str, *, template_key: str, message_text: str | None = None, variables: dict[str, Any] | None = None
+    ) -> WhatsAppSendResult:
         lead = self._get_lead(tenant_id, lead_id)
         contact = lead.contact
         phone = contact.phone or contact.phone_normalized
@@ -124,9 +113,9 @@ class WhatsAppMessageService:
             raise ValueError("Lead contact does not have a phone number")
 
         config, client_config = self.configs.get_active_client_config(tenant_id)
-        template = self.templates.get_template(tenant_id, request.template_key)
-        variables = self._lead_variables(lead, request)
-        body = request.message or self.templates.render_template(template, variables)
+        template = self.templates.get_template(tenant_id, template_key)
+        rendered_variables = self._lead_variables(lead, variables or {})
+        body = message_text or self.templates.render_template(template, rendered_variables)
         now = datetime.now(timezone.utc)
 
         message = CrmWhatsAppMessage(
@@ -156,7 +145,7 @@ class WhatsAppMessageService:
         )
 
         try:
-            if request.message:
+            if message_text:
                 payload = self.client.send_text_message(client_config, to_phone=phone, message=body)
             else:
                 payload = self.client.send_template_message(
@@ -164,10 +153,10 @@ class WhatsAppMessageService:
                     to_phone=phone,
                     template_name=template.provider_template_name,
                     language=template.language or config.default_language,
-                    components=self.templates.build_components(template, variables),
+                    components=self.templates.build_components(template, rendered_variables),
                 )
             provider_message_id = extract_provider_message_id(payload)
-        except WhatsAppCloudClientError as exc:
+        except ProviderError as exc:
             error_message = sanitize_whatsapp_error(str(exc)) or "WhatsApp send failed"
             message.status = "failed"
             message.error_message = error_message
@@ -248,9 +237,7 @@ class WhatsAppMessageService:
         # finalizing the delivery is WhatsAppNotificationExecutor's job,
         # since only it knows and can validate the current claim token.
         if notification_delivery_id:
-            from app.modules.notifications.public import delivery_exists
-
-            if not delivery_exists(tenant_id=tenant_id, delivery_id=notification_delivery_id):
+            if not self.notifications.delivery_exists(tenant_id=tenant_id, delivery_id=notification_delivery_id):
                 raise ValueError("Notification delivery not found for tenant")
 
         config, client_config = self.configs.get_active_client_config(tenant_id)
@@ -314,7 +301,7 @@ class WhatsAppMessageService:
                 components=components,
             )
             provider_message_id = extract_provider_message_id(payload)
-        except WhatsAppCloudClientError as exc:
+        except ProviderError as exc:
             error_message = sanitize_whatsapp_error(str(exc)) or "WhatsApp send failed"
             message.status = "failed"
             message.error_message = error_message
@@ -340,7 +327,7 @@ class WhatsAppMessageService:
             self.db.commit()
             self.db.refresh(message)
             return WhatsAppSendResult(
-                status="manual_review", message=message, error_message=_MISSING_PROVIDER_MESSAGE_ID_ERROR
+                status="manual_review", message=message, error_message=MISSING_PROVIDER_MESSAGE_ID_ERROR
             )
 
         message.provider_message_id = provider_message_id
@@ -407,7 +394,7 @@ class WhatsAppMessageService:
                 components=components,
             )
             provider_message_id = extract_provider_message_id(payload)
-        except WhatsAppCloudClientError as exc:
+        except ProviderError as exc:
             error_message = sanitize_whatsapp_error(str(exc)) or "WhatsApp test message failed"
             self.events.record_event(
                 tenant_id=tenant_id,
@@ -454,15 +441,6 @@ class WhatsAppMessageService:
             message="Mensaje de prueba enviado. El estado final se actualizará por webhook.",
         )
 
-    def action_response(self, result: WhatsAppSendResult) -> WhatsAppActionResponse:
-        return WhatsAppActionResponse(
-            status=result.status,
-            whatsapp_message_id=result.message.id if result.message else None,
-            provider_message_id=result.provider_message_id,
-            preview=result.preview,
-            error_message=result.error_message,
-        )
-
     def list_lead_messages(self, tenant_id: str, lead_id: str) -> list[CrmWhatsAppMessage]:
         self._get_lead(tenant_id, lead_id)
         return self.db.scalars(
@@ -503,6 +481,9 @@ class WhatsAppMessageService:
             )
             if message is None:
                 continue
+            if not can_advance_status(message.status, status):
+                # Out-of-order webhook (e.g. a late "delivered" after "read"): never move a message backwards.
+                continue
             now = datetime.now(timezone.utc)
             message.status = status
             status_error_message = None
@@ -516,9 +497,7 @@ class WhatsAppMessageService:
                 status_error_message = sanitize_whatsapp_error(str(error)) if error else "WhatsApp delivery failed"
                 message.error_message = status_error_message
             self.db.commit()
-            from app.modules.notifications.public import report_delivery_status
-
-            report_delivery_status(
+            self.notifications.report_delivery_status(
                 tenant_id=config.tenant_id,
                 provider_message_id=provider_message_id,
                 status=status,
@@ -571,6 +550,16 @@ class WhatsAppMessageService:
                     resource_type="webhook",
                     resource_id=(provider_message_id or "")[:80],
                 )
+                continue
+
+            if provider_message_id and self.db.scalar(
+                select(CrmWhatsAppMessage.id).where(
+                    CrmWhatsAppMessage.tenant_id == config.tenant_id,
+                    CrmWhatsAppMessage.provider_message_id == provider_message_id,
+                    CrmWhatsAppMessage.direction == "inbound",
+                )
+            ):
+                # Meta retries webhooks: an inbound message already stored is not stored (nor logged) twice.
                 continue
 
             message = CrmWhatsAppMessage(

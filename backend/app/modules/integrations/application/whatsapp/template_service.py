@@ -11,7 +11,8 @@ from sqlalchemy.orm import Session
 from app.modules.integrations.infrastructure.models import CrmWhatsAppMessage
 from app.modules.integrations.infrastructure.models import TenantWhatsAppTemplate
 from app.modules.integrations.api.schemas import WhatsAppTemplateCreateRequest, WhatsAppTemplateUpdateRequest
-from app.services.tenant_feature_service import TenantFeatureService, WHATSAPP_BUSINESS_CALLING
+from app.modules.integrations.application.ports import FeatureGatePort
+from app.modules.integrations.domain.whatsapp import WHATSAPP_BUSINESS_CALLING_FEATURE
 
 
 DEFAULT_WHATSAPP_TEMPLATES = [
@@ -74,10 +75,10 @@ def _build_meta_components(
     return components
 
 
-def _ensure_voice_call_allowed(db: Session, tenant_id: str, buttons: list[dict[str, Any]]) -> None:
+def _ensure_voice_call_allowed(features: FeatureGatePort, tenant_id: str, buttons: list[dict[str, Any]]) -> None:
     if not any(button.get("type") == "VOICE_CALL" for button in buttons):
         return
-    if not TenantFeatureService(db).is_enabled(tenant_id, WHATSAPP_BUSINESS_CALLING):
+    if not features.is_enabled(tenant_id, WHATSAPP_BUSINESS_CALLING_FEATURE):
         raise ValueError("VOICE_CALL button requires WhatsApp Business Calling to be enabled for this tenant")
 
 
@@ -90,8 +91,11 @@ class WhatsAppTemplateSyncResult:
 
 
 class WhatsAppTemplateService:
-    def __init__(self, db: Session) -> None:
+    def __init__(self, db: Session, features: FeatureGatePort | None = None) -> None:
+        from app.modules.integrations.wiring import default_features
+
         self.db = db
+        self.features = features or default_features(db)
 
     def ensure_default_templates(self, tenant_id: str) -> None:
         existing = {
@@ -315,7 +319,7 @@ class WhatsAppTemplateService:
             raise ValueError(f"A template with key '{template_key}' already exists")
 
         buttons = [button.model_dump(exclude_none=True) for button in request.buttons]
-        _ensure_voice_call_allowed(self.db, tenant_id, buttons)
+        _ensure_voice_call_allowed(self.features, tenant_id, buttons)
         components = _build_meta_components(
             header_text=request.header_text, body=request.body, footer_text=request.footer_text, buttons=buttons
         )
@@ -365,7 +369,7 @@ class WhatsAppTemplateService:
             if request.buttons is not None
             else (template.buttons_json or [])
         )
-        _ensure_voice_call_allowed(self.db, tenant_id, buttons)
+        _ensure_voice_call_allowed(self.features, tenant_id, buttons)
 
         template.body = body
         template.header_json = {"text": header_text} if header_text else None

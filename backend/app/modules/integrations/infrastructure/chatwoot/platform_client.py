@@ -25,10 +25,11 @@ from __future__ import annotations
 
 import httpx
 
-from app.modules.integrations.infrastructure.chatwoot.client import sanitize_chatwoot_error
+from app.modules.integrations.domain.chatwoot import sanitize_chatwoot_error
+from app.modules.integrations.domain.errors import ProviderRejected
 
 
-class ChatwootPlatformError(RuntimeError):
+class ChatwootPlatformError(ProviderRejected):
     pass
 
 

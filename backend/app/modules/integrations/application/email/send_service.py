@@ -7,10 +7,8 @@ from datetime import UTC, datetime
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.integrations import TenantFormToken
 from app.modules.integrations.infrastructure.models import TenantEmailSend, TenantEmailSendAsset
 from app.modules.crm.public import CrmFacade, LeadProfile
-from app.services.call_summary_service import CallSummaryService
 from app.modules.integrations.application.email.asset_service import EmailAssetService
 from app.modules.integrations.application.email.config_service import EmailConfigService, validate_email
 from app.modules.integrations.domain.email_render import EmailRenderService
@@ -20,11 +18,9 @@ from app.modules.integrations.application.email.template_service import (
 )
 from app.modules.integrations.application.event_service import IntegrationEventService
 from app.modules.integrations.application.integration_service import IntegrationService
-from app.modules.integrations.infrastructure.email.resend import (
-    ResendService,
-    ResendServiceError,
-    _sanitize_resend_error,
-)
+from app.modules.integrations.application.ports import CallSummaryPort, EmailProviderPort, FormLinkPort
+from app.modules.integrations.domain.email import sanitize_resend_error as _sanitize_resend_error
+from app.modules.integrations.domain.errors import ProviderError
 
 
 @dataclass(frozen=True)
@@ -40,10 +36,17 @@ class EmailSendService:
     def __init__(
         self,
         db: Session,
-        resend_service: ResendService | None = None,
+        resend_service: EmailProviderPort | None = None,
+        *,
+        form_links: FormLinkPort | None = None,
+        call_summaries: CallSummaryPort | None = None,
     ) -> None:
+        from app.modules.integrations import wiring
+
         self.db = db
-        self.resend_service = resend_service or ResendService()
+        self.resend_service = resend_service or wiring.default_email_provider()
+        self.form_links = form_links or wiring.default_form_links(db)
+        self.call_summaries = call_summaries or wiring.default_call_summary(db)
         self.integration_service = IntegrationService(db)
         self.config_service = EmailConfigService(db)
         self.template_service = EmailTemplateService(db)
@@ -111,7 +114,7 @@ class EmailSendService:
             raise ValueError("Email integration is not configured for this tenant.")
         api_key = self.integration_service.get_secret_value(integration, "api_key")
         assets = self.asset_service.validate_assets(tenant_id, asset_ids)
-        form_tokens = self._validate_form_tokens(tenant_id, lead_id, form_token_ids)
+        form_token_ids_ok = self._validate_form_tokens(tenant_id, lead_id, form_token_ids)
         attachments = self.asset_service.build_resend_attachments(assets)
         rendered = self._render(tenant_id, lead, template_key, subject, message, content_format, content)
         idempotency_key = f"lead-email:{tenant_id}:{lead_id}:{uuid.uuid4().hex}"
@@ -151,7 +154,7 @@ class EmailSendService:
                 lead_id=lead_id,
                 template_key=template_key,
             )
-        except ResendServiceError as exc:
+        except ProviderError as exc:
             error_message = _sanitize_resend_error(str(exc))
             email_send.status = "failed"
             email_send.error_message = error_message
@@ -174,8 +177,8 @@ class EmailSendService:
         email_send.sent_at = datetime.now(UTC)
         self.db.commit()
         self._record_activity(lead, "email_sent", "Email enviado", email_send.id)
-        for form_token in form_tokens:
-            self._record_activity(lead, "form_link_sent", "Link de formulario enviado", email_send.id, None, form_token.id)
+        for form_token_id in form_token_ids_ok:
+            self._record_activity(lead, "form_link_sent", "Link de formulario enviado", email_send.id, None, form_token_id)
         self.event_service.record_event(
             tenant_id=tenant_id,
             provider="resend",
@@ -206,7 +209,7 @@ class EmailSendService:
                 reply_to=config.reply_to,
                 tenant_id=tenant_id,
             )
-        except ResendServiceError as exc:
+        except ProviderError as exc:
             error_message = _sanitize_resend_error(str(exc))
             self.config_service.mark_health(config, status="active", error_message=error_message)
             self.integration_service.mark_health(integration, status="active", error_message=error_message)
@@ -274,7 +277,7 @@ class EmailSendService:
                 "lead_id": lead.id,
                 "form_link": "",
             }
-            variables.update(CallSummaryService(self.db).variables_for_lead(tenant_id, lead.id))
+            variables.update(self.call_summaries.variables_for_lead(tenant_id, lead.id))
             rendered = self.render_service.render_email_content(
                 subject=subject or template.subject,
                 content_format=content_format,
@@ -314,19 +317,7 @@ class EmailSendService:
             return f"{sender_name} <{sender_email}>"
         return sender_email
 
-    def _validate_form_tokens(self, tenant_id: str, lead_id: str, form_token_ids: list[str] | None) -> list[TenantFormToken]:
+    def _validate_form_tokens(self, tenant_id: str, lead_id: str, form_token_ids: list[str] | None) -> list[str]:
         if not form_token_ids:
             return []
-        tokens = list(
-            self.db.scalars(
-                select(TenantFormToken).where(
-                    TenantFormToken.tenant_id == tenant_id,
-                    TenantFormToken.lead_id == lead_id,
-                    TenantFormToken.id.in_(form_token_ids),
-                    TenantFormToken.status == "active",
-                )
-            ).all()
-        )
-        if len(tokens) != len(set(form_token_ids)):
-            raise ValueError("One or more form links are not available for this lead.")
-        return tokens
+        return self.form_links.validate_active_links(tenant_id, lead_id, form_token_ids)

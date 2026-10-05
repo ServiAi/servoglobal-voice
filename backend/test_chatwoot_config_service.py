@@ -147,7 +147,7 @@ class ChatwootConfigServiceTests(Integration2ATestCase):
             def get_account_profile(self):
                 return {"id": 17, "name": "Clinica ABC"}
 
-        import app.modules.integrations.application.chatwoot.config_service as module
+        import app.modules.integrations.infrastructure.chatwoot.client as module
 
         original = module.ChatwootClient
         module.ChatwootClient = _Client
@@ -173,7 +173,7 @@ class ChatwootConfigServiceTests(Integration2ATestCase):
             def get_account_profile(self):
                 raise ChatwootClientError("Chatwoot request failed")
 
-        import app.modules.integrations.application.chatwoot.config_service as module
+        import app.modules.integrations.infrastructure.chatwoot.client as module
 
         original = module.ChatwootClient
         module.ChatwootClient = _FailingClient
@@ -220,7 +220,7 @@ class ChatwootConfigServiceTests(Integration2ATestCase):
             def create_account_webhook(self, *, account_id, user_token, url):
                 return {"payload": {"webhook": {"id": 1, "url": url}}}
 
-        import app.modules.integrations.application.chatwoot.config_service as module
+        import app.modules.integrations.infrastructure.chatwoot.platform_client as module
 
         original_client = module.ChatwootPlatformClient
         original_token = settings.CHATWOOT_PLATFORM_API_TOKEN
@@ -258,7 +258,7 @@ class ChatwootConfigServiceTests(Integration2ATestCase):
             def create_account(self, *, name):
                 raise ChatwootPlatformError("Chatwoot platform request failed (401)")
 
-        import app.modules.integrations.application.chatwoot.config_service as module
+        import app.modules.integrations.infrastructure.chatwoot.platform_client as module
 
         original_client = module.ChatwootPlatformClient
         original_token = settings.CHATWOOT_PLATFORM_API_TOKEN
@@ -291,7 +291,7 @@ class ChatwootConfigServiceTests(Integration2ATestCase):
             def create_user(self, *, name, email, password):
                 raise ChatwootPlatformError("Chatwoot platform request failed (401)")
 
-        import app.modules.integrations.application.chatwoot.config_service as module
+        import app.modules.integrations.infrastructure.chatwoot.platform_client as module
 
         original_client = module.ChatwootPlatformClient
         original_token = settings.CHATWOOT_PLATFORM_API_TOKEN
@@ -360,7 +360,7 @@ class ChatwootConfigServiceTests(Integration2ATestCase):
             db.add(config)
             db.commit()
 
-        import app.modules.integrations.application.chatwoot.config_service as module
+        import app.modules.integrations.infrastructure.chatwoot.platform_client as module
 
         original_client = module.ChatwootPlatformClient
         module.ChatwootPlatformClient = _FakePlatformClient

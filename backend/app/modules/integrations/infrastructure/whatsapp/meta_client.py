@@ -1,35 +1,19 @@
 from __future__ import annotations
 
-import re
 import json as jsonlib
-from dataclasses import dataclass
 from typing import Any
 
 import httpx
 
 from app.core.config import settings
+from app.modules.integrations.domain.errors import ProviderRejected
+from app.modules.integrations.domain.whatsapp import WhatsAppClientConfig, sanitize_whatsapp_error
 
 WHATSAPP_GRAPH_VERSION = settings.WHATSAPP_GRAPH_VERSION
 
 
-class WhatsAppCloudClientError(RuntimeError):
+class WhatsAppCloudClientError(ProviderRejected):
     pass
-
-
-@dataclass(frozen=True)
-class WhatsAppClientConfig:
-    access_token: str
-    phone_number_id: str
-
-
-def sanitize_whatsapp_error(value: str | None) -> str | None:
-    if not value:
-        return None
-    text = re.sub(r"Bearer\s+[A-Za-z0-9._\-]+", "Bearer [REDACTED]", value)
-    text = re.sub(r"EA[A-Za-z0-9]{20,}", "[REDACTED_TOKEN]", text)
-    text = re.sub(r"\+?\d[\d\s().-]{6,}\d", "[REDACTED_PHONE]", text)
-    text = re.sub(r"[\w.\-+]+@[\w.\-]+\.\w+", "[REDACTED_EMAIL]", text)
-    return text[:500]
 
 
 class WhatsAppCloudClient:

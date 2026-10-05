@@ -217,7 +217,7 @@ class AdminTenantIntegrationTests(unittest.TestCase):
         self.is_internal = True
         self._configure(self.tenant.id)
         
-        with patch("app.modules.integrations.application.email.send_service.ResendService") as service_cls:
+        with patch("app.modules.integrations.infrastructure.email.resend.ResendService") as service_cls:
             service_cls.return_value.send_test_email.return_value = "email_test_admin"
             response = self.client.post(
                 f"/api/v1/admin/tenants/{self.tenant.id}/integrations/resend/test",

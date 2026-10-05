@@ -14,13 +14,12 @@ from app.modules.integrations.api.schemas import (
     WhatsAppTestResponse,
 )
 from app.modules.integrations.application.event_service import IntegrationEventService
-from app.services.tenant_feature_service import TenantFeatureService, WHATSAPP_BUSINESS_CALLING
 from app.modules.integrations.application.whatsapp.template_service import WhatsAppTemplateService
-from app.services.secret_manager_service import SecretManager
-from app.modules.integrations.infrastructure.whatsapp.meta_client import (
+from app.modules.integrations.application.ports import FeatureGatePort, SecretsPort, WhatsAppProviderPort
+from app.modules.integrations.domain.errors import ProviderError
+from app.modules.integrations.domain.whatsapp import (
+    WHATSAPP_BUSINESS_CALLING_FEATURE,
     WhatsAppClientConfig,
-    WhatsAppCloudClient,
-    WhatsAppCloudClientError,
     sanitize_whatsapp_error,
 )
 
@@ -28,10 +27,20 @@ from app.modules.integrations.infrastructure.whatsapp.meta_client import (
 class WhatsAppConfigService:
     provider = "whatsapp_cloud"
 
-    def __init__(self, db: Session, client: WhatsAppCloudClient | None = None) -> None:
+    def __init__(
+        self,
+        db: Session,
+        client: WhatsAppProviderPort | None = None,
+        *,
+        secrets: SecretsPort | None = None,
+        features: FeatureGatePort | None = None,
+    ) -> None:
+        from app.modules.integrations import wiring
+
         self.db = db
-        self.client = client or WhatsAppCloudClient()
-        self.secret_manager = SecretManager()
+        self.client = client or wiring.default_whatsapp_provider()
+        self.secret_manager = secrets or wiring.default_secrets()
+        self.features = features or wiring.default_features(db)
         self.events = IntegrationEventService(db)
 
     def get_config(self, tenant_id: str) -> TenantWhatsAppConfig | None:
@@ -44,14 +53,14 @@ class WhatsAppConfigService:
 
     def get_response(self, tenant_id: str) -> WhatsAppConfigResponse:
         config = self.get_config(tenant_id)
-        voice_calling_enabled = TenantFeatureService(self.db).is_enabled(tenant_id, WHATSAPP_BUSINESS_CALLING)
+        voice_calling_enabled = self.features.is_enabled(tenant_id, WHATSAPP_BUSINESS_CALLING_FEATURE)
         if config is None:
             return WhatsAppConfigResponse(status="inactive", has_secret=False, voice_calling_enabled=voice_calling_enabled)
         return self.to_response(config, voice_calling_enabled=voice_calling_enabled)
 
     def to_response(self, config: TenantWhatsAppConfig, voice_calling_enabled: bool | None = None) -> WhatsAppConfigResponse:
         if voice_calling_enabled is None:
-            voice_calling_enabled = TenantFeatureService(self.db).is_enabled(config.tenant_id, WHATSAPP_BUSINESS_CALLING)
+            voice_calling_enabled = self.features.is_enabled(config.tenant_id, WHATSAPP_BUSINESS_CALLING_FEATURE)
         return WhatsAppConfigResponse(
             status=config.status,
             phone_number_id=config.phone_number_id,
@@ -112,7 +121,7 @@ class WhatsAppConfigService:
         try:
             _, client_config = self.get_active_client_config(tenant_id)
             payload = self.client.get_phone_number_info(client_config)
-        except (ValueError, WhatsAppCloudClientError) as exc:
+        except (ValueError, ProviderError) as exc:
             message = sanitize_whatsapp_error(str(exc)) or "WhatsApp test failed"
             config.last_health_check_at = datetime.now(timezone.utc)
             config.last_error_message = message
@@ -163,7 +172,7 @@ class WhatsAppConfigService:
             )
             templates = payload.get("data") if isinstance(payload.get("data"), list) else []
             result = WhatsAppTemplateService(self.db).sync_approved_templates_from_meta(tenant_id, templates)
-        except WhatsAppCloudClientError as exc:
+        except ProviderError as exc:
             message = sanitize_whatsapp_error(str(exc)) or "WhatsApp template sync failed"
             self.events.record_event(
                 tenant_id=tenant_id,
@@ -217,7 +226,7 @@ class WhatsAppConfigService:
                     components=components,
                     parameter_format=template.parameter_format,
                 )
-        except WhatsAppCloudClientError as exc:
+        except ProviderError as exc:
             message = sanitize_whatsapp_error(str(exc)) or "WhatsApp template submission failed"
             self.events.record_event(
                 tenant_id=tenant_id,
@@ -260,7 +269,7 @@ class WhatsAppConfigService:
             payload = self.client.get_message_template_status(
                 client_config, provider_template_id=template.provider_template_id
             )
-        except WhatsAppCloudClientError as exc:
+        except ProviderError as exc:
             message = sanitize_whatsapp_error(str(exc)) or "WhatsApp template status sync failed"
             self.events.record_event(
                 tenant_id=tenant_id,
