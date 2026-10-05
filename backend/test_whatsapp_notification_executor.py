@@ -974,7 +974,7 @@ class WhatsAppWebhookDeliverySyncTests(_BaseExecutorTestCase):
 
     def test_webhook_message_without_delivery_still_works(self):
         ctx = self._seed_webhook_pair(delivery_status="pending", link_delivery=False)
-        response = _handle_payload(self.db, 
+        response = _handle_payload(self.db,
             self._webhook_payload(
                 phone_number_id=ctx["phone_number_id"],
                 provider_message_id=ctx["provider_message_id"],
