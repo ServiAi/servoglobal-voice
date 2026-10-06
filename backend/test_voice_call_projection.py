@@ -9,13 +9,14 @@ from sqlalchemy import func, select
 
 from _integrations_2a_test_base import Integration2ATestCase, SessionLocal
 from app.modules.agents.infrastructure.models import TenantAgent
-from app.models.analytics import Agent, Call
+from app.modules.analytics.infrastructure.models import Agent, Call
+from app.modules.analytics.wiring import (
+    build_projection_service as VoiceCallProjectionService,
+)
+from app.modules.crm.api.schemas import ActivitySchema
 from app.modules.crm.infrastructure.models import CrmActivity, CrmLead, CrmVoiceCall
 from app.modules.voice.infrastructure.models import VoiceSession, VoiceSessionEvent
-from app.modules.crm.api.schemas import ActivitySchema
-from app.services.voice_call_projection_service import VoiceCallProjectionService
 from scripts.backfill_voice_session_calls import run as backfill
-
 
 START = datetime(2026, 9, 15, 12, 0, tzinfo=UTC)
 

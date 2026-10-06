@@ -337,7 +337,7 @@ class VoiceRuntimeControlPlaneTests(Integration2ATestCase):
             self.assertEqual(post("late-connected", "voice.session.connected").status_code, 200)
 
         with SessionLocal() as db:
-            from app.models.analytics import Call
+            from app.modules.analytics.infrastructure.models import Call
             from app.modules.crm.infrastructure.models import CrmActivity, CrmVoiceCall
             from sqlalchemy import select
 

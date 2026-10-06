@@ -16,7 +16,7 @@ from app.modules.identity.api.deps import get_current_identity
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.main import app
-from app.models.analytics import Agent, Call
+from app.modules.analytics.infrastructure.models import Agent, Call
 from app.modules.identity.infrastructure.models import Tenant, TenantMembership, User
 from app.modules.identity.domain.contracts import ExternalIdentity
 

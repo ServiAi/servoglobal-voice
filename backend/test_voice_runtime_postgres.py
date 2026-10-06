@@ -29,7 +29,7 @@ from sqlalchemy.orm import sessionmaker
 
 import app.models  # noqa: F401  (register every ORM table before create_all)
 from app.db.base import Base
-from app.models.analytics import Call, CallEvent
+from app.modules.analytics.infrastructure.models import Call, CallEvent
 from app.modules.billing.infrastructure.models import TenantBillingPlan
 from app.modules.crm.infrastructure.models import CrmVoiceCall, CrmVoiceCallEvent
 from app.modules.identity.infrastructure.models import Tenant

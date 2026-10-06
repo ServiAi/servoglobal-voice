@@ -6,7 +6,7 @@ from sqlalchemy import select
 from unittest.mock import patch
 
 from _integrations_2a_test_base import Integration2ATestCase, SessionLocal
-from app.models.analytics import Agent
+from app.modules.analytics.infrastructure.models import Agent
 from app.modules.crm.infrastructure.models import CrmVoiceCall, CrmVoiceCallEvent, CrmActivity
 from app.models.integrations import TenantVoiceProviderConfig, TenantVoiceAgentConfig
 from app.modules.integrations.infrastructure.models import TenantIntegrationEvent

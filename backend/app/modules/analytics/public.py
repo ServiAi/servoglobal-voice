@@ -87,7 +87,9 @@ class CallLookup:
         self.db = db
 
     def _queries(self):
-        from app.modules.analytics.application.query_service import AnalyticsQueryService
+        from app.modules.analytics.application.query_service import (
+            AnalyticsQueryService,
+        )
 
         return AnalyticsQueryService(self.db)
 
@@ -114,7 +116,9 @@ class AnalyticsCallMetrics:
         call_ids: Sequence[str] | None = None,
     ) -> CallMetricsView:
         """``call_ids=None`` applies no id filter; an empty sequence matches no call."""
-        from app.modules.analytics.application.query_service import AnalyticsQueryService
+        from app.modules.analytics.application.query_service import (
+            AnalyticsQueryService,
+        )
 
         return AnalyticsQueryService(self.db).call_metrics(
             tenant_id, started_from=started_from, started_to=started_to, call_ids=call_ids
@@ -127,7 +131,9 @@ class AnalyticsUsageFacts:
 
     def billed_minutes(self, tenant_id: str, period_start: datetime, period_end: datetime) -> Decimal:
         """Billed minutes of finished calls started within the closed interval [start, end]."""
-        from app.modules.analytics.application.query_service import AnalyticsQueryService
+        from app.modules.analytics.application.query_service import (
+            AnalyticsQueryService,
+        )
 
         return AnalyticsQueryService(self.db).billed_minutes(tenant_id, period_start, period_end)
 
@@ -139,7 +145,9 @@ class AnalyticsAgentDirectory:
         self.db = db
 
     def _service(self):
-        from app.modules.analytics.application.agent_service import AnalyticsAgentService
+        from app.modules.analytics.application.agent_service import (
+            AnalyticsAgentService,
+        )
 
         return AnalyticsAgentService(self.db)
 
@@ -176,7 +184,9 @@ class AnalyticsDashboard:
         self.db = db
 
     def _service(self):
-        from app.modules.analytics.application.dashboard_service import AnalyticsDashboardService
+        from app.modules.analytics.application.dashboard_service import (
+            AnalyticsDashboardService,
+        )
 
         return AnalyticsDashboardService(self.db)
 
@@ -211,7 +221,9 @@ class AnalyticsMaintenance:
 
     def cleanup_tenant(self, tenant_id: str) -> dict[str, int]:
         """Deletes events, snapshots, calls and agents of the tenant. Flush only; the caller commits."""
-        from app.modules.analytics.application.maintenance_service import AnalyticsMaintenanceService
+        from app.modules.analytics.application.maintenance_service import (
+            AnalyticsMaintenanceService,
+        )
 
         return AnalyticsMaintenanceService(self.db).cleanup_tenant(tenant_id)
 

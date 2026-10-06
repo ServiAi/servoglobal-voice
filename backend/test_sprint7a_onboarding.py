@@ -28,7 +28,7 @@ from app.core.config import settings
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.main import app
-from app.models.analytics import Agent, Call, CallEvent, MetricSnapshotDaily
+from app.modules.analytics.infrastructure.models import Agent, Call, CallEvent, MetricSnapshotDaily
 from app.modules.identity.infrastructure.models import AccessAuditLog, Tenant, TenantMembership, User
 from app.modules.identity.domain.contracts import ExternalIdentity
 from app.modules.identity.infrastructure.auth0.provisioning import (

@@ -12,8 +12,15 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.modules.analytics.application.views import agent_view
-from app.modules.analytics.contracts import AgentUpsertCommand, AnalyticsAgentView, NewAgentCommand
-from app.modules.analytics.domain.errors import AmbiguousAnalyticsAgentError, AnalyticsAgentNotFoundError
+from app.modules.analytics.contracts import (
+    AgentUpsertCommand,
+    AnalyticsAgentView,
+    NewAgentCommand,
+)
+from app.modules.analytics.domain.errors import (
+    AmbiguousAnalyticsAgentError,
+    AnalyticsAgentNotFoundError,
+)
 from app.modules.analytics.infrastructure.models import Agent
 
 

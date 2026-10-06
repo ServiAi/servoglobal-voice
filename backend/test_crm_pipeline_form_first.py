@@ -12,7 +12,7 @@ os.environ.setdefault("ULTRAVOX_API_KEY", "test")
 from app.api.endpoints.voice import _create_form_context_and_lead
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
-from app.models.analytics import Agent, Call
+from app.modules.analytics.infrastructure.models import Agent, Call
 from app.modules.crm.infrastructure.models import CrmCallContext, CrmContact, CrmLead, CrmPipelineStage
 from app.modules.identity.infrastructure.models import Tenant
 from app.modules.crm.application.call_context_service import CrmCallContextService

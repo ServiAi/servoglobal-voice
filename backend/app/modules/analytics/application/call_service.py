@@ -26,7 +26,11 @@ from app.modules.analytics.domain.errors import (
     AnalyticsConflictError,
     CallNotFoundError,
 )
-from app.modules.analytics.domain.statuses import ACTIVE_STATUS, CallStatusNormalizer, is_status_regression
+from app.modules.analytics.domain.statuses import (
+    ACTIVE_STATUS,
+    CallStatusNormalizer,
+    is_status_regression,
+)
 from app.modules.analytics.infrastructure.models import Agent, Call, CallEvent
 
 _STATUS_POLICIES = {"derive", "explicit", "settle_open"}

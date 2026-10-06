@@ -5,7 +5,12 @@ from __future__ import annotations
 from sqlalchemy import delete
 from sqlalchemy.orm import Session
 
-from app.modules.analytics.infrastructure.models import Agent, Call, CallEvent, MetricSnapshotDaily
+from app.modules.analytics.infrastructure.models import (
+    Agent,
+    Call,
+    CallEvent,
+    MetricSnapshotDaily,
+)
 
 
 class AnalyticsMaintenanceService:

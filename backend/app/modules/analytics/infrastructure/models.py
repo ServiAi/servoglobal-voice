@@ -21,6 +21,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base
 from app.db.mixins import TimestampMixin, _utcnow, _uuid
 
+
 class Agent(Base, TimestampMixin):
     __tablename__ = "agents"
     __table_args__ = (

@@ -15,9 +15,20 @@ from app.modules.analytics.application.ports import (
     ProjectionLead,
     ProjectionSession,
 )
-from app.modules.analytics.application.projection_service import VoiceCallProjectionService
-from app.modules.crm.public import CrmFacade, CrmVoiceCalls, UpdateVoiceCallCommand, VoiceCallView
-from app.modules.voice.public import SessionEventFact, SessionProjectionFacts, VoiceSessionFacade
+from app.modules.analytics.application.projection_service import (
+    VoiceCallProjectionService,
+)
+from app.modules.crm.public import (
+    CrmFacade,
+    CrmVoiceCalls,
+    UpdateVoiceCallCommand,
+    VoiceCallView,
+)
+from app.modules.voice.public import (
+    SessionEventFact,
+    SessionProjectionFacts,
+    VoiceSessionFacade,
+)
 
 
 def _event(fact: SessionEventFact) -> ProjectionEvent:
