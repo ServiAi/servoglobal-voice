@@ -27,13 +27,14 @@ if VOICE_RUNTIME_TEST_DATABASE_URL:
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 
+import app.models  # noqa: F401  (register every ORM table before create_all)
 from app.db.base import Base
 from app.models.analytics import Call, CallEvent
 from app.models.billing import TenantBillingPlan
 from app.modules.crm.infrastructure.models import CrmVoiceCall, CrmVoiceCallEvent
-from app.models.identity import Tenant
+from app.modules.identity.infrastructure.models import Tenant
 from app.models.integrations import TenantVoiceAgentConfig, TenantVoiceProviderConfig
-from app.models.tenant_features import TenantFeatureGrant
+from app.modules.identity.infrastructure.models import TenantFeatureGrant
 from app.models.voice_context import TenantVoiceContextSchema
 from app.models.voice_experiences import TenantVoiceExperience, TenantVoiceExperienceVersion
 from app.models.voice_submissions import (

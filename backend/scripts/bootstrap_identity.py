@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from app.db.session import SessionLocal
-from app.services.bootstrap_service import BootstrapConfigurationError, IdentityBootstrapService
+from app.modules.identity.application.bootstrap_service import BootstrapConfigurationError, IdentityBootstrapService
 
 
 def main() -> None:

@@ -244,7 +244,10 @@ assert not loaded, loaded
             for name in _imports(path):
                 if not name.startswith("app.modules.") or name.startswith("app.modules.integrations"):
                     continue
-                if name not in FOREIGN_PUBLIC_ALLOWED:
+                is_http_auth_edge = (
+                    name == "app.modules.identity.api.deps" and path.relative_to(MODULE).parts[0] == "api"
+                )
+                if name not in FOREIGN_PUBLIC_ALLOWED and not is_http_auth_edge:
                     offenders.append(f"{path.relative_to(APP)} -> {name}")
         self.assertEqual(offenders, [])
 

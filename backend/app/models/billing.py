@@ -5,11 +5,11 @@ from datetime import UTC, datetime
 from decimal import Decimal
 
 from sqlalchemy import (
+    JSON,
     CheckConstraint,
     DateTime,
     ForeignKey,
     Index,
-    JSON,
     Numeric,
     String,
     Text,
@@ -81,7 +81,7 @@ class TenantBillingPlan(Base, TimestampMixin):
     alert_thresholds: Mapped[list[int]] = mapped_column(JSON, nullable=False, default=lambda: [80, 90, 100])
     last_usage_recalculated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    tenant = relationship("Tenant", back_populates="billing_plan")
+    tenant = relationship("Tenant")
     alerts: Mapped[list[TenantUsageAlert]] = relationship(
         back_populates="billing_plan",
         cascade="all, delete-orphan",
@@ -114,7 +114,7 @@ class TenantUsageAlert(Base, TimestampMixin):
     message: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="active")
 
-    tenant = relationship("Tenant", back_populates="usage_alerts")
+    tenant = relationship("Tenant")
     billing_plan: Mapped[TenantBillingPlan] = relationship(back_populates="alerts")
 
 

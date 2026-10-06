@@ -1,10 +1,10 @@
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 
-from app.api.auth.deps import AuthContext, get_current_auth_context
 from app.db.session import get_db
+from app.modules.identity.api.deps import get_current_auth_context
+from app.modules.identity.public import AccessAudit, AuthContext
 from app.schemas.me import MeResponse
-from app.services.identity_service import IdentityService
 
 router = APIRouter(prefix="/api/v1", tags=["Private"])
 
@@ -15,7 +15,7 @@ def get_me(
     context: AuthContext = Depends(get_current_auth_context),
     db: Session = Depends(get_db),
 ) -> MeResponse:
-    IdentityService(db).audit_access(
+    AccessAudit(db).record(
         user_id=context.user.id,
         tenant_id=context.tenant.id,
         action="profile_view",

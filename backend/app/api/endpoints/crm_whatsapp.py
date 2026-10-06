@@ -5,8 +5,9 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.api.auth.deps import AuthContext, require_roles
 from app.db.session import get_db
+from app.modules.identity.api.deps import require_roles
+from app.modules.identity.public import AuthContext
 from app.modules.integrations.public import WhatsAppFacade
 from app.schemas.crm import (
     WhatsAppActionRequest,

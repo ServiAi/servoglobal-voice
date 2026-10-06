@@ -7,7 +7,7 @@ from _integrations_2a_test_base import Integration2ATestCase
 from app.db.session import SessionLocal
 from app.modules.tools.infrastructure.credentials import TenantToolCredentialService
 from app.modules.tools.infrastructure.models import TenantHttpToolConfig, TenantTool
-from app.services.tenant_feature_service import (
+from app.modules.identity.application.feature_service import (
     AGENT_BUILDER,
     CUSTOM_HTTP_TOOLS,
     TenantFeatureService,

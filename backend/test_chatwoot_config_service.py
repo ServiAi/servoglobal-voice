@@ -61,8 +61,8 @@ class ChatwootConfigServiceTests(Integration2ATestCase):
         self.assertEqual(response.status_code, 422)
 
     def _override_auth_for_tenant(self, tenant, user):
-        from app.models.identity import TenantMembership
-        from app.api.auth.deps import AuthContext
+        from app.modules.identity.infrastructure.models import TenantMembership
+        from app.modules.identity.api.deps import AuthContext
 
         def override():
             with SessionLocal() as db:
@@ -76,7 +76,7 @@ class ChatwootConfigServiceTests(Integration2ATestCase):
                 )
                 return AuthContext(user=db_user, tenant=db_tenant, membership=membership)
 
-        from app.api.auth.deps import get_current_auth_context
+        from app.modules.identity.api.deps import get_current_auth_context
         from app.main import app
 
         app.dependency_overrides[get_current_auth_context] = override

@@ -19,7 +19,7 @@ from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.main import app
 from app.models.analytics import Agent, Call, CallEvent
-from app.models.identity import Tenant
+from app.modules.identity.infrastructure.models import Tenant
 from app.services.ultravox_ingestion_service import UltravoxIngestionService
 
 

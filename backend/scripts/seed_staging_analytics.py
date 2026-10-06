@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.db.session import SessionLocal
 from app.models.analytics import Agent, Call, CallEvent, MetricSnapshotDaily
-from app.models.identity import Tenant
+from app.models import Tenant
 
 
 SEED_PROVIDER = "sprint4a_seed"

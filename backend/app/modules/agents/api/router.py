@@ -8,7 +8,6 @@ from typing import Any, NoReturn
 from fastapi import APIRouter, Body, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.api.auth.deps import AuthContext, require_roles
 from app.db.session import get_db
 from app.modules.agents.api.schemas import (
     AgentCreateRequest,
@@ -27,7 +26,8 @@ from app.modules.agents.domain.errors import (
     AgentValidationError,
 )
 from app.modules.agents.wiring import agent_service
-from app.modules.identity.public import FeatureDisabledError
+from app.modules.identity.api.deps import require_roles
+from app.modules.identity.public import AuthContext, FeatureDisabledError
 
 router = APIRouter(prefix="/api/v1/agents", tags=["Agent Builder"])
 READ_ROLES = ["platform_admin", "tenant_admin", "tenant_analyst", "tenant_viewer"]

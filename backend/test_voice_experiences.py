@@ -10,7 +10,7 @@ from sqlalchemy.exc import IntegrityError
 
 from _integrations_2a_test_base import Integration2ATestCase
 from app.db.session import SessionLocal
-from app.models.identity import TenantMembership, User
+from app.modules.identity.infrastructure.models import TenantMembership, User
 from app.models.integrations import TenantVoiceAgentConfig
 from app.modules.integrations.infrastructure.models import TenantIntegrationEvent
 from app.models.voice_context import TenantVoiceContextSchema
@@ -20,7 +20,8 @@ from app.models.voice_experiences import (
 )
 from app.models.voice_submissions import TenantVoiceExperienceSubmission
 from app.schemas.voice_experiences import VoiceExperienceWriteRequest
-from app.services.tenant_feature_service import VOICE_EXPERIENCES, TenantFeatureService
+from app.modules.identity.application.feature_service import VOICE_EXPERIENCES, TenantFeatureService
+from app.modules.identity.public import FeatureFlags
 from app.services.voice_experience_service import (
     VoiceExperienceConflictError,
     VoiceExperienceService,
@@ -83,6 +84,13 @@ class VoiceExperienceTests(Integration2ATestCase):
                 {"max_experiences": max_experiences, "max_context_fields": 8},
                 self.user.id,
             )
+
+    def test_feature_facade_returns_limits_for_enabled_feature(self) -> None:
+        self._enable_feature(max_experiences=5)
+        with SessionLocal() as db:
+            grant = FeatureFlags(db).require_enabled(self.tenant.id, VOICE_EXPERIENCES)
+        self.assertEqual(grant.limits["max_experiences"], 5)
+        self.assertEqual(grant.limits["max_context_fields"], 8)
 
     def _payload(
         self,

@@ -18,7 +18,7 @@ from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.modules.crm.infrastructure.models import CrmContact, CrmLead, CrmPipelineStage, CrmVoiceCall
 from app.modules.scheduling.infrastructure.models import CrmBooking, CrmBookingEvent
-from app.models.identity import Tenant
+from app.modules.identity.infrastructure.models import Tenant
 from app.modules.integrations.infrastructure.models import (
     TenantIntegrationEvent,
     TenantWhatsAppConfig,

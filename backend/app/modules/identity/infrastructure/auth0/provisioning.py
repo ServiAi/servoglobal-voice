@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
 import logging
 import secrets
 import string
+from dataclasses import dataclass, replace
 from typing import Any
 from urllib.parse import quote
 

@@ -30,9 +30,12 @@ class TenantRef:
 
 def require_tenant(db: Session, tenant_id: str) -> TenantRef:
     """Identity legacy lookup. Raises ``ValueError`` (same message as before) if missing."""
-    from app.services.onboarding_service import OnboardingService
+    from app.modules.identity.public import TenantDirectory
 
-    tenant = OnboardingService(db).get_tenant(tenant_id)
+    try:
+        tenant = TenantDirectory(db).require(tenant_id)
+    except LookupError as exc:
+        raise ValueError(str(exc)) from exc
     return TenantRef(id=tenant.id, name=tenant.name, slug=tenant.slug)
 
 

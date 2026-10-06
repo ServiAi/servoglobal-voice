@@ -1,25 +1,31 @@
 from __future__ import annotations
 
 from typing import Any
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.api.auth.deps import AuthContext, require_roles
 from app.db.session import get_db
+from app.modules.identity.api.deps import require_roles
+from app.modules.identity.public import (
+    LIVEKIT_SIP_OUTBOUND_V2,
+    VOICE_RUNTIME_V2,
+    AuthContext,
+    FeatureFlags,
+)
 from app.schemas.integrations import (
-    VoiceProviderConfigRequest,
-    VoiceProviderConfigResponse,
     VoiceAgentConfigRequest,
     VoiceAgentConfigResponse,
     VoiceCallActionRequest,
     VoiceCallActionResponse,
     VoiceCallResponse,
+    VoiceProviderConfigRequest,
+    VoiceProviderConfigResponse,
 )
-from app.services.voice_config_service import VoiceConfigService
+from app.services.outbound_voice_call_service import OutboundVoiceCallService
 from app.services.voice_agent_service import VoiceAgentService
 from app.services.voice_call_service import VoiceCallService
-from app.services.outbound_voice_call_service import OutboundVoiceCallService
-from app.modules.identity.public import LIVEKIT_SIP_OUTBOUND_V2, VOICE_RUNTIME_V2, FeatureFlags
+from app.services.voice_config_service import VoiceConfigService
 
 router = APIRouter(prefix="/api/v1", tags=["Voice CRM"])
 

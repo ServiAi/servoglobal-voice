@@ -6,49 +6,57 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.config import settings
-from app.models.analytics import Agent, Call, CallEvent, MetricSnapshotDaily
-from app.models.billing import TenantBillingPlan, TenantUsageAlert
-from app.models.identity import AccessAuditLog, Tenant, TenantMembership, User
-from app.schemas.billing import TenantPlanRequest
-from app.services.auth0_provisioning_service import (
-    Auth0ProvisionedUser,
-    Auth0ProvisioningError,
-    Auth0ProvisioningService,
+from app.modules.identity.application.ports import (
+    BillingOnboardingPort,
+    IdentityProvisioningPort,
+    LegacyAgentAdministrationPort,
+    TenantDependentCleanupPort,
 )
-from app.services.tenant_usage_service import TenantUsageService
+from app.modules.identity.domain.contracts import (
+    LegacyAgentView,
+    PasswordResetOutcome,
+    ProvisionedUser,
+)
+from app.modules.identity.domain.errors import (
+    IdentityProviderError,
+    MembershipAlreadyExistsError,
+    MembershipNotFoundError,
+    OnboardingConsistencyError,
+    PasswordResetFailedError,
+    ProvisioningConflictError,
+    TenantDeletionBlockedError,
+    TenantNotFoundError,
+)
+from app.modules.identity.domain.roles import ADMIN_ROLES
+from app.modules.identity.infrastructure.models import (
+    AccessAuditLog,
+    Tenant,
+    TenantMembership,
+    User,
+)
 
 logger = logging.getLogger(__name__)
 
 
-class OnboardingConsistencyError(RuntimeError):
-    def __init__(
-        self,
-        message: str,
-        *,
-        auth0_user_id: str,
-        compensation_attempted: bool,
-        compensation_succeeded: bool,
-    ) -> None:
-        super().__init__(message)
-        self.auth0_user_id = auth0_user_id
-        self.compensation_attempted = compensation_attempted
-        self.compensation_succeeded = compensation_succeeded
 
 
-class TenantDeletionBlockedError(RuntimeError):
-    pass
 
 
 class OnboardingService:
     def __init__(
         self,
         db: Session,
-        auth0_provisioning_service: Auth0ProvisioningService | None = None,
+        *,
+        provisioning: IdentityProvisioningPort,
+        billing: BillingOnboardingPort,
+        legacy_agents: LegacyAgentAdministrationPort,
+        tenant_cleanup: TenantDependentCleanupPort,
     ) -> None:
         self.db = db
-        self.auth0_provisioning_service = (
-            auth0_provisioning_service or Auth0ProvisioningService()
-        )
+        self.provisioning = provisioning
+        self.billing = billing
+        self.legacy_agents = legacy_agents
+        self.tenant_cleanup = tenant_cleanup
 
     def create_tenant(
         self,
@@ -61,7 +69,7 @@ class OnboardingService:
         admin_email: str,
         admin_role: str = "tenant_admin",
         agents: list[dict] | None = None,
-        plan: TenantPlanRequest | None = None,
+        plan: object | None = None,
     ) -> dict:
         slug = slug.strip().lower()
         normalized_admin_email = admin_email.strip().lower()
@@ -76,7 +84,7 @@ class OnboardingService:
         if existing_user is not None and existing_user.external_auth_id is not None:
             raise ValueError(f"A user with external_auth_id already exists for email '{admin_email}'")
 
-        provisioned_admin = self.auth0_provisioning_service.provision_tenant_admin(
+        provisioned_admin = self.provisioning.provision_tenant_admin(
             email=normalized_admin_email,
             name=admin_name.strip(),
         )
@@ -90,11 +98,11 @@ class OnboardingService:
             )
             self.db.add(tenant)
             self.db.flush()
-            TenantUsageService(self.db).create_plan_for_tenant(tenant, plan)
+            self.billing.create_default_plan(tenant.id, plan)
 
             if existing_user is None:
                 admin_user = User(
-                    external_auth_id=provisioned_admin.user_id,
+                    external_auth_id=provisioned_admin.external_auth_id,
                     email=normalized_admin_email,
                     name=admin_name.strip(),
                     is_internal=False,
@@ -104,7 +112,7 @@ class OnboardingService:
                 self.db.flush()
             else:
                 admin_user = existing_user
-                admin_user.external_auth_id = provisioned_admin.user_id
+                admin_user.external_auth_id = provisioned_admin.external_auth_id
                 admin_user.name = admin_name.strip()
                 admin_user.status = "active"
 
@@ -117,28 +125,12 @@ class OnboardingService:
             self.db.add(membership)
             self.db.flush()
 
-            agent_list = []
-            if agents:
-                for agent_data in agents:
-                    agent = Agent(
-                        tenant_id=tenant.id,
-                        name=agent_data["name"].strip(),
-                        external_provider=agent_data["external_provider"].strip(),
-                        external_agent_id=agent_data["external_agent_id"].strip(),
-                        channel_type=agent_data.get("channel_type"),
-                        status=agent_data.get("status", "active"),
-                    )
-                    self.db.add(agent)
-                    agent_list.append(agent)
-                self.db.flush()
+            agent_list = self.legacy_agents.create_agents(tenant.id, agents or ())
 
             self.db.commit()
             self.db.refresh(tenant)
             self.db.refresh(admin_user)
             self.db.refresh(membership)
-
-            for a in agent_list:
-                self.db.refresh(a)
 
             return self._build_tenant_response(
                 tenant,
@@ -150,19 +142,19 @@ class OnboardingService:
         except Exception as exc:
             self.db.rollback()
             try:
-                self.auth0_provisioning_service.delete_user(provisioned_admin.user_id)
-            except Auth0ProvisioningError as cleanup_exc:
+                self.provisioning.delete_user(provisioned_admin.external_auth_id)
+            except Exception:
                 raise OnboardingConsistencyError(
                     "Tenant local creation failed after Auth0 user creation; "
-                    f"Auth0 cleanup failed: {cleanup_exc}",
-                    auth0_user_id=provisioned_admin.user_id,
+                    "identity provider cleanup failed",
+                    auth0_user_id=provisioned_admin.external_auth_id,
                     compensation_attempted=True,
                     compensation_succeeded=False,
                 ) from exc
             raise OnboardingConsistencyError(
                 "Tenant local creation failed after Auth0 user creation; "
                 "Auth0 user was deleted",
-                auth0_user_id=provisioned_admin.user_id,
+                auth0_user_id=provisioned_admin.external_auth_id,
                 compensation_attempted=True,
                 compensation_succeeded=True,
             ) from exc
@@ -179,12 +171,11 @@ class OnboardingService:
             select(Tenant)
             .options(
                 joinedload(Tenant.memberships),
-                joinedload(Tenant.agents),
             )
             .where(Tenant.id == tenant_id)
         )
         if tenant is None:
-            raise ValueError(f"Tenant '{tenant_id}' not found")
+            raise TenantNotFoundError(f"Tenant '{tenant_id}' not found")
         return tenant
 
     def update_tenant(
@@ -199,7 +190,7 @@ class OnboardingService:
             select(Tenant).where(Tenant.id == tenant_id)
         )
         if tenant is None:
-            raise ValueError(f"Tenant '{tenant_id}' not found")
+            raise TenantNotFoundError(f"Tenant '{tenant_id}' not found")
 
         if name is not None:
             tenant.name = name.strip()
@@ -217,7 +208,7 @@ class OnboardingService:
             select(Tenant).where(Tenant.id == tenant_id)
         )
         if tenant is None:
-            raise ValueError(f"Tenant '{tenant_id}' not found")
+            raise TenantNotFoundError(f"Tenant '{tenant_id}' not found")
 
         self._ensure_tenant_can_be_deleted(tenant)
 
@@ -239,33 +230,30 @@ class OnboardingService:
                 )
                 if user is not None
             ]
-            for user in tenant_users:
+            shared_user_ids = set(
+                self.db.scalars(
+                    select(TenantMembership.user_id).where(
+                        TenantMembership.user_id.in_(membership_user_ids),
+                        TenantMembership.tenant_id != tenant_id,
+                    )
+                ).all()
+            ) if membership_user_ids else set()
+            users_to_delete = [user for user in tenant_users if user.id not in shared_user_ids]
+            for user in users_to_delete:
                 if user.external_auth_id:
-                    self.auth0_provisioning_service.delete_user(
+                    self.provisioning.delete_user(
                         user.external_auth_id
                     )
                     deleted_auth0_users += 1
 
-            deleted_call_events = self._delete_count(
-                delete(CallEvent).where(CallEvent.tenant_id == tenant_id)
-            )
-            deleted_usage_alerts = self._delete_count(
-                delete(TenantUsageAlert).where(TenantUsageAlert.tenant_id == tenant_id)
-            )
-            deleted_billing_plans = self._delete_count(
-                delete(TenantBillingPlan).where(TenantBillingPlan.tenant_id == tenant_id)
-            )
-            deleted_metric_snapshots = self._delete_count(
-                delete(MetricSnapshotDaily).where(
-                    MetricSnapshotDaily.tenant_id == tenant_id
-                )
-            )
-            deleted_calls = self._delete_count(
-                delete(Call).where(Call.tenant_id == tenant_id)
-            )
-            deleted_agents = self._delete_count(
-                delete(Agent).where(Agent.tenant_id == tenant_id)
-            )
+            tenant_cleanup_counts = self.tenant_cleanup.cleanup_tenant(tenant_id)
+            billing_cleanup_counts = self.billing.cleanup_tenant(tenant_id)
+            deleted_agents = self.legacy_agents.cleanup_tenant(tenant_id)
+            deleted_call_events = tenant_cleanup_counts.get("call_events", 0)
+            deleted_metric_snapshots = tenant_cleanup_counts.get("metric_snapshots", 0)
+            deleted_calls = tenant_cleanup_counts.get("calls", 0)
+            deleted_usage_alerts = billing_cleanup_counts.get("usage_alerts", 0)
+            deleted_billing_plans = billing_cleanup_counts.get("billing_plans", 0)
             deleted_memberships = self._delete_count(
                 delete(TenantMembership).where(
                     TenantMembership.tenant_id == tenant_id
@@ -275,7 +263,7 @@ class OnboardingService:
                 delete(AccessAuditLog).where(AccessAuditLog.tenant_id == tenant_id)
             )
 
-            for user in tenant_users:
+            for user in users_to_delete:
                 self.db.delete(user)
                 deleted_users += 1
 
@@ -315,7 +303,7 @@ class OnboardingService:
             select(Tenant).where(Tenant.id == tenant_id)
         )
         if tenant is None:
-            raise ValueError(f"Tenant '{tenant_id}' not found")
+            raise TenantNotFoundError(f"Tenant '{tenant_id}' not found")
 
         normalized_email = email.strip().lower()
         user = self.db.scalar(
@@ -327,16 +315,16 @@ class OnboardingService:
             user_name = normalized_email.split("@")[0]
             external_auth_id: str | None = None
             try:
-                provisioned = self.auth0_provisioning_service.provision_tenant_admin(
+                provisioned = self.provisioning.provision_tenant_admin(
                     email=normalized_email,
                     name=user_name,
                 )
-                external_auth_id = provisioned.user_id
-            except Auth0ProvisioningError as exc:
+                external_auth_id = provisioned.external_auth_id
+            except ProvisioningConflictError as exc:
                 if exc.status_code == 409:
                     # User already exists in Auth0; trigger password reset directly
                     try:
-                        self.auth0_provisioning_service.trigger_password_reset_email(
+                        self.provisioning.trigger_password_reset_email(
                             email=normalized_email
                         )
                     except Exception as reset_exc:
@@ -347,7 +335,7 @@ class OnboardingService:
                 logger.warning("Unexpected error provisioning user in Auth0: %s", exc)
 
             try:
-                ticket_url = self.auth0_provisioning_service.create_password_change_ticket(
+                ticket_url = self.provisioning.create_password_change_ticket(
                     email=normalized_email
                 )
             except Exception as exc:
@@ -361,19 +349,29 @@ class OnboardingService:
                 status="active",
             )
             self.db.add(user)
-            self.db.flush()
+            from sqlalchemy.exc import IntegrityError
+
+            try:
+                self.db.flush()
+            except IntegrityError:
+                self.db.rollback()
+                user = self.db.scalar(
+                    select(User).where(User.email == normalized_email)
+                )
+                if user is None:
+                    raise
         else:
             if user.external_auth_id is None:
                 try:
-                    provisioned = self.auth0_provisioning_service.provision_tenant_admin(
+                    provisioned = self.provisioning.provision_tenant_admin(
                         email=normalized_email,
                         name=user.name or normalized_email.split("@")[0],
                     )
-                    user.external_auth_id = provisioned.user_id
-                except Auth0ProvisioningError as exc:
+                    user.external_auth_id = provisioned.external_auth_id
+                except ProvisioningConflictError as exc:
                     if exc.status_code == 409:
                         try:
-                            self.auth0_provisioning_service.trigger_password_reset_email(
+                            self.provisioning.trigger_password_reset_email(
                                 email=normalized_email
                             )
                         except Exception as reset_exc:
@@ -384,14 +382,14 @@ class OnboardingService:
                     logger.warning("Unexpected error provisioning existing DB user: %s", exc)
             else:
                 try:
-                    self.auth0_provisioning_service.trigger_password_reset_email(
+                    self.provisioning.trigger_password_reset_email(
                         email=normalized_email
                     )
                 except Exception as exc:
                     logger.warning("Failed triggering password reset for existing user: %s", exc)
 
             try:
-                ticket_url = self.auth0_provisioning_service.create_password_change_ticket(
+                ticket_url = self.provisioning.create_password_change_ticket(
                     email=normalized_email
                 )
             except Exception as exc:
@@ -404,7 +402,7 @@ class OnboardingService:
             )
         )
         if existing is not None:
-            raise ValueError(f"User '{email}' already has a membership in this tenant")
+            raise MembershipAlreadyExistsError(f"User '{email}' already has a membership in this tenant")
 
         membership = TenantMembership(
             tenant_id=tenant.id,
@@ -413,7 +411,23 @@ class OnboardingService:
             status="active",
         )
         self.db.add(membership)
-        self.db.commit()
+        from sqlalchemy.exc import IntegrityError
+
+        try:
+            self.db.commit()
+        except IntegrityError as exc:
+            self.db.rollback()
+            existing = self.db.scalar(
+                select(TenantMembership).where(
+                    TenantMembership.tenant_id == tenant_id,
+                    TenantMembership.user_id == user.id,
+                )
+            )
+            if existing is None:
+                raise exc
+            raise MembershipAlreadyExistsError(
+                f"User '{email}' already has a membership in this tenant"
+            ) from exc
         self.db.refresh(membership)
         if ticket_url:
             setattr(membership, "password_reset_url", ticket_url)
@@ -431,10 +445,10 @@ class OnboardingService:
 
     def delete_membership(self, tenant_id: str, membership_id: str) -> dict:
         tenant = self.db.scalar(
-            select(Tenant).where(Tenant.id == tenant_id)
+            select(Tenant).where(Tenant.id == tenant_id).with_for_update()
         )
         if tenant is None:
-            raise ValueError(f"Tenant '{tenant_id}' not found")
+            raise TenantNotFoundError(f"Tenant '{tenant_id}' not found")
 
         membership = self.db.scalar(
             select(TenantMembership).where(
@@ -445,7 +459,7 @@ class OnboardingService:
         if membership is None:
             raise ValueError(f"Membership '{membership_id}' not found in tenant '{tenant_id}'")
 
-        admin_roles = ["tenant_admin", "admin", "owner"]
+        admin_roles = ADMIN_ROLES
         if membership.role in admin_roles and membership.status == "active":
             active_admins = list(
                 self.db.scalars(
@@ -467,12 +481,52 @@ class OnboardingService:
             "tenant_id": tenant_id,
         }
 
+    def send_membership_password_reset(self, tenant_id: str, membership_id: str) -> PasswordResetOutcome:
+        """Make sure the member has an external account, then email (and offer a ticket for) a password change.
+
+        Raises ``MembershipNotFoundError`` (no membership/user/email) or ``PasswordResetFailedError`` (the provider
+        could not send the email and no fallback ticket could be created). Provider internals are never exposed.
+        """
+        membership = self.get_membership(tenant_id, membership_id)
+        if not membership or not membership.user or not membership.user.email:
+            raise MembershipNotFoundError("Membership or user not found")
+
+        user = membership.user
+        email = user.email
+        if user.external_auth_id is None:
+            try:
+                provisioned = self.provisioning.provision_tenant_admin(
+                    email=email, name=user.name or email.split("@")[0]
+                )
+                user.external_auth_id = provisioned.external_auth_id
+                self.db.commit()
+            except (IdentityProviderError, ProvisioningConflictError) as exc:
+                if exc.status_code != 409:
+                    logger.warning("Identity provider provisioning error on password reset: %s", exc)
+
+        error_detail: str | None = None
+        try:
+            self.provisioning.trigger_password_reset_email(email=email)
+        except (IdentityProviderError, ProvisioningConflictError) as exc:
+            error_detail = str(exc)
+            logger.warning("trigger_password_reset_email failed: %s", exc)
+
+        ticket_url: str | None = None
+        try:
+            ticket_url = self.provisioning.create_password_change_ticket(email=email)
+        except Exception as exc:
+            logger.warning("create_password_change_ticket failed: %s", exc)
+
+        if error_detail and not ticket_url:
+            raise PasswordResetFailedError(f"No se pudo enviar el correo de contraseña: {error_detail}")
+        return PasswordResetOutcome(email=email, ticket_url=ticket_url)
+
     def list_memberships(self, tenant_id: str) -> list[TenantMembership]:
         tenant = self.db.scalar(
             select(Tenant).where(Tenant.id == tenant_id)
         )
         if tenant is None:
-            raise ValueError(f"Tenant '{tenant_id}' not found")
+            raise TenantNotFoundError(f"Tenant '{tenant_id}' not found")
 
         return list(
             self.db.query(TenantMembership)
@@ -490,48 +544,32 @@ class OnboardingService:
         external_agent_id: str,
         channel_type: str | None = None,
         status: str = "active",
-    ) -> Agent:
-        tenant = self.db.scalar(
-            select(Tenant).where(Tenant.id == tenant_id)
-        )
-        if tenant is None:
-            raise ValueError(f"Tenant '{tenant_id}' not found")
-
-        agent = Agent(
-            tenant_id=tenant.id,
-            name=name.strip(),
-            external_provider=external_provider.strip(),
-            external_agent_id=external_agent_id.strip(),
-            channel_type=channel_type,
-            status=status,
-        )
-        self.db.add(agent)
+    ) -> LegacyAgentView:
+        if self.db.get(Tenant, tenant_id) is None:
+            raise TenantNotFoundError(f"Tenant '{tenant_id}' not found")
+        agent = self.legacy_agents.create_agents(tenant_id, ({
+            "name": name,
+            "external_provider": external_provider,
+            "external_agent_id": external_agent_id,
+            "channel_type": channel_type,
+            "status": status,
+        },))[0]
         self.db.commit()
-        self.db.refresh(agent)
         return agent
 
-    def list_agents(self, tenant_id: str) -> list[Agent]:
-        tenant = self.db.scalar(
-            select(Tenant).where(Tenant.id == tenant_id)
-        )
-        if tenant is None:
-            raise ValueError(f"Tenant '{tenant_id}' not found")
-
-        return list(
-            self.db.query(Agent)
-            .where(Agent.tenant_id == tenant_id)
-            .order_by(Agent.created_at.desc())
-            .all()
-        )
+    def list_agents(self, tenant_id: str) -> tuple[LegacyAgentView, ...]:
+        if self.db.get(Tenant, tenant_id) is None:
+            raise TenantNotFoundError(f"Tenant '{tenant_id}' not found")
+        return self.legacy_agents.list_agents(tenant_id)
 
     def _build_tenant_response(
         self,
         tenant: Tenant,
         admin_user: User,
         membership: TenantMembership,
-        agents: list[Agent],
+        agents: tuple[LegacyAgentView, ...],
         *,
-        auth0_provisioning: Auth0ProvisionedUser | None = None,
+        auth0_provisioning: ProvisionedUser | None = None,
     ) -> dict:
         member_dicts = [
             {
@@ -558,7 +596,7 @@ class OnboardingService:
             }
             for a in agents
         ]
-        usage = TenantUsageService(self.db).get_usage(tenant, persist_alerts=False)
+        usage = self.billing.tenant_usage_snapshot(tenant.id)
 
         return {
             "id": tenant.id,
@@ -605,7 +643,7 @@ class OnboardingService:
             },
             "memberships": member_dicts,
             "agents": agent_dicts,
-            "usage": usage.model_dump(mode="json"),
+            "usage": dict(usage),
             "is_ready_for_calls": len(agent_dicts) > 0,
         }
 
@@ -618,7 +656,6 @@ class OnboardingService:
         )
 
     def _ensure_tenant_can_be_deleted(self, tenant: Tenant) -> None:
-        from app.core.config import settings
 
         if tenant.slug == settings.BOOTSTRAP_TENANT_SLUG:
             raise TenantDeletionBlockedError(

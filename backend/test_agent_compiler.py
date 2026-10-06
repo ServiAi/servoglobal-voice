@@ -9,6 +9,7 @@ os.environ.setdefault("AUTH0_AUDIENCE", "https://api.example.test")
 os.environ["SERVIAI_TEST_SECRET_FALLBACK"] = "1"
 os.environ.setdefault("DATABASE_URL", "sqlite:///./serviai_agent_compiler_test.db")
 
+import app.models  # noqa: F401  (register every ORM table before create_all)
 from app.modules.agents.application.compiler import (
     AgentCompilerError,
     AgentCompilerService,
@@ -305,12 +306,12 @@ class AgentCompilerCustomToolTests(unittest.TestCase):
     def setUp(self) -> None:
         from app.db.base import Base
         from app.db.session import SessionLocal, engine
-        from app.models.identity import Tenant
+        from app.modules.identity.infrastructure.models import Tenant
         from app.modules.tools.infrastructure.models import (
             TenantHttpToolConfig,
             TenantTool,
         )
-        from app.services.tenant_feature_service import (
+        from app.modules.identity.application.feature_service import (
             CUSTOM_HTTP_TOOLS,
             TenantFeatureService,
         )

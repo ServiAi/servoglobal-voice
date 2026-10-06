@@ -32,9 +32,10 @@ if NOTIFICATION_TEST_DATABASE_URL:
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+import app.models  # noqa: F401  (register every ORM table before create_all)
 from app.db.base import Base
 from app.modules.integrations.infrastructure.models import CrmWhatsAppMessage
-from app.models.identity import Tenant
+from app.modules.identity.infrastructure.models import Tenant
 from app.modules.notifications.infrastructure.models import DomainEvent, NotificationDelivery, TenantNotificationRule
 from app.modules.notifications.application.delivery_claim_service import NotificationDeliveryClaimService
 from app.modules.notifications.application.delivery_recovery_service import NotificationDeliveryRecoveryService

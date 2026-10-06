@@ -33,8 +33,9 @@ from sqlalchemy import create_engine, func, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 
+import app.models  # noqa: F401  (register every ORM table before create_all)
 from app.db.base import Base
-from app.models.identity import Tenant
+from app.modules.identity.infrastructure.models import Tenant
 from app.modules.crm.infrastructure.models import CrmActivity, CrmContact, CrmLead, CrmPipelineStage
 from app.modules.integrations.application.integration_service import IntegrationService
 from app.modules.integrations.application.whatsapp import message_service as message_service_module

@@ -8,9 +8,10 @@ from sqlalchemy.exc import IntegrityError
 TEST_DB_PATH = Path("serviai_notification_models_test.db")
 os.environ["DATABASE_URL"] = f"sqlite:///./{TEST_DB_PATH.as_posix()}"
 
+import app.models  # noqa: F401  (register every ORM table before create_all)
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
-from app.models.identity import Tenant
+from app.modules.identity.infrastructure.models import Tenant
 from app.modules.notifications.infrastructure.models import (
     DomainEvent,
     NotificationDelivery,

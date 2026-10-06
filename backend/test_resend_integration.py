@@ -15,11 +15,11 @@ os.environ["DATABASE_URL"] = f"sqlite:///./{TEST_DB_PATH.as_posix()}"
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
-from app.api.auth.deps import AuthContext, get_current_auth_context
+from app.modules.identity.api.deps import AuthContext, get_current_auth_context
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.main import app
-from app.models.identity import Tenant, TenantMembership, User
+from app.modules.identity.infrastructure.models import Tenant, TenantMembership, User
 from app.modules.integrations.infrastructure.models import TenantIntegration
 from app.modules.integrations.infrastructure.email.resend import ResendService, ResendServiceError, _sanitize_resend_error
 

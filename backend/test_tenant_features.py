@@ -18,13 +18,13 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.api.auth.deps import AuthContext, get_current_auth_context
+from app.modules.identity.api.deps import AuthContext, get_current_auth_context
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.main import app
-from app.models.identity import Tenant, TenantMembership, User
-from app.models.tenant_features import TenantFeatureGrant
-from app.services.tenant_feature_service import (
+from app.modules.identity.infrastructure.models import Tenant, TenantMembership, User
+from app.modules.identity.infrastructure.models import TenantFeatureGrant
+from app.modules.identity.application.feature_service import (
     AGENT_BUILDER,
     TenantFeatureService,
     TenantFeatureDisabledError,

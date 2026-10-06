@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from app.api.auth.deps import AuthContext, get_current_auth_context
 from app.db.session import get_db
+from app.modules.identity.api.deps import get_current_auth_context
+from app.modules.identity.public import AuthContext
 from app.schemas.billing import TenantSavingsComparisonResponse, TenantUsageResponse
 from app.schemas.dashboard import (
     DashboardAgentDistributionResponse,
@@ -12,7 +13,10 @@ from app.schemas.dashboard import (
     DashboardStatusDistributionResponse,
     DashboardTrendsResponse,
 )
-from app.services.dashboard_analytics_service import DashboardAnalyticsService, DashboardFilters
+from app.services.dashboard_analytics_service import (
+    DashboardAnalyticsService,
+    DashboardFilters,
+)
 from app.services.tenant_usage_service import TenantUsageService
 
 router = APIRouter(prefix="/api/v1/dashboard", tags=["Dashboard"])
@@ -98,7 +102,7 @@ def get_dashboard_usage(
     context: AuthContext = Depends(get_current_auth_context),
     db: Session = Depends(get_db),
 ) -> TenantUsageResponse:
-    return TenantUsageService(db).get_usage(context.tenant)
+    return TenantUsageService(db).get_usage_for_tenant_id(context.tenant_id)
 
 
 @router.get("/savings-comparison", response_model=TenantSavingsComparisonResponse)
@@ -106,4 +110,4 @@ def get_dashboard_savings_comparison(
     context: AuthContext = Depends(get_current_auth_context),
     db: Session = Depends(get_db),
 ) -> TenantSavingsComparisonResponse:
-    return TenantUsageService(db).get_savings_comparison(context.tenant)
+    return TenantUsageService(db).get_savings_comparison_for_tenant_id(context.tenant_id)

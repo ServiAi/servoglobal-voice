@@ -11,9 +11,10 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
-from app.api.auth.deps import AuthContext, require_roles
 from app.core.config import settings
 from app.db.session import get_db
+from app.modules.identity.api.deps import require_roles
+from app.modules.identity.public import AuthContext
 from app.modules.integrations.public import IntegrationsFacade
 from app.modules.scheduling.application.google_admin import GoogleCalendarAdmin
 from app.modules.scheduling.domain.contracts import (

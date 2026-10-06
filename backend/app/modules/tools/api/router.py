@@ -8,9 +8,9 @@ from typing import Any, NoReturn
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.api.auth.deps import AuthContext, require_roles
 from app.db.session import get_db
-from app.modules.identity.public import FeatureDisabledError
+from app.modules.identity.api.deps import require_roles
+from app.modules.identity.public import AuthContext, FeatureDisabledError
 from app.modules.tools.api.schemas import (
     CustomToolCreateRequest,
     CustomToolResponse,

@@ -11,6 +11,7 @@ from sqlalchemy import event as sa_event
 TEST_DB_PATH = Path("serviai_whatsapp_notification_executor_test.db")
 os.environ["DATABASE_URL"] = f"sqlite:///./{TEST_DB_PATH.as_posix()}"
 
+import app.models  # noqa: F401  (register every ORM table before create_all)
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.modules.notifications.domain.variables import (
@@ -19,7 +20,7 @@ from app.modules.notifications.domain.variables import (
 )
 from app.modules.crm.infrastructure.models import CrmActivity, CrmContact, CrmLead, CrmPipelineStage
 from app.modules.integrations.infrastructure.models import CrmWhatsAppMessage
-from app.models.identity import Tenant
+from app.modules.identity.infrastructure.models import Tenant
 from app.modules.integrations.infrastructure.models import (
     TenantIntegrationEvent,
     TenantWhatsAppConfig,

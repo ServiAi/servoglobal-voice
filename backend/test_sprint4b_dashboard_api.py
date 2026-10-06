@@ -12,13 +12,13 @@ os.environ.setdefault("AUTH0_AUDIENCE", "https://api.example.test")
 
 from fastapi.testclient import TestClient
 
-from app.api.auth.deps import get_current_identity
+from app.modules.identity.api.deps import get_current_identity
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.main import app
 from app.models.analytics import Agent, Call
-from app.models.identity import Tenant, TenantMembership, User
-from app.services.auth0_service import AuthenticatedIdentity
+from app.modules.identity.infrastructure.models import Tenant, TenantMembership, User
+from app.modules.identity.domain.contracts import ExternalIdentity
 
 
 class Sprint4BDashboardApiTests(unittest.TestCase):
@@ -41,7 +41,7 @@ class Sprint4BDashboardApiTests(unittest.TestCase):
 
     def override_identity(self):
         async def _identity_override():
-            return AuthenticatedIdentity(
+            return ExternalIdentity(
                 external_auth_id="auth0|dashboard-user",
                 email="dashboard@example.com",
                 name="Dashboard User",

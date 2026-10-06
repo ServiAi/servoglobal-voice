@@ -5,23 +5,22 @@ from sqlalchemy.orm import Session
 
 from app.api.endpoints.admin.tenants import get_current_internal_user
 from app.db.session import get_db
-from app.models.identity import User
-from app.models.tenant_features import TenantFeatureGrant
+from app.modules.identity.public import (
+    AGENT_BUILDER,
+    CUSTOM_HTTP_TOOLS,
+    VOICE_EXPERIENCES,
+    WHATSAPP_BUSINESS_CALLING,
+    FeatureFlags,
+    TenantFeatureTenantNotFoundError,
+)
+from app.modules.identity.public import FeatureGrantView as TenantFeatureGrant
+from app.modules.identity.public import UserView as User
 from app.schemas.tenant_features import (
     AgentBuilderFeatureUpdate,
     TenantFeatureResponse,
     VoiceExperiencesFeatureUpdate,
     WhatsAppBusinessCallingFeatureUpdate,
 )
-from app.services.tenant_feature_service import (
-    AGENT_BUILDER,
-    CUSTOM_HTTP_TOOLS,
-    TenantFeatureService,
-    TenantFeatureTenantNotFoundError,
-    VOICE_EXPERIENCES,
-    WHATSAPP_BUSINESS_CALLING,
-)
-
 
 router = APIRouter(prefix="/api/v1/admin/tenants", tags=["admin-tenant-features"])
 
@@ -30,7 +29,7 @@ def _response(grant: TenantFeatureGrant) -> TenantFeatureResponse:
     return TenantFeatureResponse(
         feature_key=grant.feature_key,
         enabled=grant.enabled,
-        limits=grant.limits_json,
+        limits=dict(grant.limits),
         created_at=grant.created_at,
         updated_at=grant.updated_at,
     )
@@ -43,7 +42,7 @@ def list_tenant_features(
     db: Session = Depends(get_db),
 ) -> list[TenantFeatureResponse]:
     try:
-        grants = TenantFeatureService(db).list_features(tenant_id)
+        grants = FeatureFlags(db).list_features(tenant_id)
     except TenantFeatureTenantNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return [_response(grant) for grant in grants]
@@ -60,7 +59,7 @@ def set_voice_experiences_feature(
     db: Session = Depends(get_db),
 ) -> TenantFeatureResponse:
     try:
-        grant = TenantFeatureService(db).set_feature(
+        grant = FeatureFlags(db).set_feature(
             tenant_id=tenant_id,
             feature_key=VOICE_EXPERIENCES,
             enabled=body.enabled,
@@ -83,7 +82,7 @@ def set_agent_builder_feature(
     db: Session = Depends(get_db),
 ) -> TenantFeatureResponse:
     try:
-        grant = TenantFeatureService(db).set_feature(
+        grant = FeatureFlags(db).set_feature(
             tenant_id=tenant_id,
             feature_key=AGENT_BUILDER,
             enabled=body.enabled,
@@ -106,7 +105,7 @@ def set_custom_http_tools_feature(
     db: Session = Depends(get_db),
 ) -> TenantFeatureResponse:
     try:
-        grant = TenantFeatureService(db).set_feature(
+        grant = FeatureFlags(db).set_feature(
             tenant_id=tenant_id,
             feature_key=CUSTOM_HTTP_TOOLS,
             enabled=body.enabled,
@@ -129,7 +128,7 @@ def set_whatsapp_business_calling_feature(
     db: Session = Depends(get_db),
 ) -> TenantFeatureResponse:
     try:
-        grant = TenantFeatureService(db).set_feature(
+        grant = FeatureFlags(db).set_feature(
             tenant_id=tenant_id,
             feature_key=WHATSAPP_BUSINESS_CALLING,
             enabled=body.enabled,

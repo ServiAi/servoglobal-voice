@@ -1,27 +1,28 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-
 import re
+from dataclasses import dataclass
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.voice_context import TenantVoiceContextField, TenantVoiceContextSchema
-from app.models.voice_experiences import TenantVoiceExperience, TenantVoiceExperienceVersion
+from app.models.voice_experiences import (
+    TenantVoiceExperience,
+    TenantVoiceExperienceVersion,
+)
+from app.modules.identity.public import VOICE_EXPERIENCES, FeatureFlags
+from app.modules.telephony.public import SipRouteFacade
 from app.schemas.public_voice_experiences import (
     PublicCapabilities,
     PublicFieldOption,
+    PublicVoiceCallSettings,
     PublicVoiceConsent,
     PublicVoiceContent,
     PublicVoiceContextField,
     PublicVoiceExperienceResponse,
-    PublicVoiceCallSettings,
     PublicVoiceTheme,
 )
-from app.modules.telephony.public import SipRouteFacade
-from app.services.tenant_feature_service import VOICE_EXPERIENCES, TenantFeatureService
-
 
 PUBLIC_SLUG_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 PUBLIC_FIELD_MODES = ("ask_if_missing", "prefill_and_confirm", "trust_prefill")
@@ -42,7 +43,7 @@ class PublicVoiceSnapshot:
 class PublicVoiceExperienceService:
     def __init__(self, db: Session) -> None:
         self.db = db
-        self.feature_service = TenantFeatureService(db)
+        self.feature_service = FeatureFlags(db)
 
     def resolve(self, slug: str) -> PublicVoiceExperienceResponse:
         snapshot = self._resolve_snapshot(slug)

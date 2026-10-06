@@ -13,7 +13,7 @@ os.environ["DATABASE_URL"] = f"sqlite:///./{TEST_DB_PATH.as_posix()}"
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.models.analytics import Agent, Call, CallEvent, MetricSnapshotDaily
-from app.models.identity import Tenant
+from app.modules.identity.infrastructure.models import Tenant
 from app.services.call_persistence_service import (
     CallPersistenceService,
     PersistCallInput,

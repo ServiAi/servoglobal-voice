@@ -56,3 +56,8 @@ Los límites se derivaron del código; donde el código contradice la propuesta 
 ## Frontend
 
 Ya existe agrupación vertical por dominio de producto en el route group `app/[locale]/(tenant)/`: `agenda`, `automations`, `crm`, `dashboard`, `integrations`, `voice-ai`, y en `components/`: `agenda`, `crm`, `dashboard`, `voice-ai`, `tenant`, `shared`, `ui`. Los clientes tipados (`lib/api/*.ts`) siguen planos. Recomendación (no implementada en esta fase): cuando un dominio crezca, co-ubicar `lib/api/<dominio>.ts`, sus Server Actions y componentes bajo `features/<dominio>/`, manteniendo `components/ui` y `components/shared` como kernel visual. No se justifica un refactor masivo ahora.
+
+
+### Identity / Tenancy (Module 9)
+
+Path: `backend/app/modules/identity/`. Identity owns the five tables documented in `DATA_OWNERSHIP.md`. `public.py` is the cross-module facade; Auth0 and temporary foreign-module adapters are composed by `wiring.py`.

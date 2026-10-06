@@ -16,13 +16,13 @@ os.environ["EMAIL_ASSETS_STORAGE_PATH"] = "storage/test-call-summary-assets"
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
-from app.api.auth.deps import AuthContext, get_current_auth_context
+from app.modules.identity.api.deps import AuthContext, get_current_auth_context
 from app.core.config import settings
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.main import app
 from app.modules.crm.infrastructure.models import CrmActivity, CrmContact, CrmLead
-from app.models.identity import Tenant, TenantMembership, User
+from app.modules.identity.infrastructure.models import Tenant, TenantMembership, User
 from app.modules.integrations.infrastructure.models import TenantEmailAsset
 from app.modules.crm.application.pipeline_service import CrmPipelineService
 from app.modules.integrations.application.email.config_service import EmailConfigService

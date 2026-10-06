@@ -18,7 +18,7 @@ from app.security.voice_runtime_auth import create_runtime_token, require_voice_
 from app.modules.voice.infrastructure.livekit_runtime import RuntimeDispatchResult
 from app.services.voice_config_service import VoiceConfigService
 from app.modules.voice.application.runtime_dispatcher import VoiceRuntimeDispatcher
-from app.services.tenant_feature_service import TenantFeatureService, VOICE_RUNTIME_V2
+from app.modules.identity.application.feature_service import TenantFeatureService, VOICE_RUNTIME_V2
 from app.modules.voice.application.session_service import VoiceSessionService
 
 

@@ -7,7 +7,7 @@ from cryptography.fernet import Fernet
 from sqlalchemy import select
 
 from _integrations_2a_test_base import Integration2ATestCase
-from app.api.auth.deps import get_current_auth_context
+from app.modules.identity.api.deps import get_current_auth_context
 from app.api.endpoints.voice_public import get_public_rate_limiter, get_public_turnstile_verifier
 from app.core.config import settings
 from app.db.session import SessionLocal
@@ -18,7 +18,7 @@ from app.models.integrations import TenantVoiceAgentConfig, TenantVoiceProviderC
 from app.modules.integrations.infrastructure.models import TenantIntegrationEvent
 from app.models.voice_context import TenantVoiceContextField
 from app.services.secret_manager_service import SecretManager
-from app.services.tenant_feature_service import TenantFeatureService, VOICE_EXPERIENCES
+from app.modules.identity.application.feature_service import TenantFeatureService, VOICE_EXPERIENCES
 from app.services.voice_callback_service import VoiceCallbackWorker
 import test_public_voice_experience_submissions as submissions_tests
 

@@ -19,25 +19,26 @@ os.environ["DATABASE_URL"] = f"sqlite:///./{TEST_DB_PATH.as_posix()}"
 os.environ.setdefault("AUTH0_DOMAIN", "example.auth0.com")
 os.environ.setdefault("AUTH0_AUDIENCE", "https://api.example.test")
 
-from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
-from app.api.auth.deps import AuthContext, get_current_auth_context
-from app.api.endpoints.admin.tenants import get_auth0_provisioning_service
+from app.modules.identity.public import AuthContext
+from app.modules.identity.api.deps import get_current_auth_context
+from app.modules.identity.api.deps import get_identity_provisioning_port, to_http_exception
 from app.core.config import settings
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.main import app
 from app.models.analytics import Agent, Call, CallEvent, MetricSnapshotDaily
-from app.models.identity import AccessAuditLog, Tenant, TenantMembership, User
-from app.services.auth0_service import AuthenticatedIdentity
-from app.services.auth0_provisioning_service import (
+from app.modules.identity.infrastructure.models import AccessAuditLog, Tenant, TenantMembership, User
+from app.modules.identity.domain.contracts import ExternalIdentity
+from app.modules.identity.infrastructure.auth0.provisioning import (
     Auth0ProvisionedUser,
     Auth0ProvisioningError,
     Auth0ProvisioningService,
 )
-from app.services.identity_service import IdentityService
-from app.services.onboarding_service import OnboardingConsistencyError, OnboardingService
+from app.modules.identity.application.authentication_service import IdentityService
+from app.modules.identity.domain.errors import EmailNotVerifiedError, IdentityConflictError, OnboardingConsistencyError
+from app.modules.identity.wiring import create_onboarding_service
 
 
 class FakeAuth0ProvisioningService:
@@ -47,6 +48,8 @@ class FakeAuth0ProvisioningService:
         self.password_resets: list[str] = []
         self.fail_on_provision: Auth0ProvisioningError | None = None
         self.fail_on_delete: Auth0ProvisioningError | None = None
+        self.fail_on_reset: Auth0ProvisioningError | None = None
+        self.fail_ticket = False
 
     def provision_tenant_admin(self, *, email: str, name: str) -> Auth0ProvisionedUser:
         if self.fail_on_provision is not None:
@@ -64,9 +67,13 @@ class FakeAuth0ProvisioningService:
         )
 
     def trigger_password_reset_email(self, *, email: str) -> None:
+        if self.fail_on_reset is not None:
+            raise self.fail_on_reset
         self.password_resets.append(email)
 
     def create_password_change_ticket(self, *, email: str, **kwargs) -> str | None:
+        if self.fail_ticket:
+            raise Auth0ProvisioningError("ticket unavailable", status_code=500)
         return f"https://fake.auth0.com/u/reset-password?ticket=mock-{email}"
 
     def delete_user(self, user_id: str) -> None:
@@ -194,7 +201,7 @@ class Sprint7AIdentityTests(unittest.TestCase):
         self.client = TestClient(app)
         self.admin_user = self._seed_internal_admin()
         self.auth0_provisioning = FakeAuth0ProvisioningService()
-        app.dependency_overrides[get_auth0_provisioning_service] = (
+        app.dependency_overrides[get_identity_provisioning_port] = (
             lambda: self.auth0_provisioning
         )
         self._override_auth_context()
@@ -285,7 +292,7 @@ class Sprint7AIdentityTests(unittest.TestCase):
             db.refresh(user)
             self.assertIsNone(user.external_auth_id)
 
-            identity = AuthenticatedIdentity(
+            identity = ExternalIdentity(
                 external_auth_id="auth0|link123",
                 email="link-test@test.com",
                 name="Preprovisioned User",
@@ -314,7 +321,7 @@ class Sprint7AIdentityTests(unittest.TestCase):
             db.commit()
             db.refresh(user)
 
-            identity = AuthenticatedIdentity(
+            identity = ExternalIdentity(
                 external_auth_id="auth0|newsub",
                 email="no-dup@test.com",
                 name="Existing User",
@@ -355,7 +362,7 @@ class Sprint7AIdentityTests(unittest.TestCase):
             db.commit()
 
             # Login with external_auth_id that matches user_a
-            identity = AuthenticatedIdentity(
+            identity = ExternalIdentity(
                 external_auth_id="auth0|matched",
                 email="user-a@test.com",
                 name="User A Correct",
@@ -393,7 +400,7 @@ class Sprint7AIdentityTests(unittest.TestCase):
             status="active",
         )
 
-        identity = AuthenticatedIdentity(
+        identity = ExternalIdentity(
             external_auth_id="auth0|new",
             email="ambiguous@test.com",
             name="Trying to Login",
@@ -419,10 +426,10 @@ class Sprint7AIdentityTests(unittest.TestCase):
             db.scalars = mock_scalars
 
             service = IdentityService(db)
-            with self.assertRaises(HTTPException) as ctx:
+            with self.assertRaises(IdentityConflictError) as ctx:
                 service.resolve_user(identity)
-            self.assertEqual(ctx.exception.status_code, 409)
-            self.assertIn("Multiple active users", ctx.exception.detail)
+            self.assertIn("Multiple active users", str(ctx.exception))
+            self.assertEqual(to_http_exception(ctx.exception).status_code, 409)
 
     # ============================================================
     # TEST 5: No duplicate external_auth_id (non-null)
@@ -549,7 +556,7 @@ class Sprint7AIdentityTests(unittest.TestCase):
         response = self.client.post("/api/v1/admin/tenants", json=payload)
 
         self.assertEqual(response.status_code, 502)
-        self.assertEqual(response.json()["detail"], "Auth0 unavailable")
+        self.assertEqual(response.json()["detail"], "Identity provider provisioning failed")
         with SessionLocal() as db:
             self.assertIsNone(db.scalar(select(Tenant).where(Tenant.slug == slug)))
             self.assertIsNone(db.scalar(select(User).where(User.email == email)))
@@ -561,7 +568,7 @@ class Sprint7AIdentityTests(unittest.TestCase):
         fake_auth0 = FakeAuth0ProvisioningService()
 
         with SessionLocal() as db:
-            service = OnboardingService(db, fake_auth0)
+            service = create_onboarding_service(db, fake_auth0)
             with self.assertRaises(OnboardingConsistencyError) as ctx:
                 service.create_tenant(
                     name="Broken Agency",
@@ -816,7 +823,7 @@ class Sprint7AIdentityTests(unittest.TestCase):
         deleted = self.client.delete(f"/api/v1/admin/tenants/{tenant_id}")
 
         self.assertEqual(deleted.status_code, 502)
-        self.assertEqual(deleted.json()["detail"], "Auth0 delete failed")
+        self.assertEqual(deleted.json()["detail"], "Identity provider deletion failed")
         with SessionLocal() as db:
             self.assertIsNotNone(db.scalar(select(Tenant).where(Tenant.id == tenant_id)))
             self.assertIsNotNone(db.scalar(select(User).where(User.email == email)))
@@ -893,7 +900,7 @@ class Sprint7AIdentityTests(unittest.TestCase):
             db.commit()
             db.refresh(user)
 
-            identity = AuthenticatedIdentity(
+            identity = ExternalIdentity(
                 external_auth_id="auth0|original",
                 email="existing-linked@test.com",
                 name="Updated Name",
@@ -910,7 +917,7 @@ class Sprint7AIdentityTests(unittest.TestCase):
 
     def test_new_user_created_when_no_match(self):
         """When no user matches email or external_auth_id, a new one is created."""
-        identity = AuthenticatedIdentity(
+        identity = ExternalIdentity(
             external_auth_id="auth0|brandnew",
             email="brandnew@test.com",
             name="Brand New",
@@ -940,17 +947,17 @@ class Sprint7AIdentityTests(unittest.TestCase):
             db.commit()
             db.refresh(user)
 
-            identity = AuthenticatedIdentity(
+            identity = ExternalIdentity(
                 external_auth_id="auth0|unverified",
                 email="unverified@test.com",
                 name="Unverified User",
                 email_verified=False,
             )
             service = IdentityService(db)
-            with self.assertRaises(HTTPException) as ctx:
+            with self.assertRaises(EmailNotVerifiedError) as ctx:
                 service.resolve_user(identity)
-            self.assertEqual(ctx.exception.status_code, 403)
-            self.assertIn("Email not verified", ctx.exception.detail)
+            self.assertIn("Email not verified", str(ctx.exception))
+            self.assertEqual(to_http_exception(ctx.exception).status_code, 403)
 
     def test_unverified_email_blocks_email_match_login(self):
         """Login by email match is also blocked when email_verified=false."""
@@ -966,17 +973,17 @@ class Sprint7AIdentityTests(unittest.TestCase):
             db.commit()
             db.refresh(user)
 
-            identity = AuthenticatedIdentity(
+            identity = ExternalIdentity(
                 external_auth_id="auth0|newsub2",
                 email="unverified-by-email@test.com",
                 name="Unverified By Email",
                 email_verified=False,
             )
             service = IdentityService(db)
-            with self.assertRaises(HTTPException) as ctx:
+            with self.assertRaises(EmailNotVerifiedError) as ctx:
                 service.resolve_user(identity)
-            self.assertEqual(ctx.exception.status_code, 403)
-            self.assertIn("Email not verified", ctx.exception.detail)
+            self.assertIn("Email not verified", str(ctx.exception))
+            self.assertEqual(to_http_exception(ctx.exception).status_code, 403)
 
     # ============================================================
     # TEST 11: Admin guard still works
@@ -1136,6 +1143,92 @@ class Sprint7AIdentityTests(unittest.TestCase):
         data = reset_res.json()
         self.assertTrue(data["success"])
         self.assertIn(email, self.auth0_provisioning.password_resets)
+
+
+    def _create_member(self) -> tuple[str, str, str]:
+        created = self.client.post(
+            "/api/v1/admin/tenants", json=self._make_admin_payload(f"pwreset-{uuid.uuid4().hex[:6]}")
+        )
+        tenant_id = created.json()["id"]
+        email = f"member-{uuid.uuid4().hex[:6]}@example.com"
+        added = self.client.post(
+            f"/api/v1/admin/tenants/{tenant_id}/memberships", json={"email": email, "role": "tenant_analyst"}
+        )
+        self.assertEqual(added.status_code, 201)
+        return tenant_id, added.json()["id"], email
+
+    def test_password_reset_contract_keys_and_ticket_url(self):
+        tenant_id, membership_id, email = self._create_member()
+        response = self.client.post(f"/api/v1/admin/tenants/{tenant_id}/memberships/{membership_id}/password-reset")
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(set(body), {"success", "detail", "password_reset_url"})
+        self.assertTrue(body["success"])
+        self.assertIn(email, body["detail"])
+        self.assertIn("ticket=", body["password_reset_url"])
+
+    def test_password_reset_unknown_membership_is_404(self):
+        tenant_id, _, _ = self._create_member()
+        response = self.client.post(f"/api/v1/admin/tenants/{tenant_id}/memberships/does-not-exist/password-reset")
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json()["detail"], "Membership or user not found")
+
+    def test_password_reset_links_the_external_account_inside_identity(self):
+        tenant_id, membership_id, email = self._create_member()
+        with SessionLocal() as db:
+            user = db.scalar(select(User).where(User.email == email))
+            user.external_auth_id = None
+            db.commit()
+        before = len(self.auth0_provisioning.created)
+
+        response = self.client.post(f"/api/v1/admin/tenants/{tenant_id}/memberships/{membership_id}/password-reset")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(self.auth0_provisioning.created), before + 1)
+        with SessionLocal() as db:
+            self.assertIsNotNone(db.scalar(select(User.external_auth_id).where(User.email == email)))
+
+    def test_password_reset_provider_failure_without_ticket_is_502_without_provider_details(self):
+        tenant_id, membership_id, _ = self._create_member()
+        self.auth0_provisioning.fail_on_reset = Auth0ProvisioningError("Auth0 token=SECRET boom", status_code=500)
+        self.auth0_provisioning.fail_ticket = True
+        response = self.client.post(f"/api/v1/admin/tenants/{tenant_id}/memberships/{membership_id}/password-reset")
+        self.assertEqual(response.status_code, 502)
+        self.assertNotIn("SECRET", response.text)
+
+    def test_password_reset_provider_failure_with_ticket_still_succeeds(self):
+        tenant_id, membership_id, _ = self._create_member()
+        self.auth0_provisioning.fail_on_reset = Auth0ProvisioningError("Auth0 unavailable", status_code=500)
+        response = self.client.post(f"/api/v1/admin/tenants/{tenant_id}/memberships/{membership_id}/password-reset")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("ticket=", response.json()["password_reset_url"])
+
+    def test_identity_errors_map_to_the_documented_http_statuses(self):
+        from app.modules.identity.domain.errors import (
+            AuthenticationRequiredError,
+            IdentityConfigurationError,
+            InvalidIdentityTokenError,
+            MembershipRequiredError,
+            UserInactiveError,
+            UserNotRegisteredError,
+        )
+
+        expected = {
+            AuthenticationRequiredError("Not authenticated"): (401, True),
+            InvalidIdentityTokenError("Invalid authentication token"): (401, True),
+            IdentityConfigurationError("Auth0 backend configuration is incomplete"): (500, False),
+            EmailNotVerifiedError("Email not verified"): (403, False),
+            UserInactiveError("Authenticated user is not active"): (403, False),
+            UserNotRegisteredError("Authenticated user is not registered internally"): (403, False),
+            MembershipRequiredError("Authenticated user has no active tenant membership"): (403, False),
+            IdentityConflictError("Multiple active users"): (409, False),
+        }
+        for error, (status_code, has_bearer_header) in expected.items():
+            with self.subTest(error=type(error).__name__):
+                http = to_http_exception(error)
+                self.assertEqual(http.status_code, status_code)
+                self.assertEqual(http.detail, str(error))
+                self.assertEqual((http.headers or {}).get("WWW-Authenticate") == "Bearer", has_bearer_header)
 
 
 if __name__ == "__main__":

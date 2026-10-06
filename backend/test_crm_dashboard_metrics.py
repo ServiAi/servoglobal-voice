@@ -12,9 +12,9 @@ os.environ["DATABASE_URL"] = f"sqlite:///./{TEST_DB_PATH.as_posix()}"
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.main import app
-from app.api.auth.deps import AuthContext, get_current_auth_context
+from app.modules.identity.api.deps import AuthContext, get_current_auth_context
 from app.models.analytics import Agent, Call, CallEvent
-from app.models.identity import Tenant, User, TenantMembership
+from app.modules.identity.infrastructure.models import Tenant, User, TenantMembership
 from app.modules.crm.infrastructure.models import CrmContact, CrmPipelineStage, CrmLead, CrmActivity, CrmTask, CrmVoiceCall
 from app.modules.telephony.infrastructure.models import TenantSipRoute
 from app.models.integrations import TenantVoiceProviderConfig

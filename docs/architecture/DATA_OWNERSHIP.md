@@ -112,3 +112,18 @@ ORM en `app/modules/integrations/infrastructure/models.py` (13 tablas; mismas co
 2. Nunca escribir la tabla de otro módulo; pedirlo a su `public.py` o reaccionar a un evento.
 3. Leer datos de otro módulo: preferir un query service en su `public.py`. Las lecturas directas existentes (🟡) se eliminan al migrar el módulo lector.
 4. No crear schemas PostgreSQL por módulo ni bases separadas.
+
+
+## Identity / Tenancy (Module 9)
+
+| Table | Owner |
+| --- | --- |
+| `tenants` | Identity |
+| `users` | Identity |
+| `tenant_memberships` | Identity |
+| `access_audit_logs` | Identity |
+| `tenant_feature_grants` | Identity |
+
+Billing continues to own `tenant_billing_plans`, `tenant_usage_alerts`, and `external_provider_pricing`. Analytics / Voice Legacy continue to own `agents`, `calls`, `call_events`, and `metric_snapshots_daily`. Agent Builder `TenantAgent` data is outside Identity.
+
+Only Identity imports `User`, `TenantMembership`, `AccessAuditLog` and `TenantFeatureGrant`. `Tenant` is still read directly by 7 legacy files (Analytics/Billing/Voice Legacy/Voice Experiences) listed in `test_identity_architecture.TENANT_DIRECT_READERS`; they are removed when their owner module migrates.

@@ -9,7 +9,7 @@ os.environ["DATABASE_URL"] = f"sqlite:///./{TEST_DB_PATH.as_posix()}"
 
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
-from app.models.identity import Tenant
+from app.modules.identity.infrastructure.models import Tenant
 from app.modules.notifications.infrastructure.models import DomainEvent, NotificationDelivery, TenantNotificationRule
 from app.modules.notifications.application.domain_event_service import DomainEventService
 from app.modules.notifications.application.schedule_reconciliation_service import (

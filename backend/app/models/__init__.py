@@ -4,34 +4,10 @@ from app.models.billing import (
     TenantBillingPlan,
     TenantUsageAlert,
 )
-from app.models.identity import AccessAuditLog, Tenant, TenantMembership, User
 from app.models.integrations import (  # noqa: F401  (residual: Forms + Voice config)
     TenantVoiceAgentConfig,
     TenantVoiceProviderConfig,
 )
-from app.modules.integrations.infrastructure.models import (  # noqa: F401  (registers the tables)
-    CrmWhatsAppMessage,
-    TenantChatwootConfig,
-    TenantChatwootInbox,
-    TenantEmailAsset,
-    TenantEmailConfig,
-    TenantEmailSend,
-    TenantEmailSendAsset,
-    TenantEmailTemplate,
-    TenantIntegration,
-    TenantIntegrationEvent,
-    TenantWhatsAppConfig,
-    TenantWhatsAppFlow,
-    TenantWhatsAppTemplate,
-)
-from app.modules.notifications.infrastructure.models import (
-    DomainEvent,
-    NotificationDelivery,
-    TenantCapability,
-    TenantNotificationRecipient,
-    TenantNotificationRule,
-)
-from app.models.tenant_features import TenantFeatureGrant
 from app.models.voice_context import TenantVoiceContextField, TenantVoiceContextSchema
 from app.models.voice_experiences import (
     TenantVoiceExperience,
@@ -54,6 +30,35 @@ from app.modules.crm.infrastructure.models import (
     CrmTask,
     CrmVoiceCall,
     CrmVoiceCallEvent,
+)
+from app.modules.identity.infrastructure.models import (
+    AccessAuditLog,
+    Tenant,
+    TenantFeatureGrant,
+    TenantMembership,
+    User,
+)
+from app.modules.integrations.infrastructure.models import (  # noqa: F401  (registers the tables)
+    CrmWhatsAppMessage,
+    TenantChatwootConfig,
+    TenantChatwootInbox,
+    TenantEmailAsset,
+    TenantEmailConfig,
+    TenantEmailSend,
+    TenantEmailSendAsset,
+    TenantEmailTemplate,
+    TenantIntegration,
+    TenantIntegrationEvent,
+    TenantWhatsAppConfig,
+    TenantWhatsAppFlow,
+    TenantWhatsAppTemplate,
+)
+from app.modules.notifications.infrastructure.models import (
+    DomainEvent,
+    NotificationDelivery,
+    TenantCapability,
+    TenantNotificationRecipient,
+    TenantNotificationRule,
 )
 from app.modules.scheduling.infrastructure.models import (  # noqa: F401  (registers the tables)
     CrmBooking,

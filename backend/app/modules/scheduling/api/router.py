@@ -6,8 +6,9 @@ from typing import Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.auth.deps import AuthContext, require_roles
 from app.db.session import get_db
+from app.modules.identity.api.deps import require_roles
+from app.modules.identity.public import AuthContext
 from app.modules.scheduling.api.schemas import (
     AgentSchedulingConfigResponse,
     AgentSchedulingConfigUpsertRequest,

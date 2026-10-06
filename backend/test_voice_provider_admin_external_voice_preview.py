@@ -4,10 +4,10 @@ import unittest
 from unittest.mock import patch
 
 from _integrations_2a_test_base import Integration2ATestCase
-from app.api.auth.deps import get_current_auth_context
+from app.modules.identity.api.deps import get_current_auth_context
 from app.db.session import SessionLocal
 from app.main import app
-from app.models.identity import TenantMembership, User
+from app.modules.identity.infrastructure.models import TenantMembership, User
 from app.schemas.integrations import VoiceProviderConfigRequest
 from app.services.voice_config_service import VoiceConfigService
 from app.services.ultravox_provider_client import VoicePreviewAudio

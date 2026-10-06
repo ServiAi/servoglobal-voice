@@ -10,12 +10,12 @@ from sqlalchemy.exc import IntegrityError
 
 from _integrations_2a_test_base import Integration2ATestCase
 from app.db.session import SessionLocal
-from app.models.identity import TenantMembership, User
+from app.modules.identity.infrastructure.models import TenantMembership, User
 from app.models.integrations import TenantVoiceAgentConfig
 from app.models.voice_context import TenantVoiceContextField, TenantVoiceContextSchema
 from app.models.voice_experiences import TenantVoiceExperience, TenantVoiceExperienceVersion
 from app.modules.integrations.public import IntegrationEvents
-from app.services.tenant_feature_service import TenantFeatureService, VOICE_EXPERIENCES
+from app.modules.identity.application.feature_service import TenantFeatureService, VOICE_EXPERIENCES
 from app.services.voice_context_service import (
     ACTIVE_LINEAGE_INDEX,
     VoiceContextService,

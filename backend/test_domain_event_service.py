@@ -18,7 +18,7 @@ from app.modules.notifications.domain.events import (
     UnsupportedDomainEventTypeError,
     validate_domain_event_payload,
 )
-from app.models.identity import Tenant
+from app.modules.identity.infrastructure.models import Tenant
 from app.modules.notifications.infrastructure.models import DomainEvent, NotificationDelivery
 from app.modules.notifications.application.domain_event_service import (
     DomainEventIdempotencyConflictError,

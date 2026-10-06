@@ -9,11 +9,12 @@ from uuid import uuid4
 TEST_DB_PATH = Path("serviai_notification_worker_test.db")
 os.environ["DATABASE_URL"] = f"sqlite:///./{TEST_DB_PATH.as_posix()}"
 
+import app.models  # noqa: F401  (register every ORM table before create_all)
 from app.core import config as config_module
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.modules.crm.infrastructure.models import CrmContact, CrmLead, CrmPipelineStage
-from app.models.identity import Tenant
+from app.modules.identity.infrastructure.models import Tenant
 from app.modules.integrations.infrastructure.models import TenantWhatsAppConfig, TenantWhatsAppTemplate
 from app.modules.notifications.infrastructure.models import DomainEvent, NotificationDelivery, TenantNotificationRule
 from app.modules.notifications.application.domain_event_service import DomainEventService

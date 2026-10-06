@@ -6,8 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.models.identity import Tenant, TenantMembership, User
-
+from app.modules.identity.infrastructure.models import Tenant, TenantMembership, User
 
 ACTIVE = "active"
 
@@ -34,6 +33,13 @@ class IdentityBootstrapService:
         if not settings.BOOTSTRAP_USER_AUTH0_SUB or not settings.BOOTSTRAP_USER_EMAIL:
             raise BootstrapConfigurationError(
                 "BOOTSTRAP_USER_AUTH0_SUB and BOOTSTRAP_USER_EMAIL are required"
+            )
+
+        if self.db.bind.dialect.name == "postgresql":
+            from sqlalchemy import func, select
+
+            self.db.execute(
+                select(func.pg_advisory_xact_lock(func.hashtext(settings.BOOTSTRAP_TENANT_SLUG)))
             )
 
         tenant, created_tenant = self._get_or_create_tenant()

@@ -309,3 +309,8 @@ La componente conexa crece por la misma razón que en CRM: `wiring.py` y `public
 | Externo → internals de Integrations | 0 | **0** |
 | Ruff `app` | 1401 | **1401** (sin hallazgos `F` nuevos) |
 | Componente conexa con Integrations | 60 nodos / 10 archivos | no se persigue como métrica; lo relevante es 0 aristas privadas |
+
+
+### Identity / Tenancy
+
+Other modules consume Identity through `app.modules.identity.public` and API auth dependencies through `app.modules.identity.api`. Temporary dependencies on Billing, Analytics / Voice Legacy, and Auth0 are isolated in `app.modules.identity.wiring`; application services depend on ports. Billing tenant usage status changes go through `TenantLifecycle`.

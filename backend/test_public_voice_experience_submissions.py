@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from _integrations_2a_test_base import Integration2ATestCase
-from app.api.auth.deps import get_current_auth_context
+from app.modules.identity.api.deps import get_current_auth_context
 from app.api.endpoints.voice_public import (
     get_public_rate_limiter,
     get_public_turnstile_verifier,
@@ -26,7 +26,7 @@ from app.models.voice_submissions import (
     TenantVoiceExperienceSubmission,
     TenantVoiceExperienceSubmissionValue,
 )
-from app.services.tenant_feature_service import VOICE_EXPERIENCES, TenantFeatureService
+from app.modules.identity.application.feature_service import VOICE_EXPERIENCES, TenantFeatureService
 from app.services.voice_experience_service import VoiceExperienceService
 
 

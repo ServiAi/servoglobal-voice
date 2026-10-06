@@ -15,7 +15,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
-from app.api.auth.deps import AuthContext, require_roles
 from app.db.session import get_db
 from app.modules.crm.api.schemas import (
     ActivitySchema,
@@ -43,6 +42,8 @@ from app.modules.crm.application.pipeline_service import CrmPipelineService
 from app.modules.crm.application.query_service import CrmQueryService
 from app.modules.crm.application.task_service import CrmTaskService
 from app.modules.crm.infrastructure.models import CrmContact, CrmLead
+from app.modules.identity.api.deps import require_roles
+from app.modules.identity.public import AuthContext
 
 router = APIRouter(prefix="/api/v1/crm", tags=["CRM"])
 
