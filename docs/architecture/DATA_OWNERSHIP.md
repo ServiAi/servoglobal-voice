@@ -127,4 +127,3 @@ ORM en `app/modules/integrations/infrastructure/models.py` (13 tablas; mismas co
 Billing continues to own `tenant_billing_plans`, `tenant_usage_alerts`, and `external_provider_pricing`. Analytics / Voice Legacy continue to own `agents`, `calls`, `call_events`, and `metric_snapshots_daily`. Agent Builder `TenantAgent` data is outside Identity.
 
 Only Identity imports `User`, `TenantMembership`, `AccessAuditLog` and `TenantFeatureGrant`. `Tenant` is still read directly by 7 legacy files (Analytics/Billing/Voice Legacy/Voice Experiences) listed in `test_identity_architecture.TENANT_DIRECT_READERS`; they are removed when their owner module migrates.
-
