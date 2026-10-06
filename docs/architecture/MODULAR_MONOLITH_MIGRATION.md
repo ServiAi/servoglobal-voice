@@ -224,8 +224,9 @@ Sprint de integridad, no una migración estructural (rama `fix/integrations-reli
 
 ### 10. Billing y 11. Analytics
 
-- **Billing**: `tenant_billing_plans`, `tenant_usage_alerts`, `external_provider_pricing`. API: `provision_plan`, `usage_summary`. Eliminar `onboarding_service → models.billing`.
-- **Analytics**: `calls`, `call_events`, `metric_snapshots_daily`. Alimentar `calls` por evento de sesión en vez de que Voice y Voice Legacy escriban la tabla.
+Billing es el décimo módulo real (`app.modules.billing`). Es dueño de `tenant_billing_plans`, `tenant_usage_alerts` y `external_provider_pricing`; separa dominio, aplicación, infraestructura, API, wiring y una API pública import-light. Identity usa `BillingOnboardingFacade` para crear plan, snapshot y cleanup dentro de su transacción; Billing usa puertos respaldados por `identity.public` para consultar tenants y cambiar únicamente la suspensión por uso. La aplicación recibe hechos de minutos por `UsageMeterPort`; el adapter temporal `LegacyAnalyticsUsageMeter` conserva la consulta a `analytics.Call` (incluido `started_at <= billing_period_end`) y vive sólo en `billing.wiring`. No se movieron hechos de llamadas ni se cambió DDL, Alembic o contratos HTTP. Los casos standalone de Billing poseen su transacción; onboarding y cleanup sólo hacen flush y dejan commit/rollback al coordinador Identity.
+
+Analytics sigue siendo legacy y conserva `agents`, `calls`, `call_events`, `metric_snapshots_daily` y los dashboards analíticos. Al migrar Analytics como módulo 11, sustituirá el adapter por `analytics.public` sin modificar la aplicación Billing. Deuda Identity restante incluye la limpieza legacy de Analytics y otros consumidores listados en `DATA_OWNERSHIP.md`.
 
 ## Eventos entre módulos
 

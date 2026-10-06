@@ -90,7 +90,7 @@ Leyenda: ✅ permitida · ⚠️ cuestionable · ❌ eliminar · 🔁 circular.
 | Integrations ↔ Notifications 🔁 | `whatsapp_message_service` → `NotificationDeliveryStatusService`; notificaciones → WhatsApp | ✅ **Resuelto (módulo 8)** | Notifications → `integrations.public` (command send); el status vuelve por `NotificationsPort` (→ `notifications.public`), enlazado en `integrations.wiring`; nunca imports de internals en ningún sentido. |
 | Integrations → CRM (antes `crm_activity_service`, `models.crm`) | timeline de mensajes/emails, lead/contacto de la acción | ✅ **resuelto** (2026-10-04) | `crm.public` (`record_activity`, `get_lead_profile`, `find_contact_by_phone_digits`). Sólo queda `CrmWhatsAppMessage` (Messaging). |
 | Identity → Integrations (`admin/tenants.py` → 10 servicios) | panel admin | ⚠️ | Es un BFF de administración: consumir `public.py` de cada módulo. |
-| Identity ↔ Billing 🔁 | onboarding crea plan/uso; billing lee tenant | ⚠️ | Onboarding → `billing.public.provision_plan`. |
+| Identity ? Billing ?? | onboarding provisiona el plan; Billing consulta tenant/suspensi?n | ? por APIs p?blicas | Identity usa `BillingOnboardingFacade`; Billing usa `identity.public.TenantLifecycle` y directorios. |
 | Voice Experiences → Telephony / Voice | callbacks, rutas SIP, context schemas | ⚠️ | `telephony.public`, y mover `voice_context` (context schemas) a Voice Experiences. |
 
 ## Caso `tool_dispatch_service` (resuelto)
@@ -313,4 +313,8 @@ La componente conexa crece por la misma razón que en CRM: `wiring.py` y `public
 
 ### Identity / Tenancy
 
-Other modules consume Identity through `app.modules.identity.public` and API auth dependencies through `app.modules.identity.api`. Temporary dependencies on Billing, Analytics / Voice Legacy, and Auth0 are isolated in `app.modules.identity.wiring`; application services depend on ports. Billing tenant usage status changes go through `TenantLifecycle`.
+Other modules consume Identity through `app.modules.identity.public` and API auth dependencies through `app.modules.identity.api`. Temporary dependencies on Analytics / Voice Legacy and Auth0 are isolated in `app.modules.identity.wiring`; application services depend on ports. Billing tenant usage status changes go through `TenantLifecycle`.
+
+### Billing (Module 10)
+
+Billing consumers outside `app.modules.billing` use only `billing.public`; `main.py` mounts the Billing API routers and `app.models` registers the ORM solely for Alembic. Within Billing, only `wiring.py` imports legacy `app.models.analytics` and identity adapters use `identity.public`. The structural boundary tests enforce zero external imports of Billing application, infrastructure, or wiring and no Analytics or Identity ORM imports from Billing. The dependency remains intentionally bidirectional at the public API level: Identity onboarding calls `BillingOnboardingFacade`, while Billing's tenant account adapter calls `identity.public`. The temporary usage adapter is replaced by `analytics.public` in Module 11.

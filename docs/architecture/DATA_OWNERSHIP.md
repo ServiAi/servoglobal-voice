@@ -12,7 +12,7 @@ Estado: ✅ ya respetado · 🟡 propietario claro, pero otros módulos acceden 
 | `users`, `tenant_memberships`, `access_audit_logs` | `User`, `TenantMembership`, `AccessAuditLog` | `models/identity.py` | 🟡 |
 | `tenant_feature_grants` | `TenantFeatureGrant` | `models/tenant_features.py` | ✅ vía `TenantFeatureService` |
 
-`app/db/mixins.py` (`TimestampMixin`, `_uuid`, `_utcnow`) es shared kernel; `models/identity.py` los reexporta por compatibilidad. `models/analytics.py` y `models/billing.py` aún declaran su propio `TimestampMixin` duplicado: unificar al migrar esos módulos.
+`app/db/mixins.py` (`TimestampMixin`, `_uuid`, `_utcnow`) es shared kernel; `models/identity.py` los reexporta por compatibilidad. `models/analytics.py` aún declara su propio `TimestampMixin` duplicado: unificar al migrar Analytics.
 
 ## Agent Builder (migrado)
 
@@ -101,10 +101,20 @@ ORM en `app/modules/integrations/infrastructure/models.py` (13 tablas; mismas co
 
 `tenant_voice_experiences`, `tenant_voice_experience_versions`, `tenant_voice_context_schemas`, `tenant_voice_context_fields`, `tenant_voice_experience_submissions` y derivadas, `tenant_voice_context_sessions`, `tenant_voice_runtime_calls`, `voice_public_rate_limit_windows`, `tenant_forms`, `tenant_form_fields`, `tenant_form_tokens`, `tenant_form_submissions`, `tenant_form_submission_answers` (Forms, hoy residuo de `app/models/integrations.py`). Estado 🟡 (WhatsApp Flows lee `voice_context` por `VoiceContextSchemaPort`, adaptador en `integrations.wiring`; el envío de email valida enlaces de formulario por `FormLinkPort`).
 
-## Voice Legacy y Billing/Analytics
+## Voice Legacy y Analytics
 
 - Voice Legacy: `tenant_voice_agent_configs` (`TenantVoiceAgentConfig`), `agents` (`analytics.Agent`, legacy).
-- Billing/Analytics: `tenant_billing_plans`, `tenant_usage_alerts`, `external_provider_pricing`, `calls`, `call_events`, `metric_snapshots_daily`. `calls` 🔴: escrita por Voice (projection) y Voice Legacy (ingestión); propietario objetivo Analytics, alimentado por eventos de sesión.
+- Analytics: `agents`, `calls`, `call_events`, `metric_snapshots_daily`. `calls` 🔴: escrita por Voice (projection) y Voice Legacy (ingestión); propietario objetivo Analytics, alimentado por eventos de sesión.
+
+## Billing (Module 10)
+
+| Tabla | Modelo | Archivo actual | Estado |
+| --- | --- | --- | --- |
+| `tenant_billing_plans` | `TenantBillingPlan` | `modules/billing/infrastructure/models.py` | ✅ Billing |
+| `tenant_usage_alerts` | `TenantUsageAlert` | `modules/billing/infrastructure/models.py` | ✅ Billing |
+| `external_provider_pricing` | `ExternalProviderPricing` | `modules/billing/infrastructure/models.py` | ✅ Billing |
+
+Billing consume minutos facturados mediante `UsageMeterPort`; su adapter temporal `LegacyAnalyticsUsageMeter` en `billing.wiring` lee `analytics.Call` y conserva el límite inclusivo `started_at <= billing_period_end`. Analytics sigue siendo dueño de los hechos de llamada.
 
 ## Reglas
 
@@ -124,6 +134,6 @@ ORM en `app/modules/integrations/infrastructure/models.py` (13 tablas; mismas co
 | `access_audit_logs` | Identity |
 | `tenant_feature_grants` | Identity |
 
-Billing continues to own `tenant_billing_plans`, `tenant_usage_alerts`, and `external_provider_pricing`. Analytics / Voice Legacy continue to own `agents`, `calls`, `call_events`, and `metric_snapshots_daily`. Agent Builder `TenantAgent` data is outside Identity.
+Billing owns `tenant_billing_plans`, `tenant_usage_alerts`, and `external_provider_pricing`. Analytics owns `agents`, `calls`, `call_events`, and `metric_snapshots_daily`. Agent Builder `TenantAgent` data is outside Identity.
 
-Only Identity imports `User`, `TenantMembership`, `AccessAuditLog` and `TenantFeatureGrant`. `Tenant` is still read directly by 7 legacy files (Analytics/Billing/Voice Legacy/Voice Experiences) listed in `test_identity_architecture.TENANT_DIRECT_READERS`; they are removed when their owner module migrates.
+Only Identity imports `User`, `TenantMembership`, `AccessAuditLog` and `TenantFeatureGrant`. `Tenant` remains read directly by legacy Analytics/Voice Legacy/Voice Experiences files listed in `test_identity_architecture.TENANT_DIRECT_READERS`; they are removed when those owner modules migrate.
