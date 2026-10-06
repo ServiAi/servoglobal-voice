@@ -5,6 +5,7 @@ from hashlib import sha256
 import re
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.config import settings
@@ -195,7 +196,17 @@ class IdentityService:
                 status=ACTIVE,
             )
             self.db.add(tenant)
-            self.db.commit()
+            try:
+                self.db.commit()
+            except IntegrityError:
+                # A concurrent first login created the bootstrap tenant (unique slug): adopt it, never fail.
+                self.db.rollback()
+                existing = self.db.scalar(
+                    select(Tenant).where(Tenant.slug == settings.BOOTSTRAP_TENANT_SLUG)
+                )
+                if existing is None:
+                    raise
+                return existing
             self.db.refresh(tenant)
         return tenant
 
