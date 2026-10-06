@@ -6,13 +6,14 @@ These 7 tables are leftovers for future Forms / Voice-config modules.
 
 from __future__ import annotations
 
-import sqlalchemy as sa
 from datetime import date, datetime
+
+import sqlalchemy as sa
 from sqlalchemy import DateTime, ForeignKey, Index, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
-from app.db.mixins import TimestampMixin, _uuid, _utcnow
+from app.db.mixins import TimestampMixin, _utcnow, _uuid
 
 
 class TenantForm(Base, TimestampMixin):

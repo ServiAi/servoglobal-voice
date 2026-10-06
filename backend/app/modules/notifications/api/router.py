@@ -6,9 +6,9 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.modules.identity.public import AuthContext
-from app.modules.identity.api.deps import require_roles
 from app.db.session import get_db
+from app.modules.identity.api.deps import require_roles
+from app.modules.identity.public import AccessAudit, AuthContext
 from app.modules.notifications.api.schemas import (
     NotificationCapabilityItem,
     NotificationCapabilityUpdateRequest,
@@ -26,8 +26,10 @@ from app.modules.notifications.api.schemas import (
     NotificationRuleTestResponse,
     NotificationRuleUpdateRequest,
 )
-from app.modules.notifications.application.admin_service import NotificationAdminError, NotificationAdminService
-from app.modules.identity.public import AccessAudit
+from app.modules.notifications.application.admin_service import (
+    NotificationAdminError,
+    NotificationAdminService,
+)
 
 router = APIRouter(prefix="/api/v1/admin/notifications", tags=["Notification Administration"])
 

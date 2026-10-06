@@ -5,9 +5,9 @@ from typing import Any, NoReturn
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
-from app.modules.identity.public import AuthContext
 from app.api.deps import require_enabled_integration
 from app.db.session import get_db
+from app.modules.identity.public import AuthContext
 from app.modules.integrations.application.whatsapp.flow_service import (
     WhatsAppFlowConflictError,
     WhatsAppFlowNotFoundError,

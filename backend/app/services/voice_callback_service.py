@@ -28,6 +28,7 @@ from app.modules.crm.public import (
     CrmVoiceCalls,
     UpdateVoiceCallCommand,
 )
+from app.modules.identity.public import FeatureFlags
 from app.modules.telephony.public import (
     CapacityFacade,
     SipRouteFacade,
@@ -36,7 +37,6 @@ from app.modules.telephony.public import (
 )
 from app.schemas.public_voice_calls import PublicVoiceCallbackResponse
 from app.services.public_voice_call_service import PublicCallFailure
-from app.modules.identity.public import FeatureFlags
 from app.services.tenant_usage_service import TenantUsageService
 from app.services.voice_call_service import VoiceCallService
 from app.services.voice_client import (

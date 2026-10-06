@@ -7,7 +7,10 @@ from app.models.analytics import Agent, Call, CallEvent, MetricSnapshotDaily
 from app.models.billing import TenantBillingPlan, TenantUsageAlert
 from app.modules.identity.application.onboarding_service import OnboardingService
 from app.modules.identity.domain.contracts import LegacyAgentView, ProvisionedUser
-from app.modules.identity.domain.errors import IdentityProviderError, ProvisioningConflictError
+from app.modules.identity.domain.errors import (
+    IdentityProviderError,
+    ProvisioningConflictError,
+)
 from app.modules.identity.infrastructure.auth0.provisioning import (
     Auth0ProvisioningError,
     Auth0ProvisioningService,

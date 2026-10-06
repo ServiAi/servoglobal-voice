@@ -12,7 +12,11 @@ from app.modules.identity.application.ports import (
     LegacyAgentAdministrationPort,
     TenantDependentCleanupPort,
 )
-from app.modules.identity.domain.contracts import LegacyAgentView, PasswordResetOutcome, ProvisionedUser
+from app.modules.identity.domain.contracts import (
+    LegacyAgentView,
+    PasswordResetOutcome,
+    ProvisionedUser,
+)
 from app.modules.identity.domain.errors import (
     IdentityProviderError,
     MembershipAlreadyExistsError,
@@ -24,7 +28,12 @@ from app.modules.identity.domain.errors import (
     TenantNotFoundError,
 )
 from app.modules.identity.domain.roles import ADMIN_ROLES
-from app.modules.identity.infrastructure.models import AccessAuditLog, Tenant, TenantMembership, User
+from app.modules.identity.infrastructure.models import (
+    AccessAuditLog,
+    Tenant,
+    TenantMembership,
+    User,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -647,7 +656,6 @@ class OnboardingService:
         )
 
     def _ensure_tenant_can_be_deleted(self, tenant: Tenant) -> None:
-        from app.core.config import settings
 
         if tenant.slug == settings.BOOTSTRAP_TENANT_SLUG:
             raise TenantDeletionBlockedError(

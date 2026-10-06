@@ -3,7 +3,6 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.orm import Session
 
-from app.modules.identity.public import AuthContext
 from app.api.deps import require_enabled_integration
 from app.db.session import get_db
 from app.modules.agents.public import (
@@ -12,6 +11,7 @@ from app.modules.agents.public import (
     VoiceSelectionError,
     validate_voice_settings,
 )
+from app.modules.identity.public import AuthContext
 from app.modules.voice_providers.public import (
     ProviderVoiceSelection,
     VoiceProviderError,

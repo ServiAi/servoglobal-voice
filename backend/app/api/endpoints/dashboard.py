@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from app.modules.identity.public import AuthContext
-from app.modules.identity.api.deps import get_current_auth_context
 from app.db.session import get_db
+from app.modules.identity.api.deps import get_current_auth_context
+from app.modules.identity.public import AuthContext
 from app.schemas.billing import TenantSavingsComparisonResponse, TenantUsageResponse
 from app.schemas.dashboard import (
     DashboardAgentDistributionResponse,
@@ -13,7 +13,10 @@ from app.schemas.dashboard import (
     DashboardStatusDistributionResponse,
     DashboardTrendsResponse,
 )
-from app.services.dashboard_analytics_service import DashboardAnalyticsService, DashboardFilters
+from app.services.dashboard_analytics_service import (
+    DashboardAnalyticsService,
+    DashboardFilters,
+)
 from app.services.tenant_usage_service import TenantUsageService
 
 router = APIRouter(prefix="/api/v1/dashboard", tags=["Dashboard"])

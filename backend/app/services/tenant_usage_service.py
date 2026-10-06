@@ -2,16 +2,20 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
 from fastapi import HTTPException, status
 from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
 
-from app.models.analytics import Call
-from app.models.billing import ExternalProviderPricing, TenantBillingPlan, TenantUsageAlert
 from app.models import Tenant
+from app.models.analytics import Call
+from app.models.billing import (
+    ExternalProviderPricing,
+    TenantBillingPlan,
+    TenantUsageAlert,
+)
 from app.modules.identity.public import TenantLifecycle
 from app.schemas.billing import (
     SavingsComparisonProviderResponse,
@@ -22,7 +26,6 @@ from app.schemas.billing import (
     TenantUsageResponse,
     TenantUsageSummaryResponse,
 )
-
 
 PLAN_WEB_CONVERSION = "web_conversion"
 PLAN_VOICE_CLOUD_PBX = "voice_cloud_pbx"

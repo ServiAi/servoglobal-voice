@@ -3,7 +3,11 @@ from datetime import datetime
 from types import MappingProxyType
 from typing import Mapping
 
-from app.modules.identity.domain.contracts import IdentityProvisioningPort, LegacyAgentView, ProvisionedUser
+from app.modules.identity.domain.contracts import (
+    IdentityProvisioningPort,
+    LegacyAgentView,
+    ProvisionedUser,
+)
 from app.modules.identity.domain.errors import (
     FeatureDisabledError,
     IdentityProviderError,
@@ -125,23 +129,31 @@ class FeatureFlags:
         self.db = db
 
     def is_enabled(self, tenant_id: str, feature_key: str) -> bool:
-        from app.modules.identity.application.feature_service import TenantFeatureService
+        from app.modules.identity.application.feature_service import (
+            TenantFeatureService,
+        )
         return TenantFeatureService(self.db).is_enabled(tenant_id, feature_key)
 
     def require_enabled(self, tenant_id: str, feature_key: str) -> FeatureGrantView:
-        from app.modules.identity.application.feature_service import TenantFeatureService
+        from app.modules.identity.application.feature_service import (
+            TenantFeatureService,
+        )
         grant = TenantFeatureService(self.db).require_enabled(tenant_id, feature_key)
         return _feature_view(grant)
 
     def list_features(self, tenant_id: str) -> tuple[FeatureGrantView, ...]:
-        from app.modules.identity.application.feature_service import TenantFeatureService
+        from app.modules.identity.application.feature_service import (
+            TenantFeatureService,
+        )
         return tuple(_feature_view(item) for item in TenantFeatureService(self.db).list_features(tenant_id))
 
     def set_feature(
         self, tenant_id: str, feature_key: str, enabled: bool,
         limits: Mapping[str, object], enabled_by_user_id: str | None,
     ) -> FeatureGrantView:
-        from app.modules.identity.application.feature_service import TenantFeatureService
+        from app.modules.identity.application.feature_service import (
+            TenantFeatureService,
+        )
         grant = TenantFeatureService(self.db).set_feature(
             tenant_id, feature_key, enabled, limits, enabled_by_user_id
         )
@@ -170,6 +182,7 @@ class MembershipDirectory:
     def get(self, tenant_id: str, *, user_id: str | None = None,
             membership_id: str | None = None, active_only: bool = False) -> MembershipView | None:
         from sqlalchemy import select
+
         from app.modules.identity.infrastructure.models import TenantMembership
         query = select(TenantMembership).where(TenantMembership.tenant_id == tenant_id)
         if membership_id is not None:
@@ -183,6 +196,7 @@ class MembershipDirectory:
 
     def list(self, tenant_id: str) -> tuple[MembershipView, ...]:
         from sqlalchemy import select
+
         from app.modules.identity.infrastructure.models import TenantMembership
         memberships = self.db.scalars(
             select(TenantMembership)
@@ -203,6 +217,7 @@ class TenantDirectory:
 
     def get_by_slug(self, slug: str) -> TenantView | None:
         from sqlalchemy import select
+
         from app.modules.identity.infrastructure.models import Tenant
         tenant = self.db.scalar(select(Tenant).where(Tenant.slug == slug))
         return _view(tenant, TenantView) if tenant is not None else None
@@ -215,11 +230,14 @@ class TenantDirectory:
 
     def exists(self, tenant_id: str) -> bool:
         from sqlalchemy import select
+
         from app.modules.identity.infrastructure.models import Tenant
         return self.db.scalar(select(Tenant.id).where(Tenant.id == tenant_id)) is not None
 
     def bootstrap(self) -> TenantView:
-        from app.modules.identity.application.authentication_service import IdentityService
+        from app.modules.identity.application.authentication_service import (
+            IdentityService,
+        )
         return _view(IdentityService(self.db).bootstrap_tenant(), TenantView)
 
 

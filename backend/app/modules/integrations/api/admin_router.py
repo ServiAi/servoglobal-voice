@@ -10,9 +10,9 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.modules.identity.public import AuthContext
-from app.modules.identity.api.deps import get_current_auth_context
 from app.db.session import get_db
+from app.modules.identity.api.deps import get_current_auth_context
+from app.modules.identity.public import AuthContext
 from app.modules.integrations.api.router import (
     _integration_catalog_statuses,
     _resend_response,
@@ -53,20 +53,23 @@ from app.modules.integrations.api.schemas import (
     WhatsAppTestRequest,
     WhatsAppTestResponse,
 )
+from app.modules.integrations.api.translate import (
+    template_create_command,
+    template_update_command,
+)
 from app.modules.integrations.application.chatwoot.config_service import (
     ChatwootAccountConflictError,
     ChatwootConfigService,
+)
+from app.modules.integrations.application.dto import (
+    ChatwootConfigCommand,
+    WhatsAppConfigCommand,
+    WhatsAppTestMessageCommand,
 )
 from app.modules.integrations.application.email.config_service import EmailConfigService
 from app.modules.integrations.application.email.send_service import EmailSendService
 from app.modules.integrations.application.email.template_service import (
     EmailTemplateService,
-)
-from app.modules.integrations.api.translate import template_create_command, template_update_command
-from app.modules.integrations.application.dto import (
-    ChatwootConfigCommand,
-    WhatsAppConfigCommand,
-    WhatsAppTestMessageCommand,
 )
 from app.modules.integrations.application.event_service import IntegrationEventService
 from app.modules.integrations.application.integration_service import IntegrationService

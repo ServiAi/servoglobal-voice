@@ -9,8 +9,8 @@ from fastapi import HTTPException, status
 from sqlalchemy import Select, and_, func, select
 from sqlalchemy.orm import Session
 
-from app.models.analytics import NORMALIZED_CALL_STATUSES, Agent, Call
 from app.models import Tenant
+from app.models.analytics import NORMALIZED_CALL_STATUSES, Agent, Call
 from app.schemas.dashboard import (
     DashboardAgentDistributionItem,
     DashboardAgentDistributionResponse,
@@ -24,7 +24,6 @@ from app.schemas.dashboard import (
     DashboardTrendItem,
     DashboardTrendsResponse,
 )
-
 
 UNASSIGNED_AGENT_LABEL = "Unassigned"
 ANSWERED_STATUS = "answered"

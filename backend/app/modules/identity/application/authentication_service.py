@@ -1,15 +1,14 @@
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime
 from hashlib import sha256
-import re
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.config import settings
-from app.modules.identity.infrastructure.models import AccessAuditLog, Tenant, TenantMembership, User
 from app.modules.identity.domain.contracts import ExternalIdentity
 from app.modules.identity.domain.errors import (
     EmailNotVerifiedError,
@@ -18,7 +17,12 @@ from app.modules.identity.domain.errors import (
     UserInactiveError,
     UserNotRegisteredError,
 )
-
+from app.modules.identity.infrastructure.models import (
+    AccessAuditLog,
+    Tenant,
+    TenantMembership,
+    User,
+)
 
 ACTIVE = "active"
 USAGE_LIMIT_SUSPENDED = "suspended_usage_limit"

@@ -8,7 +8,6 @@ from app.core.config import settings
 from app.db.session import get_db
 from app.modules.identity.public import TenantDirectory
 
-
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/notifications", tags=["Notifications"])
 

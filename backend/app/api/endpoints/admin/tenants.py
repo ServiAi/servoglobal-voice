@@ -6,7 +6,11 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.modules.identity.api.deps import get_current_auth_context, get_identity_provisioning_port
+from app.db.session import get_db
+from app.modules.identity.api.deps import (
+    get_current_auth_context,
+    get_identity_provisioning_port,
+)
 from app.modules.identity.public import (
     AuthContext,
     IdentityAdminFacade,
@@ -18,7 +22,6 @@ from app.modules.identity.public import (
     ProvisioningConflictError,
     TenantDeletionBlockedError,
 )
-from app.db.session import get_db
 from app.modules.identity.public import UserView as User
 from app.modules.scheduling.public import (
     BookingConfigRequest,
@@ -280,7 +283,7 @@ def get_tenant_usage(
     db: Session = Depends(get_current_internal_db),
 ) -> dict:
     service = IdentityAdminFacade(db)
-    tenant = service.get_tenant(tenant_id)
+    service.get_tenant(tenant_id)  # 404-style ValueError when the tenant does not exist
     usage_service = TenantUsageService(db)
     usage = usage_service.get_usage_for_tenant_id(tenant_id)
     savings = usage_service.get_savings_comparison_for_tenant_id(tenant_id)
@@ -303,7 +306,7 @@ def update_tenant_plan(
     usage_service = TenantUsageService(db)
     try:
         usage = usage_service.update_plan(tenant_id, payload)
-        tenant = IdentityAdminFacade(db).get_tenant(tenant_id)
+        IdentityAdminFacade(db).get_tenant(tenant_id)
         savings = usage_service.get_savings_comparison_for_tenant_id(tenant_id)
     except ValueError as exc:
         raise HTTPException(

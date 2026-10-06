@@ -11,6 +11,8 @@ from app.models.voice_experiences import (
     TenantVoiceExperience,
     TenantVoiceExperienceVersion,
 )
+from app.modules.identity.public import VOICE_EXPERIENCES, FeatureFlags
+from app.modules.integrations.public import IntegrationEvents
 from app.schemas.tenant_features import VoiceExperienceLimits
 from app.schemas.voice_context import (
     VoiceContextFieldRequest,
@@ -20,8 +22,6 @@ from app.schemas.voice_context import (
     VoiceContextSchemaResponse,
     VoiceContextSchemaSummaryResponse,
 )
-from app.modules.integrations.public import IntegrationEvents
-from app.modules.identity.public import FeatureFlags, VOICE_EXPERIENCES
 from app.services.voice_agent_service import VoiceAgentService
 
 

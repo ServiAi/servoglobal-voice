@@ -8,18 +8,20 @@ from typing import Any, NoReturn
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.modules.identity.public import AuthContext
 from app.api.endpoints.voice_context_schemas import (
     require_context_read,
     require_context_write,
 )
 from app.db.session import get_db
+from app.modules.identity.public import AuthContext
+from app.modules.identity.public import (
+    FeatureDisabledError as TenantFeatureDisabledError,
+)
 from app.schemas.voice_experiences import (
     VoiceExperienceResponse,
     VoiceExperienceVersionResponse,
     VoiceExperienceWriteRequest,
 )
-from app.modules.identity.public import FeatureDisabledError as TenantFeatureDisabledError
 from app.services.voice_experience_service import (
     VoiceExperienceConflictError,
     VoiceExperienceNotFoundError,

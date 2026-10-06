@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import sqlalchemy as sa
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, String, Text, UniqueConstraint
+import sqlalchemy as sa
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -94,7 +94,8 @@ class AccessAuditLog(Base):
     user: Mapped[User | None] = relationship(back_populates="audit_logs")
     tenant: Mapped[Tenant | None] = relationship(back_populates="audit_logs")
 
-from sqlalchemy import Index as _FeatureGrantIndex, UniqueConstraint as _FeatureGrantUniqueConstraint
+from sqlalchemy import Index as _FeatureGrantIndex
+from sqlalchemy import UniqueConstraint as _FeatureGrantUniqueConstraint
 from sqlalchemy.orm import relationship as _feature_grant_relationship
 
 

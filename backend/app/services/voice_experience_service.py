@@ -20,14 +20,14 @@ from app.models.voice_submissions import (
     TenantVoiceExperienceSubmissionValue,
     TenantVoiceRuntimeCall,
 )
+from app.modules.identity.public import VOICE_EXPERIENCES, FeatureFlags
+from app.modules.integrations.public import IntegrationEvents
 from app.schemas.tenant_features import VoiceExperienceLimits
 from app.schemas.voice_experiences import (
     VoiceExperienceResponse,
     VoiceExperienceVersionResponse,
     VoiceExperienceWriteRequest,
 )
-from app.modules.integrations.public import IntegrationEvents
-from app.modules.identity.public import VOICE_EXPERIENCES, FeatureFlags
 from app.services.voice_agent_service import VoiceAgentService
 
 VERSION_CONSTRAINT = "uq_tenant_voice_experience_versions_experience_version"

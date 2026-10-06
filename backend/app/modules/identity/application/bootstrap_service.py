@@ -8,7 +8,6 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.modules.identity.infrastructure.models import Tenant, TenantMembership, User
 
-
 ACTIVE = "active"
 
 

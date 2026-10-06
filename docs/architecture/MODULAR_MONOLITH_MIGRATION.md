@@ -219,8 +219,8 @@ Sprint de integridad, no una migración estructural (rama `fix/integrations-reli
 ### 9. Identity / Tenancy
 
 - **Ownership**: `tenants`, `users`, `tenant_memberships`, `access_audit_logs`, `tenant_feature_grants`.
-- **API pública**: `FeatureFlags.is_enabled/require_enabled`, `FeatureDisabledError`, constantes de feature (existe, mínima); pendientes `AuthContext`, `require_roles`.
-- **Riesgos**: no romper Auth0. Muchos consumidores, poco riesgo lógico; migración mayormente mecánica.
+- **API pública**: `IdentityFacade`, `IdentityAdminFacade`, `TenantDirectory`, `MembershipDirectory`, `FeatureFlags`, `TenantLifecycle`, `AccessAudit`; DTOs `TenantView`, `UserView`, `MembershipView`, `FeatureGrantView`, `AdminMembershipView`, `PasswordResetResult`, `AuthContext`. HTTP deps en `identity.api.deps`.
+- **Riesgos**: Auth0 real no ejecutado (sin credenciales de staging); 7 lectores directos de `Tenant` legacy (allowlist en `test_identity_architecture`).
 
 ### 10. Billing y 11. Analytics
 
@@ -243,4 +243,4 @@ Workflow Automation, Knowledge, Human Handoff, Agent Copilot, Evaluations y Obse
 
 ### Sprint 9 ? Identity / Tenancy
 
-Identity / Tenancy is the ninth real module. The migration centralizes its five owned tables, provider-neutral contracts, auth context, feature flags, onboarding, bootstrap, and audit services under `backend/app/modules/identity/`. No Alembic migration is intended. Closure depends on the seven PostgreSQL concurrency scenarios and CI execution; until then this entry is in progress.
+Identity / Tenancy is the ninth real module (see `PROJECT_STATUS.md` for metrics). Layers: `domain` (pure contracts and neutral errors), `application` (framework-free services), `infrastructure` (ORM, Auth0 adapters), `api` (`deps.py` is the only place that builds `HTTPException`), `public.py` (DTOs/facades only) and `wiring.py` (only composition root that reaches legacy internals). Only `app.api.*` and other modules' `api` layers may import `identity.api.deps`. No Alembic migration; DDL and OpenAPI fingerprints unchanged. Closed with `test_identity_postgres` on real PostgreSQL 16 and run in CI.

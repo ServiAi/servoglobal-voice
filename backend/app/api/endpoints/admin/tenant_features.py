@@ -5,23 +5,22 @@ from sqlalchemy.orm import Session
 
 from app.api.endpoints.admin.tenants import get_current_internal_user
 from app.db.session import get_db
-from app.modules.identity.public import UserView as User
+from app.modules.identity.public import (
+    AGENT_BUILDER,
+    CUSTOM_HTTP_TOOLS,
+    VOICE_EXPERIENCES,
+    WHATSAPP_BUSINESS_CALLING,
+    FeatureFlags,
+    TenantFeatureTenantNotFoundError,
+)
 from app.modules.identity.public import FeatureGrantView as TenantFeatureGrant
+from app.modules.identity.public import UserView as User
 from app.schemas.tenant_features import (
     AgentBuilderFeatureUpdate,
     TenantFeatureResponse,
     VoiceExperiencesFeatureUpdate,
     WhatsAppBusinessCallingFeatureUpdate,
 )
-from app.modules.identity.public import (
-    AGENT_BUILDER,
-    CUSTOM_HTTP_TOOLS,
-    FeatureFlags,
-    TenantFeatureTenantNotFoundError,
-    VOICE_EXPERIENCES,
-    WHATSAPP_BUSINESS_CALLING,
-)
-
 
 router = APIRouter(prefix="/api/v1/admin/tenants", tags=["admin-tenant-features"])
 

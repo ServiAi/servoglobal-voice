@@ -5,9 +5,12 @@ from typing import Any, NoReturn
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
-from app.modules.identity.public import AuthContext
-from app.modules.identity.api.deps import require_roles
 from app.db.session import get_db
+from app.modules.identity.api.deps import require_roles
+from app.modules.identity.public import AuthContext
+from app.modules.identity.public import (
+    FeatureDisabledError as TenantFeatureDisabledError,
+)
 from app.schemas.voice_context import (
     VoiceContextFieldRequest,
     VoiceContextFieldResponse,
@@ -16,14 +19,12 @@ from app.schemas.voice_context import (
     VoiceContextSchemaResponse,
     VoiceContextSchemaSummaryResponse,
 )
-from app.modules.identity.public import FeatureDisabledError as TenantFeatureDisabledError
 from app.services.voice_context_service import (
     VoiceContextConflictError,
     VoiceContextNotFoundError,
     VoiceContextService,
     VoiceContextValidationError,
 )
-
 
 router = APIRouter(prefix="/api/v1/voice", tags=["Voice Context Schemas"])
 READ_ROLES = ["platform_admin", "tenant_admin", "tenant_analyst", "tenant_viewer"]

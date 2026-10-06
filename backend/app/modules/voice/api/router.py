@@ -8,13 +8,13 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.modules.identity.public import AuthContext
-from app.modules.identity.api.deps import require_roles
 from app.core.config import settings
 from app.db.session import get_db
 from app.modules.agents.public import AgentCompilerError, AgentsFacade
+from app.modules.identity.api.deps import require_roles
 from app.modules.identity.public import (
     VOICE_RUNTIME_V2,
+    AuthContext,
     FeatureDisabledError,
     FeatureFlags,
 )

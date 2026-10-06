@@ -1,7 +1,11 @@
 from collections.abc import Mapping, Sequence
 from typing import Protocol
 
-from app.modules.identity.domain.contracts import ExternalIdentity, IdentityProvisioningPort, ProvisionedUser
+from app.modules.identity.domain.contracts import (  # noqa: F401  (re-exported contract)
+    ExternalIdentity,
+    IdentityProvisioningPort,
+    ProvisionedUser,
+)
 
 
 class IdentityTokenVerifierPort(Protocol):

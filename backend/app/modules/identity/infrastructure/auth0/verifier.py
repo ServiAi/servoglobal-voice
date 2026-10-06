@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-
 import logging
+
 import httpx
 import jwt
 from jwt import PyJWKClient
@@ -11,7 +10,10 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 from app.modules.identity.domain.contracts import ExternalIdentity
-from app.modules.identity.domain.errors import IdentityConfigurationError, InvalidIdentityTokenError
+from app.modules.identity.domain.errors import (
+    IdentityConfigurationError,
+    InvalidIdentityTokenError,
+)
 
 
 class Auth0TokenVerifier:
