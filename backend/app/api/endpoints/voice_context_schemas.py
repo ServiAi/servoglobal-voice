@@ -5,7 +5,7 @@ from typing import Any, NoReturn
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
-from app.modules.identity.api.deps import AuthContext, require_roles
+from app.modules.identity.public import AuthContext, require_roles
 from app.db.session import get_db
 from app.schemas.voice_context import (
     VoiceContextFieldRequest,

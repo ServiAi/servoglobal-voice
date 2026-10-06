@@ -8,7 +8,7 @@ from typing import Any, NoReturn
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.modules.identity.api.deps import AuthContext
+from app.modules.identity.public import AuthContext
 from app.api.endpoints.voice_context_schemas import (
     require_context_read,
     require_context_write,

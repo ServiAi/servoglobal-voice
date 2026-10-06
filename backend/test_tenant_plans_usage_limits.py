@@ -17,8 +17,12 @@ from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 
-from app.modules.identity.api.deps import AuthContext, get_current_auth_context
-from app.modules.identity.api.deps import get_identity_provisioning_port
+import app.models  # noqa: F401 (register all ORM tables before create_all)
+from app.modules.identity.public import (
+    AuthContext,
+    get_current_auth_context,
+    get_identity_provisioning_port,
+)
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.main import app

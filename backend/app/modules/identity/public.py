@@ -3,10 +3,13 @@ from datetime import datetime
 from types import MappingProxyType
 from typing import Mapping
 
+from app.modules.identity.domain.contracts import ProvisionedUser
 from app.modules.identity.domain.errors import (
     FeatureDisabledError,
+    IdentityProviderError,
     MembershipAlreadyExistsError,
     OnboardingConsistencyError,
+    ProvisioningConflictError,
     TenantDeletionBlockedError,
     TenantFeatureTenantNotFoundError,
     UnknownTenantFeatureError,
@@ -25,12 +28,40 @@ __all__ = [
     "AGENT_BUILDER", "AccessAudit", "CUSTOM_HTTP_TOOLS", "FeatureDisabledError", "FeatureFlags",
     "FeatureGrantView", "IdentityFacade", "IdentityAdminFacade", "MembershipAlreadyExistsError",
     "MembershipDirectory", "MembershipView", "OnboardingConsistencyError",
+    "IdentityProvisioningPort", "IdentityProviderError", "IdentityService", "ProvisionedUser",
+    "ProvisioningConflictError", "create_onboarding_service", "get_current_auth_context",
+    "get_current_identity", "get_identity_provisioning_port", "require_roles",
     "TenantDeletionBlockedError", "TenantDirectory", "TenantFeatureTenantNotFoundError",
     "TenantLifecycle", "TenantView", "UnknownTenantFeatureError", "UserView",
     "AdminMembershipView", "PasswordResetResult",
     "VOICE_EXPERIENCES", "VOICE_RUNTIME_V2", "LIVEKIT_SIP_OUTBOUND_V2",
     "WHATSAPP_BUSINESS_CALLING", "SUPPORTED_FEATURES", "AuthContext",
 ]
+
+
+def __getattr__(name: str):
+    if name == "IdentityProvisioningPort":
+        from app.modules.identity.application.ports import IdentityProvisioningPort
+
+        return IdentityProvisioningPort
+    if name == "IdentityService":
+        from app.modules.identity.application.authentication_service import IdentityService
+
+        return IdentityService
+    if name == "create_onboarding_service":
+        from app.modules.identity.wiring import create_onboarding_service
+
+        return create_onboarding_service
+    if name in {
+        "get_current_auth_context",
+        "get_current_identity",
+        "get_identity_provisioning_port",
+        "require_roles",
+    }:
+        from app.modules.identity.api import deps
+
+        return getattr(deps, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def _view(model, view_type):

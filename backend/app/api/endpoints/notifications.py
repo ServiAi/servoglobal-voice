@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.db.session import get_db
-from app.modules.identity.application.authentication_service import IdentityService
+from app.modules.identity.public import IdentityService
 
 
 logger = logging.getLogger(__name__)

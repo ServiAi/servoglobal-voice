@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.analytics import Call
-from app.modules.identity.infrastructure.models import Tenant
+from app.models import Tenant
 from app.modules.crm.public import CrmFacade
 from app.services.voice_capacity_report_service import VoiceCapacityReportService
 

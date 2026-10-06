@@ -11,7 +11,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
 
-from app.modules.identity.infrastructure.models import Tenant
+from app.models import Tenant
 from app.models.integrations import TenantVoiceAgentConfig
 from app.models.voice_experiences import (
     TenantVoiceExperience,

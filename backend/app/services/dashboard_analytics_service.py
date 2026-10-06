@@ -10,7 +10,7 @@ from sqlalchemy import Select, and_, func, select
 from sqlalchemy.orm import Session
 
 from app.models.analytics import NORMALIZED_CALL_STATUSES, Agent, Call
-from app.modules.identity.infrastructure.models import Tenant
+from app.models import Tenant
 from app.schemas.dashboard import (
     DashboardAgentDistributionItem,
     DashboardAgentDistributionResponse,

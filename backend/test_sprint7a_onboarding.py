@@ -22,8 +22,8 @@ os.environ.setdefault("AUTH0_AUDIENCE", "https://api.example.test")
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
-from app.modules.identity.api.deps import AuthContext, get_current_auth_context
-from app.modules.identity.api.deps import get_identity_provisioning_port
+from app.modules.identity.public import AuthContext, get_current_auth_context
+from app.modules.identity.public import get_identity_provisioning_port
 from app.core.config import settings
 from app.db.base import Base
 from app.db.session import SessionLocal, engine

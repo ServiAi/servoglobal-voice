@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.models.analytics import Call
 from app.models.billing import ExternalProviderPricing, TenantBillingPlan, TenantUsageAlert
-from app.modules.identity.infrastructure.models import Tenant
+from app.models import Tenant
 from app.modules.identity.public import TenantLifecycle
 from app.schemas.billing import (
     SavingsComparisonProviderResponse,

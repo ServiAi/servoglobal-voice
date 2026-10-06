@@ -10,7 +10,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.modules.identity.api.deps import AuthContext, get_current_auth_context
+from app.modules.identity.public import AuthContext, get_current_auth_context
 from app.db.session import get_db
 from app.modules.integrations.api.router import (
     _integration_catalog_statuses,

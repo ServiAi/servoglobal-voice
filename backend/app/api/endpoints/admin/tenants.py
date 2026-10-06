@@ -6,7 +6,17 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.modules.identity.api.deps import AuthContext, get_current_auth_context
+from app.modules.identity.public import (
+    AuthContext,
+    IdentityProvisioningPort,
+    IdentityProviderError,
+    OnboardingConsistencyError,
+    ProvisioningConflictError,
+    TenantDeletionBlockedError,
+    create_onboarding_service,
+    get_current_auth_context,
+    get_identity_provisioning_port,
+)
 from app.db.session import get_db
 from app.modules.identity.public import UserView as User
 from app.modules.scheduling.public import (
@@ -31,15 +41,6 @@ from app.schemas.onboarding import (
     TenantCreateRequest,
     TenantUpdateRequest,
 )
-from app.modules.identity.api.deps import get_identity_provisioning_port
-from app.modules.identity.application.ports import IdentityProvisioningPort
-from app.modules.identity.domain.errors import (
-    IdentityProviderError,
-    OnboardingConsistencyError,
-    ProvisioningConflictError,
-    TenantDeletionBlockedError,
-)
-from app.modules.identity.wiring import create_onboarding_service
 from app.services.tenant_usage_service import TenantUsageService
 from app.services.voice_agent_service import VoiceAgentService
 from app.services.voice_config_service import VoiceConfigService

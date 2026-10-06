@@ -5,7 +5,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.modules.identity.api.deps import AuthContext, get_current_auth_context, require_roles
+from app.modules.identity.public import AuthContext, get_current_auth_context, require_roles
 from app.db.session import get_db
 from app.modules.identity.public import UserView as User
 from app.schemas.forms import (
@@ -18,7 +18,7 @@ from app.schemas.forms import (
     PublicFormSubmitResponse,
 )
 from app.services.form_service import FormService
-from app.modules.identity.wiring import create_onboarding_service
+from app.modules.identity.public import create_onboarding_service
 
 
 router = APIRouter(tags=["Forms"])

@@ -15,7 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
-from app.modules.identity.api.deps import AuthContext, require_roles
+from app.modules.identity.public import AuthContext, require_roles
 from app.db.session import get_db
 from app.modules.crm.api.schemas import (
     ActivitySchema,
