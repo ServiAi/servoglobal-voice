@@ -62,3 +62,5 @@ Ya existe agrupación vertical por dominio de producto en el route group `app/[l
 ### Identity / Tenancy (Module 9)
 
 Path: `backend/app/modules/identity/`. Identity owns the five tables documented in `DATA_OWNERSHIP.md`. `public.py` is the cross-module facade; Auth0 and temporary foreign-module adapters are composed by `wiring.py`.
+
+Billing ORM boundary: tenant foreign keys remain in the database without ORM relationships to Identity; ORM navigation remains within Billing.

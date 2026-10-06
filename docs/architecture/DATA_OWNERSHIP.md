@@ -137,3 +137,5 @@ Billing consume minutos facturados mediante `UsageMeterPort`; su adapter tempora
 Billing owns `tenant_billing_plans`, `tenant_usage_alerts`, and `external_provider_pricing`. Analytics owns `agents`, `calls`, `call_events`, and `metric_snapshots_daily`. Agent Builder `TenantAgent` data is outside Identity.
 
 Only Identity imports `User`, `TenantMembership`, `AccessAuditLog` and `TenantFeatureGrant`. `Tenant` remains read directly by legacy Analytics/Voice Legacy/Voice Experiences files listed in `test_identity_architecture.TENANT_DIRECT_READERS`; they are removed when those owner modules migrate.
+
+Billing's `tenant_id -> tenants.id` foreign keys do not create cross-module ORM navigation; its plan-alert relationship remains internal to Billing.

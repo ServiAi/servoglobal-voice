@@ -19,6 +19,20 @@ def imports(path: Path) -> set[str]:
 
 
 class BillingBoundaryTests(unittest.TestCase):
+    def test_billing_mappers_do_not_navigate_to_tenant(self):
+        from sqlalchemy import inspect
+        from sqlalchemy.orm import configure_mappers
+
+        from app.models import Tenant  # noqa: F401 - register the Tenant mapper
+        from app.modules.billing.infrastructure.models import TenantBillingPlan, TenantUsageAlert
+
+        configure_mappers()
+        self.assertEqual(set(inspect(TenantBillingPlan).relationships.keys()), {"alerts"})
+        self.assertEqual(set(inspect(TenantUsageAlert).relationships.keys()), {"billing_plan"})
+        for model in (TenantBillingPlan, TenantUsageAlert):
+            tenant_fk = model.__table__.c.tenant_id.foreign_keys
+            self.assertEqual({fk.target_fullname for fk in tenant_fk}, {"tenants.id"})
+
     def test_domain_is_pure(self):
         forbidden = ("sqlalchemy", "fastapi", "starlette", "pydantic", "httpx", "app.models", "app.services", "app.api", "app.modules.identity", "app.modules.analytics")
         offenders = [

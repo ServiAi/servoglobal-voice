@@ -318,3 +318,5 @@ Other modules consume Identity through `app.modules.identity.public` and API aut
 ### Billing (Module 10)
 
 Billing consumers outside `app.modules.billing` use only `billing.public`; `main.py` mounts the Billing API routers and `app.models` registers the ORM solely for Alembic. Within Billing, only `wiring.py` imports legacy `app.models.analytics` and identity adapters use `identity.public`. The structural boundary tests enforce zero external imports of Billing application, infrastructure, or wiring and no Analytics or Identity ORM imports from Billing. The dependency remains intentionally bidirectional at the public API level: Identity onboarding calls `BillingOnboardingFacade`, while Billing's tenant account adapter calls `identity.public`. The temporary usage adapter is replaced by `analytics.public` in Module 11.
+
+Billing retains database foreign keys to `tenants.id` without ORM navigation to Identity. Mapper architecture tests preserve these foreign keys and Billing-internal ORM relationships.

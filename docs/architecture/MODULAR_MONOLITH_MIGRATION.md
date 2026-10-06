@@ -245,3 +245,5 @@ Workflow Automation, Knowledge, Human Handoff, Agent Copilot, Evaluations y Obse
 ### Sprint 9 ? Identity / Tenancy
 
 Identity / Tenancy is the ninth real module (see `PROJECT_STATUS.md` for metrics). Layers: `domain` (pure contracts and neutral errors), `application` (framework-free services), `infrastructure` (ORM, Auth0 adapters), `api` (`deps.py` is the only place that builds `HTTPException`), `public.py` (DTOs/facades only) and `wiring.py` (only composition root that reaches legacy internals). Only `app.api.*` and other modules' `api` layers may import `identity.api.deps`. No Alembic migration; DDL and OpenAPI fingerprints unchanged. Closed with `test_identity_postgres` on real PostgreSQL 16 and run in CI.
+
+Billing closure hardening: `tenant_id -> tenants.id` foreign keys remain; ORM relationships to Identity's Tenant were removed, while Billing-internal plan/alert navigation remains. No DDL, migration, OpenAPI, or frontend changes.

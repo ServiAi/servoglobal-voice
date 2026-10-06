@@ -166,3 +166,5 @@ El evaluador admite composición `all`/`any` y rutas seguras sobre diccionarios;
 ## Identity / Tenancy (Sprint 9)
 
 `app.modules.identity` owns authentication context, tenant and membership lifecycle, roles, feature grants, bootstrap, onboarding orchestration, and access auditing. Its ORM is isolated in `identity.infrastructure.models`; consumers use immutable views and the lazy `identity.public` facade. Auth0 and temporary Billing / Analytics adapters are composed in `identity.wiring`. No schema migration is part of this move. PostgreSQL concurrency acceptance is still required before marking the sprint complete.
+
+Billing boundary hardening (Sprint 10): `tenant_billing_plans.tenant_id` and `tenant_usage_alerts.tenant_id` retain foreign keys to `tenants.id` without ORM relationships to Identity's `Tenant`. Billing's `alerts` / `billing_plan` relationship remains internal.
