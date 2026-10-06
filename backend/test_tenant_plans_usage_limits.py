@@ -24,11 +24,10 @@ from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.main import app
 from app.models.analytics import Agent, Call
-from app.models.billing import TenantBillingPlan, TenantUsageAlert
+from app.modules.billing.infrastructure.models import TenantBillingPlan, TenantUsageAlert
+from app.modules.billing.public import BillingAccessGate, BillingFacade, BillingOnboardingFacade, BillingPlanInput, MinutePackageExhaustedError
 from app.modules.identity.infrastructure.models import Tenant, TenantMembership, User
-from app.schemas.billing import TenantPlanRequest
 from app.modules.identity.infrastructure.auth0.provisioning import Auth0ProvisionedUser
-from app.services.tenant_usage_service import TenantUsageService
 from app.services.ultravox_ingestion_service import UltravoxIngestionService
 
 
@@ -128,9 +127,9 @@ class TenantPlansUsageLimitsTests(unittest.TestCase):
             tenant = Tenant(name="Usage Tenant", slug=slug, timezone="UTC", status="active")
             db.add(tenant)
             db.flush()
-            TenantUsageService(db).create_plan_for_tenant(
-                tenant,
-                TenantPlanRequest(
+            BillingOnboardingFacade(db).create_default_plan(
+                tenant.id,
+                BillingPlanInput(
                     plan_key="enterprise",
                     included_minutes=included_minutes,
                     price_per_minute_usd=price,
@@ -235,9 +234,9 @@ class TenantPlansUsageLimitsTests(unittest.TestCase):
         with SessionLocal() as db:
             tenant = db.get(Tenant, tenant.id)
             assert tenant is not None
-            service = TenantUsageService(db)
-            usage = service.get_usage(tenant)
-            usage_again = service.get_usage(tenant)
+            service = BillingFacade(db)
+            usage = service.get_usage(tenant.id)
+            usage_again = service.get_usage(tenant.id)
             alert_count = db.scalar(select(func.count()).select_from(TenantUsageAlert))
             plan = db.scalar(
                 select(TenantBillingPlan).where(TenantBillingPlan.tenant_id == tenant.id)
@@ -260,12 +259,12 @@ class TenantPlansUsageLimitsTests(unittest.TestCase):
         with SessionLocal() as db:
             tenant = db.get(Tenant, tenant.id)
             assert tenant is not None
-            comparison = TenantUsageService(db).get_savings_comparison(tenant)
+            comparison = BillingFacade(db).get_savings_comparison(tenant.id)
 
         providers = {provider.provider_key: provider for provider in comparison.providers}
         self.assertEqual(comparison.serviglobal_cost_usd, 14.0)
-        self.assertEqual(providers["vapi"].provider_price_per_minute_usd, 0.05)
-        self.assertEqual(providers["retell"].provider_price_per_minute_usd, 0.11)
+        self.assertEqual(providers["vapi"].provider_price_per_minute_usd, Decimal("0.0500"))
+        self.assertEqual(providers["retell"].provider_price_per_minute_usd, Decimal("0.1100"))
         self.assertEqual(providers["custom"].provider_price_per_minute_usd, None)
 
     def test_exhausted_tenant_blocks_new_calls_but_admin_can_still_view_it(self):
@@ -275,14 +274,18 @@ class TenantPlansUsageLimitsTests(unittest.TestCase):
         with SessionLocal() as db:
             tenant = db.get(Tenant, tenant.id)
             assert tenant is not None
-            service = TenantUsageService(db)
-            service.get_usage(tenant)
+            service = BillingFacade(db)
+            service.get_usage(tenant.id)
+            with self.assertRaises(MinutePackageExhaustedError):
+                BillingAccessGate(db).ensure_call_allowed_by_slug("blocked-tenant")
+            from app.api.endpoints.voice import _ensure_billing_call_access
+
             with self.assertRaises(HTTPException) as exc:
-                service.ensure_tenant_can_start_call_by_slug("blocked-tenant")
+                _ensure_billing_call_access(db, "blocked-tenant")
+            self.assertEqual(exc.exception.status_code, 402)
+            self.assertEqual(exc.exception.detail, "Tenant minute package exhausted")
 
         response = self.client.get("/api/v1/admin/tenants")
-        self.assertEqual(exc.exception.status_code, 402)
-        self.assertEqual(exc.exception.detail, "Tenant minute package exhausted")
         self.assertEqual(response.status_code, 200)
         listed = [item for item in response.json() if item["slug"] == "blocked-tenant"]
         self.assertEqual(listed[0]["usage"]["usage_status"], "suspended_usage_limit")
@@ -302,7 +305,7 @@ class TenantPlansUsageLimitsTests(unittest.TestCase):
                     external_agent_id="agent-late",
                 )
             )
-            TenantUsageService(db).get_usage(tenant)
+            BillingFacade(db).get_usage(tenant.id)
             result = UltravoxIngestionService(db).ingest_event(
                 {
                     "eventType": "call.billed",

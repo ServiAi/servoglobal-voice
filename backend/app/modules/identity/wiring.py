@@ -4,7 +4,6 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.models.analytics import Agent, Call, CallEvent, MetricSnapshotDaily
-from app.models.billing import TenantBillingPlan, TenantUsageAlert
 from app.modules.identity.application.onboarding_service import OnboardingService
 from app.modules.identity.domain.contracts import LegacyAgentView, ProvisionedUser
 from app.modules.identity.domain.errors import (
@@ -16,7 +15,6 @@ from app.modules.identity.infrastructure.auth0.provisioning import (
     Auth0ProvisioningService,
 )
 from app.modules.identity.infrastructure.models import Tenant
-from app.services.tenant_usage_service import TenantUsageService
 
 
 class _ProvisioningAdapter:
@@ -110,27 +108,45 @@ class _LegacyAgentAdapter:
 class _BillingAdapter:
     def __init__(self, db: Session) -> None:
         self.db = db
-        self.service = TenantUsageService(db)
 
     def create_default_plan(self, tenant_id: str, plan: object | None) -> None:
-        tenant = self.db.get(Tenant, tenant_id)
-        if tenant is None:
-            raise LookupError(f"Tenant '{tenant_id}' not found")
-        self.service.create_plan_for_tenant(tenant, plan, commit=False)
+        from app.modules.billing.public import BillingOnboardingFacade, BillingPlanInput
+
+        billing_plan = (
+            BillingPlanInput(
+                plan_key=plan.plan_key,
+                included_minutes=plan.included_minutes,
+                price_per_minute_usd=plan.price_per_minute_usd,
+            )
+            if plan is not None
+            else None
+        )
+        BillingOnboardingFacade(self.db).create_default_plan(tenant_id, billing_plan)
 
     def tenant_usage_snapshot(self, tenant_id: str) -> Mapping[str, object]:
-        tenant = self.db.get(Tenant, tenant_id)
-        if tenant is None:
-            raise LookupError(f"Tenant '{tenant_id}' not found")
-        return self.service.get_usage(tenant, persist_alerts=False).model_dump(mode="json")
+        from dataclasses import asdict
+        from datetime import datetime
+        from decimal import Decimal
+
+        from app.modules.billing.public import BillingOnboardingFacade
+
+        def encode(value):
+            if isinstance(value, Decimal):
+                return float(value)
+            if isinstance(value, datetime):
+                return value.isoformat()
+            if isinstance(value, dict):
+                return {key: encode(item) for key, item in value.items()}
+            if isinstance(value, (list, tuple)):
+                return [encode(item) for item in value]
+            return value
+
+        return encode(asdict(BillingOnboardingFacade(self.db).tenant_usage_snapshot(tenant_id)))
 
     def cleanup_tenant(self, tenant_id: str) -> Mapping[str, int]:
-        alerts = self.db.execute(delete(TenantUsageAlert).where(TenantUsageAlert.tenant_id == tenant_id))
-        plans = self.db.execute(delete(TenantBillingPlan).where(TenantBillingPlan.tenant_id == tenant_id))
-        return {
-            "usage_alerts": max(alerts.rowcount or 0, 0),
-            "billing_plans": max(plans.rowcount or 0, 0),
-        }
+        from app.modules.billing.public import BillingOnboardingFacade
+
+        return BillingOnboardingFacade(self.db).cleanup_tenant(tenant_id)
 
 
 class _TenantDependentCleanupAdapter:

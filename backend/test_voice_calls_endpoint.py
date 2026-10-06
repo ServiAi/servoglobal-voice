@@ -135,7 +135,7 @@ class LegacyPublicCallEndpointTests(unittest.TestCase):
                 "app.api.endpoints.voice._create_form_context_and_lead",
                 return_value=_StubCallContext(),
             ),
-            patch("app.api.endpoints.voice.TenantUsageService"),
+            patch("app.api.endpoints.voice._ensure_billing_call_access"),
             patch("app.api.endpoints.voice.run_demo_start_notification_task"),
             patch("app.api.endpoints.voice.create_call_session", call_session),
             patch("app.services.voice_config_service.VoiceConfigService", _VoiceConfigService),

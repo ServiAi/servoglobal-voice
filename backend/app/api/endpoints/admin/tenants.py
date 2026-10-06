@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import logging
+from decimal import Decimal
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.encoders import jsonable_encoder
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
@@ -23,6 +25,7 @@ from app.modules.identity.public import (
     TenantDeletionBlockedError,
 )
 from app.modules.identity.public import UserView as User
+from app.modules.billing.public import BillingFacade
 from app.modules.scheduling.public import (
     BookingConfigRequest,
     BookingConfigResponse,
@@ -31,7 +34,6 @@ from app.modules.scheduling.public import (
     GoogleCalendarConnectionResponse,
     SchedulingFacade,
 )
-from app.schemas.billing import TenantPlanRequest
 from app.schemas.crm import BookingCreateRequest, BookingResponse
 from app.schemas.integrations import (
     VoiceAgentConfigRequest,
@@ -45,13 +47,16 @@ from app.schemas.onboarding import (
     TenantCreateRequest,
     TenantUpdateRequest,
 )
-from app.services.tenant_usage_service import TenantUsageService
 from app.services.voice_agent_service import VoiceAgentService
 from app.services.voice_config_service import VoiceConfigService
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
+
+
+def _billing_json(value):
+    return jsonable_encoder(value, custom_encoder={Decimal: float})
 
 
 def get_current_internal_user(
@@ -131,7 +136,7 @@ def list_tenants(
     db: Session = Depends(get_current_internal_db),
 ) -> list[dict]:
     service = IdentityAdminFacade(db)
-    usage_service = TenantUsageService(db)
+    billing = BillingFacade(db)
     tenants = service.list_tenants()
     return [
         {
@@ -140,30 +145,10 @@ def list_tenants(
             "slug": t.slug,
             "timezone": t.timezone,
             "status": t.status,
-            "usage": usage_service.get_usage_for_tenant_id(t.id).model_dump(mode="json"),
+            "usage": _billing_json(billing.get_usage(t.id)),
         }
         for t in tenants
     ]
-
-@router.get("/tenants/usage-summary", response_model=list[dict[str, Any]])
-def list_tenants_usage_summary(
-    db: Session = Depends(get_current_internal_db),
-) -> list[dict]:
-    return [
-        item.model_dump(mode="json")
-        for item in TenantUsageService(db).list_usage_summary()
-    ]
-
-
-@router.get("/usage-alerts", response_model=list[dict[str, Any]])
-def list_usage_alerts(
-    db: Session = Depends(get_current_internal_db),
-) -> list[dict]:
-    return [
-        item.model_dump(mode="json")
-        for item in TenantUsageService(db).list_usage_alerts()
-    ]
-
 
 @router.get("/tenants/{tenant_id}", response_model=dict[str, Any])
 def get_tenant(
@@ -171,12 +156,12 @@ def get_tenant(
     db: Session = Depends(get_current_internal_db),
 ) -> dict:
     service = IdentityAdminFacade(db)
-    usage_service = TenantUsageService(db)
+    billing = BillingFacade(db)
     tenant = service.get_tenant(tenant_id)
     members = service.list_memberships(tenant_id)
     agents = service.list_agents(tenant_id)
-    usage = usage_service.get_usage_for_tenant_id(tenant_id)
-    savings = usage_service.get_savings_comparison_for_tenant_id(tenant_id)
+    usage = billing.get_usage(tenant_id)
+    savings = billing.get_savings_comparison(tenant_id)
 
     member_dicts = [
         {
@@ -212,8 +197,8 @@ def get_tenant(
         "status": tenant.status,
         "memberships": member_dicts,
         "agents": agent_dicts,
-        "usage": usage.model_dump(mode="json"),
-        "savings_comparison": savings.model_dump(mode="json"),
+        "usage": _billing_json(usage),
+        "savings_comparison": _billing_json(savings),
         "is_ready_for_calls": len(agent_dicts) > 0,
     }
 
@@ -225,7 +210,7 @@ def update_tenant(
     db: Session = Depends(get_current_internal_db),
 ) -> dict:
     service = IdentityAdminFacade(db)
-    usage_service = TenantUsageService(db)
+    billing = BillingFacade(db)
     tenant = service.update_tenant(
         tenant_id,
         name=payload.name,
@@ -234,8 +219,8 @@ def update_tenant(
     )
     members = service.list_memberships(tenant_id)
     agents = service.list_agents(tenant_id)
-    usage = usage_service.get_usage_for_tenant_id(tenant_id)
-    savings = usage_service.get_savings_comparison_for_tenant_id(tenant_id)
+    usage = billing.get_usage(tenant_id)
+    savings = billing.get_savings_comparison(tenant_id)
 
     member_dicts = [
         {
@@ -271,51 +256,9 @@ def update_tenant(
         "status": tenant.status,
         "memberships": member_dicts,
         "agents": agent_dicts,
-        "usage": usage.model_dump(mode="json"),
-        "savings_comparison": savings.model_dump(mode="json"),
+        "usage": _billing_json(usage),
+        "savings_comparison": _billing_json(savings),
         "is_ready_for_calls": len(agent_dicts) > 0,
-    }
-
-
-@router.get("/tenants/{tenant_id}/usage", response_model=dict[str, Any])
-def get_tenant_usage(
-    tenant_id: str,
-    db: Session = Depends(get_current_internal_db),
-) -> dict:
-    service = IdentityAdminFacade(db)
-    service.get_tenant(tenant_id)  # 404-style ValueError when the tenant does not exist
-    usage_service = TenantUsageService(db)
-    usage = usage_service.get_usage_for_tenant_id(tenant_id)
-    savings = usage_service.get_savings_comparison_for_tenant_id(tenant_id)
-    return {
-        "usage": usage.model_dump(mode="json"),
-        "savings_comparison": savings.model_dump(mode="json"),
-        "alerts": [
-            alert.model_dump(mode="json")
-            for alert in usage_service.list_usage_alerts(tenant_id)
-        ],
-    }
-
-
-@router.patch("/tenants/{tenant_id}/plan", response_model=dict[str, Any])
-def update_tenant_plan(
-    tenant_id: str,
-    payload: TenantPlanRequest,
-    db: Session = Depends(get_current_internal_db),
-) -> dict:
-    usage_service = TenantUsageService(db)
-    try:
-        usage = usage_service.update_plan(tenant_id, payload)
-        IdentityAdminFacade(db).get_tenant(tenant_id)
-        savings = usage_service.get_savings_comparison_for_tenant_id(tenant_id)
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=str(exc),
-        ) from exc
-    return {
-        "usage": usage.model_dump(mode="json"),
-        "savings_comparison": savings.model_dump(mode="json"),
     }
 
 

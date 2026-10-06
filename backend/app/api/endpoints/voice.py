@@ -10,14 +10,30 @@ from app.api.deps import verify_turnstile
 from app.core.config import settings
 from app.db.session import get_db
 from app.models import Tenant
+from app.modules.billing.public import (
+    BillingAccessGate,
+    BillingTenantNotFoundError,
+    MinutePackageExhaustedError,
+    TenantInactiveError,
+)
 from app.modules.crm.public import CrmFacade
 from app.services.notification_service import run_demo_start_notification_task
-from app.services.tenant_usage_service import TenantUsageService
 from app.services.voice_service import create_call_session, create_sip_call_via_pbx
 
 router = APIRouter(prefix="/api/v1", tags=["Voice"])
 
 logger = logging.getLogger(__name__)
+
+
+def _ensure_billing_call_access(db: Session, tenant_slug: str) -> None:
+    try:
+        BillingAccessGate(db).ensure_call_allowed_by_slug(tenant_slug)
+    except BillingTenantNotFoundError as exc:
+        raise HTTPException(status_code=400, detail="Unable to resolve tenant for call creation") from exc
+    except MinutePackageExhaustedError as exc:
+        raise HTTPException(status_code=402, detail="Tenant minute package exhausted") from exc
+    except TenantInactiveError as exc:
+        raise HTTPException(status_code=403, detail="Tenant is not active") from exc
 
 # Lightweight format checks for the public demo. Not a full RFC validator; just
 # enough to reject clearly malformed input without adding an email-validator
@@ -202,7 +218,7 @@ async def create_call(
         raise HTTPException(status_code=400, detail="Turnstile token missing")
 
     await verify_turnstile(request.turnstile_token)
-    TenantUsageService(db).ensure_tenant_can_start_call_by_slug(settings.BOOTSTRAP_TENANT_SLUG)
+    _ensure_billing_call_access(db, settings.BOOTSTRAP_TENANT_SLUG)
     tenant = _bootstrap_tenant(db)
     from app.services.voice_config_service import VoiceConfigService
 
@@ -271,7 +287,7 @@ async def create_outbound_call(
         raise HTTPException(status_code=400, detail="Turnstile token missing")
 
     await verify_turnstile(request.turnstile_token)
-    TenantUsageService(db).ensure_tenant_can_start_call_by_slug(settings.BOOTSTRAP_TENANT_SLUG)
+    _ensure_billing_call_access(db, settings.BOOTSTRAP_TENANT_SLUG)
     tenant = _bootstrap_tenant(db)
     from app.services.voice_config_service import VoiceConfigService
 

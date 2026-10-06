@@ -30,7 +30,7 @@ from app.modules.crm.public import (
 )
 from app.modules.identity.public import VOICE_EXPERIENCES, FeatureFlags
 from app.schemas.public_voice_calls import PublicVoiceCallResponse
-from app.services.tenant_usage_service import TenantUsageService
+from app.modules.billing.public import BillingAccessGate
 from app.services.voice_config_service import VoiceConfigService
 from app.services.voice_experience_runtime_provider import (
     ProviderAmbiguousFailure,
@@ -103,7 +103,7 @@ class PublicVoiceCallService:
             if tenant is None:
                 raise PublicCallFailure(503, "call_unavailable")
             try:
-                TenantUsageService(db).ensure_tenant_can_start_call_by_slug(tenant.slug)
+                BillingAccessGate(db).ensure_call_allowed_by_slug(tenant.slug)
                 version = db.get(TenantVoiceExperienceVersion, context_session.experience_version_id)
                 if version is None:
                     raise ValueError
