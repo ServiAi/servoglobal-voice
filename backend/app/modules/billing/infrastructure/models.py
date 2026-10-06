@@ -1,15 +1,12 @@
-from __future__ import annotations
-
-import uuid
-from datetime import UTC, datetime
+from datetime import datetime
 from decimal import Decimal
 
 from sqlalchemy import (
-    JSON,
     CheckConstraint,
     DateTime,
     ForeignKey,
     Index,
+    JSON,
     Numeric,
     String,
     Text,
@@ -18,52 +15,19 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
-
-
-def _uuid() -> str:
-    return str(uuid.uuid4())
-
-
-def _utcnow() -> datetime:
-    return datetime.now(UTC)
-
-
-class TimestampMixin:
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False
-    )
+from app.db.mixins import TimestampMixin, _uuid
 
 
 class TenantBillingPlan(Base, TimestampMixin):
     __tablename__ = "tenant_billing_plans"
     __table_args__ = (
-        CheckConstraint(
-            "plan_key in ('web_conversion', 'voice_cloud_pbx', 'enterprise')",
-            name="ck_tenant_billing_plans_plan_key",
-        ),
+        CheckConstraint("plan_key in ('web_conversion', 'voice_cloud_pbx', 'enterprise')", name="ck_tenant_billing_plans_plan_key"),
         CheckConstraint("included_minutes >= 2000", name="ck_tenant_billing_plans_min_minutes"),
         CheckConstraint("price_per_minute_usd > 0", name="ck_tenant_billing_plans_positive_price"),
-        CheckConstraint(
-            "plan_key != 'web_conversion' OR price_per_minute_usd = 0.16",
-            name="ck_tenant_billing_plans_web_price",
-        ),
-        CheckConstraint(
-            "plan_key != 'voice_cloud_pbx' OR price_per_minute_usd = 0.18",
-            name="ck_tenant_billing_plans_voice_price",
-        ),
-        CheckConstraint(
-            "plan_key != 'enterprise' OR "
-            "(price_per_minute_usd >= 0.14 AND price_per_minute_usd <= 0.15)",
-            name="ck_tenant_billing_plans_enterprise_price",
-        ),
-        CheckConstraint(
-            "usage_status in ("
-            "'normal', 'approaching_limit', 'limit_reached', "
-            "'over_limit', 'suspended_usage_limit'"
-            ")",
-            name="ck_tenant_billing_plans_usage_status",
-        ),
+        CheckConstraint("plan_key != 'web_conversion' OR price_per_minute_usd = 0.16", name="ck_tenant_billing_plans_web_price"),
+        CheckConstraint("plan_key != 'voice_cloud_pbx' OR price_per_minute_usd = 0.18", name="ck_tenant_billing_plans_voice_price"),
+        CheckConstraint("plan_key != 'enterprise' OR (price_per_minute_usd >= 0.14 AND price_per_minute_usd <= 0.15)", name="ck_tenant_billing_plans_enterprise_price"),
+        CheckConstraint("usage_status in ('normal', 'approaching_limit', 'limit_reached', 'over_limit', 'suspended_usage_limit')", name="ck_tenant_billing_plans_usage_status"),
         UniqueConstraint("tenant_id", name="uq_tenant_billing_plans_tenant_id"),
         Index("ix_tenant_billing_plans_tenant_id", "tenant_id"),
         Index("ix_tenant_billing_plans_usage_status", "usage_status"),
@@ -82,25 +46,14 @@ class TenantBillingPlan(Base, TimestampMixin):
     last_usage_recalculated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     tenant = relationship("Tenant")
-    alerts: Mapped[list[TenantUsageAlert]] = relationship(
-        back_populates="billing_plan",
-        cascade="all, delete-orphan",
-    )
+    alerts: Mapped[list["TenantUsageAlert"]] = relationship(back_populates="billing_plan", cascade="all, delete-orphan")
 
 
 class TenantUsageAlert(Base, TimestampMixin):
     __tablename__ = "tenant_usage_alerts"
     __table_args__ = (
-        CheckConstraint(
-            "alert_type in ('warning_80', 'warning_90', 'limit_reached')",
-            name="ck_tenant_usage_alerts_alert_type",
-        ),
-        UniqueConstraint(
-            "tenant_id",
-            "alert_type",
-            "billing_period_start",
-            name="uq_tenant_usage_alerts_tenant_type_period",
-        ),
+        CheckConstraint("alert_type in ('warning_80', 'warning_90', 'limit_reached')", name="ck_tenant_usage_alerts_alert_type"),
+        UniqueConstraint("tenant_id", "alert_type", "billing_period_start", name="uq_tenant_usage_alerts_tenant_type_period"),
         Index("ix_tenant_usage_alerts_tenant_id", "tenant_id"),
         Index("ix_tenant_usage_alerts_created_at", "created_at"),
     )
