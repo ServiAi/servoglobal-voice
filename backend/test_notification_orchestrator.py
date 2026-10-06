@@ -10,6 +10,7 @@ from sqlalchemy import event as sa_event
 TEST_DB_PATH = Path("serviai_notification_orchestrator_test.db")
 os.environ["DATABASE_URL"] = f"sqlite:///./{TEST_DB_PATH.as_posix()}"
 
+import app.models  # noqa: F401  (register every ORM table before create_all)
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.modules.notifications.domain.rules import (

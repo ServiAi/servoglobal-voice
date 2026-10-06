@@ -8,6 +8,7 @@ from uuid import uuid4
 TEST_DB_PATH = Path("serviai_notification_delivery_recovery_test.db")
 os.environ["DATABASE_URL"] = f"sqlite:///./{TEST_DB_PATH.as_posix()}"
 
+import app.models  # noqa: F401  (register every ORM table before create_all)
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.modules.integrations.infrastructure.models import CrmWhatsAppMessage

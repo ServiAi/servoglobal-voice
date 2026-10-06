@@ -18,7 +18,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 
 from app.modules.identity.api.deps import AuthContext, get_current_auth_context
-from app.api.endpoints.admin.tenants import get_auth0_provisioning_service
+from app.modules.identity.api.deps import get_identity_provisioning_port
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.main import app
@@ -58,7 +58,7 @@ class TenantPlansUsageLimitsTests(unittest.TestCase):
         app.dependency_overrides.clear()
         self.client = TestClient(app)
         self.admin_user = self._seed_internal_admin()
-        app.dependency_overrides[get_auth0_provisioning_service] = (
+        app.dependency_overrides[get_identity_provisioning_port] = (
             lambda: FakeAuth0ProvisioningService()
         )
         app.dependency_overrides[get_current_auth_context] = self._auth_context_override

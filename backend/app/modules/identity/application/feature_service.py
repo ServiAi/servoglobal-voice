@@ -1,4 +1,4 @@
-﻿from collections.abc import Mapping
+from collections.abc import Mapping
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError

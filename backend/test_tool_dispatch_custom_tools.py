@@ -15,6 +15,7 @@ os.environ["SERVIAI_TEST_SECRET_FALLBACK"] = "1"
 TEST_DB_PATH = Path("serviai_tool_dispatch_custom_test.db")
 os.environ["DATABASE_URL"] = f"sqlite:///./{TEST_DB_PATH.as_posix()}"
 
+import app.models  # noqa: F401  (register every ORM table before create_all)
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.modules.agents.infrastructure.models import TenantAgent, TenantAgentVersion

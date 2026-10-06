@@ -9,6 +9,7 @@ from uuid import uuid4
 TEST_DB_PATH = Path("serviai_notification_worker_test.db")
 os.environ["DATABASE_URL"] = f"sqlite:///./{TEST_DB_PATH.as_posix()}"
 
+import app.models  # noqa: F401  (register every ORM table before create_all)
 from app.core import config as config_module
 from app.db.base import Base
 from app.db.session import SessionLocal, engine

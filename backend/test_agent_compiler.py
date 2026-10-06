@@ -9,6 +9,7 @@ os.environ.setdefault("AUTH0_AUDIENCE", "https://api.example.test")
 os.environ["SERVIAI_TEST_SECRET_FALLBACK"] = "1"
 os.environ.setdefault("DATABASE_URL", "sqlite:///./serviai_agent_compiler_test.db")
 
+import app.models  # noqa: F401  (register every ORM table before create_all)
 from app.modules.agents.application.compiler import (
     AgentCompilerError,
     AgentCompilerService,
