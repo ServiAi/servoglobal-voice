@@ -33,6 +33,7 @@ if DATABASE_URL:
 from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import sessionmaker
 
+import app.models  # noqa: F401  (register every ORM table before create_all)
 from app.db.base import Base
 from app.db.session import SessionLocal as AppSessionLocal
 from app.modules.crm.infrastructure.models import CrmContact, CrmLead, CrmPipelineStage, CrmVoiceCall

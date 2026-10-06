@@ -29,6 +29,7 @@ from sqlalchemy import create_engine, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 
+import app.models  # noqa: F401  (register every ORM table before create_all)
 from app.db.base import Base
 from app.models.analytics import Call
 from app.modules.identity.infrastructure.models import Tenant

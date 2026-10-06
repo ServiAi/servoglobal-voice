@@ -27,6 +27,7 @@ if VOICE_RUNTIME_TEST_DATABASE_URL:
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 
+import app.models  # noqa: F401  (register every ORM table before create_all)
 from app.db.base import Base
 from app.models.analytics import Call, CallEvent
 from app.models.billing import TenantBillingPlan
