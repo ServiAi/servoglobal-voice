@@ -1066,6 +1066,7 @@ CRITICAL_PUBLIC_APIS = {
         "TenantLifecycle",
         "AccessAudit",
     ],
+    "app.modules.billing.public": ["BillingFacade", "BillingAccessGate", "BillingOnboardingFacade"],
     "app.modules.voice_legacy.public": ["VoiceLegacyFacade"],
     "app.modules.agents.public": ["AgentsFacade"],
     "app.modules.agents.application.ports": [
@@ -1145,6 +1146,15 @@ PUBLIC_DTOS = {
         "NotificationDeliveryEvidence",
     ],
     "app.modules.scheduling.public": ["BookingSummary", "BookingView", "BookingCustomer", "CreateBookingCommand"],
+    "app.modules.billing.contracts": [
+        "BillingPlanInput",
+        "BillingPlanView",
+        "TenantUsageView",
+        "UsageAlertView",
+        "ProviderSavingsView",
+        "SavingsComparisonView",
+        "TenantUsageSummaryView",
+    ],
 }
 # Genuinely dynamic payloads, not entities: the raw LLM argument as the Tool
 # Platform hands it over. SchedulingFacade.create_lead_booking itself is typed

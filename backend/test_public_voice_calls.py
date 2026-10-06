@@ -331,9 +331,9 @@ class PublicVoiceCallTests(Integration2ATestCase):
             self.assertEqual(str(analytics.billed_minutes), "1.25")
             self.assertEqual(db.query(CallEvent).count(), 3)
             self.assertEqual(db.query(CrmVoiceCallEvent).count(), 3)
-            from app.services.tenant_usage_service import TenantUsageService
+            from app.modules.billing.public import BillingFacade
 
-            usage = TenantUsageService(db).get_usage(db.get(type(self.tenant), self.tenant.id), persist_alerts=False)
+            usage = BillingFacade(db).get_usage(self.tenant.id, persist_alerts=False, commit=False)
             self.assertEqual(usage.minutes_used, 1.25)
 
         unsigned = self.client.post(
@@ -361,9 +361,9 @@ class PublicVoiceCallTests(Integration2ATestCase):
         with SessionLocal() as db:
             analytics = db.scalars(select(Call)).one()
             self.assertEqual(str(analytics.billed_minutes), "2.00")
-            from app.services.tenant_usage_service import TenantUsageService
+            from app.modules.billing.public import BillingFacade
 
-            usage = TenantUsageService(db).get_usage(db.get(type(self.tenant), self.tenant.id), persist_alerts=False)
+            usage = BillingFacade(db).get_usage(self.tenant.id, persist_alerts=False, commit=False)
             self.assertEqual(usage.minutes_used, 2.0)
 
     @patch(

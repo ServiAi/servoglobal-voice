@@ -5,7 +5,6 @@ import logging
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 
-from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -37,7 +36,7 @@ from app.modules.telephony.public import (
 )
 from app.schemas.public_voice_calls import PublicVoiceCallbackResponse
 from app.services.public_voice_call_service import PublicCallFailure
-from app.services.tenant_usage_service import TenantUsageService
+from app.modules.billing.public import BillingAccessGate, BillingError
 from app.services.voice_call_service import VoiceCallService
 from app.services.voice_client import (
     VoiceClient,
@@ -85,8 +84,8 @@ class PublicVoiceCallbackService:
             if tenant is None:
                 raise PublicCallFailure(503, "call_unavailable")
             try:
-                TenantUsageService(usage_db).ensure_tenant_can_start_call_by_slug(tenant.slug)
-            except HTTPException:
+                BillingAccessGate(usage_db).ensure_call_allowed_by_slug(tenant.slug)
+            except BillingError:
                 raise PublicCallFailure(503, "call_unavailable") from None
         with self.session_factory() as db:
             try:

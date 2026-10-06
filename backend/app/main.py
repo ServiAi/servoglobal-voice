@@ -62,6 +62,7 @@ from app.modules.agents.api import router as agents
 from app.modules.tools.api import router as tools_custom
 from app.api.endpoints import voice_registry
 from app.modules.voice.api import router as voice_runtime
+from app.modules.billing.api import admin_router as billing_admin, dashboard_router as billing_dashboard
 from app.api.endpoints import voice_provider_admin
 
 app.include_router(notifications.router)
@@ -70,9 +71,11 @@ app.include_router(voice.router)
 app.include_router(voice_booking_tools.router)
 app.include_router(calcom.router)
 app.include_router(dashboard.router)
+app.include_router(billing_dashboard.router)
 app.include_router(me.router)
 app.include_router(ultravox_webhook.router)
 app.include_router(admin_tenants.router)
+app.include_router(billing_admin.router)
 app.include_router(integrations_admin_router.router)
 app.include_router(admin_tenant_features.router)
 app.include_router(auth0_endpoint.router)

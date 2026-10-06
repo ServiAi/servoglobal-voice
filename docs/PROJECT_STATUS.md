@@ -1,6 +1,6 @@
 # Estado funcional del proyecto
 
-Actualizado: 2026-09-22. Fuente: código, migraciones y pruebas del repositorio.
+Actualizado: 2026-10-06. Fuente: código, migraciones y pruebas del repositorio.
 
 | Área | Estado | Implementación actual |
 | --- | --- | --- |
@@ -159,6 +159,14 @@ El repositorio contiene cobertura backend específica para identidad, analítica
 
 Identity / Tenancy is the ninth real module (`app.modules.identity`, branch `refactor/modular-identity-tenancy`, PR #126). It owns `tenants`, `users`, `tenant_memberships`, `access_audit_logs` and `tenant_feature_grants`. No URL, method, status code, payload, RBAC, schema or Alembic change: DDL fingerprint `7cbcf6f7e1c3eb0d` and OpenAPI fingerprint `bdd094cea133173b` are identical to `develop@85dd85c` (79 tables, 336 operations, 257 paths, 293 schemas, 0 differences). Alembic single head `202610050001`.
 
+## Sprint 10 — Billing / Usage (Module 10)
+
+Billing lives in `backend/app/modules/billing/` and owns only `tenant_billing_plans`, `tenant_usage_alerts` and `external_provider_pricing`. `calls`, `call_events`, `metric_snapshots_daily` and `agents` remain Analytics / Voice Legacy data. Plans, Decimal usage interpretation, limits, alerts, provider pricing, savings, call admission, onboarding provisioning and tenant cleanup now cross the module's public facades. The legacy Analytics read is isolated to `LegacyAnalyticsUsageMeter` in `billing.wiring` behind `UsageMeterPort`; it preserves the inclusive period end. Identity uses `BillingOnboardingFacade` with flush-only semantics inside onboarding/deletion transactions and delegates tenant access through `identity.public` adapters.
+
+Billing admin/dashboard routes moved without changing their six paths or methods. Existing billing schemas remain in `app.schemas.billing` because relocation changes OpenAPI component references. No frontend change, migration, DDL change or Alembic head change. Local OpenAPI metrics remain 257 paths, 336 operations, 293 schemas; Alembic remains at one head, `202610050001`. The supplied fingerprint algorithm was not available in the repository, so the historical fingerprints were not claimed as recomputed. The focused local Billing, onboarding, Voice and architecture suites pass; the six Billing PostgreSQL cases and Voice Runtime PostgreSQL integration cases were skipped because their dedicated test database URLs are not configured here. CI now has a dedicated `serviai_billing_test` gate.
+
+Known debt: `LegacyAnalyticsUsageMeter` will switch to `analytics.public` when Analytics migrates as Module 11; Identity's Analytics cleanup and other pre-existing Analytics/Voice Legacy readers remain outside Billing. No provider calls, payment processing, pricing refresh or new domain events were added.
+
 Technical closure (hardening):
 
 - `identity.application` and `identity.domain` no longer import FastAPI; they raise neutral errors (`AuthenticationRequiredError`, `InvalidIdentityTokenError`, `EmailNotVerifiedError`, `UserInactiveError`, `UserNotRegisteredError`, `IdentityConflictError`, `MembershipRequiredError`, `TenantNotFoundError`, `MembershipNotFoundError`, `PasswordResetFailedError`…). The HTTP mapping (same status codes, `WWW-Authenticate: Bearer` on 401) lives only in `identity/api/deps.py`.
@@ -167,6 +175,10 @@ Technical closure (hardening):
 - `test_identity_postgres` (10 tests, PostgreSQL 16, DB `serviai_identity_test`, CI step "Identity PostgreSQL concurrency" with a no-skipped guard) covers concurrent identity resolution, pre-provisioned first login, bootstrap, membership create, last-admin race, shared user on tenant deletion and concurrent feature set. Every protection was mutation-verified. `test_identity_architecture` (15) and `test_identity_public_orm_escape` (4) guard layers, public surface and ORM ownership.
 - SCC containing Identity: none in `develop` → one component of 4 nodes (3 identity files) at the head.
 
-Tenant direct-read allowlist (legacy, removed when the owner module migrates): `services/crm_dashboard_metrics_service.py`, `services/dashboard_analytics_service.py`, `services/public_voice_call_service.py`, `services/tenant_usage_service.py`, `services/ultravox_ingestion_service.py`, `services/voice_callback_service.py`, `api/endpoints/voice.py` (plus `scripts/seed_staging_analytics.py`). User/Membership/AccessAuditLog/FeatureGrant ORM is never imported outside Identity.
+Tenant direct-read allowlist (legacy, removed when the owner module migrates): `services/crm_dashboard_metrics_service.py`, `services/dashboard_analytics_service.py`, `services/public_voice_call_service.py`, `services/ultravox_ingestion_service.py`, `services/voice_callback_service.py`, `api/endpoints/voice.py` (plus `scripts/seed_staging_analytics.py`). Billing no longer reads Tenant ORM; it uses `identity.public`. User/Membership/AccessAuditLog/FeatureGrant ORM is never imported outside Identity.
 
 Remaining debt: Identity wiring still binds legacy `OnboardingService`, `SecretManager`, `StorageService`, `CallSummaryService`, Voice Legacy config, Forms and Voice context; the 7 Tenant direct readers above; `notification_service`/`meta_client` legacy workflow. **Auth0 E2E: not executed — staging credentials unavailable.**
+
+### Billing final boundary hardening
+
+Removed cross-module ORM navigation from the two Billing tenant-owned models while retaining both `tenant_id -> tenants.id` foreign keys. Mapper tests assert these foreign keys and the Billing-only ORM relationships. Metadata remains 79 tables; OpenAPI remains 257 paths, 336 operations and 293 schemas; Alembic has one head, `202610050001`; no frontend change or migration. No reproducible historical fingerprint procedure was found. Earlier CI run #275 passed Billing PostgreSQL and all final jobs. Its CRM concurrency job failed once at `test_different_entry_points_share_the_same_invariant` (2 open leads, expected 1) and passed on rerun; this is unrelated and unchanged.
