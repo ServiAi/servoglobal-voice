@@ -5,13 +5,13 @@ from dataclasses import dataclass
 import logging
 import httpx
 import jwt
-from fastapi import HTTPException, status
 from jwt import PyJWKClient
 
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 from app.modules.identity.domain.contracts import ExternalIdentity
+from app.modules.identity.domain.errors import IdentityConfigurationError, InvalidIdentityTokenError
 
 
 class Auth0TokenVerifier:
@@ -33,10 +33,7 @@ class Auth0TokenVerifier:
 
     def verify(self, token: str) -> ExternalIdentity:
         if not settings.AUTH0_DOMAIN or not settings.AUTH0_AUDIENCE:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Auth0 backend configuration is incomplete",
-            )
+            raise IdentityConfigurationError("Auth0 backend configuration is incomplete")
 
         try:
             jwks_client = self._get_jwks_client()
@@ -49,11 +46,7 @@ class Auth0TokenVerifier:
                 issuer=self.issuer,
             )
         except jwt.PyJWTError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid authentication token",
-                headers={"WWW-Authenticate": "Bearer"},
-            ) from exc
+            raise InvalidIdentityTokenError("Invalid authentication token") from exc
 
         external_auth_id = claims.get("sub")
         email = (
@@ -69,11 +62,7 @@ class Auth0TokenVerifier:
         )
 
         if not external_auth_id:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Authentication token is missing required identity claims",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
+            raise InvalidIdentityTokenError("Authentication token is missing required identity claims")
 
         if not email and settings.AUTH0_DOMAIN:
             try:

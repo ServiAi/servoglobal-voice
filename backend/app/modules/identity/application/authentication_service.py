@@ -4,13 +4,19 @@ from datetime import UTC, datetime
 from hashlib import sha256
 import re
 
-from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.config import settings
 from app.modules.identity.infrastructure.models import AccessAuditLog, Tenant, TenantMembership, User
 from app.modules.identity.domain.contracts import ExternalIdentity
+from app.modules.identity.domain.errors import (
+    EmailNotVerifiedError,
+    IdentityConflictError,
+    MembershipRequiredError,
+    UserInactiveError,
+    UserNotRegisteredError,
+)
 
 
 ACTIVE = "active"
@@ -49,9 +55,8 @@ class IdentityService:
                     user = real_user
 
             if identity.email_verified is False:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Email not verified. Please verify your email before logging in.",
+                raise EmailNotVerifiedError(
+                    "Email not verified. Please verify your email before logging in."
                 )
             self._update_user_from_identity(user, identity)
             return user
@@ -64,10 +69,7 @@ class IdentityService:
 
         # Step 3: No match found — either create new or reject
         if not settings.AUTH0_AUTO_CREATE_USERS:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Authenticated user is not registered internally",
-            )
+            raise UserNotRegisteredError("Authenticated user is not registered internally")
 
         email = identity.email or _fallback_email(identity.external_auth_id)
         user = User(
@@ -114,28 +116,21 @@ class IdentityService:
 
         if len(matching_users) > 1:
             # AMBIGUITY: multiple active users with same email
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=(
-                    f"Multiple active users found with email '{identity.email}'. "
+            raise IdentityConflictError(
+                f"Multiple active users found with email '{identity.email}'. "
                     "Manual resolution required to merge or disambiguate accounts."
-                ),
             )
 
         # Exactly one match
         user = matching_users[0]
 
         if user.status != ACTIVE:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Authenticated user is not active",
-            )
+            raise UserInactiveError("Authenticated user is not active")
 
         if identity.email_verified is False:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Email not verified. Please verify your email before logging in.",
-            )
+            raise EmailNotVerifiedError(
+                    "Email not verified. Please verify your email before logging in."
+                )
 
         # If already linked to a different sub, return as-is (don't overwrite)
         if user.external_auth_id is not None:
@@ -163,10 +158,7 @@ class IdentityService:
     def _update_user_from_identity(self, user: User, identity: ExternalIdentity) -> None:
         """Update user fields from Auth0 identity after a successful match."""
         if user.status != ACTIVE:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Authenticated user is not active",
-            )
+            raise UserInactiveError("Authenticated user is not active")
 
         if identity.email:
             user.email = identity.email
@@ -188,10 +180,7 @@ class IdentityService:
             .order_by(TenantMembership.created_at.asc())
         )
         if membership is None:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Authenticated user has no active tenant membership",
-            )
+            raise MembershipRequiredError("Authenticated user has no active tenant membership")
         return membership
 
     def bootstrap_tenant(self) -> Tenant:

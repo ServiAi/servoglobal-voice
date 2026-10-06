@@ -8,6 +8,17 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.modules.identity.application.authentication_service import IdentityService
 from app.modules.identity.domain.contracts import ExternalIdentity
+from app.modules.identity.domain.errors import (
+    AuthenticationRequiredError,
+    EmailNotVerifiedError,
+    IdentityConfigurationError,
+    IdentityConflictError,
+    IdentityError,
+    InvalidIdentityTokenError,
+    MembershipRequiredError,
+    UserInactiveError,
+    UserNotRegisteredError,
+)
 from app.modules.identity.domain.roles import PLATFORM_ADMIN
 from app.modules.identity.infrastructure.auth0.verifier import auth0_verifier
 from app.modules.identity.public import (
@@ -22,22 +33,50 @@ bearer_scheme = HTTPBearer(auto_error=False)
 T = TypeVar("T")
 
 
+_BEARER = {"WWW-Authenticate": "Bearer"}
+# Identity error -> (HTTP status, extra headers). The message is the client-facing detail.
+_HTTP_BY_ERROR: tuple[tuple[type[IdentityError], int, dict[str, str] | None], ...] = (
+    (AuthenticationRequiredError, status.HTTP_401_UNAUTHORIZED, _BEARER),
+    (InvalidIdentityTokenError, status.HTTP_401_UNAUTHORIZED, _BEARER),
+    (IdentityConfigurationError, status.HTTP_500_INTERNAL_SERVER_ERROR, None),
+    (EmailNotVerifiedError, status.HTTP_403_FORBIDDEN, None),
+    (UserInactiveError, status.HTTP_403_FORBIDDEN, None),
+    (UserNotRegisteredError, status.HTTP_403_FORBIDDEN, None),
+    (MembershipRequiredError, status.HTTP_403_FORBIDDEN, None),
+    (IdentityConflictError, status.HTTP_409_CONFLICT, None),
+)
+
+
+def to_http_exception(exc: IdentityError) -> HTTPException:
+    """The only place where Identity errors become HTTP responses."""
+    for error_type, status_code, headers in _HTTP_BY_ERROR:
+        if isinstance(exc, error_type):
+            return HTTPException(status_code=status_code, detail=str(exc), headers=headers)
+    raise exc
+
+
 def get_current_identity(
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
 ) -> ExternalIdentity:
-    if credentials is None or not credentials.credentials:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authenticated",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    return auth0_verifier.verify(credentials.credentials)
+    try:
+        if credentials is None or not credentials.credentials:
+            raise AuthenticationRequiredError("Not authenticated")
+        return auth0_verifier.verify(credentials.credentials)
+    except IdentityError as exc:
+        raise to_http_exception(exc) from exc
 
 
 def get_current_auth_context(
     identity: ExternalIdentity = Depends(get_current_identity),
     db: Session = Depends(get_db),
 ) -> AuthContext:
+    try:
+        return _resolve_auth_context(identity, db)
+    except IdentityError as exc:
+        raise to_http_exception(exc) from exc
+
+
+def _resolve_auth_context(identity: ExternalIdentity, db: Session) -> AuthContext:
     identity_service = IdentityService(db)
     user = identity_service.resolve_user(identity)
     user_view = UserView(

@@ -13,7 +13,8 @@ from typing import Any, Optional
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.modules.identity.public import AuthContext, require_roles
+from app.modules.identity.public import AuthContext
+from app.modules.identity.api.deps import require_roles
 from app.db.session import get_db
 from app.modules.crm.public import CrmFacade, LeadProfile
 from app.modules.integrations.public import EmailFacade

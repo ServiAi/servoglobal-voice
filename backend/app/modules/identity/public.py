@@ -3,15 +3,18 @@ from datetime import datetime
 from types import MappingProxyType
 from typing import Mapping
 
-from app.modules.identity.domain.contracts import ProvisionedUser
+from app.modules.identity.domain.contracts import IdentityProvisioningPort, LegacyAgentView, ProvisionedUser
 from app.modules.identity.domain.errors import (
     FeatureDisabledError,
     IdentityProviderError,
     MembershipAlreadyExistsError,
+    MembershipNotFoundError,
     OnboardingConsistencyError,
+    PasswordResetFailedError,
     ProvisioningConflictError,
     TenantDeletionBlockedError,
     TenantFeatureTenantNotFoundError,
+    TenantNotFoundError,
     UnknownTenantFeatureError,
 )
 from app.modules.identity.domain.features import (
@@ -25,43 +28,19 @@ from app.modules.identity.domain.features import (
 )
 
 __all__ = [
-    "AGENT_BUILDER", "AccessAudit", "CUSTOM_HTTP_TOOLS", "FeatureDisabledError", "FeatureFlags",
-    "FeatureGrantView", "IdentityFacade", "IdentityAdminFacade", "MembershipAlreadyExistsError",
-    "MembershipDirectory", "MembershipView", "OnboardingConsistencyError",
-    "IdentityProvisioningPort", "IdentityProviderError", "IdentityService", "ProvisionedUser",
-    "ProvisioningConflictError", "create_onboarding_service", "get_current_auth_context",
-    "get_current_identity", "get_identity_provisioning_port", "require_roles",
-    "TenantDeletionBlockedError", "TenantDirectory", "TenantFeatureTenantNotFoundError",
-    "TenantLifecycle", "TenantView", "UnknownTenantFeatureError", "UserView",
-    "AdminMembershipView", "PasswordResetResult",
-    "VOICE_EXPERIENCES", "VOICE_RUNTIME_V2", "LIVEKIT_SIP_OUTBOUND_V2",
-    "WHATSAPP_BUSINESS_CALLING", "SUPPORTED_FEATURES", "AuthContext",
+    "AGENT_BUILDER", "AccessAudit", "AdminMembershipView", "AuthContext", "CUSTOM_HTTP_TOOLS",
+    "FeatureDisabledError", "FeatureFlags", "FeatureGrantView", "IdentityAdminFacade", "IdentityFacade",
+    "IdentityProviderError", "IdentityProvisioningPort", "LIVEKIT_SIP_OUTBOUND_V2", "LegacyAgentView",
+    "MembershipAlreadyExistsError", "MembershipDirectory", "MembershipNotFoundError", "MembershipView",
+    "OnboardingConsistencyError", "PasswordResetFailedError", "PasswordResetResult", "ProvisionedUser",
+    "ProvisioningConflictError", "SUPPORTED_FEATURES", "TenantDeletionBlockedError", "TenantDirectory",
+    "TenantFeatureTenantNotFoundError", "TenantLifecycle", "TenantNotFoundError", "TenantView",
+    "UnknownTenantFeatureError", "UserView", "VOICE_EXPERIENCES", "VOICE_RUNTIME_V2",
+    "WHATSAPP_BUSINESS_CALLING",
 ]
-
-
-def __getattr__(name: str):
-    if name == "IdentityProvisioningPort":
-        from app.modules.identity.application.ports import IdentityProvisioningPort
-
-        return IdentityProvisioningPort
-    if name == "IdentityService":
-        from app.modules.identity.application.authentication_service import IdentityService
-
-        return IdentityService
-    if name == "create_onboarding_service":
-        from app.modules.identity.wiring import create_onboarding_service
-
-        return create_onboarding_service
-    if name in {
-        "get_current_auth_context",
-        "get_current_identity",
-        "get_identity_provisioning_port",
-        "require_roles",
-    }:
-        from app.modules.identity.api import deps
-
-        return getattr(deps, name)
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+# Deliberately NOT exported: IdentityService, create_onboarding_service, wiring factories and the HTTP
+# dependencies (get_current_auth_context, require_roles, ...). Those are Identity internals; HTTP routers import
+# the dependencies from ``app.modules.identity.api.deps``.
 
 
 def _view(model, view_type):
@@ -278,12 +257,13 @@ class IdentityFacade:
 
 
 class IdentityAdminFacade:
-    def __init__(self, db: object) -> None:
+    def __init__(self, db: object, provisioning: IdentityProvisioningPort | None = None) -> None:
         self.db = db
+        self._provisioning = provisioning
 
     def _service(self):
         from app.modules.identity.wiring import create_onboarding_service
-        return create_onboarding_service(self.db)
+        return create_onboarding_service(self.db, self._provisioning)
 
     @staticmethod
     def _membership_view(membership) -> AdminMembershipView:
@@ -327,12 +307,17 @@ class IdentityAdminFacade:
     def delete_membership(self, tenant_id: str, membership_id: str) -> Mapping[str, object]:
         return self._service().delete_membership(tenant_id, membership_id)
 
-    def add_agent(self, tenant_id: str, **values: object):
+    def add_agent(self, tenant_id: str, **values: object) -> LegacyAgentView:
         return self._service().add_agent(tenant_id, **values)
 
-    def list_agents(self, tenant_id: str):
+    def list_agents(self, tenant_id: str) -> tuple[LegacyAgentView, ...]:
         return self._service().list_agents(tenant_id)
 
-    def send_password_reset(self, email: str) -> PasswordResetResult:
-        succeeded = self._service().provisioning.trigger_password_reset_email(email=email)
-        return PasswordResetResult(succeeded, "Password reset email sent" if succeeded else "Password reset email could not be sent")
+    def send_membership_password_reset(self, tenant_id: str, membership_id: str) -> PasswordResetResult:
+        """Raises ``MembershipNotFoundError`` or ``PasswordResetFailedError``; never exposes provider details."""
+        outcome = self._service().send_membership_password_reset(tenant_id, membership_id)
+        return PasswordResetResult(
+            success=True,
+            detail=f"Correo para configurar contraseña enviado a {outcome.email}",
+            ticket_url=outcome.ticket_url,
+        )

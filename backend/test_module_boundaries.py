@@ -312,6 +312,23 @@ def _is_public(module: str) -> bool:
     return len(parts) == 4 and parts[3] == "public"
 
 
+IDENTITY_HTTP_AUTH = "app.modules.identity.api.deps"
+
+
+def _is_http_auth_edge(source: str, target: str) -> bool:
+    """The one narrow exception to "other modules use only <module>.public".
+
+    HTTP layers (``app.api.*`` and ``app.modules.<m>.api.*``) may import Identity's FastAPI auth
+    dependencies (``get_current_auth_context``, ``require_roles``...) from ``identity.api.deps``: they are an HTTP
+    concern, not Identity's domain API. Application, domain, infrastructure and wiring code never may."""
+    if target != IDENTITY_HTTP_AUTH:
+        return False
+    if source.startswith("app.api."):
+        return True
+    parts = source.split(".")
+    return len(parts) >= 4 and parts[:2] == ["app", "modules"] and parts[2] != "identity" and parts[3] == "api"
+
+
 class ModuleBoundaryTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -331,6 +348,7 @@ class ModuleBoundaryTests(unittest.TestCase):
             and _owner(t) is not None
             and _owner(s) != _owner(t)
             and not _is_public(t)
+            and not _is_http_auth_edge(s, t)
         )
         self.assertEqual(violations, [], "Cross-module imports must target app.modules.<name>.public")
 
@@ -338,7 +356,7 @@ class ModuleBoundaryTests(unittest.TestCase):
         # Composition-root exceptions: main.py mounts routers and
         # app/models/__init__.py registers ORM tables for Alembic.
         def allowed(source: str, target: str) -> bool:
-            if _is_public(target) or _owner(target) is None:
+            if _is_public(target) or _owner(target) is None or _is_http_auth_edge(source, target):
                 return True
             if source == "app.main" and target.startswith(f"app.modules.{_owner(target)}.api"):
                 return True
@@ -528,6 +546,7 @@ class ModuleBoundaryTests(unittest.TestCase):
         self.assertEqual(
             self._violations(
                 lambda s, t: _owner(s) == "crm" and _owner(t) not in (None, "crm") and not t.endswith(".public")
+                and not _is_http_auth_edge(s, t)
             ),
             [],
         )
@@ -751,6 +770,7 @@ class ModuleBoundaryTests(unittest.TestCase):
                 lambda s, t: _owner(s) == "scheduling"
                 and _owner(t) not in (None, "scheduling")
                 and not t.endswith(".public")
+                and not _is_http_auth_edge(s, t)
             ),
             [],
         )
@@ -1037,7 +1057,15 @@ CRITICAL_PUBLIC_APIS = {
     ],
     "app.modules.scheduling.public": ["SchedulingFacade"],
 
-    "app.modules.identity.public": ["FeatureFlags"],
+    "app.modules.identity.public": [
+        "IdentityFacade",
+        "IdentityAdminFacade",
+        "TenantDirectory",
+        "MembershipDirectory",
+        "FeatureFlags",
+        "TenantLifecycle",
+        "AccessAudit",
+    ],
     "app.modules.voice_legacy.public": ["VoiceLegacyFacade"],
     "app.modules.agents.public": ["AgentsFacade"],
     "app.modules.agents.application.ports": [
@@ -1087,6 +1115,16 @@ PUBLIC_DTOS = {
     ],
     "app.modules.agents.public": ["AgentToolBindingView", "PublishedAgent", "AgentDisplay", "ImportedAgent"],
     "app.modules.voice_legacy.public": ["LegacyVoiceDefaults"],
+    "app.modules.identity.public": [
+        "TenantView",
+        "UserView",
+        "MembershipView",
+        "FeatureGrantView",
+        "AdminMembershipView",
+        "PasswordResetResult",
+        "AuthContext",
+        "LegacyAgentView",
+    ],
     "app.modules.integrations.public": [
         "WhatsAppTemplateContract",
         "WhatsAppSendOutcome",

@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from app.modules.identity.public import AuthContext, get_current_auth_context
+from app.modules.identity.public import AuthContext
+from app.modules.identity.api.deps import get_current_auth_context
 from app.db.session import get_db
 from app.schemas.billing import TenantSavingsComparisonResponse, TenantUsageResponse
 from app.schemas.dashboard import (

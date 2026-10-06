@@ -6,7 +6,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.modules.identity.public import AuthContext, require_roles
+from app.modules.identity.public import AuthContext
+from app.modules.identity.api.deps import require_roles
 from app.api.deps import require_enabled_integration
 from app.db.session import get_db
 from app.modules.integrations.api.schemas import (

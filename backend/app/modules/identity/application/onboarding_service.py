@@ -12,12 +12,16 @@ from app.modules.identity.application.ports import (
     LegacyAgentAdministrationPort,
     TenantDependentCleanupPort,
 )
-from app.modules.identity.domain.contracts import LegacyAgentView, ProvisionedUser
+from app.modules.identity.domain.contracts import LegacyAgentView, PasswordResetOutcome, ProvisionedUser
 from app.modules.identity.domain.errors import (
+    IdentityProviderError,
     MembershipAlreadyExistsError,
+    MembershipNotFoundError,
     OnboardingConsistencyError,
+    PasswordResetFailedError,
     ProvisioningConflictError,
     TenantDeletionBlockedError,
+    TenantNotFoundError,
 )
 from app.modules.identity.domain.roles import ADMIN_ROLES
 from app.modules.identity.infrastructure.models import AccessAuditLog, Tenant, TenantMembership, User
@@ -162,7 +166,7 @@ class OnboardingService:
             .where(Tenant.id == tenant_id)
         )
         if tenant is None:
-            raise ValueError(f"Tenant '{tenant_id}' not found")
+            raise TenantNotFoundError(f"Tenant '{tenant_id}' not found")
         return tenant
 
     def update_tenant(
@@ -177,7 +181,7 @@ class OnboardingService:
             select(Tenant).where(Tenant.id == tenant_id)
         )
         if tenant is None:
-            raise ValueError(f"Tenant '{tenant_id}' not found")
+            raise TenantNotFoundError(f"Tenant '{tenant_id}' not found")
 
         if name is not None:
             tenant.name = name.strip()
@@ -195,7 +199,7 @@ class OnboardingService:
             select(Tenant).where(Tenant.id == tenant_id)
         )
         if tenant is None:
-            raise ValueError(f"Tenant '{tenant_id}' not found")
+            raise TenantNotFoundError(f"Tenant '{tenant_id}' not found")
 
         self._ensure_tenant_can_be_deleted(tenant)
 
@@ -290,7 +294,7 @@ class OnboardingService:
             select(Tenant).where(Tenant.id == tenant_id)
         )
         if tenant is None:
-            raise ValueError(f"Tenant '{tenant_id}' not found")
+            raise TenantNotFoundError(f"Tenant '{tenant_id}' not found")
 
         normalized_email = email.strip().lower()
         user = self.db.scalar(
@@ -389,7 +393,7 @@ class OnboardingService:
             )
         )
         if existing is not None:
-            raise ValueError(f"User '{email}' already has a membership in this tenant")
+            raise MembershipAlreadyExistsError(f"User '{email}' already has a membership in this tenant")
 
         membership = TenantMembership(
             tenant_id=tenant.id,
@@ -412,8 +416,6 @@ class OnboardingService:
             )
             if existing is None:
                 raise exc
-            from app.modules.identity.domain.errors import MembershipAlreadyExistsError
-
             raise MembershipAlreadyExistsError(
                 f"User '{email}' already has a membership in this tenant"
             ) from exc
@@ -437,7 +439,7 @@ class OnboardingService:
             select(Tenant).where(Tenant.id == tenant_id).with_for_update()
         )
         if tenant is None:
-            raise ValueError(f"Tenant '{tenant_id}' not found")
+            raise TenantNotFoundError(f"Tenant '{tenant_id}' not found")
 
         membership = self.db.scalar(
             select(TenantMembership).where(
@@ -470,12 +472,52 @@ class OnboardingService:
             "tenant_id": tenant_id,
         }
 
+    def send_membership_password_reset(self, tenant_id: str, membership_id: str) -> PasswordResetOutcome:
+        """Make sure the member has an external account, then email (and offer a ticket for) a password change.
+
+        Raises ``MembershipNotFoundError`` (no membership/user/email) or ``PasswordResetFailedError`` (the provider
+        could not send the email and no fallback ticket could be created). Provider internals are never exposed.
+        """
+        membership = self.get_membership(tenant_id, membership_id)
+        if not membership or not membership.user or not membership.user.email:
+            raise MembershipNotFoundError("Membership or user not found")
+
+        user = membership.user
+        email = user.email
+        if user.external_auth_id is None:
+            try:
+                provisioned = self.provisioning.provision_tenant_admin(
+                    email=email, name=user.name or email.split("@")[0]
+                )
+                user.external_auth_id = provisioned.external_auth_id
+                self.db.commit()
+            except (IdentityProviderError, ProvisioningConflictError) as exc:
+                if exc.status_code != 409:
+                    logger.warning("Identity provider provisioning error on password reset: %s", exc)
+
+        error_detail: str | None = None
+        try:
+            self.provisioning.trigger_password_reset_email(email=email)
+        except (IdentityProviderError, ProvisioningConflictError) as exc:
+            error_detail = str(exc)
+            logger.warning("trigger_password_reset_email failed: %s", exc)
+
+        ticket_url: str | None = None
+        try:
+            ticket_url = self.provisioning.create_password_change_ticket(email=email)
+        except Exception as exc:
+            logger.warning("create_password_change_ticket failed: %s", exc)
+
+        if error_detail and not ticket_url:
+            raise PasswordResetFailedError(f"No se pudo enviar el correo de contraseña: {error_detail}")
+        return PasswordResetOutcome(email=email, ticket_url=ticket_url)
+
     def list_memberships(self, tenant_id: str) -> list[TenantMembership]:
         tenant = self.db.scalar(
             select(Tenant).where(Tenant.id == tenant_id)
         )
         if tenant is None:
-            raise ValueError(f"Tenant '{tenant_id}' not found")
+            raise TenantNotFoundError(f"Tenant '{tenant_id}' not found")
 
         return list(
             self.db.query(TenantMembership)
@@ -495,7 +537,7 @@ class OnboardingService:
         status: str = "active",
     ) -> LegacyAgentView:
         if self.db.get(Tenant, tenant_id) is None:
-            raise ValueError(f"Tenant '{tenant_id}' not found")
+            raise TenantNotFoundError(f"Tenant '{tenant_id}' not found")
         agent = self.legacy_agents.create_agents(tenant_id, ({
             "name": name,
             "external_provider": external_provider,
@@ -508,7 +550,7 @@ class OnboardingService:
 
     def list_agents(self, tenant_id: str) -> tuple[LegacyAgentView, ...]:
         if self.db.get(Tenant, tenant_id) is None:
-            raise ValueError(f"Tenant '{tenant_id}' not found")
+            raise TenantNotFoundError(f"Tenant '{tenant_id}' not found")
         return self.legacy_agents.list_agents(tenant_id)
 
     def _build_tenant_response(

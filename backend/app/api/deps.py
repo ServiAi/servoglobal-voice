@@ -25,7 +25,8 @@ def require_enabled_integration(provider: str, roles: list[str]):
     from fastapi import Depends, status
     from sqlalchemy.orm import Session
 
-    from app.modules.identity.public import AuthContext, require_roles
+    from app.modules.identity.public import AuthContext
+    from app.modules.identity.api.deps import require_roles
     from app.db.session import get_db
     from app.modules.integrations.public import IntegrationsFacade
 

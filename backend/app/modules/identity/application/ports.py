@@ -1,19 +1,11 @@
 from collections.abc import Mapping, Sequence
 from typing import Protocol
 
-from app.modules.identity.domain.contracts import ExternalIdentity, ProvisionedUser
+from app.modules.identity.domain.contracts import ExternalIdentity, IdentityProvisioningPort, ProvisionedUser
 
 
 class IdentityTokenVerifierPort(Protocol):
     def verify(self, token: str) -> ExternalIdentity: ...
-
-
-class IdentityProvisioningPort(Protocol):
-    def provision_tenant_admin(self, *, email: str, name: str) -> ProvisionedUser: ...
-    def delete_user(self, user_id: str) -> None: ...
-    def send_verification_email(self, user_id: str) -> bool: ...
-    def trigger_password_reset_email(self, *, email: str) -> bool: ...
-    def create_password_change_ticket(self, *, email: str) -> str | None: ...
 
 
 class BillingOnboardingPort(Protocol):

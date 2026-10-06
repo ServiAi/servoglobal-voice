@@ -5,7 +5,8 @@ from typing import Any
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
-from app.modules.identity.public import AuthContext, get_current_auth_context, require_roles
+from app.modules.identity.public import AuthContext
+from app.modules.identity.api.deps import get_current_auth_context, require_roles
 from app.db.session import get_db
 from app.modules.integrations.api.schemas import EmailAssetItem
 from app.modules.integrations.application.email.asset_service import EmailAssetService

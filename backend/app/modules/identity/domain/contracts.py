@@ -1,5 +1,5 @@
-from dataclasses import dataclass
-from typing import Mapping
+from dataclasses import dataclass, field
+from typing import Mapping, Protocol
 
 
 @dataclass(frozen=True)
@@ -30,3 +30,19 @@ class LegacyAgentView:
     external_agent_id: str | None
     channel_type: str | None
     status: str
+
+
+@dataclass(frozen=True)
+class PasswordResetOutcome:
+    email: str
+    ticket_url: str | None = field(default=None, repr=False)
+
+
+class IdentityProvisioningPort(Protocol):
+    """Provider-neutral account provisioning (Auth0 today). Pure contract: no provider types."""
+
+    def provision_tenant_admin(self, *, email: str, name: str) -> ProvisionedUser: ...
+    def delete_user(self, user_id: str) -> None: ...
+    def send_verification_email(self, user_id: str) -> bool: ...
+    def trigger_password_reset_email(self, *, email: str) -> bool: ...
+    def create_password_change_ticket(self, *, email: str) -> str | None: ...

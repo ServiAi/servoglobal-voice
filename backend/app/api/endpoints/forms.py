@@ -5,7 +5,8 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.modules.identity.public import AuthContext, get_current_auth_context, require_roles
+from app.modules.identity.public import AuthContext
+from app.modules.identity.api.deps import get_current_auth_context, require_roles
 from app.db.session import get_db
 from app.modules.identity.public import UserView as User
 from app.schemas.forms import (
@@ -18,7 +19,7 @@ from app.schemas.forms import (
     PublicFormSubmitResponse,
 )
 from app.services.form_service import FormService
-from app.modules.identity.public import create_onboarding_service
+from app.modules.identity.public import IdentityAdminFacade
 
 
 router = APIRouter(tags=["Forms"])
@@ -105,7 +106,7 @@ def list_admin_forms(
 ) -> Any:
     del user
     try:
-        create_onboarding_service(db).get_tenant(tenant_id)
+        IdentityAdminFacade(db).get_tenant(tenant_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return [_form_response(form) for form in FormService(db).list_forms(tenant_id)]
@@ -120,7 +121,7 @@ def create_admin_form(
 ) -> Any:
     del user
     try:
-        create_onboarding_service(db).get_tenant(tenant_id)
+        IdentityAdminFacade(db).get_tenant(tenant_id)
         return _form_response(FormService(db).create_form(tenant_id, body))
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
@@ -135,7 +136,7 @@ def get_admin_form(
 ) -> Any:
     del user
     try:
-        create_onboarding_service(db).get_tenant(tenant_id)
+        IdentityAdminFacade(db).get_tenant(tenant_id)
         return _form_response(FormService(db).get_form(tenant_id, form_id))
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
@@ -151,7 +152,7 @@ def create_admin_form_token(
 ) -> Any:
     del user
     try:
-        create_onboarding_service(db).get_tenant(tenant_id)
+        IdentityAdminFacade(db).get_tenant(tenant_id)
         token, link = FormService(db).create_token(tenant_id, form_id, body.lead_id, body.expires_in_days)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc

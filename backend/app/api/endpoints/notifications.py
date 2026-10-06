@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.db.session import get_db
-from app.modules.identity.public import IdentityService
+from app.modules.identity.public import TenantDirectory
 
 
 logger = logging.getLogger(__name__)
@@ -54,7 +54,7 @@ async def send_booking_notifications(request: BookingNotificationRequest, db: Se
     """
     from app.services.notification_service import notification_service
 
-    tenant = IdentityService(db).bootstrap_tenant()
+    tenant = TenantDirectory(db).bootstrap()
 
     try:
         results = await notification_service.notify_new_booking(
