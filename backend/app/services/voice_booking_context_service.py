@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.analytics import Agent
+from app.modules.analytics.public import AnalyticsAgentDirectory, AnalyticsError
 from app.modules.crm.public import CrmFacade
 from app.modules.scheduling.public import SchedulingFacade
 
@@ -41,12 +41,10 @@ class VoiceBookingContextService:
                     booking_config_id=self._voice_config_id(context.tenant_id, agent_id),
                 )
         if agent_id:
-            agent = self.db.scalar(
-                select(Agent).where(
-                    Agent.external_agent_id == agent_id,
-                    Agent.status == "active",
-                )
-            )
+            try:
+                agent = AnalyticsAgentDirectory(self.db).resolve_unique_external_agent(agent_id)
+            except AnalyticsError:
+                agent = None  # no match or ambiguous across tenants: fail closed below
             if agent:
                 return VoiceBookingContext(
                     tenant_id=agent.tenant_id,

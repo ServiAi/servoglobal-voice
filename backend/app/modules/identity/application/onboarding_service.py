@@ -248,7 +248,7 @@ class OnboardingService:
 
             tenant_cleanup_counts = self.tenant_cleanup.cleanup_tenant(tenant_id)
             billing_cleanup_counts = self.billing.cleanup_tenant(tenant_id)
-            deleted_agents = self.legacy_agents.cleanup_tenant(tenant_id)
+            deleted_agents = tenant_cleanup_counts.get("agents", 0)
             deleted_call_events = tenant_cleanup_counts.get("call_events", 0)
             deleted_metric_snapshots = tenant_cleanup_counts.get("metric_snapshots", 0)
             deleted_calls = tenant_cleanup_counts.get("calls", 0)

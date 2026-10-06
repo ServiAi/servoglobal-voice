@@ -3,8 +3,8 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.analytics import Agent
 from app.models.integrations import TenantVoiceAgentConfig, TenantVoiceProviderConfig
+from app.modules.analytics.public import AgentUpsertCommand, AnalyticsAgentDirectory
 from app.schemas.integrations import VoiceAgentConfigRequest, VoiceAgentConfigResponse
 from app.modules.integrations.public import IntegrationEvents
 
@@ -95,23 +95,16 @@ class VoiceAgentService:
         # tenant_voice_agent_configs and is what call ingestion joins
         # against to resolve Call.agent_id; without this mirror, calls made
         # through a tenant-configured voice agent always show "Unassigned".
-        analytics_agent = self.db.scalar(
-            select(Agent).where(
-                Agent.tenant_id == tenant_id,
-                Agent.external_provider == agent.provider,
-                Agent.external_agent_id == agent.provider_agent_id,
-            )
-        )
-        if analytics_agent is None:
-            analytics_agent = Agent(
+        AnalyticsAgentDirectory(self.db).upsert_provider_agent(
+            AgentUpsertCommand(
                 tenant_id=tenant_id,
                 external_provider=agent.provider,
                 external_agent_id=agent.provider_agent_id,
+                name=agent.display_name,
+                status=agent.status,
                 channel_type="voice",
             )
-            self.db.add(analytics_agent)
-        analytics_agent.name = agent.display_name
-        analytics_agent.status = agent.status
+        )
 
     def get_default_agent(self, tenant_id: str, provider: str = "ultravox") -> TenantVoiceAgentConfig | None:
         provider_config = self.db.scalar(

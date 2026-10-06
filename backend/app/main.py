@@ -34,7 +34,6 @@ from app.modules.integrations.api import chatwoot_webhook
 from app.api.endpoints import voice
 from app.api.endpoints import voice_booking_tools
 from app.modules.scheduling.api import calcom_router as calcom
-from app.api.endpoints import dashboard
 from app.api.endpoints import me
 from app.api.endpoints import ultravox_webhook
 from app.api.endpoints.admin import tenants as admin_tenants
@@ -62,6 +61,7 @@ from app.modules.agents.api import router as agents
 from app.modules.tools.api import router as tools_custom
 from app.api.endpoints import voice_registry
 from app.modules.voice.api import router as voice_runtime
+from app.modules.analytics.api import dashboard_router as analytics_dashboard
 from app.modules.billing.api import admin_router as billing_admin, dashboard_router as billing_dashboard
 from app.api.endpoints import voice_provider_admin
 
@@ -70,7 +70,7 @@ app.include_router(chatwoot_webhook.router)
 app.include_router(voice.router)
 app.include_router(voice_booking_tools.router)
 app.include_router(calcom.router)
-app.include_router(dashboard.router)
+app.include_router(analytics_dashboard.router)
 app.include_router(billing_dashboard.router)
 app.include_router(me.router)
 app.include_router(ultravox_webhook.router)
