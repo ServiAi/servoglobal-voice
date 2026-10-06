@@ -5,8 +5,8 @@ from sqlalchemy.orm import Session
 
 from app.models.integrations import TenantVoiceAgentConfig, TenantVoiceProviderConfig
 from app.modules.analytics.public import AgentUpsertCommand, AnalyticsAgentDirectory
-from app.schemas.integrations import VoiceAgentConfigRequest, VoiceAgentConfigResponse
 from app.modules.integrations.public import IntegrationEvents
+from app.schemas.integrations import VoiceAgentConfigRequest, VoiceAgentConfigResponse
 
 
 class VoiceAgentService:

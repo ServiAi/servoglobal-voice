@@ -3,7 +3,6 @@ from __future__ import annotations
 from datetime import UTC, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import Tenant

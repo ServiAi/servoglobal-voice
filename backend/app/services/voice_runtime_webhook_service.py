@@ -9,7 +9,11 @@ from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.models.voice_submissions import TenantVoiceRuntimeCall
-from app.modules.analytics.public import AnalyticsCallLedger, PersistCallCommand, PersistCallEventCommand
+from app.modules.analytics.public import (
+    AnalyticsCallLedger,
+    PersistCallCommand,
+    PersistCallEventCommand,
+)
 from app.modules.crm.public import (
     CrmFacade,
     CrmVoiceCalls,

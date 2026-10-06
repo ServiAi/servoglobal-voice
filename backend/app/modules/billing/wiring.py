@@ -1,9 +1,12 @@
 from sqlalchemy.orm import Session
 
 from app.modules.analytics.public import AnalyticsUsageFacts
-from app.modules.billing.application.ports import TenantAccountPort, UsageMeterPort
 from app.modules.billing.application.service import BillingService
-from app.modules.identity.public import IdentityAdminFacade, TenantDirectory, TenantLifecycle
+from app.modules.identity.public import (
+    IdentityAdminFacade,
+    TenantDirectory,
+    TenantLifecycle,
+)
 
 
 class IdentityTenantAccountAdapter:

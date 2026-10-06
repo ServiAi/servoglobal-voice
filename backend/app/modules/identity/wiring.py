@@ -18,7 +18,6 @@ from app.modules.identity.infrastructure.auth0.provisioning import (
     Auth0ProvisioningError,
     Auth0ProvisioningService,
 )
-from app.modules.identity.infrastructure.models import Tenant
 
 
 class _ProvisioningAdapter:

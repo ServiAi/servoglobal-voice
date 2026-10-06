@@ -5,7 +5,6 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.modules.analytics.public import CallLookup
