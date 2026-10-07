@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-from datetime import datetime, timezone
 from pathlib import Path
 import unittest
 
@@ -21,11 +20,7 @@ from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.main import app
 from app.modules.crm.infrastructure.models import CrmCallContext, CrmContact, CrmLead, CrmPipelineStage
-from app.modules.evaluations.infrastructure.models import (
-    EvaluationDefinition,
-    EvaluationDefinitionVersion,
-    SYSTEM_OWNER_KEY,
-)
+from _evaluation_test_seed import seed_voice_technical_health
 from app.modules.identity.infrastructure.models import Tenant, TenantMembership, User
 from app.modules.scheduling.domain.contracts import BookingConfigRequest
 from app.modules.scheduling.application.booking_config_service import BookingConfigService
@@ -42,30 +37,11 @@ class Integration2ATestCase(unittest.TestCase):
         Base.metadata.create_all(bind=engine)
         app.dependency_overrides.clear()
         self.client = TestClient(app)
-        self._seed_evaluation_definition()
+        with SessionLocal() as db:
+            seed_voice_technical_health(db)
         self.tenant, self.user = self._seed_tenant_user()
         app.dependency_overrides[get_current_auth_context] = self._auth_context_override
 
-    @staticmethod
-    def _seed_evaluation_definition() -> None:
-        # create_all no ejecuta la migración que siembra la definición system-owned.
-        with SessionLocal() as db:
-            definition = EvaluationDefinition(
-                owner_scope="system", owner_key=SYSTEM_OWNER_KEY, tenant_id=None,
-                definition_key="voice_session_technical_health", name="Voice session technical health",
-                active=True,
-            )
-            db.add(definition)
-            db.flush()
-            db.add(EvaluationDefinitionVersion(
-                definition_id=definition.id, owner_key=SYSTEM_OWNER_KEY, version=1,
-                status="published", published_at=datetime.now(timezone.utc),
-                criteria_json=[
-                    {"key": key, "evaluator_type": "deterministic", "weight": 1}
-                    for key in ("session_terminal", "runtime_health", "tool_execution_health")
-                ],
-            ))
-            db.commit()
 
     def tearDown(self):
         app.dependency_overrides.clear()

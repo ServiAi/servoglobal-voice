@@ -33,6 +33,7 @@ if DATABASE_URL:
 from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import sessionmaker
 
+from _evaluation_test_seed import seed_voice_technical_health
 import app.models  # noqa: F401  (register every ORM table before create_all)
 from app.db.base import Base
 from app.db.session import SessionLocal as AppSessionLocal
@@ -100,6 +101,8 @@ class TelephonyPostgresConcurrencyTests(unittest.TestCase):
     def setUp(self) -> None:
         Base.metadata.drop_all(bind=self.engine)
         Base.metadata.create_all(bind=self.engine)
+        with self.SessionLocal() as db:
+            seed_voice_technical_health(db)
         self.sip = CountingSip()
         self.backend = ReadyBackend()
 
