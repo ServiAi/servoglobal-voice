@@ -24,7 +24,10 @@ class BillingBoundaryTests(unittest.TestCase):
         from sqlalchemy.orm import configure_mappers
 
         from app.models import Tenant  # noqa: F401 - register the Tenant mapper
-        from app.modules.billing.infrastructure.models import TenantBillingPlan, TenantUsageAlert
+        from app.modules.billing.infrastructure.models import (
+            TenantBillingPlan,
+            TenantUsageAlert,
+        )
 
         configure_mappers()
         self.assertEqual(set(inspect(TenantBillingPlan).relationships.keys()), {"alerts"})
@@ -44,7 +47,7 @@ class BillingBoundaryTests(unittest.TestCase):
         self.assertEqual(offenders, [])
 
     def test_application_has_no_framework_or_foreign_orm_dependency(self):
-        forbidden = ("fastapi", "starlette", "pydantic", "app.models.analytics", "app.modules.identity.infrastructure", "app.services", "app.modules.billing.api")
+        forbidden = ("fastapi", "starlette", "pydantic", "app.modules.analytics.infrastructure", "app.modules.identity.infrastructure", "app.services", "app.modules.billing.api")
         offenders = [
             f"{path.relative_to(BILLING)} imports {module}"
             for path in (BILLING / "application").rglob("*.py")
@@ -53,12 +56,13 @@ class BillingBoundaryTests(unittest.TestCase):
         ]
         self.assertEqual(offenders, [])
 
-    def test_only_wiring_imports_legacy_analytics_orm(self):
+    def test_billing_reaches_analytics_only_through_its_public_api(self):
         offenders = [
             f"{path.relative_to(BILLING)} imports {module}"
             for path in BILLING.rglob("*.py")
             for module in imports(path)
-            if module == "app.models.analytics" and path != BILLING / "wiring.py"
+            if module == "app.models.analytics"
+            or (module.startswith("app.modules.analytics") and module != "app.modules.analytics.public")
         ]
         self.assertEqual(offenders, [])
 
@@ -66,7 +70,7 @@ class BillingBoundaryTests(unittest.TestCase):
         code = (
             "import json,sys; import app.modules.billing.public; "
             "print(json.dumps(sorted(x for x in sys.modules if x == 'sqlalchemy' "
-            "or x.startswith(('fastapi','pydantic','app.models.analytics',"
+            "or x.startswith(('fastapi','pydantic','app.modules.analytics',"
             "'app.modules.billing.application','app.modules.billing.infrastructure',"
             "'app.modules.billing.api','app.modules.identity.infrastructure')))))"
         )
@@ -89,12 +93,12 @@ class BillingBoundaryTests(unittest.TestCase):
         ]
         self.assertEqual(offenders, [])
 
-    def test_only_wiring_reads_analytics_legacy_and_other_modules_use_public(self):
+    def test_billing_and_other_modules_use_only_public_apis(self):
         private_imports = []
         identity_billing_imports = []
         for path in APP.rglob("*.py"):
             for module in imports(path):
-                if path.is_relative_to(BILLING) and module == "app.models.analytics" and path != BILLING / "wiring.py":
+                if path.is_relative_to(BILLING) and (module == "app.models.analytics" or (module.startswith("app.modules.analytics") and module != "app.modules.analytics.public")):
                     private_imports.append(f"{path.relative_to(APP)} -> {module}")
                 if module.startswith("app.modules.billing"):
                     if path.is_relative_to(BILLING):
@@ -112,8 +116,8 @@ class BillingBoundaryTests(unittest.TestCase):
 
     def test_billing_routes_exist_once_and_contract_metrics_match(self):
         from app.api.endpoints.admin import tenants as admin_tenants
-        from app.api.endpoints import dashboard
         from app.main import app
+        from app.modules.analytics.api import dashboard_router as dashboard
         from app.modules.billing.api import admin_router, dashboard_router
 
         router_paths = (
@@ -133,7 +137,7 @@ class BillingBoundaryTests(unittest.TestCase):
         for router, path, method in router_paths:
             routes = [r for r in router.routes if r.path == path and method in r.methods]
             if router in (dashboard.router, admin_tenants.router):
-                self.assertEqual(routes, [], f"legacy router still owns {method} {path}")
+                self.assertEqual(routes, [], f"a non-Billing router still owns {method} {path}")
             else:
                 self.assertEqual(len(routes), 1, f"Billing route count for {method} {path}")
 

@@ -1,9 +1,13 @@
 from collections.abc import Mapping, Sequence
 
-from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from app.models.analytics import Agent, Call, CallEvent, MetricSnapshotDaily
+from app.modules.analytics.public import (
+    AnalyticsAgentDirectory,
+    AnalyticsAgentView,
+    AnalyticsMaintenance,
+    NewAgentCommand,
+)
 from app.modules.identity.application.onboarding_service import OnboardingService
 from app.modules.identity.domain.contracts import LegacyAgentView, ProvisionedUser
 from app.modules.identity.domain.errors import (
@@ -14,7 +18,6 @@ from app.modules.identity.infrastructure.auth0.provisioning import (
     Auth0ProvisioningError,
     Auth0ProvisioningService,
 )
-from app.modules.identity.infrastructure.models import Tenant
 
 
 class _ProvisioningAdapter:
@@ -62,7 +65,7 @@ class _ProvisioningAdapter:
             raise IdentityProviderError("Identity provider ticket creation failed") from exc
 
 
-def _agent_view(agent: Agent) -> LegacyAgentView:
+def _agent_view(agent: AnalyticsAgentView) -> LegacyAgentView:
     return LegacyAgentView(
         id=agent.id,
         tenant_id=agent.tenant_id,
@@ -75,34 +78,29 @@ def _agent_view(agent: Agent) -> LegacyAgentView:
 
 
 class _LegacyAgentAdapter:
+    """Onboarding agents live in the Analytics agent projection (via analytics.public)."""
+
     def __init__(self, db: Session) -> None:
-        self.db = db
+        self.directory = AnalyticsAgentDirectory(db)
 
     def create_agents(self, tenant_id: str, agents: Sequence[Mapping[str, object]]) -> tuple[LegacyAgentView, ...]:
-        result = []
-        for values in agents:
-            agent = Agent(
-                tenant_id=tenant_id,
-                name=str(values["name"]).strip(),
-                external_provider=str(values["external_provider"]).strip(),
-                external_agent_id=str(values["external_agent_id"]).strip(),
-                channel_type=values.get("channel_type"),
-                status=str(values.get("status", "active")),
-            )
-            self.db.add(agent)
-            self.db.flush()
-            result.append(_agent_view(agent))
-        return tuple(result)
+        created = self.directory.create_agents(
+            tenant_id,
+            [
+                NewAgentCommand(
+                    name=str(values["name"]).strip(),
+                    external_provider=str(values["external_provider"]).strip(),
+                    external_agent_id=str(values["external_agent_id"]).strip(),
+                    channel_type=values.get("channel_type"),
+                    status=str(values.get("status", "active")),
+                )
+                for values in agents
+            ],
+        )
+        return tuple(_agent_view(agent) for agent in created)
 
     def list_agents(self, tenant_id: str) -> tuple[LegacyAgentView, ...]:
-        agents = self.db.scalars(
-            select(Agent).where(Agent.tenant_id == tenant_id).order_by(Agent.created_at.desc())
-        ).all()
-        return tuple(_agent_view(agent) for agent in agents)
-
-    def cleanup_tenant(self, tenant_id: str) -> int:
-        result = self.db.execute(delete(Agent).where(Agent.tenant_id == tenant_id))
-        return max(result.rowcount or 0, 0)
+        return tuple(_agent_view(agent) for agent in self.directory.list_for_tenant(tenant_id))
 
 
 class _BillingAdapter:
@@ -151,18 +149,10 @@ class _BillingAdapter:
 
 class _TenantDependentCleanupAdapter:
     def __init__(self, db: Session) -> None:
-        self.db = db
+        self.maintenance = AnalyticsMaintenance(db)
 
     def cleanup_tenant(self, tenant_id: str) -> Mapping[str, int]:
-        counts: dict[str, int] = {}
-        for name, model in (
-            ("call_events", CallEvent),
-            ("metric_snapshots", MetricSnapshotDaily),
-            ("calls", Call),
-        ):
-            result = self.db.execute(delete(model).where(model.tenant_id == tenant_id))
-            counts[name] = max(result.rowcount or 0, 0)
-        return counts
+        return self.maintenance.cleanup_tenant(tenant_id)
 
 
 def create_provisioning_adapter(

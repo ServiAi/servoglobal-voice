@@ -23,7 +23,7 @@ from app.modules.identity.api.deps import get_current_auth_context, get_identity
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.main import app
-from app.models.analytics import Agent, Call
+from app.modules.analytics.infrastructure.models import Agent, Call
 from app.modules.billing.infrastructure.models import TenantBillingPlan, TenantUsageAlert
 from app.modules.billing.public import BillingAccessGate, BillingFacade, BillingOnboardingFacade, BillingPlanInput, MinutePackageExhaustedError
 from app.modules.identity.infrastructure.models import Tenant, TenantMembership, User

@@ -317,6 +317,23 @@ Other modules consume Identity through `app.modules.identity.public` and API aut
 
 ### Billing (Module 10)
 
-Billing consumers outside `app.modules.billing` use only `billing.public`; `main.py` mounts the Billing API routers and `app.models` registers the ORM solely for Alembic. Within Billing, only `wiring.py` imports legacy `app.models.analytics` and identity adapters use `identity.public`. The structural boundary tests enforce zero external imports of Billing application, infrastructure, or wiring and no Analytics or Identity ORM imports from Billing. The dependency remains intentionally bidirectional at the public API level: Identity onboarding calls `BillingOnboardingFacade`, while Billing's tenant account adapter calls `identity.public`. The temporary usage adapter is replaced by `analytics.public` in Module 11.
+Billing consumers outside `app.modules.billing` use only `billing.public`; `main.py` mounts the Billing API routers and `app.models` registers the ORM solely for Alembic. Within Billing, `wiring.py` reaches Analytics only through `analytics.public` and identity adapters use `identity.public`. The structural boundary tests enforce zero external imports of Billing application, infrastructure, or wiring and no Analytics or Identity ORM imports from Billing. The dependency remains intentionally bidirectional at the public API level: Identity onboarding calls `BillingOnboardingFacade`, while Billing's tenant account adapter calls `identity.public`. The temporary usage adapter was replaced by `analytics.public.AnalyticsUsageFacts` in Module 11.
 
 Billing retains database foreign keys to `tenants.id` without ORM navigation to Identity. Mapper architecture tests preserve these foreign keys and Billing-internal ORM relationships.
+
+### Analytics (Module 11)
+
+Consumers outside `app.modules.analytics` use only `analytics.public` (`main.py` mounts `analytics.api.dashboard_router`; `app.models` registers the ORM solely for Alembic; `scripts/seed_staging_analytics.py` is the one allowlisted tool). Inside Analytics, `domain` and `contracts` are framework-free, `application` imports no FastAPI/Pydantic/`app.schemas`/foreign module, and only `wiring.py` (and `api`, for `identity.api.deps`/`identity.public`) reach foreign `<module>.public` APIs. `analytics.public` loads no SQLAlchemy, FastAPI, Pydantic or other module.
+
+| Métrica | Antes (`develop@e963618`) | Después |
+| --- | --- | --- |
+| Archivos que importan el ORM de Analytics (`app.models.analytics`) | 8 (+ `app/models/__init__`) | **0** (sólo el registro `app/models/__init__`) |
+| Archivos externos con imports a internals/legacy de Analytics | 10 | **2** (`main.py` monta el router; registro de modelos) |
+| Billing → internals de Analytics | 1 | **0** |
+| Identity → internals de Analytics | 1 | **0** |
+| CRM → internals de Analytics | 0 (usa `CallLookup` público) | **0** |
+| Voice / Telephony → internals de Analytics | 0 (usan la fachada pública) | **0** |
+| Servicios legacy (Ultravox, webhook, CallSummary, booking, Voice Legacy, CRM dashboard) → ORM Analytics | 6 | **0** |
+| Analytics → internals ajenos (`Tenant` ORM, `app.schemas`, FastAPI en application) | 3 | **0** |
+| Componente conexa con Analytics (imports estáticos, incl. diferidos) | 60 archivos | 67 archivos (no se persigue; lo relevante es 0 aristas privadas) |
+| Ruff `app` | 1390 | 1381 (F 26 -> 22, sin F nuevos) |

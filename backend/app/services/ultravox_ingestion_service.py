@@ -6,16 +6,19 @@ from decimal import Decimal
 from typing import Any
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import Tenant
-from app.models.analytics import Agent, Call, CallEvent
-from app.services.call_persistence_service import (
-    CallPersistenceService,
-    PersistCallInput,
-    PersistEventInput,
+from app.modules.analytics.public import (
+    AnalyticsAgentDirectory,
+    AnalyticsAgentTenantMismatchError,
+    AnalyticsCallLedger,
+    CallEventView,
+    CallNotFoundError,
+    CallView,
+    PersistCallCommand,
+    PersistCallEventCommand,
 )
+from app.modules.identity.public import TenantDirectory, TenantView
 
 ULTRAVOX_PROVIDER = "ultravox"
 OFFICIAL_ULTRAVOX_EVENTS = {
@@ -28,31 +31,38 @@ OFFICIAL_ULTRAVOX_EVENTS = {
 
 @dataclass(frozen=True)
 class IngestionResult:
-    call: Call
-    event: CallEvent | None
+    call: CallView
+    event: CallEventView | None
 
 
 class UltravoxIngestionService:
     def __init__(self, db: Session) -> None:
         self.db = db
-        self.call_persistence = CallPersistenceService(db)
+        self.calls = AnalyticsCallLedger(db)
+        self.agents = AnalyticsAgentDirectory(db)
+        self.tenants = TenantDirectory(db)
 
     def ingest_event(self, payload: dict[str, Any]) -> IngestionResult:
         tenant = self._resolve_tenant(payload)
         call_input = self._build_call_input(payload, tenant.id)
-        call = self.call_persistence.persist_call(call_input)
-        event = self.call_persistence.persist_event(
-            PersistEventInput(
-                tenant_id=tenant.id,
-                call_id=call.id,
-                event_type=self._event_type(payload),
-                provider_event_id=self._first(payload, "eventId", "event_id", "id"),
-                payload_json=payload,
-                received_at=self._datetime_or_none(
-                    self._first(payload, "receivedAt", "received_at", "timestamp", "createdAt")
-                ),
+        try:
+            call = self.calls.persist_call(call_input)
+            event = self.calls.add_event(
+                PersistCallEventCommand(
+                    tenant_id=tenant.id,
+                    call_id=call.id,
+                    event_type=self._event_type(payload),
+                    provider_event_id=self._first(payload, "eventId", "event_id", "id"),
+                    payload_json=payload,
+                    received_at=self._datetime_or_none(
+                        self._first(payload, "receivedAt", "received_at", "timestamp", "createdAt")
+                    ),
+                )
             )
-        )
+        except AnalyticsAgentTenantMismatchError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+        except CallNotFoundError as exc:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
         # Ingest into CRM base
         try:
             import logging
@@ -69,13 +79,16 @@ class UltravoxIngestionService:
     def reconcile_call(self, payload: dict[str, Any]) -> IngestionResult:
         tenant = self._resolve_tenant(payload)
         call_input = self._build_call_input(payload, tenant.id)
-        call = self.call_persistence.persist_call(call_input)
+        try:
+            call = self.calls.persist_call(call_input)
+        except AnalyticsAgentTenantMismatchError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
         return IngestionResult(call=call, event=None)
 
-    def list_reconciliation_candidates(self, tenant_id: str, limit: int = 100) -> list[Call]:
-        return self.call_persistence.list_calls_pending_reconciliation(tenant_id, limit=limit)
+    def list_reconciliation_candidates(self, tenant_id: str, limit: int = 100) -> tuple[CallView, ...]:
+        return self.calls.list_reconciliation_candidates(tenant_id, limit=limit)
 
-    def _build_call_input(self, payload: dict[str, Any], tenant_id: str) -> PersistCallInput:
+    def _build_call_input(self, payload: dict[str, Any], tenant_id: str) -> PersistCallCommand:
         call = self._call_object(payload)
         agent = self._agent_object(call)
         metadata = self._metadata(payload)
@@ -104,7 +117,7 @@ class UltravoxIngestionService:
         )
         duration_seconds = self._duration_seconds(payload, started_at, joined_at, ended_at)
         billed_minutes = self._billed_minutes(payload)
-        return PersistCallInput(
+        return PersistCallCommand(
             tenant_id=tenant_id,
             external_provider=external_provider,
             external_call_id=self._external_call_id(payload),
@@ -133,7 +146,7 @@ class UltravoxIngestionService:
             partial_update=True,
         )
 
-    def _resolve_tenant(self, payload: dict[str, Any]) -> Tenant:
+    def _resolve_tenant(self, payload: dict[str, Any]) -> TenantView:
         metadata = self._metadata(payload)
         tenant_id = self._string(
             metadata.get("tenant_id") or self._first(payload, "tenant_id", "tenantId")
@@ -143,9 +156,9 @@ class UltravoxIngestionService:
         )
         tenant = None
         if tenant_id:
-            tenant = self.db.get(Tenant, tenant_id)
+            tenant = self.tenants.get(tenant_id)
         if tenant is None and tenant_slug:
-            tenant = self.db.scalar(select(Tenant).where(Tenant.slug == tenant_slug))
+            tenant = self.tenants.get_by_slug(tenant_slug)
         if tenant is None:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -161,13 +174,7 @@ class UltravoxIngestionService:
     ) -> str | None:
         if not provider_agent_id:
             return None
-        agent = self.db.scalar(
-            select(Agent).where(
-                Agent.tenant_id == tenant_id,
-                Agent.external_provider == external_provider,
-                Agent.external_agent_id == provider_agent_id,
-            )
-        )
+        agent = self.agents.find_by_provider_identity(tenant_id, external_provider, provider_agent_id)
         return agent.id if agent is not None else None
 
     def _external_call_id(self, payload: dict[str, Any]) -> str:

@@ -23,7 +23,7 @@ from app.db.base import Base
 from app.modules.billing.infrastructure.models import TenantBillingPlan, TenantUsageAlert
 from app.modules.billing.public import BillingFacade, BillingOnboardingFacade, BillingPlanInput
 from app.modules.identity.infrastructure.models import Tenant
-from app.models.analytics import Call
+from app.modules.analytics.infrastructure.models import Call
 
 EXPECTED_DATABASE = "serviai_billing_test"
 WORKERS = 6

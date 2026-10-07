@@ -1,8 +1,10 @@
+import logging
+
+import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
 from app.core.config import settings
-import uvicorn
-import logging
 
 logging.basicConfig(
     level=logging.INFO,
@@ -29,48 +31,54 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-from app.api.endpoints import notifications
-from app.modules.integrations.api import chatwoot_webhook
-from app.api.endpoints import voice
-from app.api.endpoints import voice_booking_tools
-from app.modules.scheduling.api import calcom_router as calcom
-from app.api.endpoints import dashboard
-from app.api.endpoints import me
-from app.api.endpoints import ultravox_webhook
-from app.api.endpoints.admin import tenants as admin_tenants
-from app.api.endpoints.admin import tenant_features as admin_tenant_features
 from app.api.endpoints import auth0 as auth0_endpoint
-from app.api.endpoints import crm
+from app.api.endpoints import (
+    crm,
+    crm_voice,
+    crm_whatsapp,
+    forms,
+    me,
+    notifications,
+    ultravox_webhook,
+    voice,
+    voice_booking_tools,
+    voice_context_schemas,
+    voice_experiences,
+    voice_integrations,
+    voice_provider_admin,
+    voice_public,
+    voice_registry,
+    voice_webhook,
+)
+from app.api.endpoints.admin import tenant_features as admin_tenant_features
+from app.api.endpoints.admin import tenants as admin_tenants
+from app.modules.agents.api import router as agents
+from app.modules.analytics.api import dashboard_router as analytics_dashboard
+from app.modules.billing.api import admin_router as billing_admin
+from app.modules.billing.api import dashboard_router as billing_dashboard
 from app.modules.crm.api import router as crm_core
-from app.api.endpoints import voice_integrations
-from app.modules.integrations.api import router as integrations_router, admin_router as integrations_admin_router
-from app.api.endpoints import forms
-from app.modules.integrations.api import email_assets
-from app.api.endpoints import crm_whatsapp
-from app.modules.integrations.api import whatsapp_webhook
-from app.modules.integrations.api import whatsapp_flows
-from app.api.endpoints import crm_voice
-from app.api.endpoints import voice_webhook
+from app.modules.integrations.api import admin_router as integrations_admin_router
+from app.modules.integrations.api import (
+    chatwoot_webhook,
+    email_assets,
+    whatsapp_flows,
+    whatsapp_webhook,
+)
+from app.modules.integrations.api import router as integrations_router
 from app.modules.notifications.api import router as notification_admin
-from app.api.endpoints import voice_context_schemas
-from app.api.endpoints import voice_experiences
-from app.api.endpoints import voice_public
-from app.modules.telephony.api import router as asterisk_provisioning
+from app.modules.scheduling.api import calcom_router as calcom
 from app.modules.scheduling.api import integrations_router as scheduling_integrations
 from app.modules.scheduling.api import router as scheduling
-from app.modules.agents.api import router as agents
+from app.modules.telephony.api import router as asterisk_provisioning
 from app.modules.tools.api import router as tools_custom
-from app.api.endpoints import voice_registry
 from app.modules.voice.api import router as voice_runtime
-from app.modules.billing.api import admin_router as billing_admin, dashboard_router as billing_dashboard
-from app.api.endpoints import voice_provider_admin
 
 app.include_router(notifications.router)
 app.include_router(chatwoot_webhook.router)
 app.include_router(voice.router)
 app.include_router(voice_booking_tools.router)
 app.include_router(calcom.router)
-app.include_router(dashboard.router)
+app.include_router(analytics_dashboard.router)
 app.include_router(billing_dashboard.router)
 app.include_router(me.router)
 app.include_router(ultravox_webhook.router)

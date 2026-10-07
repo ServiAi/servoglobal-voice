@@ -47,7 +47,7 @@ Orden validado contra el grafo real: primero módulos con pocos consumidores ent
 | 8 | Integrations / Messaging | Alta | **Hecho (2026-10-05)** |
 | 9 | Identity / Tenancy | Media (muchos consumidores, poca lógica) | |
 | 10 | Billing | Baja | |
-| 11 | Analytics | Media | |
+| 11 | Analytics | Media | ✅ migrado (2026-10-06) |
 | — | Voice Experiences | Media | Tras CRM |
 | — | Voice Providers | Media | **Frontera consolidada** (registro, adapters, credenciales) |
 | — | Voice Legacy | — | **No migrar**: aislado tras `voice_legacy.public` (mínimo); retirar cuando `voice_runtime_v2` sea el único camino |
@@ -224,9 +224,17 @@ Sprint de integridad, no una migración estructural (rama `fix/integrations-reli
 
 ### 10. Billing y 11. Analytics
 
-Billing es el décimo módulo real (`app.modules.billing`). Es dueño de `tenant_billing_plans`, `tenant_usage_alerts` y `external_provider_pricing`; separa dominio, aplicación, infraestructura, API, wiring y una API pública import-light. Identity usa `BillingOnboardingFacade` para crear plan, snapshot y cleanup dentro de su transacción; Billing usa puertos respaldados por `identity.public` para consultar tenants y cambiar únicamente la suspensión por uso. La aplicación recibe hechos de minutos por `UsageMeterPort`; el adapter temporal `LegacyAnalyticsUsageMeter` conserva la consulta a `analytics.Call` (incluido `started_at <= billing_period_end`) y vive sólo en `billing.wiring`. No se movieron hechos de llamadas ni se cambió DDL, Alembic o contratos HTTP. Los casos standalone de Billing poseen su transacción; onboarding y cleanup sólo hacen flush y dejan commit/rollback al coordinador Identity.
+Billing es el décimo módulo real (`app.modules.billing`). Es dueño de `tenant_billing_plans`, `tenant_usage_alerts` y `external_provider_pricing`; separa dominio, aplicación, infraestructura, API, wiring y una API pública import-light. Identity usa `BillingOnboardingFacade` para crear plan, snapshot y cleanup dentro de su transacción; Billing usa puertos respaldados por `identity.public` para consultar tenants y cambiar únicamente la suspensión por uso. La aplicación recibe hechos de minutos por `UsageMeterPort`; los hechos de minutos vienen de `analytics.public.AnalyticsUsageFacts` (incluido `started_at <= billing_period_end`). No se movieron hechos de llamadas ni se cambió DDL, Alembic o contratos HTTP. Los casos standalone de Billing poseen su transacción; onboarding y cleanup sólo hacen flush y dejan commit/rollback al coordinador Identity.
 
-Analytics sigue siendo legacy y conserva `agents`, `calls`, `call_events`, `metric_snapshots_daily` y los dashboards analíticos. Al migrar Analytics como módulo 11, sustituirá el adapter por `analytics.public` sin modificar la aplicación Billing. Deuda Identity restante incluye la limpieza legacy de Analytics y otros consumidores listados en `DATA_OWNERSHIP.md`.
+### 11. Analytics
+
+Analytics es el undécimo módulo real (`app.modules.analytics`): `domain` (estados, normalizador, filtros y cálculos puros, errores neutrales), `contracts.py` (DTOs/comandos frozen), `application` (ledger de llamadas y eventos, directorio de agentes, dashboard, consultas, proyección de sesiones, mantenimiento), `infrastructure` (4 modelos ORM), `api` (las seis rutas de dashboard) y `wiring.py` (puertos hacia Voice, CRM y Agents). Es dueño de `agents`, `calls`, `call_events` y `metric_snapshots_daily`; `agents` es la proyección de reporting y no se fusiona con `tenant_agents`. Sin cambios de DDL, Alembic (`202610050001`) ni OpenAPI (257/336/293).
+
+- **Consumidores**: Billing (`AnalyticsUsageFacts`), Identity (`AnalyticsAgentDirectory`, `AnalyticsMaintenance`), CRM dashboard (`AnalyticsCallMetrics`, `CallLookup`), Call Summary (`CallLookup.latest_summary`), Voice Legacy (`AnalyticsAgentDirectory`), booking de voz (`resolve_unique_external_agent`, falla cerrado si es ambiguo), Ultravox y webhook del runtime (`AnalyticsCallLedger`), Voice/Telephony (`VoiceCallProjectionFacade`).
+- **Transacciones**: `commit=True` es ingestión standalone; `commit=False`, el directorio de agentes y el mantenimiento sólo hacen flush y dejan el commit al orquestador (webhook del runtime, proyección, borrado de tenant).
+- **Concurrencia (PostgreSQL real)**: llamadas, agentes, eventos con `dedup_key` y proyecciones concurrentes convergen a una fila usando los uniques existentes; no se añadieron constraints. Un `partial update` tardío nunca reabre una llamada terminada.
+- **Eliminado**: `models/analytics.py`, `call_persistence_service`, `call_status_normalizer`, `dashboard_analytics_service`, `voice_call_projection_service`, `api/endpoints/dashboard.py`.
+- **Deuda**: `scripts/seed_staging_analytics.py` (ORM directo, allowlist), `Tenant` leído por `crm_dashboard_metrics_service`, orquestadores Ultravox/webhook (Voice Legacy), `metric_snapshots_daily` sin productor.
 
 ## Eventos entre módulos
 

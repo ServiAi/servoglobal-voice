@@ -8,8 +8,12 @@ from fastapi import HTTPException, status
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
-from app.models.analytics import Call, CallEvent
 from app.models.voice_submissions import TenantVoiceRuntimeCall
+from app.modules.analytics.public import (
+    AnalyticsCallLedger,
+    PersistCallCommand,
+    PersistCallEventCommand,
+)
 from app.modules.crm.public import (
     CrmFacade,
     CrmVoiceCalls,
@@ -95,28 +99,48 @@ class VoiceRuntimeWebhookService:
             if not claimed:
                 return {"status": "processed", "processed": False, "voice_call_id": call.id, "call_status": call.status}
 
-            analytics = self.db.scalar(select(Call).where(Call.tenant_id == runtime.tenant_id, Call.external_provider == provider, Call.external_call_id == provider_call_id))
-            if analytics is None:
-                analytics = Call(tenant_id=runtime.tenant_id, external_provider=provider, external_call_id=provider_call_id, normalized_status="in_progress", started_at=now)
-                self.db.add(analytics)
-                self.db.flush()
-            analytics.provider_status = str(call_obj.get("status") or call_obj.get("state") or event_type)
-            analytics.provider_agent_id = str(call_obj.get("agentId")) if call_obj.get("agentId") else analytics.provider_agent_id
-            analytics.duration_seconds = self._integer(call_obj.get("duration") or call_obj.get("durationSeconds")) or analytics.duration_seconds
-            if event_type == "call.joined":
-                analytics.joined_at = now
+            ledger = AnalyticsCallLedger(self.db)
+            analytics_status = None
             if event_type == "call.ended":
-                analytics.ended_at = now
-                analytics.normalized_status = "answered" if runtime.connected_at else "unanswered"
+                analytics_status = "answered" if runtime.connected_at else "unanswered"
+            billed_minutes = None
             if event_type == "call.billed":
-                analytics.billed_minutes = self._decimal(call_obj.get("billedMinutes") or payload.get("billedMinutes"))
-                if analytics.billed_minutes is None:
-                    analytics.billed_minutes = self._duration_minutes(
+                billed_minutes = self._decimal(call_obj.get("billedMinutes") or payload.get("billedMinutes"))
+                if billed_minutes is None:
+                    billed_minutes = self._duration_minutes(
                         call_obj.get("billedDuration") or payload.get("billedDuration")
                     )
-                if analytics.normalized_status == "in_progress":
-                    analytics.normalized_status = "answered" if runtime.connected_at else "unanswered"
-            self.db.add(CallEvent(tenant_id=runtime.tenant_id, call_id=analytics.id, event_type=event_type, provider_event_id=None, dedup_key=dedup_key, payload_json={"event_type": event_type}, received_at=now))
+                analytics_status = "answered" if runtime.connected_at else "unanswered"
+            # The caller owns this transaction (commit=False); a late webhook never reopens or rewrites
+            # a finished call, except call.ended which closes it and call.billed which settles an open one.
+            analytics = ledger.persist_call(
+                PersistCallCommand(
+                    tenant_id=runtime.tenant_id,
+                    external_provider=provider,
+                    external_call_id=provider_call_id,
+                    provider_status=str(call_obj.get("status") or call_obj.get("state") or event_type),
+                    provider_agent_id=str(call_obj.get("agentId")) if call_obj.get("agentId") else None,
+                    duration_seconds=self._integer(call_obj.get("duration") or call_obj.get("durationSeconds")) or None,
+                    joined_at=now if event_type == "call.joined" else None,
+                    ended_at=now if event_type == "call.ended" else None,
+                    billed_minutes=billed_minutes,
+                    normalized_status=analytics_status,
+                    partial_update=True,
+                    status_policy="explicit" if event_type == "call.ended" else "settle_open",
+                ),
+                commit=False,
+            )
+            ledger.claim_event(
+                PersistCallEventCommand(
+                    tenant_id=runtime.tenant_id,
+                    call_id=analytics.id,
+                    event_type=event_type,
+                    payload_json={"event_type": event_type},
+                    dedup_key=dedup_key,
+                    received_at=now,
+                ),
+                commit=False,
+            )
 
             changes: dict[str, Any] = {"provider_call_id": provider_call_id}
             crm_terminal = call.status in {"completed", "failed", "cancelled", "no_answer", "busy"}

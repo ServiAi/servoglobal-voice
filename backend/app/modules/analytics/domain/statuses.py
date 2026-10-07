@@ -1,6 +1,21 @@
+"""Call status vocabulary and provider-status normalization (framework-free)."""
+
 from __future__ import annotations
 
-from app.models.analytics import NORMALIZED_CALL_STATUSES
+NORMALIZED_CALL_STATUSES = (
+    "in_progress",
+    "answered",
+    "unanswered",
+    "rejected",
+    "failed",
+    "cancelled",
+    "transferred",
+    "voicemail",
+)
+ACTIVE_STATUS = "in_progress"
+ANSWERED_STATUS = "answered"
+UNANSWERED_STATUS = "unanswered"
+TERMINAL_CALL_STATUSES = frozenset(NORMALIZED_CALL_STATUSES) - {ACTIVE_STATUS}
 
 
 class CallStatusNormalizer:
@@ -47,3 +62,10 @@ class CallStatusNormalizer:
         if normalized not in NORMALIZED_CALL_STATUSES:
             return "failed"
         return normalized
+
+
+def is_status_regression(current_status: str | None, incoming_status: str | None, *, partial_update: bool) -> bool:
+    """A late partial update must never reopen a call that already finished."""
+    return bool(
+        partial_update and current_status in TERMINAL_CALL_STATUSES and incoming_status == ACTIVE_STATUS
+    )

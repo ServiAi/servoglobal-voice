@@ -11,9 +11,13 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.db.session import SessionLocal
-from app.models.analytics import Agent, Call, CallEvent, MetricSnapshotDaily
 from app.models import Tenant
-
+from app.modules.analytics.infrastructure.models import (
+    Agent,
+    Call,
+    CallEvent,
+    MetricSnapshotDaily,
+)
 
 SEED_PROVIDER = "sprint4a_seed"
 TENANT_SLUG = settings.BOOTSTRAP_TENANT_SLUG or "serviglobal-ia"

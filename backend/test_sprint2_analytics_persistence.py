@@ -1,10 +1,8 @@
 import os
+import unittest
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
-import unittest
-
-from fastapi import HTTPException
 
 os.environ.setdefault("ULTRAVOX_API_KEY", "test_ultravox_key")
 TEST_DB_PATH = Path("serviai_sprint2_test.db")
@@ -12,14 +10,20 @@ os.environ["DATABASE_URL"] = f"sqlite:///./{TEST_DB_PATH.as_posix()}"
 
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
-from app.models.analytics import Agent, Call, CallEvent, MetricSnapshotDaily
-from app.modules.identity.infrastructure.models import Tenant
-from app.services.call_persistence_service import (
-    CallPersistenceService,
-    PersistCallInput,
-    PersistEventInput,
+from app.modules.analytics.infrastructure.models import (
+    Agent,
+    Call,
+    CallEvent,
+    MetricSnapshotDaily,
 )
-from app.services.call_status_normalizer import CallStatusNormalizer
+from app.modules.analytics.public import (
+    AnalyticsAgentTenantMismatchError,
+    AnalyticsCallLedger,
+    CallStatusNormalizer,
+    PersistCallCommand,
+    PersistCallEventCommand,
+)
+from app.modules.identity.infrastructure.models import Tenant
 
 
 class Sprint2AnalyticsPersistenceTests(unittest.TestCase):
@@ -73,8 +77,8 @@ class Sprint2AnalyticsPersistenceTests(unittest.TestCase):
             db.commit()
             db.refresh(agent)
 
-            call = CallPersistenceService(db).persist_call(
-                PersistCallInput(
+            call = AnalyticsCallLedger(db).persist_call(
+                PersistCallCommand(
                     tenant_id=tenant.id,
                     external_provider="ultravox",
                     external_call_id="call-001",
@@ -103,8 +107,8 @@ class Sprint2AnalyticsPersistenceTests(unittest.TestCase):
         tenant = self.seed_tenant()
 
         with SessionLocal() as db:
-            call = CallPersistenceService(db).persist_call(
-                PersistCallInput(
+            call = AnalyticsCallLedger(db).persist_call(
+                PersistCallCommand(
                     tenant_id=tenant.id,
                     external_provider="ultravox",
                     external_call_id="call-no-agent",
@@ -119,8 +123,8 @@ class Sprint2AnalyticsPersistenceTests(unittest.TestCase):
     def test_call_requires_tenant(self):
         with SessionLocal() as db:
             with self.assertRaises(ValueError):
-                CallPersistenceService(db).persist_call(
-                    PersistCallInput(
+                AnalyticsCallLedger(db).persist_call(
+                    PersistCallCommand(
                         tenant_id="",
                         external_provider="ultravox",
                         external_call_id="call-without-tenant",
@@ -141,9 +145,9 @@ class Sprint2AnalyticsPersistenceTests(unittest.TestCase):
             db.commit()
             db.refresh(foreign_agent)
 
-            with self.assertRaises(HTTPException):
-                CallPersistenceService(db).persist_call(
-                    PersistCallInput(
+            with self.assertRaises(AnalyticsAgentTenantMismatchError):
+                AnalyticsCallLedger(db).persist_call(
+                    PersistCallCommand(
                         tenant_id=first_tenant.id,
                         external_provider="ultravox",
                         external_call_id="call-foreign-agent",
@@ -157,9 +161,9 @@ class Sprint2AnalyticsPersistenceTests(unittest.TestCase):
         tenant = self.seed_tenant()
 
         with SessionLocal() as db:
-            service = CallPersistenceService(db)
+            service = AnalyticsCallLedger(db)
             call = service.persist_call(
-                PersistCallInput(
+                PersistCallCommand(
                     tenant_id=tenant.id,
                     external_provider="ultravox",
                     external_call_id="call-event-001",
@@ -168,8 +172,8 @@ class Sprint2AnalyticsPersistenceTests(unittest.TestCase):
                 )
             )
 
-            event = service.persist_event(
-                PersistEventInput(
+            event = service.add_event(
+                PersistCallEventCommand(
                     tenant_id=tenant.id,
                     call_id=call.id,
                     event_type="call.started",
@@ -221,9 +225,9 @@ class Sprint2AnalyticsPersistenceTests(unittest.TestCase):
         tenant = self.seed_tenant()
 
         with SessionLocal() as db:
-            service = CallPersistenceService(db)
+            service = AnalyticsCallLedger(db)
             first = service.persist_call(
-                PersistCallInput(
+                PersistCallCommand(
                     tenant_id=tenant.id,
                     external_provider="ultravox",
                     external_call_id="call-upsert-001",
@@ -232,7 +236,7 @@ class Sprint2AnalyticsPersistenceTests(unittest.TestCase):
                 )
             )
             second = service.persist_call(
-                PersistCallInput(
+                PersistCallCommand(
                     tenant_id=tenant.id,
                     external_provider="ultravox",
                     external_call_id="call-upsert-001",

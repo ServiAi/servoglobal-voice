@@ -5,10 +5,9 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.analytics import Call
+from app.modules.analytics.public import CallLookup
 from app.modules.crm.public import CrmFacade, LeadProfile
 from app.modules.integrations.public import EmailAssetRef, EmailFacade
 
@@ -136,12 +135,7 @@ class CallSummaryService:
         call_ids = [value for value in (lead.last_call_id, lead.created_from_call_id) if value]
         if not call_ids:
             return None
-        call = self.db.scalar(
-            select(Call)
-            .where(Call.tenant_id == tenant_id, Call.id.in_(call_ids))
-            .order_by(Call.ended_at.desc().nullslast(), Call.started_at.desc().nullslast())
-            .limit(1)
-        )
+        call = CallLookup(self.db).latest_summary(tenant_id, call_ids)
         if call is None or not (call.summary or call.short_summary):
             return None
         return CallSummaryResult(

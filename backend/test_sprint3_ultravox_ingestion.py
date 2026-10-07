@@ -18,7 +18,7 @@ from app.core.config import settings
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.main import app
-from app.models.analytics import Agent, Call, CallEvent
+from app.modules.analytics.infrastructure.models import Agent, Call, CallEvent
 from app.modules.identity.infrastructure.models import Tenant
 from app.services.ultravox_ingestion_service import UltravoxIngestionService
 

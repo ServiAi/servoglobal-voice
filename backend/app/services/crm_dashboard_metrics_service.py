@@ -3,11 +3,10 @@ from __future__ import annotations
 from datetime import UTC, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import Tenant
-from app.models.analytics import Call
+from app.modules.analytics.public import AnalyticsCallMetrics, CallLookup
 from app.modules.crm.public import CrmFacade
 from app.services.voice_capacity_report_service import VoiceCapacityReportService
 
@@ -141,36 +140,21 @@ class CrmDashboardMetricsService:
             })
 
         # 8. Calls Metrics
-        call_filters = [Call.tenant_id == tenant_id]
-        if date_from_utc:
-            call_filters.append(Call.started_at >= date_from_utc)
-        if date_to_utc:
-            call_filters.append(Call.started_at <= date_to_utc)
-
+        call_ids = None
         if source or campaign:
-            call_ids = crm.dashboard_call_ids(tenant_id, source, campaign)
-            call_filters.append(Call.id.in_(call_ids if call_ids else ["non-existent-id"]))
+            call_ids = crm.dashboard_call_ids(tenant_id, source, campaign) or []
 
-        calls_list = self.db.scalars(select(Call).where(*call_filters)).all()
-
-        total_calls = len(calls_list)
-        answered_calls = sum(1 for c in calls_list if c.normalized_status == "answered")
-        unanswered_calls = sum(1 for c in calls_list if c.normalized_status == "unanswered")
-        voicemail_calls = sum(1 for c in calls_list if c.normalized_status == "voicemail")
-        failed_calls = sum(1 for c in calls_list if c.normalized_status == "failed")
-
-        durations = [c.duration_seconds for c in calls_list if c.duration_seconds is not None]
-        avg_dur = round((sum(durations) / len(durations)), 2) if durations else 0.0
-        tot_billed = round(float(sum(c.billed_minutes or 0 for c in calls_list)), 2)
-
+        call_metrics = AnalyticsCallMetrics(self.db).metrics(
+            tenant_id, started_from=date_from_utc, started_to=date_to_utc, call_ids=call_ids
+        )
         calls = {
-            "total_calls": total_calls,
-            "answered_calls": answered_calls,
-            "unanswered_calls": unanswered_calls,
-            "voicemail_calls": voicemail_calls,
-            "failed_calls": failed_calls,
-            "average_duration_seconds": avg_dur,
-            "total_billed_minutes": tot_billed,
+            "total_calls": call_metrics.total_calls,
+            "answered_calls": call_metrics.answered_calls,
+            "unanswered_calls": call_metrics.unanswered_calls,
+            "voicemail_calls": call_metrics.voicemail_calls,
+            "failed_calls": call_metrics.failed_calls,
+            "average_duration_seconds": call_metrics.average_duration_seconds,
+            "total_billed_minutes": call_metrics.total_billed_minutes,
         }
 
         # 9. Pending Actions (Human intervention required)
@@ -185,11 +169,7 @@ class CrmDashboardMetricsService:
             statuses: dict[str, str | None] = {}
             check_ids = [c.last_call_id for c in candidates if c.requires_call_check and c.last_call_id]
             if check_ids:
-                statuses = dict(
-                    self.db.execute(
-                        select(Call.id, Call.normalized_status).where(Call.id.in_(check_ids))
-                    ).all()
-                )
+                statuses = CallLookup(self.db).statuses_by_ids(tenant_id, check_ids)
             for candidate in candidates:
                 qualifies = candidate.qualifies_without_call or (
                     candidate.requires_call_check

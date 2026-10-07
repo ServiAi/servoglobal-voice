@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-import uuid
-from datetime import UTC, date, datetime
+from datetime import date, datetime
 from decimal import Decimal
 
 from sqlalchemy import (
@@ -20,32 +19,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
-
-NORMALIZED_CALL_STATUSES = (
-    "in_progress",
-    "answered",
-    "unanswered",
-    "rejected",
-    "failed",
-    "cancelled",
-    "transferred",
-    "voicemail",
-)
-
-
-def _uuid() -> str:
-    return str(uuid.uuid4())
-
-
-def _utcnow() -> datetime:
-    return datetime.now(UTC)
-
-
-class TimestampMixin:
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False
-    )
+from app.db.mixins import TimestampMixin, _utcnow, _uuid
 
 
 class Agent(Base, TimestampMixin):
@@ -70,7 +44,6 @@ class Agent(Base, TimestampMixin):
     channel_type: Mapped[str | None] = mapped_column(String(80), nullable=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="active")
 
-    tenant = relationship("Tenant")
     calls: Mapped[list[Call]] = relationship(back_populates="agent")
     metric_snapshots: Mapped[list[MetricSnapshotDaily]] = relationship(back_populates="agent")
 
@@ -120,7 +93,6 @@ class Call(Base, TimestampMixin):
     customer_phone: Mapped[str | None] = mapped_column(String(80), nullable=True)
     last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    tenant = relationship("Tenant")
     agent: Mapped[Agent | None] = relationship(back_populates="calls")
     events: Mapped[list[CallEvent]] = relationship(
         back_populates="call", cascade="all, delete-orphan"
@@ -146,7 +118,6 @@ class CallEvent(Base):
     payload_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, nullable=False)
 
-    tenant = relationship("Tenant")
     call: Mapped[Call] = relationship(back_populates="events")
 
 
@@ -173,5 +144,4 @@ class MetricSnapshotDaily(Base, TimestampMixin):
     duration_total_seconds: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     billed_minutes: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False, default=0)
 
-    tenant = relationship("Tenant")
     agent: Mapped[Agent | None] = relationship(back_populates="metric_snapshots")

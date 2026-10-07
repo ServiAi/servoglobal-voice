@@ -15,7 +15,7 @@ from app.core.config import settings
 from app.db.session import SessionLocal
 from app.main import app
 from app.modules.crm.infrastructure.models import CrmVoiceCall
-from app.models.analytics import Call, CallEvent
+from app.modules.analytics.infrastructure.models import Call, CallEvent
 from app.modules.crm.infrastructure.models import CrmVoiceCallEvent
 from app.models.integrations import TenantVoiceAgentConfig, TenantVoiceProviderConfig
 from app.models.voice_submissions import TenantVoiceContextSession, TenantVoiceRuntimeCall

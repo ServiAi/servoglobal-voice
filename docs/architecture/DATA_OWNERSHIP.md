@@ -103,8 +103,8 @@ ORM en `app/modules/integrations/infrastructure/models.py` (13 tablas; mismas co
 
 ## Voice Legacy y Analytics
 
-- Voice Legacy: `tenant_voice_agent_configs` (`TenantVoiceAgentConfig`), `agents` (`analytics.Agent`, legacy).
-- Analytics: `agents`, `calls`, `call_events`, `metric_snapshots_daily`. `calls` 🔴: escrita por Voice (projection) y Voice Legacy (ingestión); propietario objetivo Analytics, alimentado por eventos de sesión.
+- Voice Legacy: `tenant_voice_agent_configs` (`TenantVoiceAgentConfig`). Sincroniza su agente de reporting por `analytics.public.AnalyticsAgentDirectory`.
+- Analytics: ver la sección «Analytics (Module 11)».
 
 ## Billing (Module 10)
 
@@ -114,7 +114,7 @@ ORM en `app/modules/integrations/infrastructure/models.py` (13 tablas; mismas co
 | `tenant_usage_alerts` | `TenantUsageAlert` | `modules/billing/infrastructure/models.py` | ✅ Billing |
 | `external_provider_pricing` | `ExternalProviderPricing` | `modules/billing/infrastructure/models.py` | ✅ Billing |
 
-Billing consume minutos facturados mediante `UsageMeterPort`; su adapter temporal `LegacyAnalyticsUsageMeter` en `billing.wiring` lee `analytics.Call` y conserva el límite inclusivo `started_at <= billing_period_end`. Analytics sigue siendo dueño de los hechos de llamada.
+Billing consume minutos facturados mediante `UsageMeterPort`; respaldado por `analytics.public.AnalyticsUsageFacts` (conserva el límite inclusivo `started_at <= billing_period_end`). Analytics es dueño de los hechos de llamada.
 
 ## Reglas
 
@@ -139,3 +139,22 @@ Billing owns `tenant_billing_plans`, `tenant_usage_alerts`, and `external_provid
 Only Identity imports `User`, `TenantMembership`, `AccessAuditLog` and `TenantFeatureGrant`. `Tenant` remains read directly by legacy Analytics/Voice Legacy/Voice Experiences files listed in `test_identity_architecture.TENANT_DIRECT_READERS`; they are removed when those owner modules migrate.
 
 Billing's `tenant_id -> tenants.id` foreign keys do not create cross-module ORM navigation; its plan-alert relationship remains internal to Billing.
+
+## Analytics (Module 11)
+
+```text
+Analytics
+├── agents                  Agent                 (reporting/provider projection)
+├── calls                   Call
+├── call_events             CallEvent
+└── metric_snapshots_daily  MetricSnapshotDaily
+```
+
+| Dueño | Tablas |
+| --- | --- |
+| Analytics | `agents`, `calls`, `call_events`, `metric_snapshots_daily` (`modules/analytics/infrastructure/models.py`) |
+| Agent Builder | `tenant_agents`, `tenant_agent_versions` (identidad canónica; no se fusiona con `agents`) |
+| CRM | `crm_voice_calls`, `crm_voice_call_events`, `crm_activities`, … |
+| Voice | `voice_sessions`, `voice_session_events` |
+
+`agents` es una dimensión analítica (`Call.agent_id`, distribuciones de dashboard, correlación con el proveedor); la clase ORM conserva el nombre `Agent` y la ambigüedad se resuelve por módulo y DTO (`AnalyticsAgentView`). Nadie fuera de Analytics importa su ORM (`test_analytics_boundaries`); la única excepción de herramienta es `scripts/seed_staging_analytics.py` (seed de staging). `call_events.dedup_key` sigue siendo único global (`uq_call_events_dedup_key`). Escrituras externas: Voice/Telephony proyectan sesiones vía `VoiceCallProjectionFacade`; Ultravox y el webhook del runtime escriben por `AnalyticsCallLedger`; Identity limpia por `AnalyticsMaintenance` (sólo flush).

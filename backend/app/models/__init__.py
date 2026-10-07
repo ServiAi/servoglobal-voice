@@ -1,4 +1,4 @@
-from app.models.analytics import Agent, Call, CallEvent, MetricSnapshotDaily
+from app.modules.analytics.infrastructure.models import Agent, Call, CallEvent, MetricSnapshotDaily
 from app.modules.billing.infrastructure.models import (
     ExternalProviderPricing,
     TenantBillingPlan,
