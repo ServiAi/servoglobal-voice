@@ -13,7 +13,7 @@ Se agregó el bounded context `app.modules.evaluations` con definiciones/version
 - Rama de trabajo: `refactor/modular-evaluations`, creada desde `develop` después de confirmar `git fetch` y `git pull --ff-only origin develop` (`Already up to date`).
 - Base: `37c5758`, merge de PR #128.
 - Commits locales: `b546a62` (core + persistencia) y `58d5aea` (integración Voice). El commit de tests/CI/docs contiene este reporte.
-- Este reporte no implica que se haya publicado una rama o abierto/actualizado un PR.
+- La rama se publica para revisión mediante el PR de esta entrega; merge y despliegue no se realizaron.
 
 ## Develop Baseline
 
@@ -123,7 +123,7 @@ Sin cambio: 257 paths, 336 operations, 293 schemas; fingerprint posterior idént
 
 - Ejecutar el CI PostgreSQL y corregir cualquier discrepancia entre metadata, migración y PostgreSQL real.
 - Completar el backend suite y un gate Ruff bloqueante en un entorno apto.
-- No se publicó el branch ni se abrió PR.
+- El branch y este reporte se publican para revisión mediante el PR de esta entrega.
 
 ## Out of Scope
 
