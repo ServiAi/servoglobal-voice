@@ -210,6 +210,7 @@ class EvaluationPostgresTests(unittest.TestCase):
             )), 0)
 
         another = self.request(tenant_id, "session-atomic-success", trigger="terminal:success")
+        at = datetime.now(timezone.utc)  # la corrida nueva es reclamable solo desde su next_attempt_at
         with Session(self.engine) as db:
             repo = EvaluationRepository(db)
             claim = repo.claim_batch(now=at, lease_seconds=30, batch_size=1)[0]
