@@ -20,11 +20,6 @@ from app.services.voice_config_service import VoiceConfigService
 from app.modules.voice.application.runtime_dispatcher import VoiceRuntimeDispatcher
 from app.modules.identity.application.feature_service import TenantFeatureService, VOICE_RUNTIME_V2
 from app.modules.voice.application.session_service import VoiceSessionService
-from app.modules.evaluations.infrastructure.models import (
-    EvaluationDefinition,
-    EvaluationDefinitionVersion,
-    SYSTEM_OWNER_KEY,
-)
 
 
 class FakeBackend:
@@ -41,27 +36,6 @@ class FakeBackend:
 
 
 class VoiceRuntimeControlPlaneTests(Integration2ATestCase):
-    def setUp(self) -> None:
-        super().setUp()
-        with SessionLocal() as db:
-            definition = EvaluationDefinition(
-                owner_scope="system", owner_key=SYSTEM_OWNER_KEY, tenant_id=None,
-                definition_key="voice_session_technical_health", name="Voice session technical health",
-                active=True,
-            )
-            db.add(definition)
-            db.flush()
-            db.add(EvaluationDefinitionVersion(
-                definition_id=definition.id, owner_key=SYSTEM_OWNER_KEY, version=1,
-                status="published", published_at=datetime.now(timezone.utc),
-                criteria_json=[
-                    {"key": "session_terminal", "evaluator_type": "deterministic", "weight": 1},
-                    {"key": "runtime_health", "evaluator_type": "deterministic", "weight": 1},
-                    {"key": "tool_execution_health", "evaluator_type": "deterministic", "weight": 1},
-                ],
-            ))
-            db.commit()
-
     def _session(self, tenant_id: str | None = None):
         tenant_id = tenant_id or self.tenant.id
         with SessionLocal() as db:
