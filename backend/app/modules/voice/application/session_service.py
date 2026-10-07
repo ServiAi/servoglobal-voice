@@ -26,6 +26,9 @@ from app.modules.voice.infrastructure.models import VoiceSession, VoiceSessionEv
 class VoiceSessionService:
     def __init__(self, db: Session) -> None:
         self.db = db
+        from app.modules.voice.wiring import evaluation_requests
+
+        self.evaluation_requests = evaluation_requests(db)
 
     def create(
         self,
@@ -296,6 +299,30 @@ class VoiceSessionService:
         elif target == "starting": session.started_at = now
         elif target == "connected": session.connected_at = now
         elif target in TERMINAL_STATUSES: session.ended_at = now
+        if target in TERMINAL_STATUSES:
+            tool_outcomes = tuple(
+                {
+                    "tool_key": event.payload_json.get("tool_key"),
+                    "status": event.payload_json.get("status"),
+                    "duration_ms": event.payload_json.get("duration_ms"),
+                    "error_code": event.payload_json.get("error_code"),
+                }
+                for event in session.events
+                if event.event_type == "session.context.tool_used"
+                and event.payload_json.get("status") in {"success", "error"}
+                and isinstance(event.payload_json.get("tool_key"), str)
+                and isinstance(event.payload_json.get("duration_ms"), int)
+            )
+            self.evaluation_requests.request_terminal_session(
+                tenant_id=session.tenant_id,
+                session_id=session.id,
+                purpose=session.purpose,
+                status=session.status,
+                agent_version_id=session.agent_version_id,
+                ended_at=session.ended_at,
+                error_code=session.error_code,
+                tool_outcomes=tool_outcomes,
+            )
         if commit:
             self.db.commit()
             self.db.refresh(session)
