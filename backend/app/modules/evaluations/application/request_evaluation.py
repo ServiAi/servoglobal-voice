@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 from app.modules.evaluations.application.contracts import EvaluationRunView
+from app.modules.evaluations.domain.semantic_evidence import (
+    SemanticEvaluationEvidenceV1,
+)
 from app.modules.evaluations.domain.technical_health import VoiceSessionEvidence
 
 
@@ -12,3 +15,8 @@ class EvaluationRequestService:
 
     def request_voice_session(self, evidence: VoiceSessionEvidence, *, trigger_key: str) -> EvaluationRunView:
         return self.repository.request_voice_session(evidence, trigger_key=trigger_key)
+
+    def request_semantic_session(
+        self, evidence: SemanticEvaluationEvidenceV1, *, trigger_key: str
+    ) -> EvaluationRunView:
+        return self.repository.request_semantic_session(evidence, trigger_key=trigger_key)

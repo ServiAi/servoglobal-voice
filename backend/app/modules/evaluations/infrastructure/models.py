@@ -3,7 +3,16 @@ from __future__ import annotations
 from datetime import datetime
 
 import sqlalchemy as sa
-from sqlalchemy import CheckConstraint, ForeignKey, ForeignKeyConstraint, Index, String, UniqueConstraint, event, inspect
+from sqlalchemy import (
+    CheckConstraint,
+    ForeignKey,
+    ForeignKeyConstraint,
+    Index,
+    String,
+    UniqueConstraint,
+    event,
+    inspect,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -124,6 +133,18 @@ class CriterionResult(Base):
     __table_args__ = (
         CheckConstraint("evaluator_type IN ('deterministic','llm','human')", name="ck_evaluation_criterion_results_evaluator"),
         CheckConstraint("score IS NULL OR score BETWEEN 0 AND 100", name="ck_evaluation_criterion_results_score"),
+        CheckConstraint(
+            "outcome IN ('pass','fail','insufficient_evidence')", name="ck_evaluation_criterion_results_outcome"
+        ),
+        CheckConstraint(
+            "(outcome = 'pass' AND passed IS TRUE) OR (outcome = 'fail' AND passed IS FALSE) OR "
+            "(outcome = 'insufficient_evidence' AND passed IS NULL AND score IS NULL)",
+            name="ck_evaluation_criterion_results_outcome_passed",
+        ),
+        CheckConstraint(
+            "evaluator_type <> 'llm' OR provenance_json IS NOT NULL",
+            name="ck_evaluation_criterion_results_llm_provenance",
+        ),
         ForeignKeyConstraint(["tenant_id", "run_id"], ["evaluation_runs.tenant_id", "evaluation_runs.id"], ondelete="CASCADE"),
         UniqueConstraint("tenant_id", "run_id", "criterion_key", name="uq_evaluation_criterion_results_key"),
         Index("ix_evaluation_criterion_results_run", "tenant_id", "run_id"),
@@ -137,9 +158,13 @@ class CriterionResult(Base):
         String(20), nullable=False, default="deterministic", server_default="deterministic"
     )
     implementation_version: Mapped[str] = mapped_column(String(40), nullable=False)
-    passed: Mapped[bool] = mapped_column(sa.Boolean, nullable=False)
+    outcome: Mapped[str] = mapped_column(String(24), nullable=False)
+    verdict: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    # NULL only for outcome=insufficient_evidence (a valid semantic result, not an error).
+    passed: Mapped[bool | None] = mapped_column(sa.Boolean, nullable=True)
     score: Mapped[int | None] = mapped_column(sa.Integer, nullable=True)
     reason: Mapped[str] = mapped_column(String(500), nullable=False)
+    provenance_json: Mapped[dict | None] = mapped_column(sa.JSON, nullable=True)
     evidence_ref_json: Mapped[dict] = mapped_column(sa.JSON, nullable=False, default=dict, server_default="{}")
     created_at: Mapped[datetime] = mapped_column(
         sa.DateTime(timezone=True), nullable=False, default=_utcnow, server_default=sa.func.now()

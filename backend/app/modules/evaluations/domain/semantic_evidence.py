@@ -7,7 +7,11 @@ from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 
 from app.modules.agents.public import AgentEvaluationSnapshot
-from app.modules.voice.public import TranscriptCompleteness, VoiceConversationEvidence, VoiceToolOutcome
+from app.modules.voice.public import (
+    TranscriptCompleteness,
+    VoiceConversationEvidence,
+    VoiceToolOutcome,
+)
 
 EVIDENCE_VERSION = "semantic-evidence-v1"
 REDACTION_VERSION = "transcript-redaction-v1"
@@ -78,7 +82,7 @@ class SemanticEvaluationEvidenceV1:
 
 
 class SemanticEvidenceUnavailableError(ValueError):
-    pass
+    code = "semantic_evidence_unavailable"
 
 
 def build_semantic_evidence(
@@ -119,40 +123,7 @@ def build_semantic_evidence(
         for turn in conversation.turns
     )
     ended_at = _utc(conversation.ended_at) if conversation.ended_at else None
-    payload = {
-        "evidence_version": EVIDENCE_VERSION,
-        "tenant_id": conversation.tenant_id,
-        "session_id": conversation.session_id,
-        "purpose": conversation.purpose,
-        "terminal_status": conversation.terminal_status,
-        "ended_at": ended_at.isoformat() if ended_at else None,
-        "agent_version_id": safe_agent.agent_version_id,
-        "agent_snapshot": _agent_dict(safe_agent),
-        "transcript_completeness": conversation.transcript_completeness.value,
-        "redaction_version": REDACTION_VERSION,
-        "turns": [
-            {
-                "event_id": turn.event_id,
-                "sequence": turn.sequence,
-                "speaker": turn.speaker,
-                "text": turn.text,
-                "occurred_at": turn.occurred_at.isoformat(),
-            }
-            for turn in turns
-        ],
-        "tool_outcomes": [
-            {
-                "event_id": outcome.event_id,
-                "tool_key": outcome.tool_key,
-                "status": outcome.status,
-                "duration_ms": outcome.duration_ms,
-                "error_code": outcome.error_code,
-            }
-            for outcome in conversation.tool_outcomes
-        ],
-    }
-    canonical = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False)
-    return SemanticEvaluationEvidenceV1(
+    evidence = SemanticEvaluationEvidenceV1(
         evidence_version=EVIDENCE_VERSION,
         tenant_id=conversation.tenant_id,
         session_id=conversation.session_id,
@@ -168,8 +139,89 @@ def build_semantic_evidence(
         source_event_ids=tuple(
             [turn.event_id for turn in turns] + [outcome.event_id for outcome in conversation.tool_outcomes]
         ),
-        evidence_hash=hashlib.sha256(canonical.encode("utf-8")).hexdigest(),
+        evidence_hash="",
     )
+    return replace(evidence, evidence_hash=_hash_payload(evidence_payload(evidence)))
+
+
+def evidence_payload(evidence: SemanticEvaluationEvidenceV1) -> dict:
+    """The exact canonical (redacted) document that evidence_hash covers; also what a run stores."""
+    return {
+        "evidence_version": evidence.evidence_version,
+        "tenant_id": evidence.tenant_id,
+        "session_id": evidence.session_id,
+        "purpose": evidence.purpose,
+        "terminal_status": evidence.terminal_status,
+        "ended_at": evidence.ended_at.isoformat() if evidence.ended_at else None,
+        "agent_version_id": evidence.agent_version_id,
+        "agent_snapshot": _agent_dict(evidence.agent_snapshot),
+        "transcript_completeness": evidence.transcript_completeness.value,
+        "redaction_version": evidence.redaction_version,
+        "turns": [
+            {
+                "event_id": turn.event_id,
+                "sequence": turn.sequence,
+                "speaker": turn.speaker,
+                "text": turn.text,
+                "occurred_at": turn.occurred_at.isoformat(),
+            }
+            for turn in evidence.turns
+        ],
+        "tool_outcomes": [
+            {
+                "event_id": outcome.event_id,
+                "tool_key": outcome.tool_key,
+                "status": outcome.status,
+                "duration_ms": outcome.duration_ms,
+                "error_code": outcome.error_code,
+            }
+            for outcome in evidence.tool_outcomes
+        ],
+    }
+
+
+def evidence_from_payload(payload: dict, *, expected_hash: str) -> SemanticEvaluationEvidenceV1:
+    """Rebuild stored evidence and verify its integrity; any drift fails closed."""
+    try:
+        if _hash_payload(payload) != expected_hash or payload["evidence_version"] != EVIDENCE_VERSION:
+            raise SemanticEvidenceUnavailableError("semantic_evidence_integrity_failed")
+        agent = AgentEvaluationSnapshot(
+            **{**payload["agent_snapshot"], "enabled_tool_keys": tuple(payload["agent_snapshot"]["enabled_tool_keys"])}
+        )
+        ended_at = payload["ended_at"]
+        return SemanticEvaluationEvidenceV1(
+            evidence_version=payload["evidence_version"],
+            tenant_id=payload["tenant_id"],
+            session_id=payload["session_id"],
+            purpose=payload["purpose"],
+            terminal_status=payload["terminal_status"],
+            ended_at=datetime.fromisoformat(ended_at) if ended_at else None,
+            agent_version_id=payload["agent_version_id"],
+            agent_snapshot=agent,
+            transcript_completeness=TranscriptCompleteness(payload["transcript_completeness"]),
+            redaction_version=payload["redaction_version"],
+            turns=tuple(
+                SemanticTranscriptTurn(
+                    event_id=row["event_id"], sequence=row["sequence"], speaker=row["speaker"],
+                    text=row["text"], occurred_at=datetime.fromisoformat(row["occurred_at"]),
+                )
+                for row in payload["turns"]
+            ),
+            tool_outcomes=tuple(VoiceToolOutcome(**row) for row in payload["tool_outcomes"]),
+            source_event_ids=tuple(
+                [row["event_id"] for row in payload["turns"]] + [row["event_id"] for row in payload["tool_outcomes"]]
+            ),
+            evidence_hash=expected_hash,
+        )
+    except SemanticEvidenceUnavailableError:
+        raise
+    except (KeyError, TypeError, ValueError) as exc:
+        raise SemanticEvidenceUnavailableError("semantic_evidence_integrity_failed") from exc
+
+
+def _hash_payload(payload: dict) -> str:
+    canonical = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 def _agent_dict(snapshot: AgentEvaluationSnapshot) -> dict:
