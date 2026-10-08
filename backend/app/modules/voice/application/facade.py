@@ -44,6 +44,112 @@ class VoiceSessionOperations:
             context=SessionContextV1.model_validate(session.session_context_json or {}),
         )
 
+    def read_conversation_evidence(self, tenant_id: str, session_id: str):
+        from app.modules.voice.domain.errors import VoiceConversationEvidenceNotReadyError
+        from app.modules.voice.domain.lifecycle import TERMINAL_STATUSES
+        from app.modules.voice.domain.views import (
+            TranscriptCompleteness,
+            TranscriptTurn,
+            VoiceConversationEvidence,
+            VoiceToolOutcome,
+        )
+
+        session = self.db.scalar(select(VoiceSession).where(
+            VoiceSession.id == session_id,
+            VoiceSession.tenant_id == tenant_id,
+        ))
+        if session is None:
+            raise VoiceSessionNotFoundError("Voice session not found for tenant.")
+        if session.status not in TERMINAL_STATUSES:
+            raise VoiceConversationEvidenceNotReadyError("evidence_not_ready")
+        events = self.db.scalars(select(VoiceSessionEvent).where(
+            VoiceSessionEvent.tenant_id == tenant_id,
+            VoiceSessionEvent.voice_session_id == session_id,
+        )).all()
+        transcript = [event for event in events if event.event_type == "voice.transcript.final"]
+        turns_valid = all(
+            event.payload_json.get("speaker") in {"user", "assistant"}
+            and isinstance(event.payload_json.get("text"), str)
+            and bool(event.payload_json["text"].strip())
+            for event in transcript
+        )
+        turns = tuple(
+            TranscriptTurn(
+                event_id=event.event_id,
+                sequence=event.sequence,
+                speaker=event.payload_json["speaker"],
+                text=event.payload_json["text"],
+                occurred_at=event.occurred_at,
+            )
+            for event in sorted(
+                transcript,
+                key=lambda row: (row.sequence is None, row.sequence or 0, row.occurred_at, row.event_id),
+            )
+            if event.payload_json.get("speaker") in {"user", "assistant"}
+            and isinstance(event.payload_json.get("text"), str)
+            and event.payload_json["text"].strip()
+        )
+        markers = [
+            event.payload_json.get("transcript_final_sequence")
+            for event in events
+            if event.event_type == "voice.session.ended"
+            and event.source == "voice-runtime"
+            and "transcript_final_sequence" in event.payload_json
+        ]
+        completeness = TranscriptCompleteness.NOT_AVAILABLE
+        if markers:
+            expected = markers[0]
+            actual = [
+                event.sequence
+                for event in sorted(
+                    transcript,
+                    key=lambda row: (row.sequence is None, row.sequence or 0, row.occurred_at, row.event_id),
+                )
+            ]
+            completeness = TranscriptCompleteness.INCOMPLETE
+            if (
+                len(markers) == 1
+                and isinstance(expected, int)
+                and not isinstance(expected, bool)
+                and expected >= 0
+                and turns_valid
+                and actual == list(range(1, expected + 1))
+            ):
+                completeness = TranscriptCompleteness.COMPLETE
+        outcomes = tuple(
+            VoiceToolOutcome(
+                event_id=event.event_id,
+                tool_key=payload["tool_key"],
+                status=payload["status"],
+                duration_ms=payload["duration_ms"],
+                error_code=(
+                    payload.get("error_code")
+                    if isinstance(payload.get("error_code"), str)
+                    and len(payload["error_code"]) <= 80
+                    and payload["error_code"].replace("_", "").isalnum()
+                    else None
+                ),
+            )
+            for event in sorted(events, key=lambda row: (row.occurred_at, row.event_id))
+            if event.event_type == "session.context.tool_used"
+            for payload in (event.payload_json or {},)
+            if isinstance(payload.get("tool_key"), str)
+            and payload.get("status") in {"success", "error"}
+            and isinstance(payload.get("duration_ms"), int)
+            and not isinstance(payload.get("duration_ms"), bool)
+        )
+        return VoiceConversationEvidence(
+            tenant_id=session.tenant_id,
+            session_id=session.id,
+            purpose=session.purpose,
+            terminal_status=session.status,
+            ended_at=session.ended_at,
+            agent_version_id=session.agent_version_id or session.deleted_agent_version_id,
+            transcript_completeness=completeness,
+            turns=turns,
+            tool_outcomes=outcomes,
+        )
+
     def record_event(self, session_id: str, event_type: str, *, source: str, payload: dict[str, Any]) -> None:
         self.sessions.record_event(self.sessions.get(session_id), event_type, source=source, payload=payload)
 

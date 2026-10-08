@@ -6,6 +6,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
+from enum import StrEnum
 from types import MappingProxyType
 from typing import Any
 
@@ -45,6 +46,43 @@ class SessionEventFact:
     sequence: int | None
     occurred_at: datetime
     payload: Mapping[str, Any] = field(default_factory=lambda: MappingProxyType({}))
+
+
+class TranscriptCompleteness(StrEnum):
+    COMPLETE = "complete"
+    INCOMPLETE = "incomplete"
+    NOT_AVAILABLE = "not_available"
+
+
+@dataclass(frozen=True)
+class TranscriptTurn:
+    event_id: str
+    sequence: int | None
+    speaker: str
+    text: str
+    occurred_at: datetime
+
+
+@dataclass(frozen=True)
+class VoiceToolOutcome:
+    event_id: str
+    tool_key: str
+    status: str
+    duration_ms: int
+    error_code: str | None = None
+
+
+@dataclass(frozen=True)
+class VoiceConversationEvidence:
+    tenant_id: str
+    session_id: str
+    purpose: str
+    terminal_status: str
+    ended_at: datetime | None
+    agent_version_id: str | None
+    transcript_completeness: TranscriptCompleteness
+    turns: tuple[TranscriptTurn, ...]
+    tool_outcomes: tuple[VoiceToolOutcome, ...]
 
 
 @dataclass(frozen=True)

@@ -69,6 +69,9 @@ __all__ = [
 ]
 
 
+from app.modules.voice.domain.views import TranscriptCompleteness, VoiceConversationEvidence, VoiceToolOutcome
+
+
 class VoiceSessionFacade:
     """VoiceSession operations other modules may perform, addressed by id."""
 
@@ -83,6 +86,9 @@ class VoiceSessionFacade:
     def get_tool_session(self, session_id: str) -> ToolSessionView:
         """Raises VoiceSessionNotFoundError."""
         return self._ops().get_tool_session(session_id)
+
+    def read_conversation_evidence(self, tenant_id: str, session_id: str) -> "VoiceConversationEvidence":
+        return self._ops().read_conversation_evidence(tenant_id, session_id)
 
     def record_event(self, session_id: str, event_type: str, *, source: str, payload: dict[str, Any]) -> None:
         self._ops().record_event(session_id, event_type, source=source, payload=payload)

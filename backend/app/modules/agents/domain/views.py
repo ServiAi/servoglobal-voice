@@ -58,6 +58,34 @@ class AgentDisplay:
 
 
 @dataclass(frozen=True)
+class AgentEvaluationSnapshot:
+    tenant_id: str
+    agent_version_id: str
+    agent_id: str
+    version: int
+    language: str
+    name: str
+    description: str | None
+    role: str
+    objective: str
+    system_prompt: str
+    greeting: str
+    closing: str
+    response_style: str
+    interruptions: str
+    turn_detection: str
+    confirmation_strategy: str
+    agent_first: bool
+    enabled_tool_keys: tuple[str, ...]
+
+
+class AgentEvaluationSnapshotUnavailableError(ValueError):
+    def __init__(self, code: str = "historical_evidence_missing") -> None:
+        super().__init__(code)
+        self.code = code
+
+
+@dataclass(frozen=True)
 class ImportedAgent:
     agent_id: str
     draft_version_id: str

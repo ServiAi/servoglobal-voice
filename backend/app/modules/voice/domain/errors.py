@@ -9,6 +9,10 @@ class VoiceSessionNotFoundError(VoiceSessionError):
     pass
 
 
+class VoiceConversationEvidenceNotReadyError(VoiceSessionError):
+    pass
+
+
 class VoiceSessionsBusyError(VoiceSessionError):
     """A session of an agent being deleted cannot be released safely;
     ``code`` is the stable agent_delete_* reason."""

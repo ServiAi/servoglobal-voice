@@ -219,6 +219,7 @@ class UltravoxLiveKitRuntime:
         input_started = False
         output_started = False
         transcript_sequence = 0
+        pending_transcript_tasks: set[asyncio.Task] = set()
         participant_identities: set[str] = set()
 
         def is_human(participant: Any) -> bool:
@@ -267,18 +268,25 @@ class UltravoxLiveKitRuntime:
                 ctx.room.off("participant_connected", on_participant_connected)
                 ctx.room.off("participant_disconnected", on_participant_disconnected)
                 ctx.room.off("track_published", on_track_published)
-                session.off("conversation_item_added", on_conversation_item)
                 session.off("agent_state_changed", on_agent_state_changed)
                 try:
                     await session.aclose()
                 finally:
+                    # aclose may flush the final conversation item; keep the
+                    # listener attached until it returns, then drain every send.
+                    session.off("conversation_item_added", on_conversation_item)
+                    while pending_transcript_tasks:
+                        await asyncio.gather(*tuple(pending_transcript_tasks), return_exceptions=True)
                     try:
                         await model.aclose()
                     finally:
                         if owned_http_session is not None:
                             await owned_http_session.close()
                 if emit_ended:
-                    await send_event("voice.session.ended", payload={"end_reason": reason})
+                    await send_event(
+                        "voice.session.ended",
+                        payload={"end_reason": reason, "transcript_final_sequence": transcript_sequence},
+                    )
             finally:
                 done.set()
 
@@ -310,7 +318,15 @@ class UltravoxLiveKitRuntime:
                     or not item.text_content.strip()):
                 return
             transcript_sequence += 1
-            asyncio.create_task(emit_transcript(item, transcript_sequence))
+            task = asyncio.create_task(emit_transcript(item, transcript_sequence))
+            pending_transcript_tasks.add(task)
+
+            def forget_task(done: asyncio.Task) -> None:
+                pending_transcript_tasks.discard(done)
+                if not done.cancelled():
+                    done.exception()
+
+            task.add_done_callback(forget_task)
 
         async def emit_agent_state(event: Any) -> None:
             nonlocal output_started
