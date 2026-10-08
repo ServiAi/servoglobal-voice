@@ -827,6 +827,53 @@ class AgentBuilderTests(Integration2ATestCase):
         by_version = {v["version"]: v["status"] for v in versions}
         self.assertEqual(by_version, {1: "superseded", 2: "published"})
 
+    def test_exact_runtime_superseded_version_is_runnable_only_while_the_agent_is_active(self) -> None:
+        from app.modules.agents.wiring import agent_service
+        from app.modules.voice.application.session_service import VoiceSessionError, VoiceSessionService
+        from app.modules.agents.infrastructure.models import TenantAgent, TenantAgentVersion
+
+        self._enable_feature()
+        agent_id = self._create().json()["id"]
+        self.client.post(f"/api/v1/agents/{agent_id}/publish")                    # v1
+        self.assertEqual(self.client.post(f"/api/v1/agents/{agent_id}/draft").status_code, 201)
+        self.client.post(f"/api/v1/agents/{agent_id}/publish")                    # v2
+
+        def versions() -> dict[int, tuple[str, str]]:
+            with SessionLocal() as db:
+                rows = db.scalars(select(TenantAgentVersion).where(TenantAgentVersion.agent_id == agent_id)).all()
+                return {row.version: (row.id, row.status) for row in rows}
+
+        before = versions()
+        with SessionLocal() as db:
+            agent = db.get(TenantAgent, agent_id)
+            self.assertEqual((agent.status, agent.published_version_id), ("active", before[2][0]))
+        self.assertEqual((before[1][1], before[2][1]), ("superseded", "published"))
+        v1_id, v2_id = before[1][0], before[2][0]
+
+        # superseded + active agent: runnable, pinned to exactly v1.
+        with SessionLocal() as db:
+            session = VoiceSessionService(db).create_from_agent_version(
+                self.tenant.id, agent_id, v1_id, channel="internal_test", direction="internal"
+            )
+            self.assertEqual(session.agent_version_id, v1_id)
+
+        # The real unpublish use case.
+        with SessionLocal() as db:
+            agent_service(db).unpublish(self.tenant.id, agent_id, self.user.id)
+        with SessionLocal() as db:
+            agent = db.get(TenantAgent, agent_id)
+            self.assertEqual((agent.status, agent.published_version_id), ("draft", None))
+        after = versions()
+        self.assertEqual(after[2][1], "superseded")  # the version that was published
+        self.assertEqual(after[1][1], "superseded")
+
+        # superseded + draft agent: not runnable, for any historical version.
+        for version_id in (v1_id, v2_id):
+            with SessionLocal() as db, self.assertRaisesRegex(VoiceSessionError, "^agent_not_active$"):
+                VoiceSessionService(db).create_from_agent_version(
+                    self.tenant.id, agent_id, version_id, channel="internal_test", direction="internal"
+                )
+
     def test_unpublish_opens_a_fully_editable_draft(self) -> None:
         self._enable_feature()
         agent_id = self._create().json()["id"]

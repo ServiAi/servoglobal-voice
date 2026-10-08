@@ -101,10 +101,10 @@ class VoiceSessionFacade:
         purpose: str = "production",
         qa_context_mode: str = "preloaded",
     ) -> VoiceSessionRef:
-        """Commits a session pinned to exactly ``agent_version_id`` (published or superseded;
-        never draft, never an archived agent). Raises VoiceSessionError whose message is the
-        stable code (agent_version_not_found, agent_archived, agent_version_not_executable,
-        idempotency_key_agent_version_conflict, ...)."""
+        """Commits a session pinned to exactly ``agent_version_id`` (published or superseded,
+        only while the agent is active). Raises VoiceSessionError whose message is the stable
+        code (agent_version_not_found, agent_archived, agent_not_active,
+        agent_version_not_executable, idempotency_key_agent_version_conflict, ...)."""
         return self._ops().create_session_from_agent_version(
             tenant_id, agent_id, agent_version_id, channel=channel, direction=direction,
             idempotency_key=idempotency_key, contact_id=contact_id, lead_id=lead_id,

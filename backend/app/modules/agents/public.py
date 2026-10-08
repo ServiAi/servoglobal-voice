@@ -97,8 +97,10 @@ class AgentsFacade:
     def resolve_runtime_target(
         self, tenant_id: str, agent_id: str, agent_version_id: str, *, lock: bool = False
     ) -> AgentRuntimeTarget:
-        """The exact executable version (published or superseded; never draft, never of an
-        archived agent). Raises AgentRuntimeTargetUnavailableError (``.code``)."""
+        """The exact executable version: published or superseded, and only while the agent is
+        ``active`` (never a draft version, never a draft/archived agent). Raises
+        AgentRuntimeTargetUnavailableError (``.code``: agent_version_not_found, agent_archived,
+        agent_not_active, agent_version_not_executable)."""
         from app.modules.agents.application.queries import AgentQueries
 
         return AgentQueries(self.db).resolve_runtime_target(tenant_id, agent_id, agent_version_id, lock=lock)

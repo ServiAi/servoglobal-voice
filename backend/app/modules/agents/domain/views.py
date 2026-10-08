@@ -89,7 +89,7 @@ class AgentEvaluationSnapshotUnavailableError(ValueError):
 class AgentRuntimeTarget:
     """A tenant-verified, exact, executable agent version: provider-agnostic facts
     only (no runtime_binding_json, no ORM). ``version_status`` is ``published`` or
-    ``superseded``; a draft version or an archived agent is never a target."""
+    ``superseded``; a draft version, or any version of a non-active agent, is never a target."""
 
     tenant_id: str
     agent_id: str
@@ -106,7 +106,8 @@ class AgentRuntimeTarget:
 
 class AgentRuntimeTargetUnavailableError(ValueError):
     """``code``: agent_version_not_found (also for another tenant's or another
-    agent's version), agent_archived, agent_version_not_executable."""
+    agent's version), agent_archived, agent_not_active (agent unpublished/draft),
+    agent_version_not_executable (draft version)."""
 
     def __init__(self, code: str) -> None:
         super().__init__(code)

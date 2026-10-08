@@ -80,6 +80,15 @@ class ExactAgentVersionRuntimeTests(Integration2ATestCase):
         with self.assertRaisesRegex(VoiceSessionError, "agent_version_not_found"):
             self._create_exact(agent_id, "00000000-0000-0000-0000-000000000000")
 
+    def test_inactive_agent_blocks_every_version_including_superseded(self) -> None:
+        agent_id, (superseded, published) = self._agent(agent_status="draft")
+        for version in (superseded, published):
+            with self.assertRaisesRegex(VoiceSessionError, "^agent_not_active$"):
+                self._create_exact(agent_id, version)
+        with SessionLocal() as db, self.assertRaises(AgentRuntimeTargetUnavailableError) as raised:
+            AgentsFacade(db).resolve_runtime_target(self.tenant.id, agent_id, superseded)
+        self.assertEqual(raised.exception.code, "agent_not_active")
+
     def test_non_realtime_version_is_rejected(self) -> None:
         agent_id, (version,) = self._agent(statuses=("published",), runtime={"pipeline_type": "cascade"})
         with self.assertRaisesRegex(VoiceSessionError, "not configured for realtime"):

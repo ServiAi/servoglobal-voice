@@ -74,6 +74,10 @@ class AgentQueries:
             raise AgentRuntimeTargetUnavailableError("agent_version_not_found")
         if agent.status == "archived":
             raise AgentRuntimeTargetUnavailableError("agent_archived")
+        # Agent lifecycle first: a superseded version is a historical snapshot that stays
+        # runnable only while the agent is active (unpublish leaves the agent in draft).
+        if agent.status != "active":
+            raise AgentRuntimeTargetUnavailableError("agent_not_active")
         if version.status not in {"published", "superseded"}:
             raise AgentRuntimeTargetUnavailableError("agent_version_not_executable")
         runtime = version.runtime_binding_json or {}
