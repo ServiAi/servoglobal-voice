@@ -27,10 +27,13 @@ class CriterionResultView:
     criterion_key: str
     evaluator_type: str
     implementation_version: str
-    passed: bool
+    passed: bool | None
     score: int | None
     reason: str
     evidence_ref: dict
+    outcome: str = "pass"
+    verdict: str | None = None
+    provenance: dict | None = None
 
 
 @dataclass(frozen=True)

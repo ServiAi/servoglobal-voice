@@ -44,6 +44,7 @@ jobs:
       BILLING_TEST_DATABASE_URL: postgresql+psycopg://serviai:serviai@localhost:5432/serviai_billing_test
       ANALYTICS_TEST_DATABASE_URL: postgresql+psycopg://serviai:serviai@localhost:5432/serviai_analytics_test
       EVALUATIONS_TEST_DATABASE_URL: postgresql+psycopg://serviai:serviai@localhost:5432/serviai_evaluations_test
+      EVALUATIONS_MIGRATION_TEST_DATABASE_URL: postgresql+psycopg://serviai:serviai@localhost:5432/serviai_evaluations_migration_test
       ULTRAVOX_API_KEY: ci_test_ultravox_key
     steps:
       - uses: actions/checkout@v4
@@ -71,6 +72,7 @@ jobs:
                       "serviai_billing_test",
                       "serviai_analytics_test",
                       "serviai_evaluations_test",
+                      "serviai_evaluations_migration_test",
                   ):
                       cur.execute("SELECT 1 FROM pg_database WHERE datname = %s", (name,))
                       if cur.fetchone() is None:
@@ -81,7 +83,7 @@ jobs:
       - name: Backend test suite (excludes test_endpoints.py / test_kpis.py / test_db.py / test_db_user.py / test_db_validation.py - hardcoded staging DB creds, no network to staging from CI; excludes test_crm_sprint_2.py - known pre-existing assertion drift vs voice_call_service/voice_config_service error messages, unrelated to this branch, tracked separately)
         working-directory: backend
         run: |
-          modules=$(ls test_*.py | grep -v -e test_endpoints.py -e test_kpis.py -e test_db.py -e test_db_user.py -e test_db_validation.py -e test_crm_sprint_2.py -e test_voice_runtime_postgres.py -e test_telephony_postgres.py -e test_scheduling_postgres.py -e test_crm_postgres.py -e test_notification_worker_postgres.py -e test_integrations_postgres.py -e test_integrations_migration_postgres.py -e test_identity_postgres.py -e test_billing_postgres.py -e test_analytics_postgres.py -e test_evaluations_postgres.py | sed 's/\.py$//')
+          modules=$(ls test_*.py | grep -v -e test_endpoints.py -e test_kpis.py -e test_db.py -e test_db_user.py -e test_db_validation.py -e test_crm_sprint_2.py -e test_voice_runtime_postgres.py -e test_telephony_postgres.py -e test_scheduling_postgres.py -e test_crm_postgres.py -e test_notification_worker_postgres.py -e test_integrations_postgres.py -e test_integrations_migration_postgres.py -e test_identity_postgres.py -e test_billing_postgres.py -e test_analytics_postgres.py -e test_evaluations_postgres.py -e test_evaluations_migration_postgres.py | sed 's/\.py$//')
           status=0
           for module in $modules; do
             # Most test modules pin DATABASE_URL to their own sqlite file at import time,
@@ -181,6 +183,12 @@ jobs:
         run: |
           python -m unittest test_evaluations_postgres -v 2>&1 | tee /tmp/evaluations_pg.log
           ! grep -q "skipped" /tmp/evaluations_pg.log
+      - name: Evaluations PostgreSQL migration (semantic engine - backfill, constraints, downgrade)
+        shell: bash
+        working-directory: backend
+        run: |
+          python -m unittest test_evaluations_migration_postgres -v 2>&1 | tee /tmp/evaluations_migration_pg.log
+          ! grep -q "skipped" /tmp/evaluations_migration_pg.log
       - name: Alembic migration chain
         working-directory: backend
         run: |

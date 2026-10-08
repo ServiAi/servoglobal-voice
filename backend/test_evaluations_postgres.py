@@ -1,26 +1,33 @@
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timedelta, timezone
 import os
 import threading
 import unittest
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 from sqlalchemy import create_engine, delete, func, select, text
+from sqlalchemy.engine import make_url
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
-from sqlalchemy.engine import make_url
 
+from _semantic_engine_fixtures import good_judge, make_evidence
 from app.db.base import Base
 from app.models import Tenant
+from app.modules.evaluations.adapters.fake_llm_judge import fake_response
+from app.modules.evaluations.domain.errors import SemanticJudgeTimeout
+from app.modules.evaluations.domain.semantic_definition import (
+    SEMANTIC_DEFINITION_KEY,
+    semantic_quality_criteria,
+)
 from app.modules.evaluations.domain.technical_health import VoiceSessionEvidence
 from app.modules.evaluations.infrastructure.models import (
+    SYSTEM_OWNER_KEY,
     CriterionResult,
     EvaluationDefinition,
     EvaluationDefinitionVersion,
     EvaluationRun,
-    SYSTEM_OWNER_KEY,
 )
 from app.modules.evaluations.infrastructure.repositories import EvaluationRepository
 
@@ -219,10 +226,161 @@ class EvaluationPostgresTests(unittest.TestCase):
             db.add(CriterionResult(
                 tenant_id=tenant_id, run_id=another.id, criterion_key=first.criterion_key,
                 evaluator_type="deterministic", implementation_version="deterministic-v1",
-                passed=first.passed, score=first.score, reason=first.reason, evidence_ref_json=first.evidence_ref_json,
+                outcome=first.outcome, passed=first.passed, score=first.score, reason=first.reason, evidence_ref_json=first.evidence_ref_json,
             ))
             with self.assertRaises(IntegrityError):
                 db.flush()
+
+    # -- Module 12B.2: semantic runs on real PostgreSQL ---------------------------------------------
+
+    def seeded_semantic(self) -> str:
+        tenant_id, _ = self.seeded()
+        with Session(self.engine) as db:
+            definition = db.scalar(select(EvaluationDefinition).where(
+                EvaluationDefinition.owner_key == SYSTEM_OWNER_KEY,
+                EvaluationDefinition.definition_key == SEMANTIC_DEFINITION_KEY,
+            ))
+            if definition is None:
+                definition = EvaluationDefinition(
+                    id=str(uuid4()), owner_scope="system", owner_key=SYSTEM_OWNER_KEY,
+                    definition_key=SEMANTIC_DEFINITION_KEY, name="Semantic quality", active=True,
+                )
+                db.add(definition)
+                db.flush()
+                db.add(EvaluationDefinitionVersion(
+                    id=str(uuid4()), definition_id=definition.id, owner_key=SYSTEM_OWNER_KEY, version=1,
+                    status="published", criteria_json=semantic_quality_criteria(),
+                    published_at=datetime.now(timezone.utc),
+                ))
+            db.commit()
+        return tenant_id
+
+    def request_semantic(self, tenant_id: str, session_id: str, trigger: str = "qa:1", **evidence_kwargs):
+        with Session(self.engine) as db:
+            result = EvaluationRepository(db).request_semantic_session(
+                make_evidence(tenant_id, session_id, **evidence_kwargs), trigger_key=trigger
+            )
+            db.commit()
+            return result
+
+    def claim_one(self, at: datetime, lease: int = 60) -> dict:
+        with Session(self.engine) as db:
+            return EvaluationRepository(db).claim_batch(now=at, lease_seconds=lease, batch_size=10)[0]
+
+    def test_semantic_run_persists_atomic_nullable_passed_and_provenance(self) -> None:
+        tenant_id = self.seeded_semantic()
+        run = self.request_semantic(tenant_id, "sem-1")
+        at = datetime.now(timezone.utc)
+        claim = self.claim_one(at)
+        judge = good_judge(goal_completion=fake_response("goal_completion", "insufficient_evidence", None))
+        with Session(self.engine) as db:
+            self.assertTrue(EvaluationRepository(db, judge).execute(claim, now=at + timedelta(seconds=1)))
+        with Session(self.engine) as db:
+            rows = {r.criterion_key: r for r in db.scalars(select(CriterionResult).where(CriterionResult.run_id == run.id))}
+            self.assertEqual(set(rows), {"goal_completion", "instruction_adherence", "conversation_quality"})
+            goal = rows["goal_completion"]
+            self.assertEqual((goal.outcome, goal.passed, goal.score, goal.evaluator_type),
+                             ("insufficient_evidence", None, None, "llm"))
+            quality = rows["conversation_quality"]
+            self.assertEqual((quality.outcome, quality.passed, quality.verdict), ("pass", True, "good"))
+            self.assertEqual(quality.provenance_json["provider"], "fake")
+            self.assertEqual(quality.provenance_json["prompt_key"], "conversation-quality")
+            stored = db.get(EvaluationRun, run.id)
+            self.assertEqual((stored.status, stored.passed), ("completed", None))
+            # the database itself refuses an inconsistent result
+            db.add(CriterionResult(
+                tenant_id=tenant_id, run_id=run.id, criterion_key="extra", evaluator_type="llm",
+                implementation_version="v", outcome="pass", passed=False, score=90, reason="x", provenance_json={},
+            ))
+            with self.assertRaises(IntegrityError):
+                db.flush()
+
+    def test_semantic_judge_runs_without_an_open_db_transaction(self) -> None:
+        tenant_id = self.seeded_semantic()
+        self.request_semantic(tenant_id, "sem-tx")
+        at = datetime.now(timezone.utc)
+        claim = self.claim_one(at)
+        seen = []
+
+        class Probe(type(good_judge())):
+            def evaluate(inner, request):
+                seen.append(db.in_transaction())
+                with self.engine.connect() as other:  # row locks must not be held while the judge runs
+                    other.execute(text("SELECT id FROM evaluation_runs FOR UPDATE NOWAIT"))
+                return super().evaluate(request)
+
+        with Session(self.engine) as db:
+            self.assertTrue(EvaluationRepository(db, Probe(good_judge().responses)).execute(
+                claim, now=at + timedelta(seconds=1)))
+        self.assertEqual(seen, [False, False, False])
+
+    def test_semantic_idempotency_conflict_and_coexistence_with_technical_run(self) -> None:
+        tenant_id = self.seeded_semantic()
+        barrier = threading.Barrier(2)
+
+        def submit():
+            barrier.wait()
+            return self.request_semantic(tenant_id, "sem-dup")
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            first, second = [f.result() for f in [pool.submit(submit), pool.submit(submit)]]
+        self.assertEqual(first.id, second.id)
+        conflict = self.request_semantic(tenant_id, "sem-dup", assistant_text="Otra respuesta")
+        self.assertEqual(conflict.id, first.id)
+        self.assertTrue(conflict.evidence_conflict)
+        technical = self.request(tenant_id, "sem-dup", trigger="qa:1")
+        self.assertNotEqual(technical.id, first.id)
+        with Session(self.engine) as db:
+            self.assertEqual(db.scalar(select(func.count()).select_from(EvaluationRun).where(
+                EvaluationRun.tenant_id == tenant_id, EvaluationRun.subject_id == "sem-dup")), 2)
+            self.assertEqual(db.get(EvaluationRun, first.id).evidence_hash, first.evidence_hash)
+
+    def test_semantic_stale_worker_cannot_publish_and_failure_does_not_touch_technical(self) -> None:
+        tenant_id = self.seeded_semantic()
+        technical = self.request(tenant_id, "sem-iso", trigger="terminal:1")
+        semantic = self.request_semantic(tenant_id, "sem-iso", trigger="terminal:1")
+        at = datetime.now(timezone.utc)
+        with Session(self.engine) as db:
+            claims = EvaluationRepository(db).claim_batch(now=at, lease_seconds=1, batch_size=10)
+        by_run = {c["run_id"]: c for c in claims}
+        with Session(self.engine) as db:
+            self.assertTrue(EvaluationRepository(db).execute(by_run[technical.id], now=at))
+        stale = by_run[semantic.id]
+        with Session(self.engine) as db:
+            fresh = EvaluationRepository(db).claim_batch(now=at + timedelta(seconds=2), lease_seconds=60, batch_size=1)[0]
+        with Session(self.engine) as db:
+            self.assertFalse(EvaluationRepository(db, good_judge()).execute(stale, now=at + timedelta(seconds=3)))
+            self.assertEqual(db.scalar(select(func.count()).select_from(CriterionResult).where(
+                CriterionResult.run_id == semantic.id)), 0)
+        with Session(self.engine) as db:  # transient provider failure: bounded retry, nothing published
+            judge = good_judge(instruction_adherence=SemanticJudgeTimeout())
+            self.assertTrue(EvaluationRepository(db, judge).execute(fresh, now=at + timedelta(seconds=3)))
+            run = db.get(EvaluationRun, semantic.id)
+            self.assertEqual((run.status, run.last_error_code, run.attempt_count),
+                             ("queued", "semantic_judge_timeout", 2))
+            self.assertEqual(db.scalar(select(func.count()).select_from(CriterionResult).where(
+                CriterionResult.run_id == semantic.id)), 0)
+            self.assertEqual(db.get(EvaluationRun, technical.id).status, "completed")
+            self.assertEqual(db.scalar(select(func.count()).select_from(CriterionResult).where(
+                CriterionResult.run_id == technical.id)), 3)
+
+    def test_semantic_retries_are_bounded_then_fail(self) -> None:
+        tenant_id = self.seeded_semantic()
+        run = self.request_semantic(tenant_id, "sem-bounded")
+        judge = good_judge(goal_completion=SemanticJudgeTimeout())
+        at = datetime.now(timezone.utc)
+        for _ in range(6):
+            at += timedelta(hours=1)
+            with Session(self.engine) as db:
+                claims = EvaluationRepository(db).claim_batch(now=at, lease_seconds=60, batch_size=1)
+            if not claims:
+                break
+            with Session(self.engine) as db:
+                EvaluationRepository(db, judge).execute(claims[0], now=at + timedelta(seconds=1))
+        with Session(self.engine) as db:
+            stored = db.get(EvaluationRun, run.id)
+            self.assertEqual(stored.status, "failed")
+            self.assertEqual(stored.attempt_count, 5)
 
     def test_published_version_trigger_and_owner_constraints(self) -> None:
         tenant_id, version_id = self.seeded()

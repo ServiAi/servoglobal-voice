@@ -15,7 +15,9 @@ _LEASE_SECONDS = 60
 _POLL_SECONDS = 1
 
 
-def run_cycle(*, session_factory=SessionLocal, now_fn=None) -> dict[str, int]:
+def run_cycle(*, session_factory=SessionLocal, now_fn=None, judge=None) -> dict[str, int]:
+    """``judge`` is the LlmJudgePort for semantic runs; without one they fail closed as
+    semantic_judge_not_configured (no provider adapter exists yet)."""
     now = now_fn or (lambda: datetime.now(timezone.utc))
     claim_db = session_factory()
     try:
@@ -28,7 +30,7 @@ def run_cycle(*, session_factory=SessionLocal, now_fn=None) -> dict[str, int]:
     for claim in claims:
         db = session_factory()
         try:
-            if EvaluationExecutor(_repository(db)).execute(claim, now=now()):
+            if EvaluationExecutor(_repository(db, judge)).execute(claim, now=now()):
                 completed += 1
             else:
                 stale += 1
@@ -43,14 +45,14 @@ def run_cycle(*, session_factory=SessionLocal, now_fn=None) -> dict[str, int]:
     return {"claimed": len(claims), "completed": completed, "failed": failed, "claim_lost": stale}
 
 
-def run_once(*, session_factory=SessionLocal, now_fn=None) -> dict[str, int]:
-    return run_cycle(session_factory=session_factory, now_fn=now_fn)
+def run_once(*, session_factory=SessionLocal, now_fn=None, judge=None) -> dict[str, int]:
+    return run_cycle(session_factory=session_factory, now_fn=now_fn, judge=judge)
 
 
-def _repository(db):
+def _repository(db, judge=None):
     from app.modules.evaluations.infrastructure.repositories import EvaluationRepository
 
-    return EvaluationRepository(db)
+    return EvaluationRepository(db, judge)
 
 
 def run_forever(*, session_factory=SessionLocal, sleep_fn=time.sleep, stop_flag=None) -> None:

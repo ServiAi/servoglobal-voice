@@ -21,12 +21,62 @@ class EvaluationsBoundaryTests(unittest.TestCase):
     def test_application_and_domain_do_not_import_orm_or_provider_sdks(self) -> None:
         prohibited = (
             "sqlalchemy", "openai", "anthropic", "google.genai", "google.generativeai",
-            "livekit", "elevenlabs", "ultravox", "cohere", "mistralai",
+            "livekit", "elevenlabs", "ultravox", "cohere", "mistralai", "openrouter", "google",
+            "httpx", "requests", "urllib", "aiohttp", "socket",
         )
-        for folder in (MODULE / "domain", MODULE / "application"):
+        for folder in (MODULE / "domain", MODULE / "application", MODULE / "adapters"):
             for path in folder.rglob("*.py"):
                 for imported in _imports(path):
                     self.assertFalse(imported.startswith(prohibited), f"{path}: {imported}")
+
+    def test_semantic_engine_only_reaches_voice_and_agents_through_public(self) -> None:
+        for path in MODULE.rglob("*.py"):
+            for imported in _imports(path):
+                for other in ("voice", "agents"):
+                    if imported.startswith(f"app.modules.{other}"):
+                        self.assertEqual(imported, f"app.modules.{other}.public", f"{path}: {imported}")
+
+    def test_judge_contract_carries_no_orm_credentials_or_http_objects(self) -> None:
+        import dataclasses
+        import typing
+
+        from app.modules.evaluations.domain.semantic_judge import (
+            JudgeMetadata,
+            SemanticJudgeRequest,
+            SemanticJudgeResponse,
+        )
+
+        forbidden = ("api_key", "apikey", "secret", "authorization", "credential", "header", "password",
+                     "raw_body", "session", "db", "connection", "engine", "client", "http", "url")
+        for contract in (SemanticJudgeRequest, SemanticJudgeResponse, JudgeMetadata):
+            hints = typing.get_type_hints(contract)
+            for field in dataclasses.fields(contract):
+                self.assertFalse(any(word in field.name.lower() for word in forbidden), field.name)
+                self.assertNotIn("sqlalchemy", repr(hints[field.name]).lower(), field.name)
+            self.assertTrue(contract.__dataclass_params__.frozen)
+
+    def test_provenance_is_a_closed_secret_free_whitelist(self) -> None:
+        from _semantic_engine_fixtures import good_judge, make_evidence
+        from app.modules.evaluations.application.semantic_evaluator import (
+            SemanticEvaluator,
+        )
+        from app.modules.evaluations.domain.semantic_definition import (
+            semantic_quality_criteria,
+        )
+
+        result = SemanticEvaluator(good_judge()).evaluate(semantic_quality_criteria(), make_evidence())
+        allowed = {"provider", "requested_model", "resolved_model", "model_revision", "prompt_key",
+                   "prompt_version", "prompt_hash", "rubric_version", "schema_version",
+                   "implementation_version", "latency_ms", "input_tokens", "output_tokens"}
+        for criterion in result.criteria:
+            self.assertEqual(set(criterion.provenance), allowed)
+
+    def test_fake_judge_is_not_wired_into_runtime_code(self) -> None:
+        for path in APP.rglob("*.py"):
+            if path.is_relative_to(MODULE / "adapters"):
+                continue
+            for imported in _imports(path):
+                self.assertNotIn("fake_llm_judge", imported, f"{path}: {imported}")
 
     def test_other_modules_only_import_evaluations_public(self) -> None:
         for path in APP.rglob("*.py"):
