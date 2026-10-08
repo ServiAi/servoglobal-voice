@@ -184,7 +184,9 @@ class WhatsAppProviderMessageIntegrityMigrationTests(unittest.TestCase):
         self.assertIn(UNIQUE_INDEX, self._indexes())
 
     def test_there_is_a_single_alembic_head_and_metadata_matches_the_migration(self) -> None:
-        self.assertEqual(ScriptDirectory.from_config(_config()).get_heads(), [AFTER])
+        script = ScriptDirectory.from_config(_config())
+        self.assertEqual(len(script.get_heads()), 1)
+        self.assertIn(AFTER, {revision.revision for revision in script.walk_revisions()})
 
         import app.models  # noqa: F401  (registers every model)
         from app.db.base import Base

@@ -20,6 +20,7 @@ from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.main import app
 from app.modules.crm.infrastructure.models import CrmCallContext, CrmContact, CrmLead, CrmPipelineStage
+from _evaluation_test_seed import seed_voice_technical_health
 from app.modules.identity.infrastructure.models import Tenant, TenantMembership, User
 from app.modules.scheduling.domain.contracts import BookingConfigRequest
 from app.modules.scheduling.application.booking_config_service import BookingConfigService
@@ -36,8 +37,11 @@ class Integration2ATestCase(unittest.TestCase):
         Base.metadata.create_all(bind=engine)
         app.dependency_overrides.clear()
         self.client = TestClient(app)
+        with SessionLocal() as db:
+            seed_voice_technical_health(db)
         self.tenant, self.user = self._seed_tenant_user()
         app.dependency_overrides[get_current_auth_context] = self._auth_context_override
+
 
     def tearDown(self):
         app.dependency_overrides.clear()

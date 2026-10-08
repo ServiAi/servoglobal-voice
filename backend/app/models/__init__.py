@@ -85,6 +85,12 @@ from app.modules.tools.infrastructure.models import (
     TenantToolCredential,
 )
 from app.modules.voice.infrastructure.models import VoiceSession, VoiceSessionEvent
+from app.modules.evaluations.infrastructure.models import (
+    CriterionResult,
+    EvaluationDefinition,
+    EvaluationDefinitionVersion,
+    EvaluationRun,
+)
 
 __all__ = [
     "AccessAuditLog",

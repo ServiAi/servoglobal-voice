@@ -275,3 +275,7 @@ La cobertura local/mocked no demuestra audio bidireccional, LiveKit real, carrie
 - Playwright de notificaciones: si aparece el login, el `storageState` expiró; regenérelo con `npm.cmd run qa:auth`.
 - Webhook: validar URL pública, secreto/firma, status HTTP e idempotencia.
 - Assets: comprobar driver, bucket/ruta, permisos y límites de tamaño; el bucket no debe ser público.
+
+## Worker de Evaluations
+
+Aplica la migración con `cd backend; python -m alembic upgrade head` y ejecuta el worker sólo contra PostgreSQL mediante `python -m app.modules.evaluations.runtime.worker`. `--once` procesa un batch y termina; sin argumento queda en polling. El worker reclama hasta 25 runs por batch con lease de 60 segundos, sin mantener locks durante el cálculo. La suite `test_evaluations_postgres` requiere una base aislada cuyo nombre termine en `_evaluations_test` mediante `EVALUATIONS_TEST_DATABASE_URL`; CI crea esa base y falla si el suite se omite.
