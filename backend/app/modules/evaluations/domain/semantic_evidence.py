@@ -23,11 +23,25 @@ _DOCUMENT = re.compile(
 _ACCOUNT = re.compile(
     r"(?i)\b(?:cuenta(?:\s+bancaria)?|tarjeta(?:\s+de\s+cr[eé]dito)?)\s*(?:n[uú]mero\s*)?(?:[:#-]\s*)?[\d][\d -]{4,}[\d]"
 )
-_PHONE = re.compile(r"(?<!\w)\+?\d[\d\s().-]{6,}\d(?!\w)")
+# Phones are matched by shape, never by digit count alone, so budgets, amounts,
+# ticket ids and numeric dates survive: international "+CC ..." numbers, 3-3-4
+# separated groups, and bare Colombian mobiles (3XXXXXXXXX, optional 57 prefix;
+# same 10-digit rule as crm normalize_phone).
+_PHONE = re.compile(
+    r"(?<![\w.,$])(?:"
+    r"\+\d{1,3}[\s().-]*\d(?:[\s().-]*\d){6,11}"
+    r"|\(?\d{3}\)?[ .-]\d{3}[ .-]\d{4}"
+    r"|(?:57)?3\d{9}"
+    r")(?![\w]|[.,]\d)"
+)
 
 
 def redact_text(value: str) -> str:
-    """Redact common structured identifiers; this is not general DLP."""
+    """Redact known structured identifiers (transcript-redaction-v1).
+
+    Not general DLP: names, addresses and other contextual PII are NOT inferred;
+    that is deferred to provider qualification/privacy.
+    """
     value = _SECRET.sub("[REDACTED_SECRET]", value)
     value = _BEARER.sub("[REDACTED_TOKEN]", value)
     value = _DOCUMENT.sub("[REDACTED_DOCUMENT]", value)

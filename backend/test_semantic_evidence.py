@@ -13,6 +13,7 @@ from app.modules.agents.domain.views import AgentEvaluationSnapshotUnavailableEr
 from app.modules.agents.infrastructure.models import TenantAgent, TenantAgentVersion
 from app.modules.agents.public import AgentsFacade
 from app.modules.evaluations.domain.semantic_evidence import (
+    redact_text,
     SemanticEvidenceUnavailableError,
     build_semantic_evidence,
 )
@@ -197,6 +198,22 @@ class SemanticEvidenceTests(unittest.TestCase):
                 payload={"speaker": "user", "text": "Adiós"},
                 commit=False,
             )
+
+
+class RedactionTests(unittest.TestCase):
+    def test_business_numbers_survive(self) -> None:
+        for text in (
+            "Mi presupuesto es 300000000",
+            "Presupuesto: $300.000.000",
+            "El valor es 12500000 COP",
+            "Ticket 12345678",
+            "Referencia 20261008",
+        ):
+            self.assertEqual(redact_text(text), text)
+
+    def test_structured_phones_are_redacted(self) -> None:
+        for phone in ("+57 300 123 4567", "3001234567", "573001234567", "(300) 123-4567"):
+            self.assertEqual(redact_text(f"Llame al {phone} hoy"), "Llame al [REDACTED_PHONE] hoy")
 
 
 if __name__ == "__main__":
