@@ -23,6 +23,10 @@ from app.modules.voice.domain.session_context import CampaignContext, SessionCon
 from app.modules.voice.infrastructure.models import VoiceSession, VoiceSessionEvent
 
 
+def _as_utc(value: datetime) -> datetime:
+    return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value
+
+
 class VoiceSessionService:
     def __init__(self, db: Session) -> None:
         self.db = db
@@ -332,8 +336,16 @@ class VoiceSessionService:
         if event_id:
             existing = self.db.scalar(select(VoiceSessionEvent).where(VoiceSessionEvent.event_id == event_id))
             if existing:
-                if existing.voice_session_id != session.id:
-                    raise VoiceSessionError("Event id belongs to another session.")
+                if existing.voice_session_id != session.id or existing.tenant_id != session.tenant_id:
+                    raise VoiceSessionError("voice_event_id_conflict")
+                if (
+                    existing.event_type != event_type
+                    or existing.source != source
+                    or existing.sequence != sequence
+                    or (existing.payload_json or {}) != (payload or {})
+                    or (occurred_at is not None and _as_utc(existing.occurred_at) != _as_utc(occurred_at))
+                ):
+                    raise VoiceSessionError("voice_event_id_payload_conflict")
                 return existing, True
         event = VoiceSessionEvent(event_id=event_id, tenant_id=session.tenant_id, voice_session_id=session.id, event_type=event_type, source=source, sequence=sequence, payload_json=payload or {}, occurred_at=occurred_at or datetime.now(timezone.utc))
         self.db.add(event)

@@ -73,6 +73,9 @@ def validate_voice_settings(voice: AgentVoiceConfig) -> None:
     VoiceSelectionService.validate_settings(voice)
 
 
+from app.modules.agents.domain.views import AgentEvaluationSnapshot, AgentEvaluationSnapshotUnavailableError
+
+
 class AgentsFacade:
     def __init__(self, db: Session) -> None:
         self.db = db
@@ -97,6 +100,11 @@ class AgentsFacade:
         from app.modules.agents.application.queries import AgentQueries
 
         return AgentQueries(self.db).tool_bindings(tenant_id, agent_version_id)
+
+    def read_evaluation_snapshot(self, tenant_id: str, agent_version_id: str) -> "AgentEvaluationSnapshot":
+        from app.modules.agents.application.queries import AgentQueries
+
+        return AgentQueries(self.db).evaluation_snapshot(tenant_id, agent_version_id)
 
     def describe_agent(self, tenant_id: str, agent_id: str, agent_version_id: str | None) -> AgentDisplay:
         """Agent name/status, falling back to the version's identity name

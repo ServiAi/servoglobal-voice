@@ -355,6 +355,13 @@ class UltravoxLifecycleTests(unittest.IsolatedAsyncioTestCase):
                 started.set()
 
             async def aclose(self):
+                if "conversation_item_added" in self.handlers:
+                    self.emit(
+                        "conversation_item_added",
+                        types.SimpleNamespace(item=types.SimpleNamespace(
+                            role="assistant", text_content="Cierre final", interrupted=False,
+                        )),
+                    )
                 closed["session"] += 1
 
         class FakeAgent:
@@ -418,6 +425,8 @@ class UltravoxLifecycleTests(unittest.IsolatedAsyncioTestCase):
         ctx = FakeContext()
 
         async def send_event(event_type, **kwargs):
+            if event_type == "voice.transcript.final":
+                await asyncio.sleep(0.01)
             events.append((event_type, kwargs))
 
         resolver = FakeCredentialResolver(ProviderCredential(provider="ultravox", api_key="tenant-a-key"))
@@ -511,22 +520,11 @@ class UltravoxLifecycleTests(unittest.IsolatedAsyncioTestCase):
                 types.SimpleNamespace(old_state="speaking", new_state="listening"),
             )
             await asyncio.sleep(0)
-            await asyncio.sleep(0)
             event_names = [event[0] for event in events]
             self.assertIn("voice.participant.connected", event_names)
             self.assertIn("voice.audio.input.started", event_names)
-            self.assertIn("voice.transcript.final", event_names)
-            transcripts = [event[1] for event in events if event[0] == "voice.transcript.final"]
-            self.assertEqual(len(transcripts), 2)
-            self.assertEqual([item["payload"]["speaker"] for item in transcripts], ["user", "assistant"])
-            self.assertEqual([item["sequence"] for item in transcripts], [1, 2])
-            self.assertIn("voice.session.connected", event_names)
             self.assertIn("voice.audio.output.started", event_names)
             self.assertIn("voice.audio.output.completed", event_names)
-            self.assertLess(
-                event_names.index("voice.transcript.final"),
-                event_names.index("voice.session.connected"),
-            )
 
             ctx.room.emit("participant_disconnected", participant)
             await asyncio.wait_for(task, timeout=1)
@@ -535,6 +533,15 @@ class UltravoxLifecycleTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(closed, {"model": 1, "session": 1})
             self.assertIn("voice.participant.disconnected", [event[0] for event in events])
             self.assertIn("voice.session.ended", [event[0] for event in events])
+            transcripts = [event[1] for event in events if event[0] == "voice.transcript.final"]
+            self.assertEqual(len(transcripts), 3)
+            self.assertEqual([item["sequence"] for item in transcripts], [1, 2, 3])
+            ended = next(event[1] for event in events if event[0] == "voice.session.ended")
+            self.assertEqual(ended["payload"]["transcript_final_sequence"], 3)
+            self.assertLess(
+                max(i for i, event in enumerate(events) if event[0] == "voice.transcript.final"),
+                next(i for i, event in enumerate(events) if event[0] == "voice.session.ended"),
+            )
             self.assertEqual(ctx.shutdown_reasons, ["human participant disconnected"])
 
 

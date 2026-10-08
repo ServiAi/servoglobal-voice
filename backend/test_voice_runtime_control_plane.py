@@ -287,7 +287,9 @@ class VoiceRuntimeControlPlaneTests(Integration2ATestCase):
             token = create_runtime_token()
             headers = {"Authorization": f"Bearer {token}"}
 
-            def post(event_id: str, event_type: str, payload: dict | None = None):
+            occurred_at = datetime.now(timezone.utc).isoformat()
+
+            def post(event_id: str, event_type: str, payload: dict | None = None, sequence: int | None = None):
                 return self.client.post(
                     f"/api/v1/internal/voice-runtime/sessions/{session_id}/events",
                     headers=headers,
@@ -297,8 +299,9 @@ class VoiceRuntimeControlPlaneTests(Integration2ATestCase):
                         "session_id": session_id,
                         "event_type": event_type,
                         "source": "livekit",
+                        "sequence": sequence,
                         "payload": payload or {},
-                        "occurred_at": datetime.now(timezone.utc).isoformat(),
+                        "occurred_at": occurred_at,
                     },
                 )
 
@@ -318,7 +321,7 @@ class VoiceRuntimeControlPlaneTests(Integration2ATestCase):
                 self.assertIsNotNone(session.runtime_ready_at)
 
             self.assertEqual(
-                post("transcript", "voice.transcript.final", {"speaker": "user", "text": "Hola"}).status_code,
+                post("transcript", "voice.transcript.final", {"speaker": "user", "text": "Hola"}, 1).status_code,
                 200,
             )
             self.assertEqual(post("connected", "voice.session.connected").status_code, 200)
@@ -330,7 +333,7 @@ class VoiceRuntimeControlPlaneTests(Integration2ATestCase):
                 200,
             )
             self.assertEqual(
-                post("assistant", "voice.transcript.final", {"speaker": "assistant", "text": "Buenos días"}).status_code,
+                post("assistant", "voice.transcript.final", {"speaker": "assistant", "text": "Buenos días"}, 2).status_code,
                 200,
             )
             self.assertEqual(post("late-started", "voice.session.started").status_code, 200)

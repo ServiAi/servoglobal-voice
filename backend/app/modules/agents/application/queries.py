@@ -11,6 +11,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.modules.agents.domain.views import (
+    AgentEvaluationSnapshot,
+    AgentEvaluationSnapshotUnavailableError,
     AgentDisplay,
     AgentToolBindingView,
     PublishedAgent,
@@ -66,6 +68,46 @@ class AgentQueries:
             )
         )
         return tool_binding_views(runtime)
+
+    def evaluation_snapshot(self, tenant_id: str, agent_version_id: str) -> AgentEvaluationSnapshot:
+        version = self.db.scalar(
+            select(TenantAgentVersion).where(
+                TenantAgentVersion.id == agent_version_id,
+                TenantAgentVersion.tenant_id == tenant_id,
+            )
+        )
+        if version is None:
+            raise AgentEvaluationSnapshotUnavailableError()
+        try:
+            from app.modules.agents.domain.contracts import AgentBehavior, AgentIdentity, AgentInstructions
+
+            identity = AgentIdentity.model_validate(version.identity_json or {})
+            instructions = AgentInstructions.model_validate(version.instructions_json or {})
+            behavior = AgentBehavior.model_validate(version.behavior_json or {})
+        except Exception as exc:
+            raise AgentEvaluationSnapshotUnavailableError("agent_evaluation_snapshot_invalid") from exc
+        return AgentEvaluationSnapshot(
+            tenant_id=version.tenant_id,
+            agent_version_id=version.id,
+            agent_id=version.agent_id,
+            version=version.version,
+            language=version.language,
+            name=identity.name,
+            description=identity.description,
+            role=instructions.role,
+            objective=instructions.objective,
+            system_prompt=instructions.system_prompt,
+            greeting=instructions.greeting,
+            closing=instructions.closing,
+            response_style=behavior.response_style,
+            interruptions=behavior.interruptions,
+            turn_detection=behavior.turn_detection,
+            confirmation_strategy=behavior.confirmation_strategy,
+            agent_first=behavior.agent_first,
+            enabled_tool_keys=tuple(
+                binding.key for binding in tool_binding_views(version.runtime_binding_json) if binding.enabled
+            ),
+        )
 
     def describe(self, tenant_id: str, agent_id: str, agent_version_id: str | None) -> AgentDisplay:
         agent = self.db.scalar(

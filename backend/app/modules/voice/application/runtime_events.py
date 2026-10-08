@@ -23,7 +23,7 @@ from app.modules.voice.domain.lifecycle import (
 
 ALLOWED_PAYLOAD_KEYS = frozenset({
     "livekit_job_id", "provider_session_id", "end_reason", "error_code", "speaker", "text",
-    "timestamp", "participant_identity", "track_source",
+    "timestamp", "participant_identity", "track_source", "transcript_final_sequence",
 })
 
 
@@ -53,13 +53,24 @@ class RuntimeEventIngestor:
         InvalidRuntimeEventError; the caller owns rollback on error."""
         session = self.sessions.get(session_id)
         allowed_payload = {key: value for key, value in payload.items() if key in ALLOWED_PAYLOAD_KEYS}
+        if event_id is not None and (not event_id or len(event_id) > 80):
+            raise InvalidRuntimeEventError("Invalid runtime event id")
         if event_type == "voice.transcript.final" and (
             allowed_payload.get("speaker") not in {"user", "assistant"}
             or not isinstance(allowed_payload.get("text"), str)
             or not allowed_payload["text"].strip()
             or len(allowed_payload["text"]) > 10000
+            or isinstance(sequence, bool)
+            or not isinstance(sequence, int)
+            or sequence < 1
         ):
             raise InvalidRuntimeEventError("Invalid final transcript")
+        if event_type == "voice.session.ended" and "transcript_final_sequence" in allowed_payload and (
+            isinstance(allowed_payload["transcript_final_sequence"], bool)
+            or not isinstance(allowed_payload["transcript_final_sequence"], int)
+            or allowed_payload["transcript_final_sequence"] < 0
+        ):
+            raise InvalidRuntimeEventError("Invalid final transcript sequence")
         _event, duplicate = self.sessions.record_event(
             session, event_type, source=source, event_id=event_id, sequence=sequence,
             payload=allowed_payload, occurred_at=occurred_at, commit=False,

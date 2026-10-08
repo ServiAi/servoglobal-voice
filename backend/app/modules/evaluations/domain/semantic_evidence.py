@@ -1,0 +1,185 @@
+from __future__ import annotations
+
+import hashlib
+import json
+import re
+from dataclasses import dataclass, replace
+from datetime import UTC, datetime
+
+from app.modules.agents.public import AgentEvaluationSnapshot
+from app.modules.voice.public import TranscriptCompleteness, VoiceConversationEvidence, VoiceToolOutcome
+
+EVIDENCE_VERSION = "semantic-evidence-v1"
+REDACTION_VERSION = "transcript-redaction-v1"
+
+_EMAIL = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
+_BEARER = re.compile(r"(?i)\b(?:authorization\s*[:=]?\s*)?bearer\s+[A-Za-z0-9._~+/=-]+")
+_SECRET = re.compile(
+    r"(?i)\b(?:api[_ -]?key|access[_ -]?token|refresh[_ -]?token|client[_ -]?secret|webhook[_ -]?secret)\s*[:=]\s*[^\s,;]+"
+)
+_DOCUMENT = re.compile(
+    r"(?i)\b(?:c[eé]dula|documento|identificaci[oó]n|dni|pasaporte)\s*(?:n[uú]mero\s*)?(?:[:#-]\s*)?[\d][\d. -]{3,}[\d]"
+)
+_ACCOUNT = re.compile(
+    r"(?i)\b(?:cuenta(?:\s+bancaria)?|tarjeta(?:\s+de\s+cr[eé]dito)?)\s*(?:n[uú]mero\s*)?(?:[:#-]\s*)?[\d][\d -]{4,}[\d]"
+)
+_PHONE = re.compile(r"(?<!\w)\+?\d[\d\s().-]{6,}\d(?!\w)")
+
+
+def redact_text(value: str) -> str:
+    """Redact common structured identifiers; this is not general DLP."""
+    value = _SECRET.sub("[REDACTED_SECRET]", value)
+    value = _BEARER.sub("[REDACTED_TOKEN]", value)
+    value = _DOCUMENT.sub("[REDACTED_DOCUMENT]", value)
+    value = _ACCOUNT.sub("[REDACTED_ACCOUNT]", value)
+    value = _EMAIL.sub("[REDACTED_EMAIL]", value)
+    return _PHONE.sub("[REDACTED_PHONE]", value)
+
+
+@dataclass(frozen=True)
+class SemanticTranscriptTurn:
+    event_id: str
+    sequence: int | None
+    speaker: str
+    text: str
+    occurred_at: datetime
+
+
+@dataclass(frozen=True)
+class SemanticEvaluationEvidenceV1:
+    evidence_version: str
+    tenant_id: str
+    session_id: str
+    purpose: str
+    terminal_status: str
+    ended_at: datetime | None
+    agent_version_id: str
+    agent_snapshot: AgentEvaluationSnapshot
+    transcript_completeness: TranscriptCompleteness
+    redaction_version: str
+    turns: tuple[SemanticTranscriptTurn, ...]
+    tool_outcomes: tuple[VoiceToolOutcome, ...]
+    source_event_ids: tuple[str, ...]
+    evidence_hash: str
+
+
+class SemanticEvidenceUnavailableError(ValueError):
+    pass
+
+
+def build_semantic_evidence(
+    conversation: VoiceConversationEvidence,
+    agent_snapshot: AgentEvaluationSnapshot,
+) -> SemanticEvaluationEvidenceV1:
+    if conversation.transcript_completeness != TranscriptCompleteness.COMPLETE:
+        raise SemanticEvidenceUnavailableError("transcript_evidence_incomplete")
+    if (
+        not conversation.agent_version_id
+        or agent_snapshot.agent_version_id != conversation.agent_version_id
+        or agent_snapshot.tenant_id != conversation.tenant_id
+    ):
+        raise SemanticEvidenceUnavailableError("historical_evidence_missing")
+    if agent_snapshot.agent_id == "" or agent_snapshot.agent_version_id == "":
+        raise SemanticEvidenceUnavailableError("historical_evidence_missing")
+    if any(not turn.event_id or turn.speaker not in {"user", "assistant"} for turn in conversation.turns):
+        raise SemanticEvidenceUnavailableError("transcript_turn_invalid")
+
+    safe_agent = replace(
+        agent_snapshot,
+        name=redact_text(agent_snapshot.name),
+        description=redact_text(agent_snapshot.description) if agent_snapshot.description else None,
+        role=redact_text(agent_snapshot.role),
+        objective=redact_text(agent_snapshot.objective),
+        system_prompt=redact_text(agent_snapshot.system_prompt),
+        greeting=redact_text(agent_snapshot.greeting),
+        closing=redact_text(agent_snapshot.closing),
+    )
+    turns = tuple(
+        SemanticTranscriptTurn(
+            event_id=turn.event_id,
+            sequence=turn.sequence,
+            speaker=turn.speaker,
+            text=redact_text(turn.text),
+            occurred_at=_utc(turn.occurred_at),
+        )
+        for turn in conversation.turns
+    )
+    ended_at = _utc(conversation.ended_at) if conversation.ended_at else None
+    payload = {
+        "evidence_version": EVIDENCE_VERSION,
+        "tenant_id": conversation.tenant_id,
+        "session_id": conversation.session_id,
+        "purpose": conversation.purpose,
+        "terminal_status": conversation.terminal_status,
+        "ended_at": ended_at.isoformat() if ended_at else None,
+        "agent_version_id": safe_agent.agent_version_id,
+        "agent_snapshot": _agent_dict(safe_agent),
+        "transcript_completeness": conversation.transcript_completeness.value,
+        "redaction_version": REDACTION_VERSION,
+        "turns": [
+            {
+                "event_id": turn.event_id,
+                "sequence": turn.sequence,
+                "speaker": turn.speaker,
+                "text": turn.text,
+                "occurred_at": turn.occurred_at.isoformat(),
+            }
+            for turn in turns
+        ],
+        "tool_outcomes": [
+            {
+                "event_id": outcome.event_id,
+                "tool_key": outcome.tool_key,
+                "status": outcome.status,
+                "duration_ms": outcome.duration_ms,
+                "error_code": outcome.error_code,
+            }
+            for outcome in conversation.tool_outcomes
+        ],
+    }
+    canonical = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False)
+    return SemanticEvaluationEvidenceV1(
+        evidence_version=EVIDENCE_VERSION,
+        tenant_id=conversation.tenant_id,
+        session_id=conversation.session_id,
+        purpose=conversation.purpose,
+        terminal_status=conversation.terminal_status,
+        ended_at=ended_at,
+        agent_version_id=safe_agent.agent_version_id,
+        agent_snapshot=safe_agent,
+        transcript_completeness=conversation.transcript_completeness,
+        redaction_version=REDACTION_VERSION,
+        turns=turns,
+        tool_outcomes=conversation.tool_outcomes,
+        source_event_ids=tuple(
+            [turn.event_id for turn in turns] + [outcome.event_id for outcome in conversation.tool_outcomes]
+        ),
+        evidence_hash=hashlib.sha256(canonical.encode("utf-8")).hexdigest(),
+    )
+
+
+def _agent_dict(snapshot: AgentEvaluationSnapshot) -> dict:
+    return {
+        "tenant_id": snapshot.tenant_id,
+        "agent_version_id": snapshot.agent_version_id,
+        "agent_id": snapshot.agent_id,
+        "version": snapshot.version,
+        "language": snapshot.language,
+        "name": snapshot.name,
+        "description": snapshot.description,
+        "role": snapshot.role,
+        "objective": snapshot.objective,
+        "system_prompt": snapshot.system_prompt,
+        "greeting": snapshot.greeting,
+        "closing": snapshot.closing,
+        "response_style": snapshot.response_style,
+        "interruptions": snapshot.interruptions,
+        "turn_detection": snapshot.turn_detection,
+        "confirmation_strategy": snapshot.confirmation_strategy,
+        "agent_first": snapshot.agent_first,
+        "enabled_tool_keys": list(snapshot.enabled_tool_keys),
+    }
+
+
+def _utc(value: datetime) -> datetime:
+    return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
