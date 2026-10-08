@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import datetime, timezone
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.modules.agents.public import AgentsFacade, PublishedAgentUnavailableError
+from app.modules.agents.public import AgentRuntimeTargetUnavailableError, AgentsFacade, PublishedAgentUnavailableError
 from app.modules.voice.application.context_resolution import ContactResolutionService
 from app.modules.voice.application.ports import ContactView, LeadView
 from app.modules.voice.domain.errors import (  # noqa: F401 -- historical import path for these names
@@ -49,6 +50,77 @@ class VoiceSessionService:
         purpose: str = "production",
         qa_context_mode: str = "preloaded",
     ) -> VoiceSession:
+        """Session for the agent's CURRENT published version."""
+
+        def resolve() -> tuple[str, str, str | None]:
+            try:
+                published = AgentsFacade(self.db).lock_published_agent(tenant_id, agent_id)
+            except PublishedAgentUnavailableError as exc:
+                if exc.code == "published_version_invalid":
+                    raise VoiceSessionError("The agent's published version is invalid.") from exc
+                raise VoiceSessionError("An active agent with a published version is required.") from exc
+            if not published.is_realtime:
+                raise VoiceSessionError("Published agent is not configured for realtime voice.")
+            return published.agent_id, published.version_id, published.realtime_provider
+
+        return self._create_session(
+            tenant_id, resolve, channel=channel, direction=direction, idempotency_key=idempotency_key,
+            contact_id=contact_id, lead_id=lead_id, caller_phone=caller_phone, variables=variables,
+            purpose=purpose, qa_context_mode=qa_context_mode,
+        )
+
+    def create_from_agent_version(
+        self,
+        tenant_id: str,
+        agent_id: str,
+        agent_version_id: str,
+        *,
+        channel: str,
+        direction: str,
+        idempotency_key: str | None = None,
+        contact_id: str | None = None,
+        lead_id: str | None = None,
+        caller_phone: str | None = None,
+        variables: dict | None = None,
+        purpose: str = "production",
+        qa_context_mode: str = "preloaded",
+    ) -> VoiceSession:
+        """Session pinned to EXACTLY ``agent_version_id`` (published or superseded), however
+        the agent's published pointer moves later. Same algorithm as create()."""
+
+        def resolve() -> tuple[str, str, str | None]:
+            try:
+                target = AgentsFacade(self.db).resolve_runtime_target(
+                    tenant_id, agent_id, agent_version_id, lock=True
+                )
+            except AgentRuntimeTargetUnavailableError as exc:
+                raise VoiceSessionError(exc.code) from exc
+            if not target.is_realtime:
+                raise VoiceSessionError("Agent version is not configured for realtime voice.")
+            return target.agent_id, target.agent_version_id, target.realtime_provider
+
+        return self._create_session(
+            tenant_id, resolve, channel=channel, direction=direction, idempotency_key=idempotency_key,
+            contact_id=contact_id, lead_id=lead_id, caller_phone=caller_phone, variables=variables,
+            purpose=purpose, qa_context_mode=qa_context_mode, expected_version_id=agent_version_id,
+        )
+
+    def _create_session(
+        self,
+        tenant_id: str,
+        resolve: Callable[[], tuple[str, str, str | None]],
+        *,
+        channel: str,
+        direction: str,
+        idempotency_key: str | None,
+        contact_id: str | None,
+        lead_id: str | None,
+        caller_phone: str | None,
+        variables: dict | None,
+        purpose: str,
+        qa_context_mode: str,
+        expected_version_id: str | None = None,
+    ) -> VoiceSession:
         if purpose == "qa" and qa_context_mode == "conversation" and (
             contact_id or lead_id or variables or (caller_phone and channel != "sip")
         ):
@@ -56,15 +128,8 @@ class VoiceSessionService:
         if idempotency_key:
             existing = self.db.scalar(select(VoiceSession).where(VoiceSession.tenant_id == tenant_id, VoiceSession.idempotency_key == idempotency_key))
             if existing:
-                return existing
-        try:
-            published = AgentsFacade(self.db).lock_published_agent(tenant_id, agent_id)
-        except PublishedAgentUnavailableError as exc:
-            if exc.code == "published_version_invalid":
-                raise VoiceSessionError("The agent's published version is invalid.") from exc
-            raise VoiceSessionError("An active agent with a published version is required.") from exc
-        if not published.is_realtime:
-            raise VoiceSessionError("Published agent is not configured for realtime voice.")
+                return self._same_version_or_conflict(existing, expected_version_id)
+        resolved_agent_id, resolved_version_id, realtime_provider = resolve()
         # contact_id/lead_id/caller_phone are only ever trusted here: this
         # is the request-scoped, WRITE_ROLES-authenticated caller of
         # POST /api/v1/voice/sessions (the WebRTC test-call flow), never a
@@ -86,9 +151,9 @@ class VoiceSessionService:
             variables=variables,
         )
         session = VoiceSession(
-            tenant_id=tenant_id, agent_id=published.agent_id, agent_version_id=published.version_id, channel=channel, direction=direction,
+            tenant_id=tenant_id, agent_id=resolved_agent_id, agent_version_id=resolved_version_id, channel=channel, direction=direction,
             purpose=purpose,
-            runtime_engine="livekit", pipeline_type="realtime", provider=published.realtime_provider,
+            runtime_engine="livekit", pipeline_type="realtime", provider=realtime_provider,
             idempotency_key=idempotency_key, session_context_json=context.model_dump(mode="json"),
         )
         self.db.add(session)
@@ -106,9 +171,17 @@ class VoiceSessionService:
             existing = self.db.scalar(select(VoiceSession).where(VoiceSession.tenant_id == tenant_id, VoiceSession.idempotency_key == idempotency_key))
             if existing is None:
                 raise
-            return existing
+            return self._same_version_or_conflict(existing, expected_version_id)
         self.db.refresh(session)
         return session
+
+    @staticmethod
+    def _same_version_or_conflict(existing: VoiceSession, expected_version_id: str | None) -> VoiceSession:
+        # Only the exact-version path asks: an idempotent replay must not silently hand back a
+        # session pinned to a different version.
+        if expected_version_id is not None and existing.agent_version_id != expected_version_id:
+            raise VoiceSessionError("idempotency_key_agent_version_conflict")
+        return existing
 
     def _record_context_events(self, session: VoiceSession, context: SessionContextV1) -> None:
         # Structured, PII-free observability for context resolution: only

@@ -14,6 +14,8 @@ from app.modules.agents.domain.views import (
     AgentEvaluationSnapshot,
     AgentEvaluationSnapshotUnavailableError,
     AgentDisplay,
+    AgentRuntimeTarget,
+    AgentRuntimeTargetUnavailableError,
     AgentToolBindingView,
     PublishedAgent,
     PublishedAgentUnavailableError,
@@ -51,6 +53,34 @@ class AgentQueries:
             tenant_id=tenant_id,
             version_id=version.id,
             pipeline_type=runtime.get("pipeline_type"),
+            realtime_provider=realtime.get("provider", "") if isinstance(realtime, dict) else None,
+        )
+
+    def resolve_runtime_target(
+        self, tenant_id: str, agent_id: str, agent_version_id: str, *, lock: bool = False
+    ) -> AgentRuntimeTarget:
+        """Exact version, never "whatever is published now". ``lock`` takes the agent row
+        FOR UPDATE (like lock_published_agent) so a concurrent archive/delete serializes."""
+        statement = select(TenantAgent).where(TenantAgent.id == agent_id, TenantAgent.tenant_id == tenant_id)
+        agent = self.db.scalar(statement.with_for_update() if lock else statement)
+        version = self.db.scalar(
+            select(TenantAgentVersion).where(
+                TenantAgentVersion.id == agent_version_id,
+                TenantAgentVersion.agent_id == agent_id,
+                TenantAgentVersion.tenant_id == tenant_id,
+            )
+        )
+        if agent is None or version is None:
+            raise AgentRuntimeTargetUnavailableError("agent_version_not_found")
+        if agent.status == "archived":
+            raise AgentRuntimeTargetUnavailableError("agent_archived")
+        if version.status not in {"published", "superseded"}:
+            raise AgentRuntimeTargetUnavailableError("agent_version_not_executable")
+        runtime = version.runtime_binding_json or {}
+        realtime = runtime.get("realtime")
+        return AgentRuntimeTarget(
+            tenant_id=tenant_id, agent_id=agent.id, agent_version_id=version.id, version=version.version,
+            version_status=version.status, pipeline_type=runtime.get("pipeline_type"),
             realtime_provider=realtime.get("provider", "") if isinstance(realtime, dict) else None,
         )
 

@@ -33,6 +33,8 @@ from app.modules.agents.domain.errors import (
 )
 from app.modules.agents.domain.views import (
     AgentDisplay,
+    AgentRuntimeTarget,
+    AgentRuntimeTargetUnavailableError,
     AgentToolBindingView,
     ImportedAgent,
     PublishedAgent,
@@ -51,6 +53,8 @@ __all__ = [
     "AgentIdentity",
     "AgentInstructions",
     "AgentNotFoundError",
+    "AgentRuntimeTarget",
+    "AgentRuntimeTargetUnavailableError",
     "AgentToolBinding",
     "AgentToolBindingView",
     "AgentValidationError",
@@ -89,6 +93,15 @@ class AgentsFacade:
         from app.modules.agents.application.queries import AgentQueries
 
         return AgentQueries(self.db).lock_published_agent(tenant_id, agent_id)
+
+    def resolve_runtime_target(
+        self, tenant_id: str, agent_id: str, agent_version_id: str, *, lock: bool = False
+    ) -> AgentRuntimeTarget:
+        """The exact executable version (published or superseded; never draft, never of an
+        archived agent). Raises AgentRuntimeTargetUnavailableError (``.code``)."""
+        from app.modules.agents.application.queries import AgentQueries
+
+        return AgentQueries(self.db).resolve_runtime_target(tenant_id, agent_id, agent_version_id, lock=lock)
 
     def get_agent_status(self, tenant_id: str, agent_id: str) -> str | None:
         """Current status straight from the database (never a cached row)."""
