@@ -18,6 +18,7 @@ from app.modules.voice.domain.views import (
     SessionEventFact,
     SessionProjectionFacts,
     ToolSessionView,
+    VoiceSessionRef,
 )
 from app.modules.voice.infrastructure.models import VoiceSession, VoiceSessionEvent
 
@@ -26,6 +27,17 @@ class VoiceSessionOperations:
     def __init__(self, db: Session) -> None:
         self.db = db
         self.sessions = VoiceSessionService(db)
+
+    def create_session_from_agent_version(
+        self, tenant_id: str, agent_id: str, agent_version_id: str, **options: Any
+    ) -> VoiceSessionRef:
+        session = self.sessions.create_from_agent_version(tenant_id, agent_id, agent_version_id, **options)
+        return VoiceSessionRef(
+            session_id=session.id, tenant_id=session.tenant_id, agent_id=session.agent_id,
+            agent_version_id=session.agent_version_id, channel=session.channel, direction=session.direction,
+            purpose=session.purpose, status=session.status, pipeline_type=session.pipeline_type,
+            provider=session.provider,
+        )
 
     def get_tool_session(self, session_id: str) -> ToolSessionView:
         session = self.sessions.get(session_id)

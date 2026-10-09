@@ -55,6 +55,23 @@ class TranscriptCompleteness(StrEnum):
 
 
 @dataclass(frozen=True)
+class VoiceSessionRef:
+    """What other modules get back for a session they asked Voice to create: identifiers and
+    the pinned version, never the VoiceSession row."""
+
+    session_id: str
+    tenant_id: str
+    agent_id: str
+    agent_version_id: str
+    channel: str
+    direction: str
+    purpose: str
+    status: str
+    pipeline_type: str
+    provider: str | None
+
+
+@dataclass(frozen=True)
 class TranscriptTurn:
     event_id: str
     sequence: int | None

@@ -86,6 +86,35 @@ class AgentEvaluationSnapshotUnavailableError(ValueError):
 
 
 @dataclass(frozen=True)
+class AgentRuntimeTarget:
+    """A tenant-verified, exact, executable agent version: provider-agnostic facts
+    only (no runtime_binding_json, no ORM). ``version_status`` is ``published`` or
+    ``superseded``; a draft version, or any version of a non-active agent, is never a target."""
+
+    tenant_id: str
+    agent_id: str
+    agent_version_id: str
+    version: int
+    version_status: str
+    pipeline_type: str | None
+    realtime_provider: str | None
+
+    @property
+    def is_realtime(self) -> bool:
+        return self.pipeline_type == "realtime" and self.realtime_provider is not None
+
+
+class AgentRuntimeTargetUnavailableError(ValueError):
+    """``code``: agent_version_not_found (also for another tenant's or another
+    agent's version), agent_archived, agent_not_active (agent unpublished/draft),
+    agent_version_not_executable (draft version)."""
+
+    def __init__(self, code: str) -> None:
+        super().__init__(code)
+        self.code = code
+
+
+@dataclass(frozen=True)
 class ImportedAgent:
     agent_id: str
     draft_version_id: str
