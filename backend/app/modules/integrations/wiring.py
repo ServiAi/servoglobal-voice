@@ -19,6 +19,10 @@ from dataclasses import dataclass
 from sqlalchemy.orm import Session
 
 from app.modules.integrations.domain.catalog import CatalogFacts
+from app.modules.integrations.domain.whatsapp_flow_context import (
+    ContextFieldSnapshot,
+    ContextSchemaSnapshot,
+)
 
 
 @dataclass(frozen=True)
@@ -155,26 +159,16 @@ class LegacyFormLinks:
 
 
 class LegacyVoiceContextSchemas:
-    """VoiceContextSchemaPort over the not-yet-public Voice context schema tables."""
+    """Integrations composition adapter for the public Voice Experiences port."""
 
     def __init__(self, db: Session) -> None:
-        self.db = db
+        from app.modules.voice_experiences.public import create_context_schema_reader
 
-    def get_schema_snapshot(self, tenant_id: str, schema_id: str):
-        from sqlalchemy import select
+        self.reader = create_context_schema_reader(db)
 
-        from app.models.voice_context import TenantVoiceContextSchema
-        from app.modules.integrations.domain.whatsapp_flow_context import (
-            ContextFieldSnapshot,
-            ContextSchemaSnapshot,
-        )
-
-        schema = self.db.scalar(
-            select(TenantVoiceContextSchema).where(
-                TenantVoiceContextSchema.id == schema_id,
-                TenantVoiceContextSchema.tenant_id == tenant_id,
-            )
-        )
+    def get_schema_snapshot(self, tenant_id: str, schema_id: str) -> ContextSchemaSnapshot | None:
+        """Translate the Voice Experiences DTOs into Integrations' own snapshot contract."""
+        schema = self.reader.get_schema_snapshot(tenant_id, schema_id)
         if schema is None:
             return None
         return ContextSchemaSnapshot(
@@ -192,7 +186,9 @@ class LegacyVoiceContextSchemas:
                     collection_mode=field.collection_mode,
                     required=field.required,
                     position=field.position,
-                    options=tuple(field.options_json or ()),
+                    options=tuple(
+                        {"value": option.value, "label": option.label} for option in field.options
+                    ),
                 )
                 for field in schema.fields
             ),

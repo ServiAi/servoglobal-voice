@@ -48,6 +48,9 @@ jobs:
       ULTRAVOX_API_KEY: ci_test_ultravox_key
     steps:
       - uses: actions/checkout@v4
+        with:
+          # voice_experiences boundary tests diff the full OpenAPI against origin/develop.
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"

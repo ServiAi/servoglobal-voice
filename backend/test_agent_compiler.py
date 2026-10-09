@@ -29,7 +29,7 @@ class _FakeLegacyVoice:
 
     def get_voice_agent_defaults(self, tenant_id: str, config_id: str) -> LegacyVoiceDefaults:
         self.calls.append((tenant_id, config_id))
-        return LegacyVoiceDefaults(config_id=config_id, tenant_id=tenant_id, default_voice=self.default_voice)
+        return LegacyVoiceDefaults(config_id=config_id, tenant_id=tenant_id, default_voice=self.default_voice, agent_provider="ultravox")
 
 
 def _legacy_compiler(default_voice: str | None) -> AgentCompilerService:

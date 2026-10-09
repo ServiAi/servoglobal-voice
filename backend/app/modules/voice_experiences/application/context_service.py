@@ -6,23 +6,17 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.models.voice_context import TenantVoiceContextField, TenantVoiceContextSchema
-from app.models.voice_experiences import (
+from app.modules.voice_experiences.application.contracts import Command, View
+
+from app.modules.voice_experiences.infrastructure.context_models import TenantVoiceContextField, TenantVoiceContextSchema
+from app.modules.voice_experiences.infrastructure.experience_models import (
     TenantVoiceExperience,
     TenantVoiceExperienceVersion,
 )
 from app.modules.identity.public import VOICE_EXPERIENCES, FeatureFlags
 from app.modules.integrations.public import IntegrationEvents
-from app.schemas.tenant_features import VoiceExperienceLimits
-from app.schemas.voice_context import (
-    VoiceContextFieldRequest,
-    VoiceContextFieldResponse,
-    VoiceContextSchemaCreateRequest,
-    VoiceContextSchemaMetaUpdateRequest,
-    VoiceContextSchemaResponse,
-    VoiceContextSchemaSummaryResponse,
-)
-from app.services.voice_agent_service import VoiceAgentService
+from app.modules.voice_experiences.domain.limits import VoiceExperienceLimits
+from app.modules.voice_legacy.public import VoiceLegacyFacade
 
 
 class VoiceContextNotFoundError(ValueError):
@@ -68,12 +62,12 @@ class VoiceContextService:
     def __init__(self, db: Session) -> None:
         self.db = db
         self.feature_service = FeatureFlags(db)
-        self.agent_service = VoiceAgentService(db)
+        self.agent_service = VoiceLegacyFacade(db)
         self.event_service = IntegrationEvents(db)
 
     def list_schemas(
         self, tenant_id: str, agent_config_id: str
-    ) -> list[VoiceContextSchemaSummaryResponse]:
+    ) -> list[View]:
         self._require_feature_and_agent(tenant_id, agent_config_id)
         schemas = list(
             self.db.scalars(
@@ -99,7 +93,7 @@ class VoiceContextService:
 
     def list_versions(
         self, tenant_id: str, agent_config_id: str, schema_key: str
-    ) -> list[VoiceContextSchemaSummaryResponse]:
+    ) -> list[View]:
         self._require_feature_and_agent(tenant_id, agent_config_id)
         schemas = self.db.scalars(
             select(TenantVoiceContextSchema)
@@ -129,7 +123,7 @@ class VoiceContextService:
         self,
         tenant_id: str,
         agent_config_id: str,
-        body: VoiceContextSchemaCreateRequest,
+        body: Command,
         user_id: str | None,
     ) -> TenantVoiceContextSchema:
         _, agent = self._require_feature_and_agent(tenant_id, agent_config_id)
@@ -155,7 +149,7 @@ class VoiceContextService:
         self.db.add(schema)
         try:
             self.db.flush()
-            self._record_event(schema, agent.provider, "context_schema_created")
+            self._record_event(schema, agent.agent_provider, "context_schema_created")
         except IntegrityError as exc:
             self.db.rollback()
             if self._is_lineage_status_violation(exc, DRAFT_LINEAGE_INDEX):
@@ -170,7 +164,7 @@ class VoiceContextService:
         self,
         tenant_id: str,
         schema_id: str,
-        body: VoiceContextSchemaMetaUpdateRequest,
+        body: Command,
     ) -> TenantVoiceContextSchema:
         schema = self._require_draft(tenant_id, schema_id)
         schema.name = body.name
@@ -183,7 +177,7 @@ class VoiceContextService:
         self,
         tenant_id: str,
         schema_id: str,
-        body: VoiceContextFieldRequest,
+        body: Command,
     ) -> TenantVoiceContextField:
         schema = self._require_draft(tenant_id, schema_id)
         grant = self.feature_service.require_enabled(tenant_id, VOICE_EXPERIENCES)
@@ -197,7 +191,7 @@ class VoiceContextService:
         field = TenantVoiceContextField(
             tenant_id=tenant_id,
             schema_id=schema.id,
-            **body.model_dump(),
+            **body.as_mapping(),
         )
         self.db.add(field)
         self._commit_field(field)
@@ -208,7 +202,7 @@ class VoiceContextService:
         tenant_id: str,
         schema_id: str,
         field_id: str,
-        body: VoiceContextFieldRequest,
+        body: Command,
     ) -> TenantVoiceContextField:
         schema = self._require_draft(tenant_id, schema_id)
         field = self.db.scalar(
@@ -220,7 +214,7 @@ class VoiceContextService:
         )
         if field is None:
             raise VoiceContextNotFoundError("Voice context field not found.")
-        for key, value in body.model_dump().items():
+        for key, value in body.as_mapping().items():
             setattr(field, key, value)
         self._commit_field(field)
         return field
@@ -269,7 +263,7 @@ class VoiceContextService:
             schema.activated_at = now
             schema.archived_at = None
             self._record_event(
-                schema, agent.provider, "context_schema_activated", user_id
+                schema, agent.agent_provider, "context_schema_activated", user_id
             )
         except IntegrityError as exc:
             self.db.rollback()
@@ -290,7 +284,7 @@ class VoiceContextService:
         agent = self._require_agent(tenant_id, schema.agent_config_id)
         schema.status = "archived"
         schema.archived_at = datetime.now(timezone.utc)
-        self._record_event(schema, agent.provider, "context_schema_archived", user_id)
+        self._record_event(schema, agent.agent_provider, "context_schema_archived", user_id)
         self.db.refresh(schema)
         return schema
 
@@ -335,7 +329,7 @@ class VoiceContextService:
 
         self.event_service.record(
             tenant_id=tenant_id,
-            provider=agent.provider,
+            provider=agent.agent_provider,
             event_type="context_schema_deleted",
             status="success",
             resource_type="voice_context_schema",
@@ -402,7 +396,7 @@ class VoiceContextService:
         self.db.add(schema)
         try:
             self.db.flush()
-            self._record_event(schema, agent.provider, "context_schema_created")
+            self._record_event(schema, agent.agent_provider, "context_schema_created")
         except IntegrityError as exc:
             self.db.rollback()
             if self._is_lineage_status_violation(exc, DRAFT_LINEAGE_INDEX):
@@ -414,8 +408,8 @@ class VoiceContextService:
         return schema
 
     @staticmethod
-    def field_response(field: TenantVoiceContextField) -> VoiceContextFieldResponse:
-        return VoiceContextFieldResponse(
+    def field_response(field: TenantVoiceContextField) -> View:
+        return View(
             id=field.id,
             key=field.key,
             label=field.label,
@@ -429,8 +423,8 @@ class VoiceContextService:
             options_json=field.options_json,
         )
 
-    def schema_response(self, schema: TenantVoiceContextSchema) -> VoiceContextSchemaResponse:
-        return VoiceContextSchemaResponse(
+    def schema_response(self, schema: TenantVoiceContextSchema) -> View:
+        return View(
             id=schema.id,
             agent_config_id=schema.agent_config_id,
             schema_key=schema.schema_key,
@@ -446,8 +440,8 @@ class VoiceContextService:
         )
 
     @staticmethod
-    def summary_response(schema: TenantVoiceContextSchema) -> VoiceContextSchemaSummaryResponse:
-        return VoiceContextSchemaSummaryResponse(
+    def summary_response(schema: TenantVoiceContextSchema) -> View:
+        return View(
             id=schema.id,
             agent_config_id=schema.agent_config_id,
             schema_key=schema.schema_key,
@@ -465,7 +459,7 @@ class VoiceContextService:
 
     def _require_agent(self, tenant_id: str, agent_config_id: str):
         try:
-            return self.agent_service.validate_agent_belongs_to_tenant(
+            return self.agent_service.require_voice_agent_defaults(
                 tenant_id, agent_config_id
             )
         except ValueError as exc:
@@ -498,7 +492,7 @@ class VoiceContextService:
 
     @staticmethod
     def _limits(grant) -> VoiceExperienceLimits:
-        return VoiceExperienceLimits.model_validate(grant.limits)
+        return VoiceExperienceLimits.from_mapping(grant.limits)
 
     def _commit_field(self, field: TenantVoiceContextField) -> None:
         try:

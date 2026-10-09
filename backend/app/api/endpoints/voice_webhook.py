@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.modules.notifications.public import publish_call_event
 from app.services.voice_webhook_service import VoiceWebhookService
-from app.services.voice_runtime_webhook_service import VoiceRuntimeWebhookService
+from app.modules.voice_experiences.public import create_runtime_webhook_service
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +37,7 @@ async def voice_webhook(
         ) from exc
 
     service = VoiceWebhookService(db)
-    runtime_service = VoiceRuntimeWebhookService(db)
+    runtime_service = create_runtime_webhook_service(db)
     runtime_target = runtime_service.resolve_target(provider, payload)
 
     if runtime_target:

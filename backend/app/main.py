@@ -42,11 +42,8 @@ from app.api.endpoints import (
     ultravox_webhook,
     voice,
     voice_booking_tools,
-    voice_context_schemas,
-    voice_experiences,
     voice_integrations,
     voice_provider_admin,
-    voice_public,
     voice_registry,
     voice_webhook,
 )
@@ -72,6 +69,10 @@ from app.modules.scheduling.api import router as scheduling
 from app.modules.telephony.api import router as asterisk_provisioning
 from app.modules.tools.api import router as tools_custom
 from app.modules.voice.api import router as voice_runtime
+from app.modules.voice_experiences.api import router as voice_experiences
+
+from app.modules.voice_experiences.public import register_models
+register_models()
 
 app.include_router(notifications.router)
 app.include_router(chatwoot_webhook.router)
@@ -100,9 +101,7 @@ app.include_router(whatsapp_flows.router)
 app.include_router(crm_voice.router)
 app.include_router(voice_webhook.router)
 app.include_router(notification_admin.router)
-app.include_router(voice_context_schemas.router)
-app.include_router(voice_experiences.router)
-app.include_router(voice_public.router)
+app.include_router(voice_experiences)
 app.include_router(asterisk_provisioning.router)
 app.include_router(scheduling.router)
 app.include_router(agents.router)

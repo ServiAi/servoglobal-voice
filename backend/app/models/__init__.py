@@ -8,18 +8,9 @@ from app.models.integrations import (  # noqa: F401  (residual: Forms + Voice co
     TenantVoiceAgentConfig,
     TenantVoiceProviderConfig,
 )
-from app.models.voice_context import TenantVoiceContextField, TenantVoiceContextSchema
-from app.models.voice_experiences import (
-    TenantVoiceExperience,
-    TenantVoiceExperienceVersion,
-)
-from app.models.voice_submissions import (
-    TenantVoiceContextSession,
-    TenantVoiceExperienceSubmission,
-    TenantVoiceExperienceSubmissionValue,
-    TenantVoiceRuntimeCall,
-    VoicePublicRateLimitWindow,
-)
+# Registration only: Voice Experiences entities are owned by their module and are
+# deliberately not re-exported here (import them from the module's public API).
+import app.modules.voice_experiences.infrastructure.models  # noqa: F401
 from app.modules.agents.infrastructure.models import TenantAgent, TenantAgentVersion
 from app.modules.crm.infrastructure.models import (
     CrmActivity,
@@ -115,15 +106,6 @@ __all__ = [
     "TenantToolCredential",
     "TenantVoiceProviderConfig",
     "TenantVoiceAgentConfig",
-    "TenantVoiceContextField",
-    "TenantVoiceContextSchema",
-    "TenantVoiceExperience",
-    "TenantVoiceExperienceVersion",
-    "TenantVoiceExperienceSubmission",
-    "TenantVoiceExperienceSubmissionValue",
-    "TenantVoiceContextSession",
-    "TenantVoiceRuntimeCall",
-    "VoicePublicRateLimitWindow",
     "VoiceSession",
     "VoiceSessionEvent",
     "TenantWhatsAppConfig",

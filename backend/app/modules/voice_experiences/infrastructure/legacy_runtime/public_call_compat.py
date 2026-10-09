@@ -11,13 +11,11 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
 
-from app.models import Tenant
-from app.models.integrations import TenantVoiceAgentConfig
-from app.models.voice_experiences import (
+from app.modules.voice_experiences.infrastructure.experience_models import (
     TenantVoiceExperience,
     TenantVoiceExperienceVersion,
 )
-from app.models.voice_submissions import (
+from app.modules.voice_experiences.infrastructure.submission_models import (
     TenantVoiceContextSession,
     TenantVoiceExperienceSubmission,
     TenantVoiceExperienceSubmissionValue,
@@ -29,10 +27,9 @@ from app.modules.crm.public import (
     UpdateVoiceCallCommand,
 )
 from app.modules.identity.public import VOICE_EXPERIENCES, FeatureFlags
-from app.schemas.public_voice_calls import PublicVoiceCallResponse
 from app.modules.billing.public import BillingAccessGate
 from app.services.voice_config_service import VoiceConfigService
-from app.services.voice_experience_runtime_provider import (
+from app.modules.voice_experiences.infrastructure.legacy_runtime.provider_adapter import (
     ProviderAmbiguousFailure,
     ProviderDefiniteFailure,
     VoiceExperienceRuntimeProvider,
@@ -41,10 +38,9 @@ from app.services.voice_experience_runtime_provider import (
 logger = logging.getLogger(__name__)
 
 
-class PublicCallFailure(Exception):
-    def __init__(self, status_code: int, code: str) -> None:
-        self.status_code = status_code
-        self.code = code
+from app.modules.voice_experiences.domain.errors import PublicCallFailure
+from app.modules.identity.public import TenantDirectory
+from app.modules.voice_legacy.public import VoiceLegacyFacade
 
 
 class PublicVoiceCallService:
@@ -65,7 +61,7 @@ class PublicVoiceCallService:
         session, runtime = self._resolve_session_and_runtime(slug, context_token)
         return runtime.tenant_id if runtime else session.tenant_id
 
-    def launch(self, slug: str, context_token: str) -> PublicVoiceCallResponse:
+    def launch(self, slug: str, context_token: str) -> dict[str, str]:
         session, runtime = self._resolve_session_and_runtime(slug, context_token)
         if runtime:
             return self._recover(runtime.id)
@@ -99,7 +95,7 @@ class PublicVoiceCallService:
         if self._utc(context_session.expires_at) <= now:
             raise PublicCallFailure(410, "context_session_expired")
         with self.session_factory() as db:
-            tenant = db.get(Tenant, context_session.tenant_id)
+            tenant = TenantDirectory(db).get(context_session.tenant_id)
             if tenant is None:
                 raise PublicCallFailure(503, "call_unavailable")
             try:
@@ -107,9 +103,7 @@ class PublicVoiceCallService:
                 version = db.get(TenantVoiceExperienceVersion, context_session.experience_version_id)
                 if version is None:
                     raise ValueError
-                agent = db.get(TenantVoiceAgentConfig, version.agent_config_id)
-                if agent is None or agent.tenant_id != tenant.id or agent.status != "active":
-                    raise ValueError
+                agent = VoiceLegacyFacade(db).require_active_runtime_config(tenant.id, version.agent_config_id)
                 config = VoiceConfigService(db).get_active_provider_config(tenant.id, agent.provider)
                 if config.id != agent.provider_config_id or not config.webhook_secret_encrypted:
                     raise ValueError
@@ -152,9 +146,12 @@ class PublicVoiceCallService:
                     submission = db.get(TenantVoiceExperienceSubmission, context_session.submission_id)
                     if submission is None or submission.tenant_id != context_session.tenant_id:
                         raise PublicCallFailure(409, "context_session_unavailable")
-                    agent = db.get(TenantVoiceAgentConfig, version.agent_config_id)
-                    if agent is None or agent.tenant_id != context_session.tenant_id:
-                        raise PublicCallFailure(503, "call_unavailable")
+                    try:
+                        agent = VoiceLegacyFacade(db).require_active_runtime_config(
+                            context_session.tenant_id, version.agent_config_id
+                        )
+                    except ValueError:
+                        raise PublicCallFailure(503, "call_unavailable") from None
                     crm_id, runtime_id = str(uuid4()), str(uuid4())
                     CrmVoiceCalls(db).create(CreateVoiceCallCommand(id=crm_id, tenant_id=context_session.tenant_id, lead_id=submission.crm_lead_id, contact_id=submission.crm_contact_id, provider="ultravox", provider_agent_id=agent.provider_agent_id, direction="webrtc", status="requested"), flush=True)
                     insert = sqlite_insert if db.get_bind().dialect.name == "sqlite" else pg_insert
@@ -185,9 +182,12 @@ class PublicVoiceCallService:
             return won is not None
 
     def _load_provider_context(self, db: Session, runtime: TenantVoiceRuntimeCall):
-        agent = db.get(TenantVoiceAgentConfig, runtime.agent_config_id)
-        if agent is None or agent.tenant_id != runtime.tenant_id or agent.status != "active":
-            raise PublicCallFailure(503, "call_unavailable")
+        try:
+            agent = VoiceLegacyFacade(db).require_active_runtime_config(
+                runtime.tenant_id, runtime.agent_config_id
+            )
+        except ValueError:
+            raise PublicCallFailure(503, "call_unavailable") from None
         config_service = VoiceConfigService(db)
         try:
             config = config_service.get_active_provider_config(runtime.tenant_id, runtime.provider)
@@ -198,7 +198,7 @@ class PublicVoiceCallService:
         provider = VoiceExperienceRuntimeProvider(config_service, timeout_seconds=self.provider_timeout_seconds)
         return agent, config, provider
 
-    def _create_provider_call(self, runtime_id: str) -> PublicVoiceCallResponse:
+    def _create_provider_call(self, runtime_id: str) -> dict[str, str]:
         with self.session_factory() as db:
             runtime = db.get(TenantVoiceRuntimeCall, runtime_id)
             if runtime is None or runtime.status != "starting":
@@ -223,7 +223,7 @@ class PublicVoiceCallService:
         self._finish_attempt(runtime_id, state, provider_call_id=result.provider_call_id, failure_code=None if state == "ready" else "provider_ambiguous")
         if state != "ready":
             raise PublicCallFailure(503, "call_provider_unavailable")
-        return PublicVoiceCallResponse(status="ready", join_url=result.join_url)
+        return {"status": "ready", "join_url": result.join_url}
 
     def _finish_attempt(self, runtime_id: str, state: str, *, provider_call_id: str | None = None, failure_code: str | None = None) -> None:
         with self.session_factory() as db:
@@ -252,7 +252,7 @@ class PublicVoiceCallService:
                 runtime.ended_at = runtime.ended_at or datetime.now(UTC)
             db.commit()
 
-    def _recover(self, runtime_id: str) -> PublicVoiceCallResponse:
+    def _recover(self, runtime_id: str) -> dict[str, str]:
         with self.session_factory() as db:
             runtime = db.get(TenantVoiceRuntimeCall, runtime_id)
             if runtime is None:
@@ -299,7 +299,7 @@ class PublicVoiceCallService:
                 raise PublicCallFailure(409, "call_already_started")
             if result.join_url and result.provider_call_id:
                 self._finish_attempt(runtime_id, "ready", provider_call_id=result.provider_call_id)
-                return PublicVoiceCallResponse(status="ready", join_url=result.join_url)
+                return {"status": "ready", "join_url": result.join_url}
         except PublicCallFailure:
             raise
         except ProviderAmbiguousFailure:

@@ -9,7 +9,7 @@ from sqlalchemy.exc import IntegrityError
 
 from _integrations_2a_test_base import Integration2ATestCase
 from app.modules.identity.api.deps import get_current_auth_context
-from app.api.endpoints.voice_public import (
+from app.modules.voice_experiences.api.public_router import (
     get_public_rate_limiter,
     get_public_turnstile_verifier,
 )
@@ -19,15 +19,15 @@ from app.main import app
 from app.modules.crm.infrastructure.models import CrmActivity, CrmContact, CrmLead
 from app.models.integrations import TenantVoiceAgentConfig
 from app.modules.integrations.infrastructure.models import TenantIntegrationEvent
-from app.models.voice_context import TenantVoiceContextField, TenantVoiceContextSchema
-from app.models.voice_experiences import TenantVoiceExperience, TenantVoiceExperienceVersion
-from app.models.voice_submissions import (
+from app.modules.voice_experiences.infrastructure.context_models import TenantVoiceContextField, TenantVoiceContextSchema
+from app.modules.voice_experiences.infrastructure.experience_models import TenantVoiceExperience, TenantVoiceExperienceVersion
+from app.modules.voice_experiences.infrastructure.submission_models import (
     TenantVoiceContextSession,
     TenantVoiceExperienceSubmission,
     TenantVoiceExperienceSubmissionValue,
 )
 from app.modules.identity.application.feature_service import VOICE_EXPERIENCES, TenantFeatureService
-from app.services.voice_experience_service import VoiceExperienceService
+from app.modules.voice_experiences.application.experience_service import VoiceExperienceService
 
 
 class _AllowLimiter:
@@ -593,18 +593,18 @@ class PublicVoiceExperienceSubmissionTests(Integration2ATestCase):
         sensitive = self._body(turnstile_token="sensitive-token")
         sensitive["answers"]["client_email"] = "private@example.com"
         with patch(
-            "app.services.public_voice_submission_service.PublicVoiceSubmissionService.pre_resolve",
+            "app.modules.voice_experiences.application.submission_service.PublicVoiceSubmissionService.pre_resolve",
             side_effect=RuntimeError("private@example.com sensitive-token 127.0.0.1"),
-        ), patch("app.api.endpoints.voice_public.logger.error") as logged:
+        ), patch("app.modules.voice_experiences.api.public_router.logger.error") as logged:
             response = self._post(sensitive)
         self.assertEqual(response.status_code, 500, response.text)
         self.assertEqual(response.json()["detail"], {"code": "internal_error", "fields": []})
         self.assertNotIn("private@example.com", str(logged.call_args_list))
 
         with patch(
-            "app.services.public_voice_submission_service.PublicVoiceSubmissionService.persist",
+            "app.modules.voice_experiences.application.submission_service.PublicVoiceSubmissionService.persist",
             side_effect=RuntimeError("private@example.com sensitive-token 127.0.0.1"),
-        ), patch("app.api.endpoints.voice_public.logger.error") as logged:
+        ), patch("app.modules.voice_experiences.api.public_router.logger.error") as logged:
             response = self._post(sensitive)
         self.assertEqual(response.status_code, 500, response.text)
         self.assertEqual(response.json()["detail"], {"code": "internal_error", "fields": []})

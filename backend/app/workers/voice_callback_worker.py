@@ -5,14 +5,14 @@ import time
 
 from app.core.config import settings
 from app.db.session import SessionLocal
-from app.services.voice_callback_service import VoiceCallbackWorker
+from app.modules.voice_experiences.public import create_callback_worker
 
 
 logger = logging.getLogger(__name__)
 
 
 def main() -> None:
-    worker = VoiceCallbackWorker(
+    worker = create_callback_worker(
         SessionLocal,
         starting_lease_seconds=settings.VOICE_CALLBACK_STARTING_LEASE_SECONDS, 
         reconcile_after_seconds=settings.VOICE_CALLBACK_RECONCILE_AFTER_SECONDS,

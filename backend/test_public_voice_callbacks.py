@@ -8,7 +8,7 @@ from sqlalchemy import select
 
 from _integrations_2a_test_base import Integration2ATestCase
 from app.modules.identity.api.deps import get_current_auth_context
-from app.api.endpoints.voice_public import get_public_rate_limiter, get_public_turnstile_verifier
+from app.modules.voice_experiences.api.public_router import get_public_rate_limiter, get_public_turnstile_verifier
 from app.core.config import settings
 from app.db.session import SessionLocal
 from app.main import app
@@ -16,10 +16,10 @@ from app.modules.crm.infrastructure.models import CrmActivity, CrmVoiceCall
 from app.modules.telephony.infrastructure.models import TenantSipRoute
 from app.models.integrations import TenantVoiceAgentConfig, TenantVoiceProviderConfig
 from app.modules.integrations.infrastructure.models import TenantIntegrationEvent
-from app.models.voice_context import TenantVoiceContextField
+from app.modules.voice_experiences.infrastructure.context_models import TenantVoiceContextField
 from app.services.secret_manager_service import SecretManager
 from app.modules.identity.application.feature_service import TenantFeatureService, VOICE_EXPERIENCES
-from app.services.voice_callback_service import VoiceCallbackWorker
+from app.modules.voice_experiences.infrastructure.legacy_runtime.callback_compat import VoiceCallbackWorker
 import test_public_voice_experience_submissions as submissions_tests
 
 
@@ -144,7 +144,7 @@ class PublicVoiceCallbackTests(Integration2ATestCase):
             ).all()
             self.assertEqual(capacity_events, [])
 
-        with patch("app.services.voice_callback_service.VoiceClient.start_outbound_call") as start:
+        with patch("app.modules.voice_experiences.infrastructure.legacy_runtime.callback_compat.VoiceClient.start_outbound_call") as start:
             start.return_value = {"callId": "provider-callback-1", "status": "queued"}
             self.assertTrue(VoiceCallbackWorker(SessionLocal).process_once())
             config = start.call_args.args[0]
@@ -257,7 +257,7 @@ class PublicVoiceCallbackTests(Integration2ATestCase):
         first = self._request_callback(token)
         self.assertEqual(first.status_code, 202, first.text)
 
-        with patch("app.services.voice_callback_service.VoiceClient.start_outbound_call") as start:
+        with patch("app.modules.voice_experiences.infrastructure.legacy_runtime.callback_compat.VoiceClient.start_outbound_call") as start:
             start.side_effect = RuntimeError("provider unavailable")
             self.assertTrue(VoiceCallbackWorker(SessionLocal).process_once())
 
@@ -276,7 +276,7 @@ class PublicVoiceCallbackTests(Integration2ATestCase):
             self.assertEqual(calls[0].status, "requested")
             self.assertIsNone(calls[0].error_message)
 
-        with patch("app.services.voice_callback_service.VoiceClient.start_outbound_call") as start:
+        with patch("app.modules.voice_experiences.infrastructure.legacy_runtime.callback_compat.VoiceClient.start_outbound_call") as start:
             start.return_value = {"callId": "provider-callback-retry", "status": "queued"}
             self.assertTrue(VoiceCallbackWorker(SessionLocal).process_once())
 
@@ -305,7 +305,7 @@ class PublicVoiceCallbackTests(Integration2ATestCase):
             db.commit()
             stuck_id = stuck.id
 
-        with patch("app.services.voice_callback_service.VoiceClient.start_outbound_call") as start:
+        with patch("app.modules.voice_experiences.infrastructure.legacy_runtime.callback_compat.VoiceClient.start_outbound_call") as start:
             start.return_value = {"callId": "provider-recovered-1", "status": "queued"}
             worker = VoiceCallbackWorker(SessionLocal, starting_lease_seconds=60)
             self.assertTrue(worker.process_once())
@@ -364,7 +364,7 @@ class PublicVoiceCallbackTests(Integration2ATestCase):
             db.commit()
             call_id = call.id
 
-        with patch("app.services.voice_callback_service.VoiceClient.get_call") as get_call:
+        with patch("app.modules.voice_experiences.infrastructure.legacy_runtime.callback_compat.VoiceClient.get_call") as get_call:
             get_call.return_value = {
                 "callId": "provider-ended-without-webhook",
                 "joined": "2026-08-26T20:00:00Z",
@@ -411,7 +411,7 @@ class PublicVoiceCallbackTests(Integration2ATestCase):
             db.commit()
             call_id = call.id
 
-        with patch("app.services.voice_callback_service.VoiceClient.get_call") as get_call:
+        with patch("app.modules.voice_experiences.infrastructure.legacy_runtime.callback_compat.VoiceClient.get_call") as get_call:
             worker = VoiceCallbackWorker(
                 SessionLocal,
                 reconcile_after_seconds=60,
@@ -528,6 +528,37 @@ class PublicVoiceCallbackTests(Integration2ATestCase):
                 )
             )
             self.assertEqual(still_queued.status, "requested")
+
+    def _set_agent_status(self, status: str) -> None:
+        with SessionLocal() as db:
+            db.get(TenantVoiceAgentConfig, self.agent_id).status = status
+            db.commit()
+
+    def test_inactive_legacy_agent_cannot_request_callback(self) -> None:
+        app.dependency_overrides.pop(get_current_auth_context, None)
+        token = self._post().json()["context_token"]
+        self._set_agent_status("inactive")
+
+        response = self._request_callback(token)
+
+        self.assertEqual(response.status_code, 503, response.text)
+        self.assertEqual(response.json()["detail"]["code"], "call_unavailable")
+        with SessionLocal() as db:
+            self.assertEqual(db.scalars(select(CrmVoiceCall)).all(), [])
+
+    def test_agent_deactivated_after_request_never_reaches_the_provider(self) -> None:
+        app.dependency_overrides.pop(get_current_auth_context, None)
+        token = self._post().json()["context_token"]
+        self.assertEqual(self._request_callback(token).status_code, 202)
+        self._set_agent_status("inactive")
+
+        with patch("app.modules.voice_experiences.infrastructure.legacy_runtime.callback_compat.VoiceClient.start_outbound_call") as start:
+            self.assertTrue(VoiceCallbackWorker(SessionLocal).process_once())
+
+        start.assert_not_called()
+        with SessionLocal() as db:
+            call = db.scalars(select(CrmVoiceCall)).one()
+            self.assertEqual(call.status, "failed")
 
 
 if __name__ == "__main__":

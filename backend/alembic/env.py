@@ -35,6 +35,9 @@ config.set_main_option("sqlalchemy.url", database_url.replace("%", "%%"))
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
+from app.modules.voice_experiences.public import register_models
+register_models()
+
 target_metadata = Base.metadata
 
 

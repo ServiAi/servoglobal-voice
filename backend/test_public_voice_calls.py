@@ -3,14 +3,14 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 
 from cryptography.fernet import Fernet
 from sqlalchemy import select
 
 from _integrations_2a_test_base import Integration2ATestCase
-from app.api.endpoints.voice_public import get_public_rate_limiter, get_public_turnstile_verifier
+from app.modules.voice_experiences.api.public_router import get_public_rate_limiter, get_public_turnstile_verifier
 from app.core.config import settings
 from app.db.session import SessionLocal
 from app.main import app
@@ -18,11 +18,12 @@ from app.modules.crm.infrastructure.models import CrmVoiceCall
 from app.modules.analytics.infrastructure.models import Call, CallEvent
 from app.modules.crm.infrastructure.models import CrmVoiceCallEvent
 from app.models.integrations import TenantVoiceAgentConfig, TenantVoiceProviderConfig
-from app.models.voice_submissions import TenantVoiceContextSession, TenantVoiceRuntimeCall
+from app.modules.voice_experiences.infrastructure.submission_models import TenantVoiceContextSession, TenantVoiceRuntimeCall
 from app.services.secret_manager_service import SecretManager
 from app.modules.identity.application.feature_service import TenantFeatureService, VOICE_EXPERIENCES
-from app.services.voice_experience_service import VoiceExperienceService
-from app.services.voice_experience_runtime_provider import ProviderAmbiguousFailure, ProviderCallResult
+from app.modules.voice_experiences.application.experience_service import VoiceExperienceService
+from app.modules.voice_experiences.infrastructure.legacy_runtime.provider_adapter import ProviderAmbiguousFailure, ProviderCallResult
+from app.modules.voice_experiences.infrastructure.legacy_runtime.public_call_compat import PublicVoiceCallService
 import test_public_voice_experience_submissions as submissions_tests
 
 
@@ -108,11 +109,11 @@ class PublicVoiceCallTests(Integration2ATestCase):
         )
 
     @patch(
-        "app.services.voice_experience_runtime_provider.VoiceExperienceRuntimeProvider.create_webrtc_call",
+        "app.modules.voice_experiences.infrastructure.legacy_runtime.provider_adapter.VoiceExperienceRuntimeProvider.create_webrtc_call",
         return_value=ProviderCallResult("provider-call-1", "https://provider.invalid/join/secret"),
     )
     @patch(
-        "app.services.voice_experience_runtime_provider.VoiceExperienceRuntimeProvider.get_call",
+        "app.modules.voice_experiences.infrastructure.legacy_runtime.provider_adapter.VoiceExperienceRuntimeProvider.get_call",
         return_value=ProviderCallResult("provider-call-1", "https://provider.invalid/join/secret"),
     )
     def test_same_token_recovers_same_call_without_second_create(self, _get_call, create_call) -> None:
@@ -142,7 +143,7 @@ class PublicVoiceCallTests(Integration2ATestCase):
             self.assertNotIn("join", repr(runtime.__dict__).lower())
 
     @patch(
-        "app.services.voice_experience_runtime_provider.VoiceExperienceRuntimeProvider.create_webrtc_call",
+        "app.modules.voice_experiences.infrastructure.legacy_runtime.provider_adapter.VoiceExperienceRuntimeProvider.create_webrtc_call",
         return_value=ProviderCallResult("provider-delete", "https://provider.invalid/join/delete"),
     )
     def test_delete_archived_experience_removes_runtime_but_keeps_crm_audit(self, _create_call) -> None:
@@ -171,7 +172,7 @@ class PublicVoiceCallTests(Integration2ATestCase):
         self.assertNotIn("input", response.text)
 
     def test_provider_result_uses_joined_ended_and_end_reason_contract(self) -> None:
-        from app.services.voice_experience_runtime_provider import VoiceExperienceRuntimeProvider
+        from app.modules.voice_experiences.infrastructure.legacy_runtime.provider_adapter import VoiceExperienceRuntimeProvider
 
         result = VoiceExperienceRuntimeProvider._result(
             {
@@ -194,7 +195,7 @@ class PublicVoiceCallTests(Integration2ATestCase):
         self.assertEqual(websocket_result.join_url, "wss://provider.invalid/join/secret")
 
     @patch(
-        "app.services.voice_experience_runtime_provider.VoiceExperienceRuntimeProvider.create_webrtc_call",
+        "app.modules.voice_experiences.infrastructure.legacy_runtime.provider_adapter.VoiceExperienceRuntimeProvider.create_webrtc_call",
         return_value=ProviderCallResult("provider-call-nullable", "https://provider.invalid/join/nullable"),
     )
     def test_submission_without_crm_identity_launches(self, create_call) -> None:
@@ -211,11 +212,11 @@ class PublicVoiceCallTests(Integration2ATestCase):
             self.assertIsNone(call.lead_id)
 
     @patch(
-        "app.services.voice_experience_runtime_provider.VoiceExperienceRuntimeProvider.create_webrtc_call",
+        "app.modules.voice_experiences.infrastructure.legacy_runtime.provider_adapter.VoiceExperienceRuntimeProvider.create_webrtc_call",
         return_value=ProviderCallResult("provider-partial", None),
     )
     @patch(
-        "app.services.voice_experience_runtime_provider.VoiceExperienceRuntimeProvider.get_call",
+        "app.modules.voice_experiences.infrastructure.legacy_runtime.provider_adapter.VoiceExperienceRuntimeProvider.get_call",
         return_value=ProviderCallResult("provider-partial", "https://provider.invalid/join/recovered"),
     )
     def test_partial_2xx_recovers_same_call_without_recreate(self, _get_call, create_call) -> None:
@@ -225,11 +226,11 @@ class PublicVoiceCallTests(Integration2ATestCase):
         self.assertEqual(create_call.call_count, 1)
 
     @patch(
-        "app.services.voice_experience_runtime_provider.VoiceExperienceRuntimeProvider.create_webrtc_call",
+        "app.modules.voice_experiences.infrastructure.legacy_runtime.provider_adapter.VoiceExperienceRuntimeProvider.create_webrtc_call",
         side_effect=ProviderAmbiguousFailure(),
     )
     @patch(
-        "app.services.voice_experience_runtime_provider.VoiceExperienceRuntimeProvider.find_call_by_runtime_metadata",
+        "app.modules.voice_experiences.infrastructure.legacy_runtime.provider_adapter.VoiceExperienceRuntimeProvider.find_call_by_runtime_metadata",
         return_value=[ProviderCallResult("provider-found", "https://provider.invalid/join/found")],
     )
     def test_ambiguous_timeout_recovers_by_runtime_metadata(self, _find_call, create_call) -> None:
@@ -239,11 +240,11 @@ class PublicVoiceCallTests(Integration2ATestCase):
         self.assertEqual(create_call.call_count, 1)
 
     @patch(
-        "app.services.voice_experience_runtime_provider.VoiceExperienceRuntimeProvider.create_webrtc_call",
+        "app.modules.voice_experiences.infrastructure.legacy_runtime.provider_adapter.VoiceExperienceRuntimeProvider.create_webrtc_call",
         return_value=ProviderCallResult("provider-ended", "https://provider.invalid/join/ended"),
     )
     @patch(
-        "app.services.voice_experience_runtime_provider.VoiceExperienceRuntimeProvider.get_call",
+        "app.modules.voice_experiences.infrastructure.legacy_runtime.provider_adapter.VoiceExperienceRuntimeProvider.get_call",
         return_value=ProviderCallResult(
             "provider-ended",
             "https://provider.invalid/join/ended",
@@ -261,11 +262,11 @@ class PublicVoiceCallTests(Integration2ATestCase):
         self.assertEqual(create_call.call_count, 1)
 
     @patch(
-        "app.services.voice_experience_runtime_provider.VoiceExperienceRuntimeProvider.create_webrtc_call",
+        "app.modules.voice_experiences.infrastructure.legacy_runtime.provider_adapter.VoiceExperienceRuntimeProvider.create_webrtc_call",
         return_value=ProviderCallResult("provider-joined", "https://provider.invalid/join/joined"),
     )
     @patch(
-        "app.services.voice_experience_runtime_provider.VoiceExperienceRuntimeProvider.get_call",
+        "app.modules.voice_experiences.infrastructure.legacy_runtime.provider_adapter.VoiceExperienceRuntimeProvider.get_call",
         return_value=ProviderCallResult(
             "provider-joined",
             "https://provider.invalid/join/joined",
@@ -281,11 +282,11 @@ class PublicVoiceCallTests(Integration2ATestCase):
         self.assertEqual(create_call.call_count, 1)
 
     @patch(
-        "app.services.voice_experience_runtime_provider.VoiceExperienceRuntimeProvider.create_webrtc_call",
+        "app.modules.voice_experiences.infrastructure.legacy_runtime.provider_adapter.VoiceExperienceRuntimeProvider.create_webrtc_call",
         side_effect=ProviderAmbiguousFailure(),
     )
     @patch(
-        "app.services.voice_experience_runtime_provider.VoiceExperienceRuntimeProvider.find_call_by_runtime_metadata",
+        "app.modules.voice_experiences.infrastructure.legacy_runtime.provider_adapter.VoiceExperienceRuntimeProvider.find_call_by_runtime_metadata",
         return_value=[
             ProviderCallResult(
                 "provider-list-ended",
@@ -306,7 +307,7 @@ class PublicVoiceCallTests(Integration2ATestCase):
             self.assertEqual(db.scalars(select(TenantVoiceRuntimeCall)).one().status, "ended")
 
     @patch(
-        "app.services.voice_experience_runtime_provider.VoiceExperienceRuntimeProvider.create_webrtc_call",
+        "app.modules.voice_experiences.infrastructure.legacy_runtime.provider_adapter.VoiceExperienceRuntimeProvider.create_webrtc_call",
         return_value=ProviderCallResult("provider-webhook", "https://provider.invalid/join/webhook"),
     )
     def test_runtime_webhook_is_signed_deduplicated_and_updates_analytics(self, _create_call) -> None:
@@ -343,7 +344,7 @@ class PublicVoiceCallTests(Integration2ATestCase):
         self.assertEqual(unsigned.status_code, 401)
 
     @patch(
-        "app.services.voice_experience_runtime_provider.VoiceExperienceRuntimeProvider.create_webrtc_call",
+        "app.modules.voice_experiences.infrastructure.legacy_runtime.provider_adapter.VoiceExperienceRuntimeProvider.create_webrtc_call",
         return_value=ProviderCallResult("provider-duration-120", "https://provider.invalid/join/duration-120"),
     )
     def test_runtime_billing_parses_120_second_official_duration(self, _create_call) -> None:
@@ -367,7 +368,7 @@ class PublicVoiceCallTests(Integration2ATestCase):
             self.assertEqual(usage.minutes_used, 2.0)
 
     @patch(
-        "app.services.voice_experience_runtime_provider.VoiceExperienceRuntimeProvider.create_webrtc_call",
+        "app.modules.voice_experiences.infrastructure.legacy_runtime.provider_adapter.VoiceExperienceRuntimeProvider.create_webrtc_call",
         return_value=ProviderCallResult("provider-monotonic", "https://provider.invalid/join/monotonic"),
     )
     def test_terminal_runtime_and_crm_do_not_regress_on_late_events(self, _create_call) -> None:
@@ -387,6 +388,68 @@ class PublicVoiceCallTests(Integration2ATestCase):
         with SessionLocal() as db:
             self.assertEqual(db.get(CrmVoiceCall, crm_call.id).status, "completed")
             self.assertEqual(db.scalars(select(TenantVoiceRuntimeCall)).one().status, "ended")
+
+    def _set_agent_status(self, status: str) -> None:
+        with SessionLocal() as db:
+            db.get(TenantVoiceAgentConfig, self.agent_id).status = status
+            db.commit()
+
+    @patch(
+        "app.modules.voice_experiences.infrastructure.legacy_runtime.provider_adapter.VoiceExperienceRuntimeProvider.create_webrtc_call",
+        return_value=ProviderCallResult("provider-inactive", "https://provider.invalid/join/inactive"),
+    )
+    def test_inactive_legacy_agent_cannot_launch_webrtc(self, create_call) -> None:
+        token = self._post().json()["context_token"]
+        self._set_agent_status("inactive")
+
+        response = self._launch(token)
+
+        self.assertEqual(response.status_code, 503, response.text)
+        self.assertEqual(response.json()["detail"]["code"], "call_unavailable")
+        create_call.assert_not_called()
+        with SessionLocal() as db:
+            self.assertEqual(db.scalars(select(TenantVoiceRuntimeCall)).all(), [])
+
+    @patch(
+        "app.modules.voice_experiences.infrastructure.legacy_runtime.provider_adapter.VoiceExperienceRuntimeProvider.create_webrtc_call",
+        return_value=ProviderCallResult("provider-toctou", "https://provider.invalid/join/toctou"),
+    )
+    def test_agent_deactivated_after_precheck_never_reaches_the_provider(self, create_call) -> None:
+        token = self._post().json()["context_token"]
+        original = PublicVoiceCallService._claim
+
+        def claim_then_deactivate(service, *args, **kwargs):
+            result = original(service, *args, **kwargs)
+            self._set_agent_status("inactive")  # admin deactivates after precheck + claim
+            return result
+
+        with patch.object(PublicVoiceCallService, "_claim", claim_then_deactivate):
+            response = self._launch(token)
+
+        self.assertEqual(response.status_code, 503, response.text)
+        self.assertEqual(response.json()["detail"]["code"], "call_unavailable")
+        create_call.assert_not_called()
+
+    @patch(
+        "app.modules.voice_experiences.infrastructure.legacy_runtime.provider_adapter.VoiceExperienceRuntimeProvider.create_webrtc_call",
+        return_value=ProviderCallResult("provider-recovery", "https://provider.invalid/join/recovery"),
+    )
+    def test_recovery_of_a_reserved_call_revalidates_the_active_agent(self, create_call) -> None:
+        token = self._post().json()["context_token"]
+        with patch.object(PublicVoiceCallService, "_cas_start", return_value=False):
+            first = self._launch(token)  # reserved by the claim, but never started
+        self.assertEqual(first.status_code, 409, first.text)
+        with SessionLocal() as db:  # make the reservation stale so recovery may take it over
+            runtime = db.scalars(select(TenantVoiceRuntimeCall)).one()
+            runtime.created_at = datetime.now(UTC) - timedelta(hours=1)
+            db.commit()
+        self._set_agent_status("inactive")
+
+        response = self._launch(token)
+
+        self.assertEqual(response.status_code, 503, response.text)
+        self.assertEqual(response.json()["detail"]["code"], "call_unavailable")
+        create_call.assert_not_called()
 
 
 if __name__ == "__main__":

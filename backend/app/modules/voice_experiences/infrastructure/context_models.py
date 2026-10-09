@@ -61,9 +61,6 @@ class TenantVoiceContextSchema(Base, TimestampMixin):
     activated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    tenant = relationship("Tenant")
-    agent_config = relationship("TenantVoiceAgentConfig")
-    created_by_user = relationship("User")
     fields: Mapped[list["TenantVoiceContextField"]] = relationship(
         back_populates="schema",
         cascade="all, delete-orphan",
@@ -105,5 +102,4 @@ class TenantVoiceContextField(Base, TimestampMixin):
     validation_json: Mapped[dict] = mapped_column(sa.JSON, nullable=False, default=dict)
     options_json: Mapped[list] = mapped_column(sa.JSON, nullable=False, default=list)
 
-    tenant = relationship("Tenant")
     schema = relationship("TenantVoiceContextSchema", back_populates="fields")

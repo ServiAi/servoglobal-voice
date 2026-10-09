@@ -81,7 +81,6 @@ SECRET_FIELD_WORDS = ("token", "secret", "password", "api_key", "authorization",
 # The composition root may reach these legacy owners until they become modules (documented in wiring.py).
 WIRING_LEGACY_ALLOWED = {
     "app.models.integrations",  # TenantFormToken (Forms)
-    "app.models.voice_context",  # TenantVoiceContextSchema (Voice context)
     "app.services.call_summary_service",
     "app.services.onboarding_service",  # Identity
     "app.services.secret_manager_service",
@@ -94,6 +93,7 @@ FOREIGN_PUBLIC_ALLOWED = {
     "app.modules.identity.public",
     "app.modules.notifications.public",
     "app.modules.scheduling.public",
+    "app.modules.voice_experiences.public",
 }
 
 

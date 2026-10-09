@@ -6,26 +6,22 @@ from dataclasses import dataclass
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.voice_context import TenantVoiceContextField, TenantVoiceContextSchema
-from app.models.voice_experiences import (
+from app.modules.voice_experiences.application.contracts import Command, View
+
+from app.modules.voice_experiences.infrastructure.context_models import TenantVoiceContextField, TenantVoiceContextSchema
+from app.modules.voice_experiences.infrastructure.experience_models import (
     TenantVoiceExperience,
     TenantVoiceExperienceVersion,
 )
 from app.modules.identity.public import VOICE_EXPERIENCES, FeatureFlags
 from app.modules.telephony.public import SipRouteFacade
-from app.schemas.public_voice_experiences import (
-    PublicCapabilities,
-    PublicFieldOption,
-    PublicVoiceCallSettings,
-    PublicVoiceConsent,
-    PublicVoiceContent,
-    PublicVoiceContextField,
-    PublicVoiceExperienceResponse,
-    PublicVoiceTheme,
-)
 
 PUBLIC_SLUG_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 PUBLIC_FIELD_MODES = ("ask_if_missing", "prefill_and_confirm", "trust_prefill")
+CALL_SETTINGS_FIELDS = frozenset({
+    "auto_start", "show_microphone_help", "language", "mode",
+    "phone_field_key", "default_country", "allowed_countries",
+})
 
 
 class PublicExperienceNotFound(Exception):
@@ -45,12 +41,12 @@ class PublicVoiceExperienceService:
         self.db = db
         self.feature_service = FeatureFlags(db)
 
-    def resolve(self, slug: str) -> PublicVoiceExperienceResponse:
+    def resolve(self, slug: str) -> View:
         snapshot = self._resolve_snapshot(slug)
         version = snapshot.version
         call_settings = {
             key: version.call_settings_json.get(key)
-            for key in PublicVoiceCallSettings.model_fields
+            for key in CALL_SETTINGS_FIELDS
             if key in version.call_settings_json
         }
         calls_available = True
@@ -70,7 +66,7 @@ class PublicVoiceExperienceService:
                     # so degrade to WebRTC-only instead of hiding calls entirely.
                     call_settings["mode"] = "webrtc"
 
-        return PublicVoiceExperienceResponse(
+        return View(
             slug=version.slug,
             locale=version.default_locale,
             version=version.version,
@@ -78,8 +74,8 @@ class PublicVoiceExperienceService:
             theme=self._theme(version.theme_json),
             consent=self._consent(version.consent_json),
             fields=[self._field(field) for field in snapshot.fields],
-            call_settings=PublicVoiceCallSettings.model_validate(call_settings),
-            capabilities=PublicCapabilities(calls=calls_available),
+            call_settings=View(**call_settings),
+            capabilities=View(calls=calls_available),
         )
 
     def _resolve_snapshot(
@@ -141,33 +137,27 @@ class PublicVoiceExperienceService:
         )
 
     @staticmethod
-    def _content(payload: dict) -> PublicVoiceContent:
-        return PublicVoiceContent.model_validate(
-            {key: payload[key] for key in PublicVoiceContent.model_fields if key in payload}
-        )
+    def _content(payload: dict) -> View:
+        return View(**payload)
 
     @staticmethod
-    def _theme(payload: dict) -> PublicVoiceTheme:
-        return PublicVoiceTheme.model_validate(
-            {key: payload[key] for key in PublicVoiceTheme.model_fields if key in payload}
-        )
+    def _theme(payload: dict) -> View:
+        return View(**payload)
 
     @staticmethod
-    def _consent(payload: dict) -> PublicVoiceConsent:
-        return PublicVoiceConsent.model_validate(
-            {key: payload[key] for key in PublicVoiceConsent.model_fields if key in payload}
-        )
+    def _consent(payload: dict) -> View:
+        return View(**payload)
 
     @staticmethod
-    def _field(field: TenantVoiceContextField) -> PublicVoiceContextField:
-        return PublicVoiceContextField(
+    def _field(field: TenantVoiceContextField) -> View:
+        return View(
             key=field.key,
             label=field.label,
             description=field.description,
             field_type=field.field_type,
             required=field.required,
             options=[
-                PublicFieldOption(value=option["value"], label=option["label"])
+                View(value=option["value"], label=option["label"])
                 for option in field.options_json
             ]
             if field.field_type == "select"

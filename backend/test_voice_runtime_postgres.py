@@ -36,17 +36,18 @@ from app.modules.crm.infrastructure.models import CrmVoiceCall, CrmVoiceCallEven
 from app.modules.identity.infrastructure.models import Tenant
 from app.models.integrations import TenantVoiceAgentConfig, TenantVoiceProviderConfig
 from app.modules.identity.infrastructure.models import TenantFeatureGrant
-from app.models.voice_context import TenantVoiceContextSchema
-from app.models.voice_experiences import TenantVoiceExperience, TenantVoiceExperienceVersion
-from app.models.voice_submissions import (
+from app.modules.voice_experiences.infrastructure.context_models import TenantVoiceContextSchema
+from app.modules.voice_experiences.infrastructure.experience_models import TenantVoiceExperience, TenantVoiceExperienceVersion
+from app.modules.voice_experiences.infrastructure.submission_models import (
     TenantVoiceContextSession,
     TenantVoiceExperienceSubmission,
     TenantVoiceRuntimeCall,
 )
-from app.services.public_voice_call_service import PublicCallFailure, PublicVoiceCallService
+from app.modules.voice_experiences.infrastructure.legacy_runtime.public_call_compat import PublicCallFailure, PublicVoiceCallService
 from app.services.secret_manager_service import SecretManager
-from app.services.voice_experience_runtime_provider import ProviderCallResult
-from app.services.voice_runtime_webhook_service import RuntimeWebhookTarget, VoiceRuntimeWebhookService
+from app.modules.voice_experiences.infrastructure.legacy_runtime.provider_adapter import ProviderCallResult
+from app.modules.voice_experiences.infrastructure.legacy_runtime.webhook_compat import VoiceRuntimeWebhookService
+from app.modules.voice_experiences.public import VoiceRuntimeWebhookTarget
 
 
 @unittest.skipUnless(
@@ -236,9 +237,18 @@ class VoiceRuntimePostgresConcurrencyTests(unittest.TestCase):
             db.commit()
             return runtime.id
 
-    def _webhook_target(self, db, runtime_id: str) -> RuntimeWebhookTarget:
+    def _webhook_target(self, db, runtime_id: str) -> VoiceRuntimeWebhookTarget:
         runtime = db.get(TenantVoiceRuntimeCall, runtime_id)
-        return RuntimeWebhookTarget(db.get(CrmVoiceCall, runtime.crm_voice_call_id), runtime)
+        call = db.get(CrmVoiceCall, runtime.crm_voice_call_id)
+        return VoiceRuntimeWebhookTarget(
+            tenant_id=runtime.tenant_id,
+            runtime_call_id=runtime.id,
+            voice_call_id=call.id,
+            provider=runtime.provider,
+            provider_call_id=runtime.provider_call_id,
+            contact_id=call.contact_id,
+            lead_id=call.lead_id,
+        )
 
     def test_simultaneous_first_launch_creates_one_runtime_crm_call_and_provider_call(self) -> None:
         seeded = self._seed_context()
@@ -247,15 +257,15 @@ class VoiceRuntimePostgresConcurrencyTests(unittest.TestCase):
         def launch():
             barrier.wait()
             try:
-                return self._service().launch(seeded["slug"], seeded["token"]).status
+                return self._service().launch(seeded["slug"], seeded["token"])["status"]
             except PublicCallFailure as exc:
                 return exc.code
 
         with patch(
-            "app.services.voice_experience_runtime_provider.VoiceExperienceRuntimeProvider.create_webrtc_call",
+            "app.modules.voice_experiences.infrastructure.legacy_runtime.provider_adapter.VoiceExperienceRuntimeProvider.create_webrtc_call",
             return_value=ProviderCallResult("provider-first", "https://provider.invalid/join/first"),
         ) as create_call, patch(
-            "app.services.voice_experience_runtime_provider.VoiceExperienceRuntimeProvider.get_call",
+            "app.modules.voice_experiences.infrastructure.legacy_runtime.provider_adapter.VoiceExperienceRuntimeProvider.get_call",
             return_value=ProviderCallResult("provider-first", "https://provider.invalid/join/first"),
         ):
             with ThreadPoolExecutor(max_workers=2) as pool:
@@ -275,15 +285,15 @@ class VoiceRuntimePostgresConcurrencyTests(unittest.TestCase):
         def recover():
             barrier.wait()
             try:
-                return self._service()._recover(runtime_id).status
+                return self._service()._recover(runtime_id)["status"]
             except PublicCallFailure as exc:
                 return exc.code
 
         with patch(
-            "app.services.voice_experience_runtime_provider.VoiceExperienceRuntimeProvider.create_webrtc_call",
+            "app.modules.voice_experiences.infrastructure.legacy_runtime.provider_adapter.VoiceExperienceRuntimeProvider.create_webrtc_call",
             return_value=ProviderCallResult("provider-takeover", "https://provider.invalid/join/takeover"),
         ) as create_call, patch(
-            "app.services.voice_experience_runtime_provider.VoiceExperienceRuntimeProvider.get_call",
+            "app.modules.voice_experiences.infrastructure.legacy_runtime.provider_adapter.VoiceExperienceRuntimeProvider.get_call",
             return_value=ProviderCallResult("provider-takeover", "https://provider.invalid/join/takeover"),
         ):
             with ThreadPoolExecutor(max_workers=2) as pool:

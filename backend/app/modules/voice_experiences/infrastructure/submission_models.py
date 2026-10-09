@@ -152,6 +152,12 @@ class TenantVoiceContextSession(Base):
 
 
 class TenantVoiceRuntimeCall(Base):
+    """Legacy public launch ledger, retained unchanged until runtime migration.
+
+    PR #135 replaces direct-provider WebRTC use; PR #136 replaces callback
+    provider/SIP use. This table is not a VoiceSession.
+    """
+
     __tablename__ = "tenant_voice_runtime_calls"
     __table_args__ = (
         UniqueConstraint("context_session_id", name="uq_voice_runtime_context_session"),

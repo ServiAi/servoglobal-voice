@@ -9,12 +9,14 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.models.voice_context import TenantVoiceContextSchema
-from app.models.voice_experiences import (
+from app.modules.voice_experiences.application.contracts import Command, View
+
+from app.modules.voice_experiences.infrastructure.context_models import TenantVoiceContextSchema
+from app.modules.voice_experiences.infrastructure.experience_models import (
     TenantVoiceExperience,
     TenantVoiceExperienceVersion,
 )
-from app.models.voice_submissions import (
+from app.modules.voice_experiences.infrastructure.submission_models import (
     TenantVoiceContextSession,
     TenantVoiceExperienceSubmission,
     TenantVoiceExperienceSubmissionValue,
@@ -22,13 +24,8 @@ from app.models.voice_submissions import (
 )
 from app.modules.identity.public import VOICE_EXPERIENCES, FeatureFlags
 from app.modules.integrations.public import IntegrationEvents
-from app.schemas.tenant_features import VoiceExperienceLimits
-from app.schemas.voice_experiences import (
-    VoiceExperienceResponse,
-    VoiceExperienceVersionResponse,
-    VoiceExperienceWriteRequest,
-)
-from app.services.voice_agent_service import VoiceAgentService
+from app.modules.voice_experiences.domain.limits import VoiceExperienceLimits
+from app.modules.voice_legacy.public import VoiceLegacyFacade
 
 VERSION_CONSTRAINT = "uq_tenant_voice_experience_versions_experience_version"
 SLUG_CONSTRAINT = "uq_tenant_voice_experiences_slug"
@@ -62,9 +59,9 @@ class VoiceExperienceService:
         self.db = db
         self.feature_service = FeatureFlags(db)
         self.event_service = IntegrationEvents(db)
-        self.agent_service = VoiceAgentService(db)
+        self.agent_service = VoiceLegacyFacade(db)
 
-    def list_experiences(self, tenant_id: str) -> list[VoiceExperienceResponse]:
+    def list_experiences(self, tenant_id: str) -> list[View]:
         self.feature_service.require_enabled(tenant_id, VOICE_EXPERIENCES)
         experiences = self.db.scalars(
             select(TenantVoiceExperience)
@@ -88,7 +85,7 @@ class VoiceExperienceService:
     def create_experience(
         self,
         tenant_id: str,
-        body: VoiceExperienceWriteRequest,
+        body: Command,
         user_id: str | None,
     ) -> TenantVoiceExperience:
         grant = self.feature_service.require_enabled(tenant_id, VOICE_EXPERIENCES)
@@ -102,7 +99,7 @@ class VoiceExperienceService:
                 TenantVoiceExperience.status != "archived",
             )
         ) or 0
-        limits = VoiceExperienceLimits.model_validate(grant.limits)
+        limits = VoiceExperienceLimits.from_mapping(grant.limits)
         if count >= limits.max_experiences:
             raise VoiceExperienceValidationError("Maximum voice experiences limit reached.")
         experience = TenantVoiceExperience(
@@ -121,7 +118,7 @@ class VoiceExperienceService:
                 raise VoiceExperienceConflictError("Could not allocate a unique experience slug.") from exc
             raise
         self._record_event(
-            experience, agent.provider, "voice_experience_created", user_id
+            experience, agent.agent_provider, "voice_experience_created", user_id
         )
         self.db.refresh(experience)
         return experience
@@ -130,7 +127,7 @@ class VoiceExperienceService:
         self,
         tenant_id: str,
         experience_id: str,
-        body: VoiceExperienceWriteRequest,
+        body: Command,
     ) -> TenantVoiceExperience:
         experience = self.get_experience(tenant_id, experience_id)
         self._ensure_mutable(experience)
@@ -206,7 +203,7 @@ class VoiceExperienceService:
             raise
         self._record_event(
             experience,
-            agent.provider,
+            agent.agent_provider,
             "voice_experience_published",
             user_id,
             {"version": next_version},
@@ -228,7 +225,7 @@ class VoiceExperienceService:
         experience.published_version_id = None
         self.db.commit()
         self._record_event(
-            experience, agent.provider, "voice_experience_unpublished", user_id
+            experience, agent.agent_provider, "voice_experience_unpublished", user_id
         )
         self.db.refresh(experience)
         return experience
@@ -250,7 +247,7 @@ class VoiceExperienceService:
         experience.published_version_id = None
         self.db.commit()
         self._record_event(
-            experience, agent.provider, "voice_experience_archived", user_id
+            experience, agent.agent_provider, "voice_experience_archived", user_id
         )
         self.db.refresh(experience)
         return experience
@@ -270,7 +267,7 @@ class VoiceExperienceService:
         experience.archived_at = None
         self.db.commit()
         self._record_event(
-            experience, agent.provider, "voice_experience_unarchived", user_id
+            experience, agent.agent_provider, "voice_experience_unarchived", user_id
         )
         self.db.refresh(experience)
         return experience
@@ -286,7 +283,7 @@ class VoiceExperienceService:
         agent, _ = self._require_relations(
             tenant_id, experience.agent_config_id, experience.context_schema_id
         )
-        provider = agent.provider
+        provider = agent.agent_provider
         submission_ids = select(TenantVoiceExperienceSubmission.id).where(
             TenantVoiceExperienceSubmission.tenant_id == tenant_id,
             TenantVoiceExperienceSubmission.experience_id == experience_id,
@@ -325,7 +322,7 @@ class VoiceExperienceService:
 
     def list_versions(
         self, tenant_id: str, experience_id: str
-    ) -> list[VoiceExperienceVersionResponse]:
+    ) -> list[View]:
         experience = self.get_experience(tenant_id, experience_id)
         versions = self.db.scalars(
             select(TenantVoiceExperienceVersion)
@@ -378,9 +375,9 @@ class VoiceExperienceService:
             ) from exc
         self.event_service.record(
             tenant_id=tenant_id,
-            provider=self.agent_service.validate_agent_belongs_to_tenant(
+            provider=self.agent_service.require_voice_agent_defaults(
                 tenant_id, experience.agent_config_id
-            ).provider,
+            ).agent_provider,
             event_type="voice_experience_version_deleted",
             status="success",
             resource_type="voice_experience_version",
@@ -492,7 +489,7 @@ class VoiceExperienceService:
         self, tenant_id: str, agent_config_id: str, schema_id: str
     ):
         try:
-            agent = self.agent_service.validate_agent_belongs_to_tenant(
+            agent = self.agent_service.require_voice_agent_defaults(
                 tenant_id, agent_config_id
             )
         except ValueError as exc:
@@ -505,7 +502,7 @@ class VoiceExperienceService:
         )
         if schema is None:
             raise VoiceExperienceNotFoundError("Voice context schema not found.")
-        if schema.agent_config_id != agent.id:
+        if schema.agent_config_id != agent.config_id:
             raise VoiceExperienceValidationError(
                 "Voice context schema does not belong to the selected voice agent."
             )
@@ -536,8 +533,8 @@ class VoiceExperienceService:
             raise VoiceExperienceConflictError("Archived voice experiences are immutable.")
 
     @staticmethod
-    def _draft_values(body: VoiceExperienceWriteRequest) -> dict:
-        payload = body.model_dump(mode="json")
+    def _draft_values(body: Command) -> dict:
+        payload = body.as_mapping()
         return {
             "agent_config_id": payload["agent_config_id"],
             "context_schema_id": payload["context_schema_id"],
@@ -550,8 +547,8 @@ class VoiceExperienceService:
         }
 
     @staticmethod
-    def response(experience: TenantVoiceExperience) -> VoiceExperienceResponse:
-        return VoiceExperienceResponse(
+    def response(experience: TenantVoiceExperience) -> View:
+        return View(
             id=experience.id,
             agent_config_id=experience.agent_config_id,
             context_schema_id=experience.context_schema_id,
@@ -573,8 +570,8 @@ class VoiceExperienceService:
     def version_response(
         version: TenantVoiceExperienceVersion,
         delete_block_reason: str | None = None,
-    ) -> VoiceExperienceVersionResponse:
-        return VoiceExperienceVersionResponse(
+    ) -> View:
+        return View(
             id=version.id,
             experience_id=version.experience_id,
             version=version.version,

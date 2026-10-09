@@ -8,7 +8,8 @@ from fastapi import HTTPException, status
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
-from app.models.voice_submissions import TenantVoiceRuntimeCall
+from app.modules.voice_experiences.domain.views import VoiceRuntimeWebhookTarget
+from app.modules.voice_experiences.infrastructure.submission_models import TenantVoiceRuntimeCall
 from app.modules.analytics.public import (
     AnalyticsCallLedger,
     PersistCallCommand,
@@ -18,17 +19,10 @@ from app.modules.crm.public import (
     CrmFacade,
     CrmVoiceCalls,
     UpdateVoiceCallCommand,
-    VoiceCallView,
 )
 from app.services.voice_config_service import VoiceConfigService
 
 OFFICIAL_EVENTS = {"call.started", "call.joined", "call.ended", "call.billed"}
-
-
-class RuntimeWebhookTarget:
-    def __init__(self, call: VoiceCallView, runtime: TenantVoiceRuntimeCall) -> None:
-        self.call = call
-        self.runtime = runtime
 
 
 class VoiceRuntimeWebhookService:
@@ -36,7 +30,7 @@ class VoiceRuntimeWebhookService:
         self.db = db
         self.config_service = VoiceConfigService(db)
 
-    def resolve_target(self, provider: str, payload: dict[str, Any]) -> RuntimeWebhookTarget | None:
+    def resolve_target(self, provider: str, payload: dict[str, Any]) -> VoiceRuntimeWebhookTarget | None:
         call_obj = payload.get("call") or payload
         metadata = payload.get("metadata") or call_obj.get("metadata") or {}
         voice_call_id = metadata.get("voice_call_id")
@@ -54,31 +48,39 @@ class VoiceRuntimeWebhookService:
         config = self.config_service.get_provider_config(runtime.tenant_id, provider)
         if not config or provider != call.provider or provider != runtime.provider or config.provider != provider:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Webhook validation failed")
-        return RuntimeWebhookTarget(call, runtime)
+        return VoiceRuntimeWebhookTarget(
+            tenant_id=runtime.tenant_id,
+            runtime_call_id=runtime.id,
+            voice_call_id=call.id,
+            provider=runtime.provider,
+            provider_call_id=runtime.provider_call_id,
+            contact_id=call.contact_id,
+            lead_id=call.lead_id,
+        )
 
-    def runtime_secret(self, target: RuntimeWebhookTarget) -> str:
-        config = self.config_service.get_provider_config(target.runtime.tenant_id, target.runtime.provider)
+    def runtime_secret(self, target: VoiceRuntimeWebhookTarget) -> str:
+        config = self.config_service.get_provider_config(target.tenant_id, target.provider)
         secret = self.config_service.decrypt_webhook_secret(config) if config else None
         if not secret:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Webhook validation failed")
         return secret
 
-    def process(self, provider: str, payload: dict[str, Any], target: RuntimeWebhookTarget) -> dict[str, Any]:
+    def process(self, provider: str, payload: dict[str, Any], target: VoiceRuntimeWebhookTarget) -> dict[str, Any]:
         event_type = str(payload.get("event") or payload.get("event_type") or payload.get("type") or "")
         if event_type not in OFFICIAL_EVENTS:
             return {"status": "ignored", "processed": False}
         call_obj = payload.get("call") or payload
-        provider_call_id = call_obj.get("callId") or call_obj.get("id") or target.runtime.provider_call_id
+        provider_call_id = call_obj.get("callId") or call_obj.get("id") or target.provider_call_id
         if not provider_call_id:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Webhook call identifier missing")
         provider_call_id = str(provider_call_id)
         dedup_key = f"ultravox:{provider_call_id}:{event_type}"
         now = datetime.now(UTC)
-        call_id = target.call.id
-        runtime_id = target.runtime.id
-        tenant_id = target.runtime.tenant_id
-        contact_id = target.call.contact_id
-        lead_id = target.call.lead_id
+        call_id = target.voice_call_id
+        runtime_id = target.runtime_call_id
+        tenant_id = target.tenant_id
+        contact_id = target.contact_id
+        lead_id = target.lead_id
         self.db.rollback()
         with self.db.begin():
             calls = CrmVoiceCalls(self.db)

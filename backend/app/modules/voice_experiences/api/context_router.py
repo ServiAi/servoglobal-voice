@@ -11,7 +11,7 @@ from app.modules.identity.public import AuthContext
 from app.modules.identity.public import (
     FeatureDisabledError as TenantFeatureDisabledError,
 )
-from app.schemas.voice_context import (
+from app.modules.voice_experiences.api.schemas.voice_context import (
     VoiceContextFieldRequest,
     VoiceContextFieldResponse,
     VoiceContextSchemaCreateRequest,
@@ -19,12 +19,13 @@ from app.schemas.voice_context import (
     VoiceContextSchemaResponse,
     VoiceContextSchemaSummaryResponse,
 )
-from app.services.voice_context_service import (
+from app.modules.voice_experiences.application.context_service import (
     VoiceContextConflictError,
     VoiceContextNotFoundError,
     VoiceContextService,
     VoiceContextValidationError,
 )
+from app.modules.voice_experiences.api.commands import command_from_model
 
 router = APIRouter(prefix="/api/v1/voice", tags=["Voice Context Schemas"])
 READ_ROLES = ["platform_admin", "tenant_admin", "tenant_analyst", "tenant_viewer"]
@@ -95,7 +96,7 @@ def create_context_schema(
     service = VoiceContextService(db)
     try:
         schema = service.create_schema(
-            context.tenant.id, agent_config_id, body, context.user.id
+            context.tenant.id, agent_config_id, command_from_model(body), context.user.id
         )
         return service.schema_response(schema)
     except Exception as exc:
@@ -143,7 +144,7 @@ def update_context_schema(
     service = VoiceContextService(db)
     try:
         return service.schema_response(
-            service.update_schema_meta(context.tenant.id, schema_id, body)
+            service.update_schema_meta(context.tenant.id, schema_id, command_from_model(body))
         )
     except Exception as exc:
         _raise_service_error(exc)
@@ -162,7 +163,7 @@ def add_context_field(
 ) -> Any:
     service = VoiceContextService(db)
     try:
-        return service.field_response(service.add_field(context.tenant.id, schema_id, body))
+        return service.field_response(service.add_field(context.tenant.id, schema_id, command_from_model(body)))
     except Exception as exc:
         _raise_service_error(exc)
 
@@ -181,7 +182,7 @@ def update_context_field(
     service = VoiceContextService(db)
     try:
         return service.field_response(
-            service.update_field(context.tenant.id, schema_id, field_id, body)
+            service.update_field(context.tenant.id, schema_id, field_id, command_from_model(body))
         )
     except Exception as exc:
         _raise_service_error(exc)

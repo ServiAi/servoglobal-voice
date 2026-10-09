@@ -8,7 +8,7 @@ from typing import Any, NoReturn
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.api.endpoints.voice_context_schemas import (
+from app.modules.voice_experiences.api.context_router import (
     require_context_read,
     require_context_write,
 )
@@ -17,17 +17,18 @@ from app.modules.identity.public import AuthContext
 from app.modules.identity.public import (
     FeatureDisabledError as TenantFeatureDisabledError,
 )
-from app.schemas.voice_experiences import (
+from app.modules.voice_experiences.api.schemas.voice_experiences import (
     VoiceExperienceResponse,
     VoiceExperienceVersionResponse,
     VoiceExperienceWriteRequest,
 )
-from app.services.voice_experience_service import (
+from app.modules.voice_experiences.application.experience_service import (
     VoiceExperienceConflictError,
     VoiceExperienceNotFoundError,
     VoiceExperienceService,
     VoiceExperienceValidationError,
 )
+from app.modules.voice_experiences.api.commands import command_from_model
 
 router = APIRouter(prefix="/api/v1/voice/experiences", tags=["Voice Experiences"])
 SERVICE_ERRORS = (
@@ -75,7 +76,7 @@ def create_voice_experience(
     service = VoiceExperienceService(db)
     try:
         return service.response(
-            service.create_experience(context.tenant.id, body, context.user.id)
+            service.create_experience(context.tenant.id, command_from_model(body), context.user.id)
         )
     except SERVICE_ERRORS as exc:
         _raise_service_error(exc)
@@ -104,7 +105,7 @@ def update_voice_experience(
     service = VoiceExperienceService(db)
     try:
         return service.response(
-            service.update_experience(context.tenant.id, experience_id, body)
+            service.update_experience(context.tenant.id, experience_id, command_from_model(body))
         )
     except SERVICE_ERRORS as exc:
         _raise_service_error(exc)
