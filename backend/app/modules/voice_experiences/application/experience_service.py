@@ -60,6 +60,7 @@ class VoiceExperienceService:
         self.feature_service = FeatureFlags(db)
         self.event_service = IntegrationEvents(db)
         self.agent_service = VoiceLegacyFacade(db)
+        self.agents = AgentsFacade(db)
 
     def list_experiences(self, tenant_id: str) -> list[View]:
         self.feature_service.require_enabled(tenant_id, VOICE_EXPERIENCES)
@@ -92,6 +93,7 @@ class VoiceExperienceService:
         agent, schema = self._require_relations(
             tenant_id, body.agent_config_id, body.context_schema_id
         )
+        binding = self._resolve_agent_binding(tenant_id, body.agent_config_id)
         self._validate_callback_settings(body, schema)
         count = self.db.scalar(
             select(func.count(TenantVoiceExperience.id)).where(
@@ -107,6 +109,7 @@ class VoiceExperienceService:
             slug=secrets.token_urlsafe(24),
             status="draft",
             created_by_user_id=user_id,
+            agent_id=binding.agent_id,
             **self._draft_values(body),
         )
         self.db.add(experience)
@@ -140,9 +143,11 @@ class VoiceExperienceService:
         _, schema = self._require_relations(
             tenant_id, body.agent_config_id, body.context_schema_id
         )
+        binding = self._resolve_agent_binding(tenant_id, body.agent_config_id)
         self._validate_callback_settings(body, schema)
         for key, value in self._draft_values(body).items():
             setattr(experience, key, value)
+        experience.agent_id = binding.agent_id
         self.db.commit()
         self.db.refresh(experience)
         return experience
@@ -160,6 +165,14 @@ class VoiceExperienceService:
         if schema.status != "active":
             raise VoiceExperienceValidationError("Only an active context schema can be published.")
         self._validate_callback_settings(self.response(experience), schema)
+        try:
+            target = self.agents.lock_experience_publication_target(
+                tenant_id, experience.agent_id
+            )
+        except ValueError as exc:
+            raise VoiceExperienceConflictError("agent_binding_changed") from exc
+        if target.legacy_voice_agent_config_id != experience.agent_config_id:
+            raise VoiceExperienceConflictError("agent_binding_changed")
         next_version = (
             self.db.scalar(
                 select(func.max(TenantVoiceExperienceVersion.version)).where(
@@ -174,6 +187,8 @@ class VoiceExperienceService:
             tenant_id=tenant_id,
             version=next_version,
             agent_config_id=experience.agent_config_id,
+            agent_id=target.agent_id,
+            agent_version_id=target.agent_version_id,
             context_schema_id=experience.context_schema_id,
             name=experience.name,
             slug=experience.slug,
@@ -508,6 +523,14 @@ class VoiceExperienceService:
             )
         return agent, schema
 
+    def _resolve_agent_binding(
+        self, tenant_id: str, agent_config_id: str
+    ) -> AgentLegacyBinding:
+        try:
+            return self.agents.resolve_legacy_binding(tenant_id, agent_config_id)
+        except LegacyAgentBindingError as exc:
+            raise VoiceExperienceValidationError(exc.code) from exc
+
     @staticmethod
     def _validate_callback_settings(body, schema) -> None:
         settings = body.call_settings
@@ -589,3 +612,4 @@ class VoiceExperienceService:
             can_delete=delete_block_reason is None,
             delete_block_reason=delete_block_reason,
         )
+from app.modules.agents.public import AgentLegacyBinding, AgentsFacade, LegacyAgentBindingError

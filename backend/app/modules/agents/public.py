@@ -78,6 +78,11 @@ def validate_voice_settings(voice: AgentVoiceConfig) -> None:
 
 
 from app.modules.agents.domain.views import AgentEvaluationSnapshot, AgentEvaluationSnapshotUnavailableError
+from app.modules.agents.domain.views import (
+    AgentExperiencePublicationTarget,
+    AgentLegacyBinding,
+    LegacyAgentBindingError,
+)
 
 
 class AgentsFacade:
@@ -93,6 +98,24 @@ class AgentsFacade:
         from app.modules.agents.application.queries import AgentQueries
 
         return AgentQueries(self.db).lock_published_agent(tenant_id, agent_id)
+
+    def resolve_legacy_binding(
+        self, tenant_id: str, legacy_voice_agent_config_id: str
+    ) -> AgentLegacyBinding:
+        """Resolve a legacy voice config only when it identifies one Agent."""
+        from app.modules.agents.application.queries import AgentQueries
+
+        return AgentQueries(self.db).resolve_legacy_binding(
+            tenant_id, legacy_voice_agent_config_id
+        )
+
+    def lock_experience_publication_target(
+        self, tenant_id: str, agent_id: str
+    ) -> AgentExperiencePublicationTarget:
+        """Lock the Agent and snapshot its exact current published version."""
+        from app.modules.agents.application.queries import AgentQueries
+
+        return AgentQueries(self.db).lock_experience_publication_target(tenant_id, agent_id)
 
     def resolve_runtime_target(
         self, tenant_id: str, agent_id: str, agent_version_id: str, *, lock: bool = False

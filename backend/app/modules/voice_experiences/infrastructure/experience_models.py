@@ -16,6 +16,7 @@ class TenantVoiceExperience(Base, TimestampMixin):
         UniqueConstraint("slug", name="uq_tenant_voice_experiences_slug"),
         Index("ix_tenant_voice_experiences_tenant_status", "tenant_id", "status"),
         Index("ix_tenant_voice_experiences_tenant_agent", "tenant_id", "agent_config_id"),
+        Index("ix_tenant_voice_experiences_tenant_agent_id", "tenant_id", "agent_id"),
         Index("ix_tenant_voice_experiences_slug", "slug"),
         sa.CheckConstraint(
             "status IN ('draft', 'published', 'unpublished', 'archived')",
@@ -29,6 +30,14 @@ class TenantVoiceExperience(Base, TimestampMixin):
     )
     agent_config_id: Mapped[str] = mapped_column(
         ForeignKey("tenant_voice_agent_configs.id"), nullable=False
+    )
+    agent_id: Mapped[str] = mapped_column(
+        ForeignKey(
+            "tenant_agents.id",
+            name="fk_tenant_voice_experiences_agent",
+            ondelete="RESTRICT",
+        ),
+        nullable=False,
     )
     context_schema_id: Mapped[str] = mapped_column(
         ForeignKey("tenant_voice_context_schemas.id"), nullable=False
@@ -78,6 +87,8 @@ class TenantVoiceExperienceVersion(Base):
         ),
         Index("ix_tenant_voice_experience_versions_tenant", "tenant_id"),
         Index("ix_tenant_voice_experience_versions_experience", "experience_id"),
+        Index("ix_tenant_voice_experience_versions_tenant_agent", "tenant_id", "agent_id"),
+        Index("ix_tenant_voice_experience_versions_agent_version", "agent_version_id"),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
@@ -90,6 +101,22 @@ class TenantVoiceExperienceVersion(Base):
     version: Mapped[int] = mapped_column(sa.Integer, nullable=False)
     agent_config_id: Mapped[str] = mapped_column(
         ForeignKey("tenant_voice_agent_configs.id"), nullable=False
+    )
+    agent_id: Mapped[str] = mapped_column(
+        ForeignKey(
+            "tenant_agents.id",
+            name="fk_tenant_voice_experience_versions_agent",
+            ondelete="RESTRICT",
+        ),
+        nullable=False,
+    )
+    agent_version_id: Mapped[str] = mapped_column(
+        ForeignKey(
+            "tenant_agent_versions.id",
+            name="fk_tenant_voice_experience_versions_agent_version",
+            ondelete="RESTRICT",
+        ),
+        nullable=False,
     )
     context_schema_id: Mapped[str] = mapped_column(
         ForeignKey("tenant_voice_context_schemas.id"), nullable=False

@@ -260,3 +260,6 @@ Billing closure hardening: `tenant_id -> tenants.id` foreign keys remain; ORM re
 - Las nueve tablas, routers, schemas HTTP y casos de uso pertenecen a app/modules/voice_experiences; no hay migración Alembic y se conservaron los hashes base de DDL/OpenAPI.
 - public.py expone snapshots frozen y factories lazy; Integrations/WhatsApp Flows consume el snapshot mediante ese contrato. Identity, Billing, CRM, Telephony y Voice Legacy se alcanzan por APIs públicas.
 - El dominio es provider-neutral. Los launch WebRTC/Ultravox y callback proveedor/SIP siguen aislados tras adaptadores de compatibilidad. agent_config_id permanece hasta PR #134; VoiceSession/LiveKit no se conectan en esta fase.
+
+## PR #134 — Canonical Agent binding
+Voice Experiences agrega `agent_id` a Experience y `agent_id`/`agent_version_id` a ExperienceVersion. La publicación toma el Agent bajo lock y fija el AgentVersion publicado; versiones históricas no cambian si Agent Builder publica otra versión después. La migración backfillea por tenant + `agent_config_id` y falla ante referencias ausentes o ambiguas. `agent_config_id` y el runtime directo legacy permanecen temporalmente: PR #135 migrará el launch público y PR #136 el callback a VoiceSession/LiveKit. Este PR no crea VoiceSession ni cambia HTTP/OpenAPI.

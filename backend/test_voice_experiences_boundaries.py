@@ -142,6 +142,7 @@ class VoiceExperiencesBoundaryTests(unittest.TestCase):
             "app.modules.integrations.infrastructure", "app.modules.telephony.infrastructure",
             "app.modules.voice.infrastructure", "app.modules.voice_legacy.infrastructure",
             "app.modules.voice_providers.infrastructure",
+            "app.modules.agents.infrastructure",
         )
         for folder, forbidden in (
             (MODULE / "domain", domain_forbidden),
@@ -334,7 +335,7 @@ class VoiceExperiencesBoundaryTests(unittest.TestCase):
                         )
                     )
 
-    def test_ddl_matches_develop_baseline(self) -> None:
+    def test_ddl_matches_expected_canonical_binding_delta(self) -> None:
         import app.models
         from app.db.base import Base
         from app.modules.voice_experiences.infrastructure import models as voice_models  # noqa: F401
@@ -350,7 +351,35 @@ class VoiceExperiencesBoundaryTests(unittest.TestCase):
             for index in sorted(table.indexes, key=lambda item: item.name or "")
         )
         actual = hashlib.sha256("\n".join(ddl).encode()).hexdigest()
-        self.assertEqual(actual, "ed1d743672039c752c16ee4c070b69e3cc2ddfadc6c6405c46eb2a69d227f071")
+        self.assertEqual(actual, "93e926f83628c73f6233e687879c4d5ce3175e39ab326d8099d8671b14061efd")
+        experiences = Base.metadata.tables["tenant_voice_experiences"]
+        versions = Base.metadata.tables["tenant_voice_experience_versions"]
+        self.assertFalse(experiences.c.agent_id.nullable)
+        self.assertFalse(versions.c.agent_id.nullable)
+        self.assertFalse(versions.c.agent_version_id.nullable)
+        self.assertEqual(
+            {index.name for index in experiences.indexes if index.name and "agent_id" in index.name},
+            {"ix_tenant_voice_experiences_tenant_agent_id"},
+        )
+        self.assertEqual(
+            {index.name for index in versions.indexes if index.name and "agent" in index.name},
+            {
+                "ix_tenant_voice_experience_versions_tenant_agent",
+                "ix_tenant_voice_experience_versions_agent_version",
+            },
+        )
+        self.assertEqual(
+            {fk.name for fk in experiences.c.agent_id.foreign_keys},
+            {"fk_tenant_voice_experiences_agent"},
+        )
+        self.assertEqual(
+            {fk.name for fk in versions.c.agent_id.foreign_keys},
+            {"fk_tenant_voice_experience_versions_agent"},
+        )
+        self.assertEqual(
+            {fk.name for fk in versions.c.agent_version_id.foreign_keys},
+            {"fk_tenant_voice_experience_versions_agent_version"},
+        )
 
     def test_openapi_matches_develop_baseline(self) -> None:
         """Full OpenAPI (paths, requestBody, responses, components.schemas, enums, required,

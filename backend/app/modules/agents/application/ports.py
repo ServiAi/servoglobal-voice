@@ -46,6 +46,10 @@ class LegacyVoicePort(Protocol):
         """None if the legacy config does not exist or belongs to another tenant."""
         ...
 
+    def lock_voice_agent_defaults(self, tenant_id: str, config_id: str) -> LegacyVoiceDefaults | None:
+        """Lock the legacy config row while an Agent binding is changed."""
+        ...
+
 
 class IntegrationReadinessPort(Protocol):
     """Whether a platform tool's required integration is operational for a

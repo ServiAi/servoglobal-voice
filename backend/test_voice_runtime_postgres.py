@@ -34,6 +34,7 @@ from app.modules.analytics.infrastructure.models import Call, CallEvent
 from app.modules.billing.infrastructure.models import TenantBillingPlan
 from app.modules.crm.infrastructure.models import CrmVoiceCall, CrmVoiceCallEvent
 from app.modules.identity.infrastructure.models import Tenant
+from app.modules.agents.infrastructure.models import TenantAgent, TenantAgentVersion
 from app.models.integrations import TenantVoiceAgentConfig, TenantVoiceProviderConfig
 from app.modules.identity.infrastructure.models import TenantFeatureGrant
 from app.modules.voice_experiences.infrastructure.context_models import TenantVoiceContextSchema
@@ -100,6 +101,30 @@ class VoiceRuntimePostgresConcurrencyTests(unittest.TestCase):
             )
             db.add(agent)
             db.flush()
+            canonical_agent = TenantAgent(
+                tenant_id=tenant.id,
+                name="Runtime Agent",
+                status="active",
+            )
+            db.add(canonical_agent)
+            db.flush()
+            canonical_version = TenantAgentVersion(
+                agent_id=canonical_agent.id,
+                tenant_id=tenant.id,
+                version=1,
+                status="published",
+                language="es",
+                timezone="America/Bogota",
+                identity_json={"name": "Runtime Agent"},
+                instructions_json={"system_prompt": "runtime test"},
+                behavior_json={},
+                runtime_binding_json={"pipeline_type": "realtime", "realtime": {"provider": "ultravox"}},
+                voice_agent_config_id=agent.id,
+                published_at=now,
+            )
+            db.add(canonical_version)
+            db.flush()
+            canonical_agent.published_version_id = canonical_version.id
             schema = TenantVoiceContextSchema(
                 tenant_id=tenant.id,
                 agent_config_id=agent.id,
@@ -114,6 +139,7 @@ class VoiceRuntimePostgresConcurrencyTests(unittest.TestCase):
             experience = TenantVoiceExperience(
                 tenant_id=tenant.id,
                 agent_config_id=agent.id,
+                agent_id=canonical_agent.id,
                 context_schema_id=schema.id,
                 name="Runtime",
                 slug=f"runtime-{uuid4().hex[:12]}",
@@ -130,6 +156,8 @@ class VoiceRuntimePostgresConcurrencyTests(unittest.TestCase):
                 tenant_id=tenant.id,
                 version=1,
                 agent_config_id=agent.id,
+                agent_id=canonical_agent.id,
+                agent_version_id=canonical_version.id,
                 context_schema_id=schema.id,
                 name=experience.name,
                 slug=experience.slug,

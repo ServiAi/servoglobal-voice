@@ -236,7 +236,9 @@ class AgentService:
             raise AgentConflictError(
                 "Agent has no editable draft. Create a new draft first."
             )
-        self._validate_voice_agent_config(tenant_id, body.voice_agent_config_id)
+        self._validate_voice_agent_config(
+            tenant_id, body.voice_agent_config_id, except_agent_id=agent.id
+        )
         version = self._get_version(tenant_id, agent.draft_version_id)
         agent.name = body.name
         agent.description = body.description
@@ -422,7 +424,18 @@ class AgentService:
         agent.draft_version_id = None
         self.db.flush()
         self.db.delete(agent)
-        self.db.commit()
+        try:
+            self.db.commit()
+        except IntegrityError as exc:
+            self.db.rollback()
+            constraint = getattr(getattr(exc.orig, "diag", None), "constraint_name", None)
+            if constraint in {
+                "fk_tenant_voice_experiences_agent",
+                "fk_tenant_voice_experience_versions_agent",
+                "fk_tenant_voice_experience_versions_agent_version",
+            } or "foreign key constraint failed" in str(exc.orig).lower():
+                raise AgentConflictError("agent_delete_experience_referenced") from exc
+            raise
         self.event_service.record(
             tenant_id=agent.tenant_id,
             provider="agent_builder",
@@ -489,14 +502,38 @@ class AgentService:
         return agent
 
     def _validate_voice_agent_config(
-        self, tenant_id: str, voice_agent_config_id: str | None
+        self,
+        tenant_id: str,
+        voice_agent_config_id: str | None,
+        *,
+        except_agent_id: str | None = None,
     ) -> None:
         if voice_agent_config_id is None:
             return
-        if self.ports.legacy_voice.get_voice_agent_defaults(tenant_id, voice_agent_config_id) is None:
+        lock_config = getattr(self.ports.legacy_voice, "lock_voice_agent_defaults", None)
+        defaults = (
+            lock_config(tenant_id, voice_agent_config_id)
+            if callable(lock_config)
+            else self.ports.legacy_voice.get_voice_agent_defaults(
+                tenant_id, voice_agent_config_id
+            )
+        )
+        if defaults is None:
             raise AgentValidationError(
                 "voice_agent_config_id does not exist or does not belong to this tenant."
             )
+        bindings = self.db.scalars(
+            select(TenantAgentVersion.agent_id)
+            .where(
+                TenantAgentVersion.tenant_id == tenant_id,
+                TenantAgentVersion.voice_agent_config_id == voice_agent_config_id,
+                TenantAgentVersion.agent_id != (except_agent_id or ""),
+            )
+            .distinct()
+            .limit(1)
+        ).first()
+        if bindings is not None:
+            raise AgentConflictError("voice_agent_config_already_bound")
 
     @staticmethod
     def _build_runtime_binding(pipeline_type: str, provider: str, model: str) -> dict:

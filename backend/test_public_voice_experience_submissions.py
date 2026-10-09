@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from _integrations_2a_test_base import Integration2ATestCase
+from app.modules.agents.infrastructure.models import TenantAgent, TenantAgentVersion
 from app.modules.identity.api.deps import get_current_auth_context
 from app.modules.voice_experiences.api.public_router import (
     get_public_rate_limiter,
@@ -82,17 +83,30 @@ class PublicVoiceExperienceSubmissionTests(Integration2ATestCase):
 
     def _seed_agent(self) -> str:
         with SessionLocal() as db:
-            agent = TenantVoiceAgentConfig(
+            config = TenantVoiceAgentConfig(
                 tenant_id=self.tenant.id,
                 provider="ultravox",
                 provider_agent_id="submission-agent",
                 display_name="Submission agent",
                 default_tools_json={},
             )
+            db.add(config)
+            db.flush()
+            agent = TenantAgent(tenant_id=self.tenant.id, name="Submission agent", status="active")
             db.add(agent)
+            db.flush()
+            version = TenantAgentVersion(
+                tenant_id=self.tenant.id, agent_id=agent.id, version=1, status="published",
+                language="es", timezone="America/Bogota", identity_json={"name": "Submission agent"},
+                instructions_json={"system_prompt": "Hola"}, behavior_json={},
+                runtime_binding_json={"pipeline_type": "realtime", "realtime": {"provider": "ultravox", "model": "ultravox"}},
+                voice_agent_config_id=config.id,
+            )
+            db.add(version)
+            db.flush()
+            agent.published_version_id = version.id
             db.commit()
-            db.refresh(agent)
-            return agent.id
+            return config.id
 
     def _seed_schema(self) -> str:
         with SessionLocal() as db:
