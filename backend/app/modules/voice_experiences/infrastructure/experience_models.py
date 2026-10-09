@@ -55,10 +55,7 @@ class TenantVoiceExperience(Base, TimestampMixin):
     )
     archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    tenant = relationship("Tenant")
-    agent_config = relationship("TenantVoiceAgentConfig")
     context_schema = relationship("TenantVoiceContextSchema")
-    created_by_user = relationship("User")
     versions: Mapped[list[TenantVoiceExperienceVersion]] = relationship(
         back_populates="experience",
         cascade="all, delete-orphan",
@@ -115,7 +112,4 @@ class TenantVoiceExperienceVersion(Base):
     experience: Mapped[TenantVoiceExperience] = relationship(
         back_populates="versions", foreign_keys=[experience_id]
     )
-    tenant = relationship("Tenant")
-    agent_config = relationship("TenantVoiceAgentConfig")
     context_schema = relationship("TenantVoiceContextSchema")
-    published_by_user = relationship("User")

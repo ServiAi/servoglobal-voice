@@ -7,8 +7,8 @@ from app.modules.identity.api.deps import get_current_auth_context
 from app.db.session import SessionLocal
 from app.main import app
 from app.models.integrations import TenantVoiceAgentConfig
-from app.models.voice_context import TenantVoiceContextField, TenantVoiceContextSchema
-from app.models.voice_experiences import TenantVoiceExperience, TenantVoiceExperienceVersion
+from app.modules.voice_experiences.infrastructure.context_models import TenantVoiceContextField, TenantVoiceContextSchema
+from app.modules.voice_experiences.infrastructure.experience_models import TenantVoiceExperience, TenantVoiceExperienceVersion
 from app.modules.identity.application.feature_service import VOICE_EXPERIENCES, TenantFeatureService
 
 

@@ -91,7 +91,11 @@ Leyenda: ✅ permitida · ⚠️ cuestionable · ❌ eliminar · 🔁 circular.
 | Integrations → CRM (antes `crm_activity_service`, `models.crm`) | timeline de mensajes/emails, lead/contacto de la acción | ✅ **resuelto** (2026-10-04) | `crm.public` (`record_activity`, `get_lead_profile`, `find_contact_by_phone_digits`). Sólo queda `CrmWhatsAppMessage` (Messaging). |
 | Identity → Integrations (`admin/tenants.py` → 10 servicios) | panel admin | ⚠️ | Es un BFF de administración: consumir `public.py` de cada módulo. |
 | Identity ? Billing ?? | onboarding provisiona el plan; Billing consulta tenant/suspensi?n | ? por APIs p?blicas | Identity usa `BillingOnboardingFacade`; Billing usa `identity.public.TenantLifecycle` y directorios. |
-| Voice Experiences → Telephony / Voice | callbacks, rutas SIP, context schemas | ⚠️ | `telephony.public`, y mover `voice_context` (context schemas) a Voice Experiences. |
+| Voice Experiences → Identity / Integrations / CRM / Telephony / Voice Legacy | flags, eventos, CRM projections, rutas, validación de agent_config_id | Migrado (2026-10-08) | Application usa identity.public, integrations.public, crm.public, telephony.public y voice_legacy.public; WhatsApp Flows consume voice_experiences.public. No crea VoiceSession; runtime/callback siguen detrás de adaptadores legacy. |
+
+## Voice Experiences after migration (2026-10-08)
+
+El módulo tiene un único owner y su API pública es import-light. Integrations consulta Context Schemas mediante DTOs frozen de voice_experiences.public; no importa application ni infrastructure. Application usa contratos públicos de Identity, Integrations, CRM, Telephony y Voice Legacy; no conecta con Voice Orchestration. Los adaptadores temporales de proveedor y callback permanecen en infrastructure y wiring.
 
 ## Caso `tool_dispatch_service` (resuelto)
 

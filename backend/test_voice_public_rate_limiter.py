@@ -6,8 +6,8 @@ from starlette.requests import Request
 
 from _integrations_2a_test_base import Integration2ATestCase
 from app.db.session import SessionLocal
-from app.models.voice_submissions import VoicePublicRateLimitWindow
-from app.services.voice_public_rate_limiter import (
+from app.modules.voice_experiences.infrastructure.submission_models import VoicePublicRateLimitWindow
+from app.modules.voice_experiences.application.rate_limiter import (
     VoicePublicRateLimiter,
     pseudonymize_ip,
     resolve_public_client_ip,

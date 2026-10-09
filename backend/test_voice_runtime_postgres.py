@@ -36,17 +36,17 @@ from app.modules.crm.infrastructure.models import CrmVoiceCall, CrmVoiceCallEven
 from app.modules.identity.infrastructure.models import Tenant
 from app.models.integrations import TenantVoiceAgentConfig, TenantVoiceProviderConfig
 from app.modules.identity.infrastructure.models import TenantFeatureGrant
-from app.models.voice_context import TenantVoiceContextSchema
-from app.models.voice_experiences import TenantVoiceExperience, TenantVoiceExperienceVersion
-from app.models.voice_submissions import (
+from app.modules.voice_experiences.infrastructure.context_models import TenantVoiceContextSchema
+from app.modules.voice_experiences.infrastructure.experience_models import TenantVoiceExperience, TenantVoiceExperienceVersion
+from app.modules.voice_experiences.infrastructure.submission_models import (
     TenantVoiceContextSession,
     TenantVoiceExperienceSubmission,
     TenantVoiceRuntimeCall,
 )
-from app.services.public_voice_call_service import PublicCallFailure, PublicVoiceCallService
+from app.modules.voice_experiences.infrastructure.legacy_runtime.public_call_compat import PublicCallFailure, PublicVoiceCallService
 from app.services.secret_manager_service import SecretManager
-from app.services.voice_experience_runtime_provider import ProviderCallResult
-from app.services.voice_runtime_webhook_service import RuntimeWebhookTarget, VoiceRuntimeWebhookService
+from app.modules.voice_experiences.infrastructure.legacy_runtime.provider_adapter import ProviderCallResult
+from app.modules.voice_experiences.infrastructure.legacy_runtime.webhook_compat import RuntimeWebhookTarget, VoiceRuntimeWebhookService
 
 
 @unittest.skipUnless(

@@ -9,8 +9,10 @@ from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.orm import Session
 
-from app.models.voice_context import TenantVoiceContextField
-from app.models.voice_submissions import (
+from app.modules.voice_experiences.application.contracts import Command, View
+
+from app.modules.voice_experiences.infrastructure.context_models import TenantVoiceContextField
+from app.modules.voice_experiences.infrastructure.submission_models import (
     TenantVoiceContextSession,
     TenantVoiceExperienceSubmission,
     TenantVoiceExperienceSubmissionValue,
@@ -22,13 +24,8 @@ from app.modules.telephony.public import (
     normalize_caller_id,
     normalize_outbound_phone,
 )
-from app.schemas.public_voice_submissions import (
-    PublicFieldError,
-    PublicVoiceExperienceSubmissionRequest,
-    PublicVoiceExperienceSubmissionResponse,
-)
 from app.modules.integrations.public import IntegrationEvents
-from app.services.public_voice_experience_service import (
+from app.modules.voice_experiences.application.public_experience_service import (
     PublicVoiceExperienceService,
     PublicVoiceSnapshot,
 )
@@ -47,7 +44,7 @@ class ExperienceVersionChanged(Exception):
 
 
 class SubmissionValidationFailed(Exception):
-    def __init__(self, fields: list[PublicFieldError] | None = None) -> None:
+    def __init__(self, fields: list[View] | None = None) -> None:
         self.fields = fields or []
 
 
@@ -57,7 +54,7 @@ class HistoricalValidationConfigurationError(Exception):
 
 @dataclass(frozen=True)
 class PersistedSubmission:
-    response: PublicVoiceExperienceSubmissionResponse
+    response: View
     submission_id: str
     tenant_id: str
     experience_id: str
@@ -86,7 +83,7 @@ class PublicVoiceSubmissionService:
     def persist(
         self,
         slug: str,
-        payload: PublicVoiceExperienceSubmissionRequest,
+        payload: Command,
     ) -> PersistedSubmission:
         context_token = secrets.token_urlsafe(32)
         token_hash = hashlib.sha256(context_token.encode()).hexdigest()
@@ -165,7 +162,7 @@ class PublicVoiceSubmissionService:
                 )
 
             persisted = PersistedSubmission(
-                response=PublicVoiceExperienceSubmissionResponse(
+                response=View(
                     context_token=context_token,
                     expires_at=expires_at,
                 ),
@@ -283,15 +280,15 @@ class PublicVoiceSubmissionService:
 
 
 def validate_submission(
-    payload: PublicVoiceExperienceSubmissionRequest,
+    payload: Command,
     snapshot: PublicVoiceSnapshot,
     *,
     allowed_countries: frozenset[str] | None = None,
-) -> list[PublicFieldError]:
-    errors: list[PublicFieldError] = []
+) -> list[View]:
+    errors: list[View] = []
     fields = {field.key: field for field in snapshot.fields}
     for key in payload.answers.keys() - fields.keys():
-        errors.append(PublicFieldError(key=key, code="unknown_field"))
+        errors.append(View(key=key, code="unknown_field"))
 
     for key, field in fields.items():
         present = key in payload.answers
@@ -299,30 +296,30 @@ def validate_submission(
         if field.required and (
             not present or value is None or (type(value) is str and not value.strip())
         ):
-            errors.append(PublicFieldError(key=key, code="required"))
+            errors.append(View(key=key, code="required"))
             continue
         if not present or value is None:
             continue
 
         if field.field_type in STRING_TYPES and type(value) is not str:
-            errors.append(PublicFieldError(key=key, code="invalid_type"))
+            errors.append(View(key=key, code="invalid_type"))
             continue
         if field.field_type == "integer" and type(value) is not int:
-            errors.append(PublicFieldError(key=key, code="invalid_type"))
+            errors.append(View(key=key, code="invalid_type"))
             continue
         if field.field_type == "checkbox" and type(value) is not bool:
-            errors.append(PublicFieldError(key=key, code="invalid_type"))
+            errors.append(View(key=key, code="invalid_type"))
             continue
 
         rules = _validated_rules(field)
         if type(value) is str:
             if "min_length" in rules and len(value) < rules["min_length"]:
-                errors.append(PublicFieldError(key=key, code="too_short"))
+                errors.append(View(key=key, code="too_short"))
             global_max = STRING_MAX_LENGTHS.get(field.field_type)
             if (
                 global_max is not None and len(value) > global_max
             ) or ("max_length" in rules and len(value) > rules["max_length"]):
-                errors.append(PublicFieldError(key=key, code="too_long"))
+                errors.append(View(key=key, code="too_long"))
         if type(value) is int:
             if (
                 value < INTEGER_MIN
@@ -330,14 +327,14 @@ def validate_submission(
                 or ("min" in rules and value < rules["min"])
                 or ("max" in rules and value > rules["max"])
             ):
-                errors.append(PublicFieldError(key=key, code="invalid_format"))
+                errors.append(View(key=key, code="invalid_format"))
 
         if field.field_type == "select" and value not in {
             option.get("value") for option in field.options_json if isinstance(option, dict)
         }:
-            errors.append(PublicFieldError(key=key, code="invalid_option"))
+            errors.append(View(key=key, code="invalid_option"))
         elif field.field_type == "email" and not EMAIL_RE.fullmatch(value.strip()):
-            errors.append(PublicFieldError(key=key, code="invalid_format"))
+            errors.append(View(key=key, code="invalid_format"))
         elif field.field_type == "phone":
             call_settings = snapshot.version.call_settings_json
             if call_settings.get("mode") in ("callback", "both") and key == call_settings.get(
@@ -349,20 +346,20 @@ def validate_submission(
                         phone_kwargs["allowed_countries"] = allowed_countries
                     normalize_outbound_phone(value, **phone_kwargs)
                 except ValueError:
-                    errors.append(PublicFieldError(key=key, code="invalid_format"))
+                    errors.append(View(key=key, code="invalid_format"))
             elif not PHONE_RE.fullmatch(value.strip()):
-                errors.append(PublicFieldError(key=key, code="invalid_format"))
+                errors.append(View(key=key, code="invalid_format"))
         elif field.field_type == "date":
             try:
                 parsed = datetime.strptime(value, "%Y-%m-%d")
                 if not 1900 <= parsed.year <= 2100:
                     raise ValueError
             except ValueError:
-                errors.append(PublicFieldError(key=key, code="invalid_format"))
+                errors.append(View(key=key, code="invalid_format"))
 
     consent = snapshot.version.consent_json
     if consent.get("required") is True and payload.consent is not True:
-        errors.append(PublicFieldError(key="consent", code="consent_required"))
+        errors.append(View(key="consent", code="consent_required"))
     return errors
 
 

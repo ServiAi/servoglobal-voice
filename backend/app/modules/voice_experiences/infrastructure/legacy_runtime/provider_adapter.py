@@ -6,7 +6,8 @@ from typing import Any
 
 import httpx
 
-from app.models.integrations import TenantVoiceAgentConfig, TenantVoiceProviderConfig
+from app.models.integrations import TenantVoiceProviderConfig
+from app.modules.voice_legacy.public import LegacyVoiceAgentRuntimeConfig
 from app.services.voice_config_service import VoiceConfigService
 
 
@@ -40,7 +41,7 @@ class VoiceExperienceRuntimeProvider:
     def create_webrtc_call(
         self,
         config: TenantVoiceProviderConfig,
-        agent: TenantVoiceAgentConfig,
+        agent: LegacyVoiceAgentRuntimeConfig,
         *,
         metadata: dict[str, str],
         user_context: dict[str, Any],

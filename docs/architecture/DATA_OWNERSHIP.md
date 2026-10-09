@@ -99,7 +99,9 @@ ORM en `app/modules/integrations/infrastructure/models.py` (13 tablas; mismas co
 
 ## Voice Experiences
 
-`tenant_voice_experiences`, `tenant_voice_experience_versions`, `tenant_voice_context_schemas`, `tenant_voice_context_fields`, `tenant_voice_experience_submissions` y derivadas, `tenant_voice_context_sessions`, `tenant_voice_runtime_calls`, `voice_public_rate_limit_windows`, `tenant_forms`, `tenant_form_fields`, `tenant_form_tokens`, `tenant_form_submissions`, `tenant_form_submission_answers` (Forms, hoy residuo de `app/models/integrations.py`). Estado 🟡 (WhatsApp Flows lee `voice_context` por `VoiceContextSchemaPort`, adaptador en `integrations.wiring`; el envío de email valida enlaces de formulario por `FormLinkPort`).
+Owner: app.modules.voice_experiences.infrastructure.models para tenant_voice_experiences, tenant_voice_experience_versions, tenant_voice_context_schemas, tenant_voice_context_fields, tenant_voice_experience_submissions, tenant_voice_experience_submission_values, tenant_voice_context_sessions, tenant_voice_runtime_calls y voice_public_rate_limit_windows. Las tablas CRM, Billing, Telephony, Identity y Voice Legacy siguen con sus owners; Forms no pertenece a Voice Experiences.
+Responsabilidades: contenido/tema, consentimiento, captura de contexto, schemas versionados, submissions públicas, token one-shot, política y lifecycle de launch. No es owner de Agent prompt/runtime config, VoiceSession, LiveKit, SIP, Telephony, CRM, Billing, credenciales, tools ni evaluaciones.
+Deuda temporal: agent_config_id sigue hasta PR #134; runtime público directo de proveedor hasta PR #135; callback directo de proveedor/SIP hasta PR #136. TenantVoiceRuntimeCall es por ahora el ledger del launch legacy.
 
 ## Voice Legacy y Analytics
 

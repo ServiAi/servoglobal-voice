@@ -13,19 +13,20 @@ from app.db.session import SessionLocal
 from app.modules.identity.infrastructure.models import TenantMembership, User
 from app.models.integrations import TenantVoiceAgentConfig
 from app.modules.integrations.infrastructure.models import TenantIntegrationEvent
-from app.models.voice_context import TenantVoiceContextSchema
-from app.models.voice_experiences import (
+from app.modules.voice_experiences.infrastructure.context_models import TenantVoiceContextSchema
+from app.modules.voice_experiences.infrastructure.experience_models import (
     TenantVoiceExperience,
     TenantVoiceExperienceVersion,
 )
-from app.models.voice_submissions import TenantVoiceExperienceSubmission
-from app.schemas.voice_experiences import VoiceExperienceWriteRequest
+from app.modules.voice_experiences.infrastructure.submission_models import TenantVoiceExperienceSubmission
+from app.modules.voice_experiences.api.schemas.voice_experiences import VoiceExperienceWriteRequest
 from app.modules.identity.application.feature_service import VOICE_EXPERIENCES, TenantFeatureService
 from app.modules.identity.public import FeatureFlags
-from app.services.voice_experience_service import (
+from app.modules.voice_experiences.application.experience_service import (
     VoiceExperienceConflictError,
     VoiceExperienceService,
 )
+from app.modules.voice_experiences.api.commands import command_from_model
 
 
 class VoiceExperienceTests(Integration2ATestCase):
@@ -616,9 +617,9 @@ class VoiceExperienceTests(Integration2ATestCase):
             service = VoiceExperienceService(db)
             experience = service.create_experience(
                 tenant_b.id,
-                VoiceExperienceWriteRequest.model_validate(
+                command_from_model(VoiceExperienceWriteRequest.model_validate(
                     self._payload(agent_id=agent_b, schema_id=schema_b)
-                ),
+                )),
                 None,
             )
             service.publish_experience(tenant_b.id, experience.id, None)
@@ -639,9 +640,9 @@ class VoiceExperienceTests(Integration2ATestCase):
         with SessionLocal() as db:
             other_experience = VoiceExperienceService(db).create_experience(
                 tenant_b.id,
-                VoiceExperienceWriteRequest.model_validate(
+                command_from_model(VoiceExperienceWriteRequest.model_validate(
                     self._payload(agent_id=agent_b, schema_id=schema_b)
-                ),
+                )),
                 None,
             )
             other_id = other_experience.id
@@ -763,9 +764,9 @@ class VoiceExperienceTests(Integration2ATestCase):
         with SessionLocal() as db:
             experience = VoiceExperienceService(db).create_experience(
                 tenant_b.id,
-                VoiceExperienceWriteRequest.model_validate(
+                command_from_model(VoiceExperienceWriteRequest.model_validate(
                     self._payload(agent_id=agent_b, schema_id=schema_b)
-                ),
+                )),
                 user_b.id,
             )
             other_id = experience.id
@@ -882,9 +883,9 @@ class VoiceExperienceTests(Integration2ATestCase):
             service = VoiceExperienceService(db)
             other = service.create_experience(
                 tenant_b.id,
-                VoiceExperienceWriteRequest.model_validate(
+                command_from_model(VoiceExperienceWriteRequest.model_validate(
                     self._payload(agent_id=agent_b, schema_id=schema_b)
-                ),
+                )),
                 user_b.id,
             )
             other_published = service.publish_experience(tenant_b.id, other.id, user_b.id)

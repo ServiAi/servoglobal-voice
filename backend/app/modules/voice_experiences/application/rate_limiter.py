@@ -4,23 +4,31 @@ import hashlib
 import hmac
 import ipaddress
 from datetime import UTC, datetime, timedelta
-from typing import Callable
+from typing import Callable, Protocol
 
-from fastapi import Request
 from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
 
 from app.db.mixins import _uuid
-from app.models.voice_submissions import VoicePublicRateLimitWindow
+from app.modules.voice_experiences.infrastructure.submission_models import VoicePublicRateLimitWindow
+
+
+class _ClientAddress(Protocol):
+    host: str
+
+
+class PublicRequest(Protocol):
+    headers: dict[str, str]
+    client: _ClientAddress | None
 
 
 class VoicePublicRateLimitConfigurationError(RuntimeError):
     pass
 
 
-def resolve_public_client_ip(request: Request, trust_cloudflare: bool) -> str:
+def resolve_public_client_ip(request: PublicRequest, trust_cloudflare: bool) -> str:
     candidate = (
         request.headers.get("CF-Connecting-IP")
         if trust_cloudflare

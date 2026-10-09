@@ -10,13 +10,12 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models import Tenant
-from app.models.integrations import TenantVoiceAgentConfig
-from app.models.voice_context import TenantVoiceContextField
-from app.models.voice_experiences import (
+from app.modules.voice_experiences.infrastructure.context_models import TenantVoiceContextField
+from app.modules.voice_experiences.infrastructure.experience_models import (
     TenantVoiceExperience,
     TenantVoiceExperienceVersion,
 )
-from app.models.voice_submissions import (
+from app.modules.voice_experiences.infrastructure.submission_models import (
     TenantVoiceContextSession,
     TenantVoiceExperienceSubmission,
     TenantVoiceExperienceSubmissionValue,
@@ -34,8 +33,8 @@ from app.modules.telephony.public import (
     VoicePhoneValidationError,
     normalize_outbound_phone,
 )
-from app.schemas.public_voice_calls import PublicVoiceCallbackResponse
-from app.services.public_voice_call_service import PublicCallFailure
+from app.modules.voice_experiences.domain.errors import PublicCallFailure
+from app.modules.voice_legacy.public import VoiceLegacyFacade
 from app.modules.billing.public import BillingAccessGate, BillingError
 from app.services.voice_call_service import VoiceCallService
 from app.services.voice_client import (
@@ -75,7 +74,7 @@ class PublicVoiceCallbackService:
                 raise PublicCallFailure(404, "experience_unavailable")
             return session.tenant_id
 
-    def request(self, slug: str, context_token: str) -> PublicVoiceCallbackResponse:
+    def request(self, slug: str, context_token: str) -> dict[str, str]:
         token_hash = hashlib.sha256(context_token.encode()).hexdigest()
         now = datetime.now(UTC)
         tenant_id = self.resolve_tenant(slug, context_token)
@@ -127,7 +126,7 @@ class PublicVoiceCallbackService:
                                 provider_session_id=None,
                                 provider_attempt_started_at=None,
                                 started_at=None))
-                        return PublicVoiceCallbackResponse(status="accepted")
+                        return {"status": "accepted"}
                     if context_session.status != "active":
                         raise PublicCallFailure(409, "context_session_unavailable")
                     if self._utc(context_session.expires_at) <= now:
@@ -138,14 +137,13 @@ class PublicVoiceCallbackService:
                         context_session.tenant_id, "voice_experiences"
                     ):
                         raise PublicCallFailure(404, "experience_unavailable")
-                    agent = db.get(TenantVoiceAgentConfig, version.agent_config_id)
+                    try:
+                        agent = VoiceLegacyFacade(db).require_runtime_config(
+                            context_session.tenant_id, version.agent_config_id
+                        )
+                    except ValueError:
+                        raise PublicCallFailure(503, "call_unavailable") from None
                     config_service = VoiceConfigService(db)
-                    if (
-                        agent is None
-                        or agent.tenant_id != context_session.tenant_id
-                        or agent.status != "active"
-                    ):
-                        raise PublicCallFailure(503, "call_unavailable")
                     try:
                         provider_config = config_service.get_active_provider_config(
                             context_session.tenant_id, agent.provider
@@ -237,7 +235,7 @@ class PublicVoiceCallbackService:
                 existing = CrmVoiceCalls(db).find_by_source_submission(context_session.submission_id)
                 if existing is None:
                     raise
-        return PublicVoiceCallbackResponse(status="accepted")
+        return {"status": "accepted"}
 
     @staticmethod
     def _utc(value: datetime) -> datetime:

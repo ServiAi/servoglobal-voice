@@ -82,7 +82,7 @@ TELEPHONY_LEGACY_ALLOWED = {
 # that flow retires or moves behind ``telephony.public.place_outbound_call``.
 SIP_CREDENTIAL_CONSUMERS = {
     "app.services.voice_call_service",
-    "app.services.voice_callback_service",
+    "app.modules.voice_experiences.infrastructure.legacy_runtime.callback_compat",
 }
 
 # Legacy/shared code Scheduling may import. ``integration_event_service`` +
@@ -930,6 +930,9 @@ class ModuleBoundaryTests(unittest.TestCase):
 
         heavy = (
             "app.services", "app.models.crm", "app.models.analytics", "livekit",
+            "app.modules.voice_experiences.application",
+            "app.modules.voice_experiences.infrastructure",
+            "app.modules.voice_experiences.api",
             "app.modules.voice.application", "app.modules.voice.infrastructure",
             "app.modules.agents.application", "app.modules.voice_providers.application",
             "app.modules.voice_providers.infrastructure",
@@ -939,6 +942,7 @@ class ModuleBoundaryTests(unittest.TestCase):
         )
         for module in (
             "app.modules.voice.public",
+            "app.modules.voice_experiences.public",
             "app.modules.voice_providers.public",
             "app.modules.agents.public",
             "app.modules.telephony.public",
@@ -1068,6 +1072,13 @@ CRITICAL_PUBLIC_APIS = {
         "run_worker_cli",
     ],
     "app.modules.scheduling.public": ["SchedulingFacade"],
+    "app.modules.voice_experiences.public": [
+        "VoiceContextSchemaReader",
+        "create_context_schema_reader",
+        "create_callback_worker",
+        "create_runtime_webhook_service",
+        "register_models",
+    ],
 
     "app.modules.identity.public": [
         "IdentityFacade",
@@ -1127,7 +1138,7 @@ PUBLIC_DTOS = {
         "ProviderConfigRef",
     ],
     "app.modules.agents.public": ["AgentToolBindingView", "PublishedAgent", "AgentDisplay", "ImportedAgent"],
-    "app.modules.voice_legacy.public": ["LegacyVoiceDefaults"],
+    "app.modules.voice_legacy.public": ["LegacyVoiceDefaults", "LegacyVoiceAgentRuntimeConfig"],
     "app.modules.identity.public": [
         "TenantView",
         "UserView",
@@ -1158,6 +1169,10 @@ PUBLIC_DTOS = {
         "NotificationDeliveryEvidence",
     ],
     "app.modules.scheduling.public": ["BookingSummary", "BookingView", "BookingCustomer", "CreateBookingCommand"],
+    "app.modules.voice_experiences.public": [
+        "VoiceContextFieldSnapshot",
+        "VoiceContextSchemaSnapshot",
+    ],
     "app.modules.analytics.contracts": [
         "AnalyticsAgentView",
         "CallView",

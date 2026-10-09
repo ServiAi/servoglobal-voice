@@ -8,7 +8,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
-from app.models.voice_submissions import TenantVoiceRuntimeCall
+from app.modules.voice_experiences.infrastructure.submission_models import TenantVoiceRuntimeCall
 from app.modules.analytics.public import (
     AnalyticsCallLedger,
     PersistCallCommand,

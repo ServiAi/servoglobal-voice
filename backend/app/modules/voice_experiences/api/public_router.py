@@ -10,37 +10,44 @@ from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.db.session import SessionLocal, get_db
-from app.schemas.public_voice_experiences import PublicVoiceExperienceResponse
-from app.schemas.public_voice_submissions import (
+from app.db.session import get_db
+from app.modules.voice_experiences.api.schemas.public_voice_experiences import PublicVoiceExperienceResponse
+from app.modules.voice_experiences.api.schemas.public_voice_submissions import (
     PublicSubmissionError,
     PublicVoiceExperienceSubmissionRequest,
     PublicVoiceExperienceSubmissionResponse,
 )
-from app.schemas.public_voice_calls import (
+from app.modules.voice_experiences.api.schemas.public_voice_calls import (
     PublicVoiceCallError,
     PublicVoiceCallRequest,
     PublicVoiceCallResponse,
     PublicVoiceCallbackResponse,
 )
-from app.services.public_voice_call_service import PublicCallFailure, PublicVoiceCallService
-from app.services.voice_callback_service import PublicVoiceCallbackService
-from app.services.public_voice_experience_service import (
+from app.modules.voice_experiences.domain.errors import PublicCallFailure
+from app.modules.voice_experiences.application.public_experience_service import (
     PublicExperienceNotFound,
     PublicVoiceExperienceService,
 )
-from app.services.public_voice_submission_service import (
+from app.modules.voice_experiences.application.submission_service import (
     ExperienceVersionChanged,
     HistoricalValidationConfigurationError,
     PublicVoiceSubmissionService,
     SubmissionValidationFailed,
 )
-from app.services.turnstile_verification_service import TurnstileVerificationService
-from app.services.voice_public_rate_limiter import (
+from app.modules.voice_experiences.application.ports import TurnstileVerificationPort
+from app.modules.voice_experiences.api.commands import command_from_model
+from app.modules.voice_experiences.application.rate_limiter import (
     VoicePublicRateLimiter,
     VoicePublicRateLimitConfigurationError,
     pseudonymize_ip,
     resolve_public_client_ip,
+)
+from app.modules.voice_experiences.wiring import (
+    get_public_call_service as wire_public_call_service,
+    get_public_callback_service as wire_public_callback_service,
+    get_public_rate_limiter as wire_public_rate_limiter,
+    get_public_submission_service as wire_public_submission_service,
+    get_public_turnstile_verifier as wire_public_turnstile_verifier,
 )
 
 
@@ -52,31 +59,23 @@ NO_STORE_HEADERS = {"Cache-Control": "no-store"}
 
 
 def get_public_rate_limiter() -> VoicePublicRateLimiter:
-    return VoicePublicRateLimiter(session_factory=SessionLocal)
+    return wire_public_rate_limiter()
 
 
-def get_public_turnstile_verifier() -> TurnstileVerificationService:
-    return TurnstileVerificationService()
+def get_public_turnstile_verifier():
+    return wire_public_turnstile_verifier()
 
 
 def get_public_submission_service() -> PublicVoiceSubmissionService:
-    return PublicVoiceSubmissionService(
-        session_factory=SessionLocal,
-        ttl_seconds=settings.VOICE_CONTEXT_SESSION_TTL_SECONDS,
-    )
+    return wire_public_submission_service()
 
 
-def get_public_call_service() -> PublicVoiceCallService:
-    return PublicVoiceCallService(
-        session_factory=SessionLocal,
-        provider_timeout_seconds=settings.VOICE_RUNTIME_PROVIDER_TIMEOUT_SECONDS,
-        reserved_lease_seconds=settings.VOICE_RUNTIME_RESERVED_LEASE_SECONDS,
-        starting_lease_seconds=settings.VOICE_RUNTIME_STARTING_LEASE_SECONDS,
-    )
+def get_public_call_service():
+    return wire_public_call_service()
 
 
-def get_public_callback_service() -> PublicVoiceCallbackService:
-    return PublicVoiceCallbackService(session_factory=SessionLocal)
+def get_public_callback_service():
+    return wire_public_callback_service()
 
 
 def _call_error(status_code: int, code: str) -> HTTPException:
@@ -132,7 +131,7 @@ async def submit_public_voice_experience(
     request: Request,
     response: Response,
     limiter: VoicePublicRateLimiter = Depends(get_public_rate_limiter),
-    verifier: TurnstileVerificationService = Depends(get_public_turnstile_verifier),
+    verifier: TurnstileVerificationPort = Depends(get_public_turnstile_verifier),
     service: PublicVoiceSubmissionService = Depends(get_public_submission_service),
 ) -> PublicVoiceExperienceSubmissionResponse:
     response.headers.update(NO_STORE_HEADERS)
@@ -217,14 +216,14 @@ async def submit_public_voice_experience(
         raise _public_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "verification_failed")
 
     try:
-        return service.persist(slug, payload).response
+        return service.persist(slug, command_from_model(payload)).response
     except ExperienceVersionChanged:
         raise _public_error(status.HTTP_409_CONFLICT, "experience_version_changed") from None
     except SubmissionValidationFailed as exc:
         raise _public_error(
             status.HTTP_422_UNPROCESSABLE_ENTITY,
             "validation_error",
-            exc.fields,
+            [dict(field) for field in exc.fields],
         ) from None
     except HistoricalValidationConfigurationError:
         logger.error(

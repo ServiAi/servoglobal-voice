@@ -8,9 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from sqlalchemy.orm import Session
-
-__all__ = ["LegacyVoiceDefaults", "VoiceLegacyFacade"]
+__all__ = ["LegacyVoiceAgentRuntimeConfig", "LegacyVoiceDefaults", "VoiceLegacyFacade"]
 
 
 # The legacy bridge has always emitted Ultravox catalog voices, whatever
@@ -23,11 +21,23 @@ class LegacyVoiceDefaults:
     config_id: str
     tenant_id: str
     default_voice: str | None
+    agent_provider: str
     voice_provider: str = _LEGACY_VOICE_PROVIDER
 
 
+@dataclass(frozen=True)
+class LegacyVoiceAgentRuntimeConfig:
+    config_id: str
+    tenant_id: str
+    provider: str
+    provider_config_id: str | None
+    provider_agent_id: str | None
+    status: str
+    default_voice: str | None
+
+
 class VoiceLegacyFacade:
-    def __init__(self, db: Session) -> None:
+    def __init__(self, db: object) -> None:
         self.db = db
 
     def get_voice_agent_defaults(self, tenant_id: str, config_id: str) -> LegacyVoiceDefaults | None:
@@ -37,4 +47,42 @@ class VoiceLegacyFacade:
         config = self.db.get(TenantVoiceAgentConfig, config_id)
         if config is None or config.tenant_id != tenant_id:
             return None
-        return LegacyVoiceDefaults(config_id=config.id, tenant_id=config.tenant_id, default_voice=config.default_voice)
+        return LegacyVoiceDefaults(
+            config_id=config.id,
+            tenant_id=config.tenant_id,
+            default_voice=config.default_voice,
+            agent_provider=config.provider,
+        )
+
+    def require_voice_agent_defaults(self, tenant_id: str, config_id: str) -> LegacyVoiceDefaults:
+        result = self.get_voice_agent_defaults(tenant_id, config_id)
+        if result is None:
+            raise ValueError("Voice agent config does not exist or does not belong to this tenant.")
+        return result
+
+    def get_runtime_config(
+        self, tenant_id: str, config_id: str
+    ) -> LegacyVoiceAgentRuntimeConfig | None:
+        """Return only the provider-neutral launch fields required by legacy adapters."""
+        from app.models.integrations import TenantVoiceAgentConfig
+
+        config = self.db.get(TenantVoiceAgentConfig, config_id)
+        if config is None or config.tenant_id != tenant_id:
+            return None
+        return LegacyVoiceAgentRuntimeConfig(
+            config_id=config.id,
+            tenant_id=config.tenant_id,
+            provider=config.provider,
+            provider_config_id=config.provider_config_id,
+            provider_agent_id=config.provider_agent_id,
+            status=config.status,
+            default_voice=config.default_voice,
+        )
+
+    def require_runtime_config(
+        self, tenant_id: str, config_id: str
+    ) -> LegacyVoiceAgentRuntimeConfig:
+        config = self.get_runtime_config(tenant_id, config_id)
+        if config is None:
+            raise ValueError("Voice agent config does not exist or does not belong to this tenant.")
+        return config

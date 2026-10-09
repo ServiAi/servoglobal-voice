@@ -255,3 +255,8 @@ Workflow Automation, Knowledge, Human Handoff, Agent Copilot, Evaluations y Obse
 Identity / Tenancy is the ninth real module (see `PROJECT_STATUS.md` for metrics). Layers: `domain` (pure contracts and neutral errors), `application` (framework-free services), `infrastructure` (ORM, Auth0 adapters), `api` (`deps.py` is the only place that builds `HTTPException`), `public.py` (DTOs/facades only) and `wiring.py` (only composition root that reaches legacy internals). Only `app.api.*` and other modules' `api` layers may import `identity.api.deps`. No Alembic migration; DDL and OpenAPI fingerprints unchanged. Closed with `test_identity_postgres` on real PostgreSQL 16 and run in CI.
 
 Billing closure hardening: `tenant_id -> tenants.id` foreign keys remain; ORM relationships to Identity's Tenant were removed, while Billing-internal plan/alert navigation remains. No DDL, migration, OpenAPI, or frontend changes.
+### Voice Experiences — migración de ownership (2026-10-08)
+
+- Las nueve tablas, routers, schemas HTTP y casos de uso pertenecen a app/modules/voice_experiences; no hay migración Alembic y se conservaron los hashes base de DDL/OpenAPI.
+- public.py expone snapshots frozen y factories lazy; Integrations/WhatsApp Flows consume el snapshot mediante ese contrato. Identity, Billing, CRM, Telephony y Voice Legacy se alcanzan por APIs públicas.
+- El dominio es provider-neutral. Los launch WebRTC/Ultravox y callback proveedor/SIP siguen aislados tras adaptadores de compatibilidad. agent_config_id permanece hasta PR #134; VoiceSession/LiveKit no se conectan en esta fase.

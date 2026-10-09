@@ -155,48 +155,15 @@ class LegacyFormLinks:
 
 
 class LegacyVoiceContextSchemas:
-    """VoiceContextSchemaPort over the not-yet-public Voice context schema tables."""
+    """Integrations composition adapter for the public Voice Experiences port."""
 
     def __init__(self, db: Session) -> None:
-        self.db = db
+        from app.modules.voice_experiences.public import create_context_schema_reader
+
+        self.reader = create_context_schema_reader(db)
 
     def get_schema_snapshot(self, tenant_id: str, schema_id: str):
-        from sqlalchemy import select
-
-        from app.models.voice_context import TenantVoiceContextSchema
-        from app.modules.integrations.domain.whatsapp_flow_context import (
-            ContextFieldSnapshot,
-            ContextSchemaSnapshot,
-        )
-
-        schema = self.db.scalar(
-            select(TenantVoiceContextSchema).where(
-                TenantVoiceContextSchema.id == schema_id,
-                TenantVoiceContextSchema.tenant_id == tenant_id,
-            )
-        )
-        if schema is None:
-            return None
-        return ContextSchemaSnapshot(
-            id=schema.id,
-            schema_key=schema.schema_key,
-            version=schema.version,
-            name=schema.name,
-            description=schema.description,
-            fields=tuple(
-                ContextFieldSnapshot(
-                    key=field.key,
-                    label=field.label,
-                    description=field.description,
-                    field_type=field.field_type,
-                    collection_mode=field.collection_mode,
-                    required=field.required,
-                    position=field.position,
-                    options=tuple(field.options_json or ()),
-                )
-                for field in schema.fields
-            ),
-        )
+        return self.reader.get_schema_snapshot(tenant_id, schema_id)
 
 
 def default_form_links(db: Session):
