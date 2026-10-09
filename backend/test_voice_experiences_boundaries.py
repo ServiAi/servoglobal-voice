@@ -3,7 +3,6 @@ from __future__ import annotations
 import ast
 import hashlib
 import inspect
-import json
 import subprocess
 import sys
 import unittest
@@ -208,10 +207,17 @@ class VoiceExperiencesBoundaryTests(unittest.TestCase):
     def test_openapi_matches_develop_baseline(self) -> None:
         from app.main import app
 
-        actual = hashlib.sha256(
-            json.dumps(app.openapi(), sort_keys=True, separators=(",", ":")).encode()
-        ).hexdigest()
-        self.assertEqual(actual, "05a1e823f21241e0cc2d9ee7a1b590a8db8a366de90e50a6265f5d45d3c1ae85")
+        # Hash only the route contract (method, path, operationId, response codes,
+        # parameters): the full schema dump also shifts with pydantic/fastapi versions.
+        spec = app.openapi()
+        ops = sorted(
+            f"{method.upper()} {path} {op.get('operationId')} {sorted(op.get('responses', {}))} "
+            f"{sorted(p['name'] + p['in'] for p in op.get('parameters', []))}"
+            for path, item in spec["paths"].items()
+            for method, op in item.items()
+        )
+        actual = hashlib.sha256("\n".join(ops).encode()).hexdigest()
+        self.assertEqual(actual, "f97e52fb51b373f8c48a2d720480e10ea6fb2b918d01716068875783e46ee47c")
 
 
 if __name__ == "__main__":
