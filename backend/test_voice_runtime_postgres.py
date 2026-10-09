@@ -247,15 +247,15 @@ class VoiceRuntimePostgresConcurrencyTests(unittest.TestCase):
         def launch():
             barrier.wait()
             try:
-                return self._service().launch(seeded["slug"], seeded["token"]).status
+                return self._service().launch(seeded["slug"], seeded["token"])["status"]
             except PublicCallFailure as exc:
                 return exc.code
 
         with patch(
-            "app.services.voice_experience_runtime_provider.VoiceExperienceRuntimeProvider.create_webrtc_call",
+            "app.modules.voice_experiences.infrastructure.legacy_runtime.provider_adapter.VoiceExperienceRuntimeProvider.create_webrtc_call",
             return_value=ProviderCallResult("provider-first", "https://provider.invalid/join/first"),
         ) as create_call, patch(
-            "app.services.voice_experience_runtime_provider.VoiceExperienceRuntimeProvider.get_call",
+            "app.modules.voice_experiences.infrastructure.legacy_runtime.provider_adapter.VoiceExperienceRuntimeProvider.get_call",
             return_value=ProviderCallResult("provider-first", "https://provider.invalid/join/first"),
         ):
             with ThreadPoolExecutor(max_workers=2) as pool:
@@ -275,15 +275,15 @@ class VoiceRuntimePostgresConcurrencyTests(unittest.TestCase):
         def recover():
             barrier.wait()
             try:
-                return self._service()._recover(runtime_id).status
+                return self._service()._recover(runtime_id)["status"]
             except PublicCallFailure as exc:
                 return exc.code
 
         with patch(
-            "app.services.voice_experience_runtime_provider.VoiceExperienceRuntimeProvider.create_webrtc_call",
+            "app.modules.voice_experiences.infrastructure.legacy_runtime.provider_adapter.VoiceExperienceRuntimeProvider.create_webrtc_call",
             return_value=ProviderCallResult("provider-takeover", "https://provider.invalid/join/takeover"),
         ) as create_call, patch(
-            "app.services.voice_experience_runtime_provider.VoiceExperienceRuntimeProvider.get_call",
+            "app.modules.voice_experiences.infrastructure.legacy_runtime.provider_adapter.VoiceExperienceRuntimeProvider.get_call",
             return_value=ProviderCallResult("provider-takeover", "https://provider.invalid/join/takeover"),
         ):
             with ThreadPoolExecutor(max_workers=2) as pool:
