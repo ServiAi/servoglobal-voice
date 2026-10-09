@@ -8,6 +8,17 @@ from app.models.integrations import (  # noqa: F401  (residual: Forms + Voice co
     TenantVoiceAgentConfig,
     TenantVoiceProviderConfig,
 )
+from app.modules.voice_experiences.infrastructure.models import (  # noqa: F401
+    TenantVoiceContextField,
+    TenantVoiceContextSchema,
+    TenantVoiceContextSession,
+    TenantVoiceExperience,
+    TenantVoiceExperienceSubmission,
+    TenantVoiceExperienceSubmissionValue,
+    TenantVoiceExperienceVersion,
+    TenantVoiceRuntimeCall,
+    VoicePublicRateLimitWindow,
+)
 from app.modules.agents.infrastructure.models import TenantAgent, TenantAgentVersion
 from app.modules.crm.infrastructure.models import (
     CrmActivity,
