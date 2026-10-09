@@ -14,8 +14,6 @@ ORM_MODULES = {"app.modules.identity.infrastructure.models", "app.models"}
 # Legacy code that still reads Tenant (through the app.models registry) until its owner module exists.
 TENANT_DIRECT_READERS = {
     "services/crm_dashboard_metrics_service.py": "CRM/Analytics dashboard read-model (future Analytics owner)",
-    "modules/voice_experiences/infrastructure/legacy_runtime/public_call_compat.py": "Voice Experiences public calls (future Voice Experiences owner)",
-    "modules/voice_experiences/infrastructure/legacy_runtime/callback_compat.py": "Voice Legacy callbacks (future Voice Legacy owner)",
     "api/endpoints/voice.py": "Voice Legacy endpoint (future Voice Legacy owner)",
 }
 MIGRATED_MODULES = (

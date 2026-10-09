@@ -86,3 +86,12 @@ class VoiceLegacyFacade:
         if config is None:
             raise ValueError("Voice agent config does not exist or does not belong to this tenant.")
         return config
+
+    def require_active_runtime_config(
+        self, tenant_id: str, config_id: str
+    ) -> LegacyVoiceAgentRuntimeConfig:
+        """Tenant-safe runtime config that must also be ``active`` (public launch paths)."""
+        config = self.require_runtime_config(tenant_id, config_id)
+        if config.status != "active":
+            raise ValueError("Voice agent config is not active.")
+        return config

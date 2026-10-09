@@ -95,7 +95,7 @@ Leyenda: ✅ permitida · ⚠️ cuestionable · ❌ eliminar · 🔁 circular.
 
 ## Voice Experiences after migration (2026-10-08)
 
-El módulo tiene un único owner y su API pública es import-light. Integrations consulta Context Schemas mediante DTOs frozen de voice_experiences.public; no importa application ni infrastructure. Application usa contratos públicos de Identity, Integrations, CRM, Telephony y Voice Legacy; no conecta con Voice Orchestration. Los adaptadores temporales de proveedor y callback permanecen en infrastructure y wiring.
+El módulo tiene un único owner y su API pública es import-light. Integrations consulta Context Schemas mediante DTOs frozen de voice_experiences.public y los traduce explícitamente a su propio `ContextSchemaSnapshot` en su wiring; no importa application ni infrastructure. Los factories públicos devuelven Protocols (`VoiceRuntimeWebhookServicePort`, `VoiceCallbackWorkerPort`), nunca `object`; el target del webhook runtime es un DTO sin ORM. Los adaptadores `infrastructure/legacy_runtime/*` son compatibilidad temporal hasta PR #135/#136. Application usa contratos públicos de Identity, Integrations, CRM, Telephony y Voice Legacy; no conecta con Voice Orchestration. Los adaptadores temporales de proveedor y callback permanecen en infrastructure y wiring.
 
 ## Caso `tool_dispatch_service` (resuelto)
 

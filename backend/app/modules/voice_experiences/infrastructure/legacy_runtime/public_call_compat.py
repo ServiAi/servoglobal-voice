@@ -11,7 +11,6 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
 
-from app.models import Tenant
 from app.modules.voice_experiences.infrastructure.experience_models import (
     TenantVoiceExperience,
     TenantVoiceExperienceVersion,
@@ -40,6 +39,7 @@ logger = logging.getLogger(__name__)
 
 
 from app.modules.voice_experiences.domain.errors import PublicCallFailure
+from app.modules.identity.public import TenantDirectory
 from app.modules.voice_legacy.public import VoiceLegacyFacade
 
 
@@ -95,7 +95,7 @@ class PublicVoiceCallService:
         if self._utc(context_session.expires_at) <= now:
             raise PublicCallFailure(410, "context_session_expired")
         with self.session_factory() as db:
-            tenant = db.get(Tenant, context_session.tenant_id)
+            tenant = TenantDirectory(db).get(context_session.tenant_id)
             if tenant is None:
                 raise PublicCallFailure(503, "call_unavailable")
             try:
@@ -103,7 +103,7 @@ class PublicVoiceCallService:
                 version = db.get(TenantVoiceExperienceVersion, context_session.experience_version_id)
                 if version is None:
                     raise ValueError
-                agent = VoiceLegacyFacade(db).require_runtime_config(tenant.id, version.agent_config_id)
+                agent = VoiceLegacyFacade(db).require_active_runtime_config(tenant.id, version.agent_config_id)
                 config = VoiceConfigService(db).get_active_provider_config(tenant.id, agent.provider)
                 if config.id != agent.provider_config_id or not config.webhook_secret_encrypted:
                     raise ValueError
@@ -147,7 +147,7 @@ class PublicVoiceCallService:
                     if submission is None or submission.tenant_id != context_session.tenant_id:
                         raise PublicCallFailure(409, "context_session_unavailable")
                     try:
-                        agent = VoiceLegacyFacade(db).require_runtime_config(
+                        agent = VoiceLegacyFacade(db).require_active_runtime_config(
                             context_session.tenant_id, version.agent_config_id
                         )
                     except ValueError:
@@ -183,7 +183,7 @@ class PublicVoiceCallService:
 
     def _load_provider_context(self, db: Session, runtime: TenantVoiceRuntimeCall):
         try:
-            agent = VoiceLegacyFacade(db).require_runtime_config(
+            agent = VoiceLegacyFacade(db).require_active_runtime_config(
                 runtime.tenant_id, runtime.agent_config_id
             )
         except ValueError:

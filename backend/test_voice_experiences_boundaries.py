@@ -3,8 +3,13 @@ from __future__ import annotations
 import ast
 import hashlib
 import inspect
+import io
+import json
+import os
 import subprocess
 import sys
+import tarfile
+import tempfile
 import unittest
 from dataclasses import fields, is_dataclass
 from pathlib import Path
@@ -26,6 +31,57 @@ def _imports(path: Path) -> set[str]:
 
 def _files(path: Path) -> list[Path]:
     return sorted(path.rglob("*.py"))
+
+
+def _hides_implementation(annotation: object) -> bool:
+    """True for ``Any`` / bare ``object`` / ``dict[str, Any]``-style escape hatches."""
+    import typing
+
+    if annotation is typing.Any or annotation is object:
+        return True
+    origin = typing.get_origin(annotation)
+    args = typing.get_args(annotation)
+    if origin is dict:  # JSON payloads may be ``dict[str, object]``; ``Any`` is never fine
+        return any(arg is typing.Any for arg in args)
+    return any(_hides_implementation(arg) for arg in args if arg is not type(None))
+
+
+BASE_REF = os.environ.get("OPENAPI_BASE_REF", "origin/develop")
+_OPENAPI_SCRIPT = (
+    "import hashlib, json, sys; sys.path.insert(0, '.'); from app.main import app; "
+    "print(hashlib.sha256(json.dumps(app.openapi(), sort_keys=True, separators=(',', ':')).encode()).hexdigest())"
+)
+
+
+def _openapi_digest(spec: dict) -> str:
+    return hashlib.sha256(json.dumps(spec, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
+def _base_openapi_digest() -> str:
+    """Digest of the base ref's full OpenAPI, produced by importing its ``app`` from ``git archive``."""
+    repo = Path(__file__).resolve().parent.parent
+    archive = subprocess.run(
+        ["git", "archive", BASE_REF, "backend/app"], cwd=repo, capture_output=True
+    )
+    if archive.returncode != 0:
+        if os.environ.get("CI"):
+            raise AssertionError(f"base ref {BASE_REF} unavailable in CI: {archive.stderr.decode()[:200]}")
+        raise unittest.SkipTest(f"base ref {BASE_REF} not available locally")
+    with tempfile.TemporaryDirectory() as tmp:
+        with tarfile.open(fileobj=io.BytesIO(archive.stdout)) as tar:
+            tar.extractall(tmp, filter="data")
+        env = {key: value for key, value in os.environ.items() if key != "PYTHONPATH"}
+        result = subprocess.run(
+            [sys.executable, "-c", _OPENAPI_SCRIPT],
+            cwd=Path(tmp) / "backend",
+            env=env,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    if result.returncode != 0:
+        raise AssertionError(f"base OpenAPI generation failed: {result.stderr[-500:]}")
+    return result.stdout.strip().splitlines()[-1]
 
 
 class VoiceExperiencesBoundaryTests(unittest.TestCase):
@@ -117,21 +173,113 @@ class VoiceExperiencesBoundaryTests(unittest.TestCase):
                         self.assertEqual(imported, "app.modules.voice_experiences.public")
 
     def test_public_dtos_are_frozen_and_public_signatures_are_framework_free(self) -> None:
+        import typing
+
         from app.modules.voice_experiences import public
 
-        for name in ("VoiceContextFieldSnapshot", "VoiceContextSchemaSnapshot"):
-            dto = getattr(public, name)
-            self.assertTrue(is_dataclass(dto))
-            self.assertTrue(dto.__dataclass_params__.frozen)
+        dtos = [
+            value for value in vars(public).values()
+            if is_dataclass(value) and value.__module__.startswith("app.modules.voice_experiences")
+        ]
+        self.assertGreaterEqual(len(dtos), 4)
+        for dto in dtos:
+            self.assertTrue(dto.__dataclass_params__.frozen, dto)
+            hints = typing.get_type_hints(dto)
             for field in fields(dto):
-                self.assertNotIn("Any", str(field.type))
-                self.assertNotIn("sqlalchemy", str(field.type).lower())
+                with self.subTest(dto=dto.__name__, field=field.name):
+                    self.assertFalse(_hides_implementation(hints[field.name]), hints[field.name])
+        self.assertEqual(
+            typing.get_type_hints(public.VoiceContextFieldSnapshot)["options"],
+            tuple[public.VoiceContextOptionSnapshot, ...],
+        )
+
+        callables = [
+            (f"{name}", value) for name, value in vars(public).items()
+            if inspect.isfunction(value) and value.__module__ == public.__name__
+        ]
         for name, value in vars(public).items():
-            if inspect.isfunction(value) and value.__module__ == public.__name__:
-                signature = str(inspect.signature(value)).lower()
-                self.assertNotIn("sqlalchemy", signature)
-                self.assertNotIn("fastapi", signature)
-                self.assertNotIn("any", signature)
+            if inspect.isclass(value) and getattr(value, "_is_protocol", False) and value.__module__ == public.__name__:
+                callables.extend(
+                    (f"{name}.{method}", member)
+                    for method, member in vars(value).items()
+                    if inspect.isfunction(member) and not method.startswith("_")
+                )
+        self.assertGreaterEqual(len(callables), 8)
+        for name, function in callables:
+            hints = typing.get_type_hints(function)
+            self.assertIn("return", hints, name)
+            for parameter, annotation in hints.items():
+                with self.subTest(callable=name, parameter=parameter):
+                    self.assertFalse(_hides_implementation(annotation), f"{name}: {annotation}")
+                    rendered = str(annotation).lower()
+                    for forbidden in ("sqlalchemy", "fastapi", "pydantic", "infrastructure"):
+                        self.assertNotIn(forbidden, rendered)
+
+    def test_public_factories_return_protocols_not_implementation_classes(self) -> None:
+        import typing
+
+        from app.modules.voice_experiences import public
+
+        self.assertIs(
+            typing.get_type_hints(public.create_runtime_webhook_service)["return"],
+            public.VoiceRuntimeWebhookServicePort,
+        )
+        self.assertIs(
+            typing.get_type_hints(public.create_callback_worker)["return"],
+            public.VoiceCallbackWorkerPort,
+        )
+        self.assertIs(
+            typing.get_type_hints(public.create_context_schema_reader)["return"],
+            public.VoiceContextSchemaReader,
+        )
+
+    def test_runtime_webhook_target_is_a_framework_free_handle(self) -> None:
+        import typing
+
+        from app.modules.voice_experiences.public import VoiceRuntimeWebhookTarget
+
+        self.assertTrue(VoiceRuntimeWebhookTarget.__dataclass_params__.frozen)
+        for name, annotation in typing.get_type_hints(VoiceRuntimeWebhookTarget).items():
+            with self.subTest(field=name):
+                self.assertIn(annotation, (str, str | None))
+
+    def test_public_module_source_imports_no_implementation_or_framework(self) -> None:
+        forbidden = (
+            "sqlalchemy", "fastapi", "starlette", "pydantic", "app.models", "app.services",
+            "app.modules.voice_experiences.infrastructure", "app.modules.voice_experiences.application",
+            "app.modules.voice_experiences.api",
+        )
+        tree = ast.parse((MODULE / "public.py").read_text(encoding="utf-8"))
+        top_level = set()
+        for node in tree.body:  # lazy imports inside factories are the composition seam
+            if isinstance(node, ast.Import):
+                top_level.update(alias.name for alias in node.names)
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                top_level.add(node.module)
+        for imported in top_level:
+            self.assertFalse(
+                any(imported == prefix or imported.startswith(prefix + ".") for prefix in forbidden),
+                imported,
+            )
+
+    def test_voice_experiences_entities_are_not_reexported_by_app_models(self) -> None:
+        import app.models as legacy_models
+        from app.modules.voice_experiences.infrastructure import models
+
+        for name in models.__all__:
+            with self.subTest(entity=name):
+                self.assertNotIn(name, legacy_models.__all__)
+                self.assertFalse(hasattr(legacy_models, name))
+        from app.db.base import Base
+
+        self.assertIn("tenant_voice_experience_submissions", Base.metadata.tables)
+
+    def test_legacy_adapters_do_not_touch_identity_orm(self) -> None:
+        for path in _files(MODULE / "infrastructure" / "legacy_runtime"):
+            for imported in _imports(path):
+                with self.subTest(path=path.name, imported=imported):
+                    self.assertNotEqual(imported, "app.models")
+                    self.assertFalse(imported.startswith("app.modules.identity.infrastructure"))
 
     def test_public_import_does_not_load_implementation_layers(self) -> None:
         code = (
@@ -205,19 +353,59 @@ class VoiceExperiencesBoundaryTests(unittest.TestCase):
         self.assertEqual(actual, "ed1d743672039c752c16ee4c070b69e3cc2ddfadc6c6405c46eb2a69d227f071")
 
     def test_openapi_matches_develop_baseline(self) -> None:
+        """Full OpenAPI (paths, requestBody, responses, components.schemas, enums, required,
+        nullable, defaults, constraints, $refs) must equal the base branch's, generated in
+        this same environment so dependency versions cannot create false diffs."""
         from app.main import app
 
-        # Hash only the route contract (method, path, operationId, response codes,
-        # parameters): the full schema dump also shifts with pydantic/fastapi versions.
-        spec = app.openapi()
-        ops = sorted(
-            f"{method.upper()} {path} {op.get('operationId')} {sorted(op.get('responses', {}))} "
-            f"{sorted(p['name'] + p['in'] for p in op.get('parameters', []))}"
-            for path, item in spec["paths"].items()
-            for method, op in item.items()
+        base = _base_openapi_digest()
+        self.assertEqual(
+            _openapi_digest(app.openapi()),
+            base,
+            "OpenAPI differs from the base branch; no normalization is applied.",
         )
-        actual = hashlib.sha256("\n".join(ops).encode()).hexdigest()
-        self.assertEqual(actual, "f97e52fb51b373f8c48a2d720480e10ea6fb2b918d01716068875783e46ee47c")
+
+    def test_openapi_digest_detects_schema_level_changes(self) -> None:
+        import copy
+
+        spec = {
+            "paths": {
+                "/x": {
+                    "post": {
+                        "requestBody": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/A"}}}},
+                        "responses": {"200": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/A"}}}}},
+                    }
+                }
+            },
+            "components": {
+                "schemas": {
+                    "A": {
+                        "type": "object",
+                        "required": ["agent_config_id"],
+                        "properties": {"agent_config_id": {"type": "string"}},
+                    }
+                }
+            },
+        }
+        baseline = _openapi_digest(spec)
+        self.assertEqual(baseline, _openapi_digest(copy.deepcopy(spec)))
+        mutations = {
+            "nullable": lambda d: d["components"]["schemas"]["A"]["properties"]["agent_config_id"].update(
+                anyOf=[{"type": "string"}, {"type": "null"}]
+            ),
+            "required": lambda d: d["components"]["schemas"]["A"].update(required=[]),
+            "requestBody": lambda d: d["paths"]["/x"]["post"]["requestBody"]["content"]["application/json"].update(
+                schema={"$ref": "#/components/schemas/B"}
+            ),
+            "response": lambda d: d["paths"]["/x"]["post"]["responses"]["200"]["content"]["application/json"].update(
+                schema={"type": "string"}
+            ),
+        }
+        for name, mutate in mutations.items():
+            with self.subTest(change=name):
+                changed = copy.deepcopy(spec)
+                mutate(changed)
+                self.assertNotEqual(baseline, _openapi_digest(changed))
 
 
 if __name__ == "__main__":

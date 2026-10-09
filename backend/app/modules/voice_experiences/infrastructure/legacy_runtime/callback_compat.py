@@ -9,7 +9,6 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.models import Tenant
 from app.modules.voice_experiences.infrastructure.context_models import TenantVoiceContextField
 from app.modules.voice_experiences.infrastructure.experience_models import (
     TenantVoiceExperience,
@@ -26,7 +25,7 @@ from app.modules.crm.public import (
     CrmVoiceCalls,
     UpdateVoiceCallCommand,
 )
-from app.modules.identity.public import FeatureFlags
+from app.modules.identity.public import FeatureFlags, TenantDirectory
 from app.modules.telephony.public import (
     CapacityFacade,
     SipRouteFacade,
@@ -79,7 +78,7 @@ class PublicVoiceCallbackService:
         now = datetime.now(UTC)
         tenant_id = self.resolve_tenant(slug, context_token)
         with self.session_factory() as usage_db:
-            tenant = usage_db.get(Tenant, tenant_id)
+            tenant = TenantDirectory(usage_db).get(tenant_id)
             if tenant is None:
                 raise PublicCallFailure(503, "call_unavailable")
             try:
@@ -138,7 +137,7 @@ class PublicVoiceCallbackService:
                     ):
                         raise PublicCallFailure(404, "experience_unavailable")
                     try:
-                        agent = VoiceLegacyFacade(db).require_runtime_config(
+                        agent = VoiceLegacyFacade(db).require_active_runtime_config(
                             context_session.tenant_id, version.agent_config_id
                         )
                     except ValueError:
@@ -390,6 +389,23 @@ class VoiceCallbackWorker:
             route_service = SipRouteFacade(db, config_service.secret_manager)
             client = VoiceClient()
             try:
+                # The agent may be deactivated between the request and this start:
+                # re-check it before any outbound provider call.
+                # (The FK nulls the submission id when a submission is deleted.)
+                submission = (
+                    db.get(TenantVoiceExperienceSubmission, call.source_submission_id)
+                    if call.source_submission_id is not None
+                    else None
+                )
+                version = (
+                    db.get(TenantVoiceExperienceVersion, submission.experience_version_id)
+                    if submission is not None
+                    else None
+                )
+                if version is not None:
+                    VoiceLegacyFacade(db).require_active_runtime_config(
+                        call.tenant_id, version.agent_config_id
+                    )
                 provider_config = config_service.get_active_provider_config(
                     call.tenant_id, call.provider
                 )

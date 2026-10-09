@@ -3,6 +3,7 @@ from sqlalchemy import select
 from app.modules.voice_experiences.infrastructure.context_models import TenantVoiceContextSchema
 from app.modules.voice_experiences.domain.views import (
     VoiceContextFieldSnapshot,
+    VoiceContextOptionSnapshot,
     VoiceContextSchemaSnapshot,
 )
 
@@ -37,7 +38,12 @@ class SqlAlchemyVoiceContextSchemaReader:
                     collection_mode=field.collection_mode,
                     required=field.required,
                     position=field.position,
-                    options=tuple(field.options_json or ()),
+                    options=tuple(
+                        VoiceContextOptionSnapshot(
+                            value=str(option["value"]), label=str(option["label"])
+                        )
+                        for option in (field.options_json or ())
+                    ),
                 )
                 for field in schema.fields
             ),

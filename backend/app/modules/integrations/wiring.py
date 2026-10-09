@@ -19,6 +19,10 @@ from dataclasses import dataclass
 from sqlalchemy.orm import Session
 
 from app.modules.integrations.domain.catalog import CatalogFacts
+from app.modules.integrations.domain.whatsapp_flow_context import (
+    ContextFieldSnapshot,
+    ContextSchemaSnapshot,
+)
 
 
 @dataclass(frozen=True)
@@ -162,8 +166,33 @@ class LegacyVoiceContextSchemas:
 
         self.reader = create_context_schema_reader(db)
 
-    def get_schema_snapshot(self, tenant_id: str, schema_id: str):
-        return self.reader.get_schema_snapshot(tenant_id, schema_id)
+    def get_schema_snapshot(self, tenant_id: str, schema_id: str) -> ContextSchemaSnapshot | None:
+        """Translate the Voice Experiences DTOs into Integrations' own snapshot contract."""
+        schema = self.reader.get_schema_snapshot(tenant_id, schema_id)
+        if schema is None:
+            return None
+        return ContextSchemaSnapshot(
+            id=schema.id,
+            schema_key=schema.schema_key,
+            version=schema.version,
+            name=schema.name,
+            description=schema.description,
+            fields=tuple(
+                ContextFieldSnapshot(
+                    key=field.key,
+                    label=field.label,
+                    description=field.description,
+                    field_type=field.field_type,
+                    collection_mode=field.collection_mode,
+                    required=field.required,
+                    position=field.position,
+                    options=tuple(
+                        {"value": option.value, "label": option.label} for option in field.options
+                    ),
+                )
+                for field in schema.fields
+            ),
+        )
 
 
 def default_form_links(db: Session):

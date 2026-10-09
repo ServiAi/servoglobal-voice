@@ -529,6 +529,37 @@ class PublicVoiceCallbackTests(Integration2ATestCase):
             )
             self.assertEqual(still_queued.status, "requested")
 
+    def _set_agent_status(self, status: str) -> None:
+        with SessionLocal() as db:
+            db.get(TenantVoiceAgentConfig, self.agent_id).status = status
+            db.commit()
+
+    def test_inactive_legacy_agent_cannot_request_callback(self) -> None:
+        app.dependency_overrides.pop(get_current_auth_context, None)
+        token = self._post().json()["context_token"]
+        self._set_agent_status("inactive")
+
+        response = self._request_callback(token)
+
+        self.assertEqual(response.status_code, 503, response.text)
+        self.assertEqual(response.json()["detail"]["code"], "call_unavailable")
+        with SessionLocal() as db:
+            self.assertEqual(db.scalars(select(CrmVoiceCall)).all(), [])
+
+    def test_agent_deactivated_after_request_never_reaches_the_provider(self) -> None:
+        app.dependency_overrides.pop(get_current_auth_context, None)
+        token = self._post().json()["context_token"]
+        self.assertEqual(self._request_callback(token).status_code, 202)
+        self._set_agent_status("inactive")
+
+        with patch("app.modules.voice_experiences.infrastructure.legacy_runtime.callback_compat.VoiceClient.start_outbound_call") as start:
+            self.assertTrue(VoiceCallbackWorker(SessionLocal).process_once())
+
+        start.assert_not_called()
+        with SessionLocal() as db:
+            call = db.scalars(select(CrmVoiceCall)).one()
+            self.assertEqual(call.status, "failed")
+
 
 if __name__ == "__main__":
     import unittest

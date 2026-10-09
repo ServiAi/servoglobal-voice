@@ -1,7 +1,9 @@
 """Composition root for Voice Experiences adapters and legacy runtime paths."""
 
+from app.modules.voice_experiences.domain.ports import DatabaseSession, SessionFactory
 
-def create_context_schema_reader(session: object):
+
+def create_context_schema_reader(session: DatabaseSession):
     from app.modules.voice_experiences.infrastructure.context_schema_reader import (
         SqlAlchemyVoiceContextSchemaReader,
     )
@@ -57,7 +59,7 @@ def get_public_rate_limiter():
     return VoicePublicRateLimiter(session_factory=SessionLocal)
 
 
-def create_runtime_webhook_service(session: object):
+def create_runtime_webhook_service(session: DatabaseSession):
     from app.modules.voice_experiences.infrastructure.legacy_runtime.webhook_compat import (
         VoiceRuntimeWebhookService,
     )
@@ -66,7 +68,7 @@ def create_runtime_webhook_service(session: object):
 
 
 def create_callback_worker(
-    session_factory: object,
+    session_factory: SessionFactory,
     *,
     starting_lease_seconds: int,
     reconcile_after_seconds: int,

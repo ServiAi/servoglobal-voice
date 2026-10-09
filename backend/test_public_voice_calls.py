@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 
 from cryptography.fernet import Fernet
@@ -23,6 +23,7 @@ from app.services.secret_manager_service import SecretManager
 from app.modules.identity.application.feature_service import TenantFeatureService, VOICE_EXPERIENCES
 from app.modules.voice_experiences.application.experience_service import VoiceExperienceService
 from app.modules.voice_experiences.infrastructure.legacy_runtime.provider_adapter import ProviderAmbiguousFailure, ProviderCallResult
+from app.modules.voice_experiences.infrastructure.legacy_runtime.public_call_compat import PublicVoiceCallService
 import test_public_voice_experience_submissions as submissions_tests
 
 
@@ -387,6 +388,68 @@ class PublicVoiceCallTests(Integration2ATestCase):
         with SessionLocal() as db:
             self.assertEqual(db.get(CrmVoiceCall, crm_call.id).status, "completed")
             self.assertEqual(db.scalars(select(TenantVoiceRuntimeCall)).one().status, "ended")
+
+    def _set_agent_status(self, status: str) -> None:
+        with SessionLocal() as db:
+            db.get(TenantVoiceAgentConfig, self.agent_id).status = status
+            db.commit()
+
+    @patch(
+        "app.modules.voice_experiences.infrastructure.legacy_runtime.provider_adapter.VoiceExperienceRuntimeProvider.create_webrtc_call",
+        return_value=ProviderCallResult("provider-inactive", "https://provider.invalid/join/inactive"),
+    )
+    def test_inactive_legacy_agent_cannot_launch_webrtc(self, create_call) -> None:
+        token = self._post().json()["context_token"]
+        self._set_agent_status("inactive")
+
+        response = self._launch(token)
+
+        self.assertEqual(response.status_code, 503, response.text)
+        self.assertEqual(response.json()["detail"]["code"], "call_unavailable")
+        create_call.assert_not_called()
+        with SessionLocal() as db:
+            self.assertEqual(db.scalars(select(TenantVoiceRuntimeCall)).all(), [])
+
+    @patch(
+        "app.modules.voice_experiences.infrastructure.legacy_runtime.provider_adapter.VoiceExperienceRuntimeProvider.create_webrtc_call",
+        return_value=ProviderCallResult("provider-toctou", "https://provider.invalid/join/toctou"),
+    )
+    def test_agent_deactivated_after_precheck_never_reaches_the_provider(self, create_call) -> None:
+        token = self._post().json()["context_token"]
+        original = PublicVoiceCallService._claim
+
+        def claim_then_deactivate(service, *args, **kwargs):
+            result = original(service, *args, **kwargs)
+            self._set_agent_status("inactive")  # admin deactivates after precheck + claim
+            return result
+
+        with patch.object(PublicVoiceCallService, "_claim", claim_then_deactivate):
+            response = self._launch(token)
+
+        self.assertEqual(response.status_code, 503, response.text)
+        self.assertEqual(response.json()["detail"]["code"], "call_unavailable")
+        create_call.assert_not_called()
+
+    @patch(
+        "app.modules.voice_experiences.infrastructure.legacy_runtime.provider_adapter.VoiceExperienceRuntimeProvider.create_webrtc_call",
+        return_value=ProviderCallResult("provider-recovery", "https://provider.invalid/join/recovery"),
+    )
+    def test_recovery_of_a_reserved_call_revalidates_the_active_agent(self, create_call) -> None:
+        token = self._post().json()["context_token"]
+        with patch.object(PublicVoiceCallService, "_cas_start", return_value=False):
+            first = self._launch(token)  # reserved by the claim, but never started
+        self.assertEqual(first.status_code, 409, first.text)
+        with SessionLocal() as db:  # make the reservation stale so recovery may take it over
+            runtime = db.scalars(select(TenantVoiceRuntimeCall)).one()
+            runtime.created_at = datetime.now(UTC) - timedelta(hours=1)
+            db.commit()
+        self._set_agent_status("inactive")
+
+        response = self._launch(token)
+
+        self.assertEqual(response.status_code, 503, response.text)
+        self.assertEqual(response.json()["detail"]["code"], "call_unavailable")
+        create_call.assert_not_called()
 
 
 if __name__ == "__main__":
