@@ -37,6 +37,24 @@ def tool_binding_views(runtime_binding_json: Any) -> tuple[AgentToolBindingView,
 
 
 @dataclass(frozen=True)
+class AgentLegacyBinding:
+    tenant_id: str
+    agent_id: str
+    legacy_voice_agent_config_id: str
+    agent_status: str
+
+
+@dataclass(frozen=True, slots=True)
+class AgentExperiencePublicationTarget:
+    tenant_id: str
+    agent_id: str
+    agent_version_id: str
+    legacy_voice_agent_config_id: str | None
+    pipeline_type: str | None
+    realtime_provider: str | None
+
+
+@dataclass(frozen=True, slots=True)
 class PublishedAgent:
     agent_id: str
     tenant_id: str
@@ -123,6 +141,14 @@ class ImportedAgent:
 
 class PublishedAgentUnavailableError(ValueError):
     """``code`` is ``agent_not_active`` or ``published_version_invalid``."""
+
+    def __init__(self, code: str) -> None:
+        super().__init__(code)
+        self.code = code
+
+
+class LegacyAgentBindingError(ValueError):
+    """Stable failure code for resolving a legacy config to one Agent."""
 
     def __init__(self, code: str) -> None:
         super().__init__(code)

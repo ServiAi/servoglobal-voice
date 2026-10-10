@@ -1091,7 +1091,7 @@ CRITICAL_PUBLIC_APIS = {
     ],
     "app.modules.billing.public": ["BillingFacade", "BillingAccessGate", "BillingOnboardingFacade"],
     "app.modules.voice_legacy.public": ["VoiceLegacyFacade"],
-    "app.modules.agents.public": ["AgentsFacade"],
+    "app.modules.agents.public": ["AgentsFacade", "LegacyAgentBindingError"],
     "app.modules.agents.application.ports": [
         "VoiceProviderPort",
         "LegacyVoicePort",
@@ -1137,7 +1137,14 @@ PUBLIC_DTOS = {
         "ProviderCredential",
         "ProviderConfigRef",
     ],
-    "app.modules.agents.public": ["AgentToolBindingView", "PublishedAgent", "AgentDisplay", "ImportedAgent"],
+    "app.modules.agents.public": [
+        "AgentToolBindingView",
+        "PublishedAgent",
+        "AgentDisplay",
+        "ImportedAgent",
+        "AgentLegacyBinding",
+        "AgentExperiencePublicationTarget",
+    ],
     "app.modules.voice_legacy.public": ["LegacyVoiceDefaults", "LegacyVoiceAgentRuntimeConfig"],
     "app.modules.identity.public": [
         "TenantView",

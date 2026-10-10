@@ -12,6 +12,7 @@ from app.modules.agents.application.service import AgentService
 from app.modules.integrations.public import WhatsAppFacade
 from app.modules.scheduling.public import SchedulingFacade
 from app.modules.voice.public import VoiceSessionFacade
+from app.modules.voice_experiences.public import create_agent_reference_reader
 from app.modules.voice_legacy.public import VoiceLegacyFacade
 from app.modules.voice_providers.public import VoiceProviderFacade
 
@@ -43,6 +44,7 @@ def default_agent_ports(db: Session) -> AgentPorts:
         legacy_voice=VoiceLegacyFacade(db),
         integrations=IntegrationReadiness(db),
         voice_sessions=VoiceSessionFacade(db),
+        experience_references=create_agent_reference_reader(db),
     )
 
 

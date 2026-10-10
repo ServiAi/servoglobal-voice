@@ -11,6 +11,14 @@ def create_context_schema_reader(session: DatabaseSession):
     return SqlAlchemyVoiceContextSchemaReader(session)
 
 
+def create_agent_reference_reader(session: DatabaseSession):
+    from app.modules.voice_experiences.infrastructure.agent_reference_reader import (
+        SqlAlchemyAgentReferenceReader,
+    )
+
+    return SqlAlchemyAgentReferenceReader(session)
+
+
 def get_public_call_service():
     from app.core.config import settings
     from app.db.session import SessionLocal

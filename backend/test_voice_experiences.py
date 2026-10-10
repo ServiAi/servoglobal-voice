@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timezone
 from unittest.mock import patch
 
@@ -12,6 +13,14 @@ from _integrations_2a_test_base import Integration2ATestCase
 from app.db.session import SessionLocal
 from app.modules.identity.infrastructure.models import TenantMembership, User
 from app.models.integrations import TenantVoiceAgentConfig
+from app.modules.agents.infrastructure.models import TenantAgent, TenantAgentVersion
+from app.modules.agents.domain.errors import AgentConflictError
+from app.modules.agents.wiring import agent_service
+from app.modules.voice_experiences.application.experience_service import VoiceExperienceService
+from app.modules.voice_experiences.infrastructure.experience_models import (
+    TenantVoiceExperience,
+    TenantVoiceExperienceVersion,
+)
 from app.modules.integrations.infrastructure.models import TenantIntegrationEvent
 from app.modules.voice_experiences.infrastructure.context_models import TenantVoiceContextSchema
 from app.modules.voice_experiences.infrastructure.experience_models import (
@@ -20,7 +29,7 @@ from app.modules.voice_experiences.infrastructure.experience_models import (
 )
 from app.modules.voice_experiences.infrastructure.submission_models import TenantVoiceExperienceSubmission
 from app.modules.voice_experiences.api.schemas.voice_experiences import VoiceExperienceWriteRequest
-from app.modules.identity.application.feature_service import VOICE_EXPERIENCES, TenantFeatureService
+from app.modules.identity.application.feature_service import AGENT_BUILDER, VOICE_EXPERIENCES, TenantFeatureService
 from app.modules.identity.public import FeatureFlags
 from app.modules.voice_experiences.application.experience_service import (
     VoiceExperienceConflictError,
@@ -56,8 +65,28 @@ class VoiceExperienceTests(Integration2ATestCase):
                 default_tools_json={"private": "tool"},
             )
             db.add(agent)
+            db.flush()
+            canonical = TenantAgent(tenant_id=tenant_id, name="Safe agent", status="active")
+            db.add(canonical)
+            db.flush()
+            version = TenantAgentVersion(
+                agent_id=canonical.id,
+                tenant_id=tenant_id,
+                version=1,
+                status="published",
+                language="es",
+                timezone="America/Bogota",
+                identity_json={"name": "Safe agent"},
+                instructions_json={"system_prompt": "test"},
+                behavior_json={},
+                runtime_binding_json={"pipeline_type": "realtime", "realtime": {"provider": "ultravox"}},
+                voice_agent_config_id=agent.id,
+                published_at=datetime.now(UTC),
+            )
+            db.add(version)
+            db.flush()
+            canonical.published_version_id = version.id
             db.commit()
-            db.refresh(agent)
             return agent.id
 
     @staticmethod
@@ -134,6 +163,16 @@ class VoiceExperienceTests(Integration2ATestCase):
         return self.client.post(
             "/api/v1/voice/experiences", json=self._payload(**payload_overrides)
         )
+
+    def _canonical_agent_id(self, legacy_config_id: str) -> str:
+        with SessionLocal() as db:
+            version = (
+                db.query(TenantAgentVersion)
+                .filter(TenantAgentVersion.voice_agent_config_id == legacy_config_id)
+                .first()
+            )
+            assert version is not None
+            return version.agent_id
 
     def _assert_safe_event(self, event_type: str, experience_id: str) -> None:
         with SessionLocal() as db:
@@ -238,6 +277,100 @@ class VoiceExperienceTests(Integration2ATestCase):
             self.client.post(f"/api/v1/voice/experiences/{archived}/publish").status_code,
             422,
         )
+
+    def test_publish_freezes_exact_agent_version_without_historical_drift(self) -> None:
+        self._enable_feature()
+        response = self._create()
+        self.assertEqual(response.status_code, 201, response.text)
+        experience_id = response.json()["id"]
+        self.assertEqual(
+            self.client.post(f"/api/v1/voice/experiences/{experience_id}/publish").status_code,
+            200,
+        )
+
+        with SessionLocal() as db:
+            experience = db.get(TenantVoiceExperience, experience_id)
+            first = db.get(TenantVoiceExperienceVersion, experience.published_version_id)
+            agent = db.get(TenantAgent, first.agent_id)
+            self.assertEqual(first.agent_id, self._canonical_agent_id(self.agent_id))
+            self.assertEqual(first.agent_version_id, agent.published_version_id)
+            v1_id = first.agent_version_id
+            v1 = db.get(TenantAgentVersion, v1_id)
+            v2 = TenantAgentVersion(
+                agent_id=agent.id,
+                tenant_id=agent.tenant_id,
+                version=2,
+                status="published",
+                language=v1.language,
+                timezone=v1.timezone,
+                identity_json=v1.identity_json,
+                instructions_json=v1.instructions_json,
+                behavior_json=v1.behavior_json,
+                runtime_binding_json=v1.runtime_binding_json,
+                voice_agent_config_id=v1.voice_agent_config_id,
+                published_at=datetime.now(UTC) + timedelta(seconds=1),
+            )
+            v1.status = "superseded"
+            db.add(v2)
+            db.flush()
+            agent.published_version_id = v2.id
+            db.commit()
+            v2_id = v2.id
+            self.assertEqual(db.get(TenantVoiceExperienceVersion, first.id).agent_version_id, v1_id)
+
+            service = VoiceExperienceService(db)
+            service.unpublish_experience(self.tenant.id, experience_id)
+            service.publish_experience(self.tenant.id, experience_id, None)
+            versions = (
+                db.query(TenantVoiceExperienceVersion)
+                .filter(TenantVoiceExperienceVersion.experience_id == experience_id)
+                .order_by(TenantVoiceExperienceVersion.version)
+                .all()
+            )
+            self.assertEqual([item.agent_version_id for item in versions], [v1_id, v2_id])
+
+            v3 = TenantAgentVersion(
+                agent_id=agent.id,
+                tenant_id=agent.tenant_id,
+                version=3,
+                status="published",
+                language=v1.language,
+                timezone=v1.timezone,
+                identity_json=v1.identity_json,
+                instructions_json=v1.instructions_json,
+                behavior_json=v1.behavior_json,
+                runtime_binding_json=v1.runtime_binding_json,
+                voice_agent_config_id=v1.voice_agent_config_id,
+                published_at=datetime.now(UTC) + timedelta(seconds=2),
+            )
+            v2.status = "superseded"
+            db.add(v3)
+            db.flush()
+            agent.published_version_id = v3.id
+            db.commit()
+            self.assertEqual([item.agent_version_id for item in versions], [v1_id, v2_id])
+
+    def test_publish_rejects_changed_legacy_binding(self) -> None:
+        self._enable_feature()
+        response = self._create()
+        self.assertEqual(response.status_code, 201, response.text)
+        with SessionLocal() as db:
+            agent_id = self._canonical_agent_id(self.agent_id)
+            current = (
+                db.query(TenantAgentVersion)
+                .filter(
+                    TenantAgentVersion.agent_id == agent_id,
+                    TenantAgentVersion.status == "published",
+                )
+                .one()
+            )
+            current.voice_agent_config_id = self.other_agent_id
+            db.commit()
+        result = self.client.post(
+            f"/api/v1/voice/experiences/{response.json()['id']}/publish"
+        )
+        self.assertEqual(result.status_code, 409, result.text)
+        self.assertIn("agent_binding_changed", result.text)
 
     def test_publish_versions_are_immutable_snapshots_and_unpublish_keeps_history(self) -> None:
         self._enable_feature()
@@ -566,6 +699,47 @@ class VoiceExperienceTests(Integration2ATestCase):
             ).status_code,
             204,
         )
+
+    def test_deleting_a_referenced_agent_is_rejected_before_voice_sessions_are_released(self) -> None:
+        from unittest.mock import AsyncMock
+
+        from app.modules.voice.infrastructure.models import VoiceSession
+
+        self._enable_feature()
+        self.assertEqual(self._create().status_code, 201)
+        agent_id = self._canonical_agent_id(self.agent_id)
+        with SessionLocal() as db:
+            agent = db.get(TenantAgent, agent_id)
+            session = VoiceSession(
+                tenant_id=self.tenant.id,
+                agent_id=agent_id,
+                agent_version_id=agent.published_version_id,
+                channel="internal_test",
+                direction="internal",
+                provider="ultravox",
+                status="connected",
+            )
+            db.add(session)
+            db.commit()
+            session_id = session.id
+        with SessionLocal() as db:
+            TenantFeatureService(db).set_feature(self.tenant.id, AGENT_BUILDER, True, {}, self.user.id)
+            agent_service(db).archive_agent(self.tenant.id, agent_id, None)
+
+        with patch(
+            "app.modules.voice.infrastructure.livekit_runtime.LiveKitRuntimeBackend.close_session_room",
+            new_callable=AsyncMock,
+        ) as close, SessionLocal() as db:
+            with self.assertRaises(AgentConflictError) as raised:
+                asyncio.run(agent_service(db).delete_agent(self.tenant.id, agent_id, None))
+
+        self.assertEqual(str(raised.exception), "agent_delete_experience_referenced")
+        close.assert_not_called()
+        with SessionLocal() as db:
+            untouched = db.get(VoiceSession, session_id)
+            self.assertEqual(untouched.status, "connected")
+            self.assertEqual(untouched.agent_id, agent_id)
+            self.assertIsNotNone(db.get(TenantAgent, agent_id))
 
     def test_delete_referenced_version_is_rejected(self) -> None:
         self._enable_feature()
@@ -986,3 +1160,4 @@ class VoiceExperienceTests(Integration2ATestCase):
         # head especifico.
         heads = ScriptDirectory.from_config(Config("alembic.ini")).get_heads()
         self.assertEqual(len(heads), 1, f"Expected a single Alembic head, got: {heads}")
+from datetime import UTC, datetime, timedelta

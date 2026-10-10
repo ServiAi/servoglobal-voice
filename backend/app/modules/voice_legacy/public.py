@@ -54,6 +54,31 @@ class VoiceLegacyFacade:
             agent_provider=config.provider,
         )
 
+    def lock_voice_agent_defaults(
+        self, tenant_id: str, config_id: str
+    ) -> LegacyVoiceDefaults | None:
+        """Serialize changes that could bind one legacy config to two Agents."""
+        from sqlalchemy import select
+
+        from app.models.integrations import TenantVoiceAgentConfig
+
+        config = self.db.scalar(
+            select(TenantVoiceAgentConfig)
+            .where(
+                TenantVoiceAgentConfig.id == config_id,
+                TenantVoiceAgentConfig.tenant_id == tenant_id,
+            )
+            .with_for_update()
+        )
+        if config is None:
+            return None
+        return LegacyVoiceDefaults(
+            config_id=config.id,
+            tenant_id=config.tenant_id,
+            default_voice=config.default_voice,
+            agent_provider=config.provider,
+        )
+
     def require_voice_agent_defaults(self, tenant_id: str, config_id: str) -> LegacyVoiceDefaults:
         result = self.get_voice_agent_defaults(tenant_id, config_id)
         if result is None:

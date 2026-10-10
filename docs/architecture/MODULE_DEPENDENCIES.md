@@ -341,3 +341,6 @@ Consumers outside `app.modules.analytics` use only `analytics.public` (`main.py`
 | Analytics → internals ajenos (`Tenant` ORM, `app.schemas`, FastAPI en application) | 3 | **0** |
 | Componente conexa con Analytics (imports estáticos, incl. diferidos) | 60 archivos | 67 archivos (no se persigue; lo relevante es 0 aristas privadas) |
 | Ruff `app` | 1390 | 1381 (F 26 -> 22, sin F nuevos) |
+
+## Voice Experiences → Agents
+Voice Experiences usa `app.modules.agents.public` para resolver el binding legacy `agent_config_id` a `agent_id` y para bloquear/leer la versión publicada exacta al publicar una experiencia. No importa ORM de Agents ni agrega relaciones ORM cross-module. Agent Builder usa el contrato público de Voice Legacy para proteger la unicidad del binding legacy.

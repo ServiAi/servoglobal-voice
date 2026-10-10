@@ -160,3 +160,6 @@ Analytics
 | Voice | `voice_sessions`, `voice_session_events` |
 
 `agents` es una dimensión analítica (`Call.agent_id`, distribuciones de dashboard, correlación con el proveedor); la clase ORM conserva el nombre `Agent` y la ambigüedad se resuelve por módulo y DTO (`AnalyticsAgentView`). Nadie fuera de Analytics importa su ORM (`test_analytics_boundaries`); la única excepción de herramienta es `scripts/seed_staging_analytics.py` (seed de staging). `call_events.dedup_key` sigue siendo único global (`uq_call_events_dedup_key`). Escrituras externas: Voice/Telephony proyectan sesiones vía `VoiceCallProjectionFacade`; Ultravox y el webhook del runtime escriben por `AnalyticsCallLedger`; Identity limpia por `AnalyticsMaintenance` (sólo flush).
+
+## Voice Experiences — binding canónico
+Voice Experiences sigue siendo owner de `tenant_voice_experiences` y `tenant_voice_experience_versions`. `agent_id` identifica el Agent canónico de cada experiencia; `agent_id` + `agent_version_id` en ExperienceVersion fijan el AgentVersion usado por esa publicación. Agent Builder conserva el ownership de `tenant_agents` y `tenant_agent_versions`; la consulta y el bloqueo de publicación cruzan únicamente `agents.public`. Los campos `agent_config_id` permanecen por compatibilidad hasta completar PR #134/#135/#136.

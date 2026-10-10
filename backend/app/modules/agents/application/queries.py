@@ -28,6 +28,78 @@ class AgentQueries:
     def __init__(self, db: Session) -> None:
         self.db = db
 
+    def resolve_legacy_binding(
+        self, tenant_id: str, legacy_voice_agent_config_id: str
+    ) -> AgentLegacyBinding:
+        from app.modules.agents.domain.views import AgentLegacyBinding, LegacyAgentBindingError
+
+        agent_ids = set(
+            self.db.scalars(
+                select(TenantAgent.id)
+                .join(TenantAgentVersion, TenantAgentVersion.agent_id == TenantAgent.id)
+                .where(
+                    TenantAgent.tenant_id == tenant_id,
+                    TenantAgentVersion.tenant_id == tenant_id,
+                    TenantAgentVersion.voice_agent_config_id == legacy_voice_agent_config_id,
+                )
+                .distinct()
+            ).all()
+        )
+        if not agent_ids:
+            raise LegacyAgentBindingError("legacy_agent_binding_not_found")
+        if len(agent_ids) != 1:
+            raise LegacyAgentBindingError("legacy_agent_binding_ambiguous")
+        agent_id = next(iter(agent_ids))
+        status = self.db.scalar(
+            select(TenantAgent.status).where(
+                TenantAgent.id == agent_id, TenantAgent.tenant_id == tenant_id
+            )
+        )
+        if status is None:
+            raise LegacyAgentBindingError("legacy_agent_binding_not_found")
+        return AgentLegacyBinding(
+            tenant_id=tenant_id,
+            agent_id=agent_id,
+            legacy_voice_agent_config_id=legacy_voice_agent_config_id,
+            agent_status=status,
+        )
+
+    def lock_experience_publication_target(
+        self, tenant_id: str, agent_id: str
+    ) -> AgentExperiencePublicationTarget:
+        from app.modules.agents.domain.views import (
+            AgentExperiencePublicationTarget,
+            PublishedAgentUnavailableError,
+        )
+
+        agent = self.db.scalar(
+            select(TenantAgent)
+            .where(TenantAgent.id == agent_id, TenantAgent.tenant_id == tenant_id)
+            .with_for_update()
+        )
+        if agent is None or agent.status != "active" or not agent.published_version_id:
+            raise PublishedAgentUnavailableError("agent_not_active")
+        version = self.db.scalar(
+            select(TenantAgentVersion).where(
+                TenantAgentVersion.id == agent.published_version_id,
+                TenantAgentVersion.agent_id == agent.id,
+                TenantAgentVersion.tenant_id == tenant_id,
+                TenantAgentVersion.status == "published",
+            )
+        )
+        if version is None:
+            raise PublishedAgentUnavailableError("published_version_invalid")
+        runtime = version.runtime_binding_json or {}
+        realtime = runtime.get("realtime")
+        return AgentExperiencePublicationTarget(
+            tenant_id=tenant_id,
+            agent_id=agent.id,
+            agent_version_id=version.id,
+            legacy_voice_agent_config_id=version.voice_agent_config_id,
+            pipeline_type=runtime.get("pipeline_type"),
+            realtime_provider=realtime.get("provider") if isinstance(realtime, dict) else None,
+        )
+
     def lock_published_agent(self, tenant_id: str, agent_id: str) -> PublishedAgent:
         agent = self.db.scalar(
             select(TenantAgent)

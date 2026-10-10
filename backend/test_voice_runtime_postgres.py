@@ -34,6 +34,7 @@ from app.modules.analytics.infrastructure.models import Call, CallEvent
 from app.modules.billing.infrastructure.models import TenantBillingPlan
 from app.modules.crm.infrastructure.models import CrmVoiceCall, CrmVoiceCallEvent
 from app.modules.identity.infrastructure.models import Tenant
+from app.modules.agents.infrastructure.models import TenantAgent, TenantAgentVersion
 from app.models.integrations import TenantVoiceAgentConfig, TenantVoiceProviderConfig
 from app.modules.identity.infrastructure.models import TenantFeatureGrant
 from app.modules.voice_experiences.infrastructure.context_models import TenantVoiceContextSchema
@@ -100,6 +101,30 @@ class VoiceRuntimePostgresConcurrencyTests(unittest.TestCase):
             )
             db.add(agent)
             db.flush()
+            canonical_agent = TenantAgent(
+                tenant_id=tenant.id,
+                name="Runtime Agent",
+                status="active",
+            )
+            db.add(canonical_agent)
+            db.flush()
+            canonical_version = TenantAgentVersion(
+                agent_id=canonical_agent.id,
+                tenant_id=tenant.id,
+                version=1,
+                status="published",
+                language="es",
+                timezone="America/Bogota",
+                identity_json={"name": "Runtime Agent"},
+                instructions_json={"system_prompt": "runtime test"},
+                behavior_json={},
+                runtime_binding_json={"pipeline_type": "realtime", "realtime": {"provider": "ultravox"}},
+                voice_agent_config_id=agent.id,
+                published_at=now,
+            )
+            db.add(canonical_version)
+            db.flush()
+            canonical_agent.published_version_id = canonical_version.id
             schema = TenantVoiceContextSchema(
                 tenant_id=tenant.id,
                 agent_config_id=agent.id,
@@ -114,6 +139,7 @@ class VoiceRuntimePostgresConcurrencyTests(unittest.TestCase):
             experience = TenantVoiceExperience(
                 tenant_id=tenant.id,
                 agent_config_id=agent.id,
+                agent_id=canonical_agent.id,
                 context_schema_id=schema.id,
                 name="Runtime",
                 slug=f"runtime-{uuid4().hex[:12]}",
@@ -130,6 +156,8 @@ class VoiceRuntimePostgresConcurrencyTests(unittest.TestCase):
                 tenant_id=tenant.id,
                 version=1,
                 agent_config_id=agent.id,
+                agent_id=canonical_agent.id,
+                agent_version_id=canonical_version.id,
                 context_schema_id=schema.id,
                 name=experience.name,
                 slug=experience.slug,
@@ -358,6 +386,97 @@ class VoiceRuntimePostgresConcurrencyTests(unittest.TestCase):
             self.assertEqual(runtime.status, "ended")
             self.assertEqual(db.query(CallEvent).count(), 1)
             self.assertEqual(db.query(CrmVoiceCallEvent).count(), 1)
+
+    def test_agent_publish_and_experience_publish_serialize_on_the_agent_row(self) -> None:
+        from threading import Event, Thread
+
+        from app.modules.agents.application.ports import AgentPorts
+        from app.modules.agents.application.service import AgentService
+        from app.modules.voice_legacy.public import VoiceLegacyFacade
+        from app.modules.voice_experiences.application.experience_service import VoiceExperienceService
+
+        class _Ok:
+            def validate_voice(self, *args, **kwargs) -> None: ...
+            def is_configured(self, *args, **kwargs) -> bool:
+                return True
+
+        seeded = self._seed_context()
+        tenant_id = seeded["tenant_id"]
+        with self.SessionLocal() as db:
+            db.add(TenantFeatureGrant(tenant_id=tenant_id, feature_key="agent_builder_v2", enabled=True, limits_json={}))
+            experience = db.get(TenantVoiceExperience, seeded["experience_id"])
+            experience.call_settings_json = {"mode": "webrtc"}
+            agent_id = experience.agent_id
+            v1 = db.get(TenantVoiceExperienceVersion, seeded["version_id"]).agent_version_id
+            draft = TenantAgentVersion(
+                agent_id=agent_id,
+                tenant_id=tenant_id,
+                version=2,
+                status="draft",
+                language="es",
+                timezone="America/Bogota",
+                identity_json={"name": "Runtime Agent"},
+                instructions_json={"system_prompt": "runtime test v2"},
+                behavior_json={},
+                runtime_binding_json={"pipeline_type": "realtime", "realtime": {"provider": "ultravox"}},
+                voice_agent_config_id=seeded["agent_id"],
+            )
+            db.add(draft)
+            db.flush()
+            db.get(TenantAgent, agent_id).draft_version_id = draft.id
+            db.commit()
+            v2 = draft.id
+        with self.SessionLocal() as db:
+            VoiceExperienceService(db).unpublish_experience(tenant_id, seeded["experience_id"])
+
+        errors: list[BaseException] = []
+
+        def agent_publish() -> None:
+            try:
+                with self.SessionLocal() as db:
+                    ok = _Ok()
+                    ports = AgentPorts(voice_provider=ok, legacy_voice=VoiceLegacyFacade(db), integrations=ok, voice_sessions=ok)
+                    AgentService(db, ports).publish(tenant_id, agent_id, None)
+            except BaseException as exc:  # noqa: BLE001 - surfaced by the assertions below
+                errors.append(exc)
+
+        def experience_publish() -> None:
+            try:
+                with self.SessionLocal() as db:
+                    VoiceExperienceService(db).publish_experience(tenant_id, seeded["experience_id"], None)
+            except BaseException as exc:  # noqa: BLE001
+                errors.append(exc)
+
+        with self.SessionLocal() as holder:
+            holder.execute(select(TenantAgent).where(TenantAgent.id == agent_id).with_for_update()).scalar_one()
+            threads = [Thread(target=agent_publish), Thread(target=experience_publish)]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join(timeout=1.5)
+            # Both contend for the same Agent row lock: neither may finish while it is held.
+            self.assertTrue(all(thread.is_alive() for thread in threads), repr(errors))
+            holder.rollback()
+        for thread in threads:
+            thread.join(timeout=30)
+        self.assertFalse(any(thread.is_alive() for thread in threads), "deadlock")
+        self.assertEqual(errors, [])
+
+        with self.SessionLocal() as db:
+            agent = db.get(TenantAgent, agent_id)
+            self.assertEqual(agent.published_version_id, v2)
+            self.assertEqual(db.get(TenantAgentVersion, v1).status, "superseded")
+            bound = db.scalars(
+                select(TenantVoiceExperienceVersion).where(
+                    TenantVoiceExperienceVersion.experience_id == seeded["experience_id"],
+                    TenantVoiceExperienceVersion.version == 2,
+                )
+            ).one()
+            # Whichever won the lock, the Experience pinned one exact, existing version.
+            self.assertIn(bound.agent_version_id, {v1, v2})
+            pinned = db.get(TenantAgentVersion, bound.agent_version_id)
+            self.assertEqual((pinned.agent_id, pinned.tenant_id), (agent_id, tenant_id))
+            self.assertEqual(db.get(TenantVoiceExperience, seeded["experience_id"]).published_version_id, bound.id)
 
 
 if __name__ == "__main__":

@@ -46,6 +46,10 @@ class LegacyVoicePort(Protocol):
         """None if the legacy config does not exist or belongs to another tenant."""
         ...
 
+    def lock_voice_agent_defaults(self, tenant_id: str, config_id: str) -> LegacyVoiceDefaults | None:
+        """Lock the legacy config row while an Agent binding is changed."""
+        ...
+
 
 class IntegrationReadinessPort(Protocol):
     """Whether a platform tool's required integration is operational for a
@@ -61,9 +65,16 @@ class VoiceSessionsPort(Protocol):
         ...
 
 
+class ExperienceReferencesPort(Protocol):
+    def is_agent_referenced(self, tenant_id: str, agent_id: str) -> bool:
+        """True while a Voice Experience (or one of its versions) uses the Agent."""
+        ...
+
+
 @dataclass(frozen=True)
 class AgentPorts:
     voice_provider: VoiceProviderPort
     legacy_voice: LegacyVoicePort
     integrations: IntegrationReadinessPort
     voice_sessions: VoiceSessionsPort
+    experience_references: ExperienceReferencesPort | None = None

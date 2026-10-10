@@ -115,6 +115,42 @@ class AgentBuilderTests(Integration2ATestCase):
             self._payload()["instructions"]["system_prompt"],
         )
 
+    def test_legacy_voice_config_cannot_bind_two_agents_but_same_agent_versions_may_share_it(self) -> None:
+        self._enable_feature()
+        response = self._create(voice_agent_config_id=self.voice_agent_config_id)
+        self.assertEqual(response.status_code, 201, response.text)
+        agent_id = response.json()["id"]
+        with SessionLocal() as db:
+            agent = db.get(TenantAgent, agent_id)
+            self.assertIsNotNone(agent)
+            db.add(
+                TenantAgentVersion(
+                    agent_id=agent_id,
+                    tenant_id=self.tenant.id,
+                    version=2,
+                    status="draft",
+                    language="es",
+                    timezone="America/Bogota",
+                    identity_json={"name": "Sandra"},
+                    instructions_json={"system_prompt": "draft"},
+                    behavior_json={},
+                    runtime_binding_json={"pipeline_type": "realtime", "realtime": {"provider": "ultravox"}},
+                    voice_agent_config_id=self.voice_agent_config_id,
+                )
+            )
+            db.flush()
+            AgentService(db).update_draft(
+                self.tenant.id,
+                agent_id,
+                AgentDraftUpdateRequest.model_validate(
+                    self._payload(voice_agent_config_id=self.voice_agent_config_id)
+                ),
+            )
+
+        duplicate = self._create(voice_agent_config_id=self.voice_agent_config_id)
+        self.assertEqual(duplicate.status_code, 409, duplicate.text)
+        self.assertIn("voice_agent_config_already_bound", duplicate.text)
+
     def test_create_agent_records_sanitized_event(self) -> None:
         self._enable_feature()
         agent_id = self._create().json()["id"]
@@ -1190,3 +1226,6 @@ class AgentBuilderTests(Integration2ATestCase):
 
 if __name__ == "__main__":
     unittest.main()
+from app.modules.agents.api.schemas import AgentDraftUpdateRequest
+from app.modules.agents.application.service import AgentService
+from app.modules.agents.infrastructure.models import TenantAgent, TenantAgentVersion
