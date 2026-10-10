@@ -387,6 +387,11 @@ class VoiceExperiencesBoundaryTests(unittest.TestCase):
         # PR #135: the launch ledger gains the VoiceSession correlation, nothing else.
         self.assertEqual(changed, {"tenant_voice_runtime_calls", "index:uq_voice_runtime_voice_session"})
         runtime_calls = Base.metadata.tables["tenant_voice_runtime_calls"]
+        self.assertFalse(runtime_calls.c.launch_runtime.nullable)
+        self.assertIn(
+            "ck_voice_runtime_launch_runtime",
+            {constraint.name for constraint in runtime_calls.constraints},
+        )
         self.assertTrue(runtime_calls.c.voice_session_id.nullable)
         self.assertEqual(
             {fk.name for fk in runtime_calls.c.voice_session_id.foreign_keys}, {"fk_voice_runtime_voice_session"}

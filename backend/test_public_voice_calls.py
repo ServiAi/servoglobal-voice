@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 import jwt
 from cryptography.fernet import Fernet
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from _integrations_2a_test_base import Integration2ATestCase
 from app.core.config import settings
@@ -29,6 +29,7 @@ from app.modules.voice_experiences.api.public_router import (
     get_public_turnstile_verifier,
 )
 from app.modules.voice_experiences.application.experience_service import VoiceExperienceService
+from app.modules.voice_experiences.domain.limits import LAUNCH_RUNTIME_CANONICAL, LAUNCH_RUNTIME_LEGACY
 from app.modules.voice_experiences.application.public_webrtc_service import PublicWebRTCService
 from app.modules.voice_experiences.infrastructure.context_models import TenantVoiceContextField
 from app.modules.voice_experiences.infrastructure.submission_models import (
@@ -94,6 +95,7 @@ class PublicVoiceCallTests(Integration2ATestCase):
             patcher.start()
             self.addCleanup(patcher.stop)
         self.livekit = FakeLiveKit()
+        self.backend = self.livekit
         self.limiter = submissions_tests._AllowLimiter()
         self.verifier = submissions_tests._Verifier()
         app.dependency_overrides[get_public_rate_limiter] = lambda: self.limiter
@@ -132,7 +134,7 @@ class PublicVoiceCallTests(Integration2ATestCase):
     def _service(self) -> PublicWebRTCService:
         return PublicWebRTCService(
             session_factory=SessionLocal,
-            runtime_factory=lambda db: VoiceRuntimeAdapter(db, runtime_backend=self.livekit),
+            runtime_factory=lambda db: VoiceRuntimeAdapter(db, runtime_backend=self.backend),
         )
 
     def _launch(self, token: str):
@@ -296,18 +298,20 @@ class PublicVoiceCallTests(Integration2ATestCase):
             submission = db.get(TenantVoiceExperienceSubmission, context_session.submission_id)
             contact_id, lead_id = submission.crm_contact_id, submission.crm_lead_id
             self.assertTrue(contact_id and lead_id)
-            db.add(
-                TenantVoiceContextField(
-                    tenant_id=self.tenant.id, schema_id=self.schema_id, key="internal_note", label="n",
-                    field_type="text", collection_mode="internal_only", required=False, position=99,
-                    sensitivity="standard", validation_json={}, options_json=[],
+            for position, (key, mode) in enumerate((("internal_note", "internal_only"), ("live_note", "collect_during_call"))):
+                db.add(
+                    TenantVoiceContextField(
+                        tenant_id=self.tenant.id, schema_id=self.schema_id, key=key, label="n",
+                        field_type="text", collection_mode=mode, required=False, position=90 + position,
+                        sensitivity="standard", validation_json={}, options_json=[],
+                    )
                 )
-            )
-            db.add(
-                TenantVoiceExperienceSubmissionValue(
-                    tenant_id=self.tenant.id, submission_id=submission.id, field_key="internal_note", field_type="text", value_json="hidden"
+                db.add(
+                    TenantVoiceExperienceSubmissionValue(
+                        tenant_id=self.tenant.id, submission_id=submission.id, field_key=key,
+                        field_type="text", value_json="hidden",
+                    )
                 )
-            )
             db.commit()
 
         # The request can only carry the token: IDs smuggled in the body are rejected outright.
@@ -326,8 +330,9 @@ class PublicVoiceCallTests(Integration2ATestCase):
         self.assertIsNone(context["caller"])  # a browser participant is not a PSTN caller
         variables = context["variables"]
         self.assertEqual(variables["full_name"], "Ana")
-        self.assertEqual(variables["locale"], "es")
-        self.assertNotIn("internal_note", variables)
+        self.assertNotIn("locale", variables)  # session metadata, not a business variable
+        self.assertNotIn("internal_note", variables)  # internal_only
+        self.assertNotIn("live_note", variables)  # collect_during_call
         flat = json.dumps(context)
         for secret in (token, self.tenant.id, "token_hash"):
             self.assertNotIn(secret, flat)
@@ -383,24 +388,52 @@ class PublicVoiceCallTests(Integration2ATestCase):
         self.assertEqual(replay.status_code, 503)
         self.assertEqual(self.livekit.dispatches, [])
 
-    def test_unconfigured_livekit_fails_closed_without_a_partial_response(self) -> None:
+    def test_unconfigured_livekit_is_detected_before_dispatch_and_stays_retryable(self) -> None:
         token = self._token()
+        self.backend = None  # the REAL backend: without a preflight it would fail the session
         with patch.object(settings, "LIVEKIT_API_SECRET", ""):
             response = self._launch(token)
+
         self.assertEqual(response.status_code, 503, response.text)
         self.assertEqual(response.json()["detail"], {"code": "call_unavailable"})
         self.assertNotIn("participant_token", response.text)
         self.assertNotIn("join_url", response.text)
-        # Not a permanent failure: once LiveKit is configured the same token recovers.
+        with SessionLocal() as db:
+            session = db.scalars(select(VoiceSession)).one()
+            runtime = db.scalars(select(TenantVoiceRuntimeCall)).one()
+            self.assertEqual(session.status, "requested")  # not dispatching/failed/dispatched
+            self.assertIsNone(session.livekit_room_name)
+            self.assertIn(runtime.status, ("reserved", "starting"))
+            self.assertEqual(runtime.voice_session_id, session.id)
+            session_id, runtime_id = session.id, runtime.id
+        self.assertEqual(self.livekit.dispatches, [])
+
+        # LiveKit gets configured: the same token recovers the same session, with one dispatch.
+        self.backend = self.livekit
         recovered = self._launch(token)
+
         self.assertEqual(recovered.status_code, 200, recovered.text)
-        self.assertEqual(len(self.livekit.dispatches), 1)
+        self.assertEqual(self.livekit.dispatches, [session_id])
+        with SessionLocal() as db:
+            self.assertEqual(db.query(VoiceSession).count(), 1)
+            self.assertEqual(db.query(TenantVoiceRuntimeCall).count(), 1)
+            self.assertEqual(db.scalars(select(TenantVoiceRuntimeCall)).one().id, runtime_id)
+
+    def test_authenticated_qa_token_endpoint_keeps_its_contract_when_livekit_is_unconfigured(self) -> None:
+        from app.modules.voice.application.webrtc import WebRTCJoinService
+
+        self.assertEqual(self._launch(self._token()).status_code, 200)
+        with SessionLocal() as db:
+            session = db.scalars(select(VoiceSession)).one()
+            with patch.object(settings, "LIVEKIT_URL", ""):
+                with self.assertRaisesRegex(Exception, "LiveKit WebRTC is not configured."):
+                    WebRTCJoinService(db).issue_token(session)
 
     def test_crash_after_claim_before_session_converges_on_one_session(self) -> None:
         token = self._token()
         service = self._service()
         session, _ = service._resolve_session_and_runtime(self.published["slug"], token)
-        service._claim(self.published["slug"], session.id, service._precheck(session))
+        service._claim(self.published["slug"], session.id, service._precheck(session).provider)
 
         response = self._launch(token)
 
@@ -414,7 +447,7 @@ class PublicVoiceCallTests(Integration2ATestCase):
         token = self._token()
         service = self._service()
         context, _ = service._resolve_session_and_runtime(self.published["slug"], token)
-        service._claim(self.published["slug"], context.id, service._precheck(context))
+        service._claim(self.published["slug"], context.id, service._precheck(context).provider)
         agent_id, version_id = self._canonical_agent()
         with SessionLocal() as db:
             orphan = VoiceSessionFacade(db).create_session_from_agent_version(
@@ -456,19 +489,64 @@ class PublicVoiceCallTests(Integration2ATestCase):
         self.assertEqual(response.status_code, 409)
         self.assertEqual(response.json()["detail"]["code"], "call_already_started")
 
-    def test_a_pre_canonical_direct_provider_call_is_never_relaunched(self) -> None:
-        token = self._token()
-        self.assertEqual(self._launch(token).status_code, 200)
+    def _claimed_launch(self, token: str):
+        service = self._service()
+        context, _ = service._resolve_session_and_runtime(self.published["slug"], token)
+        service._claim(self.published["slug"], context.id, service._precheck(context).provider)
+        return context
+
+    def _legacy_ledger_row(self, token: str, status: str) -> None:
+        """A row exactly as a pre-#135 deploy left it: consumed token, no VoiceSession."""
+        self._claimed_launch(token)
         with SessionLocal() as db:
             runtime = db.scalars(select(TenantVoiceRuntimeCall)).one()
+            runtime.launch_runtime = LAUNCH_RUNTIME_LEGACY
+            runtime.status = status
+            runtime.provider_call_id = None
             runtime.voice_session_id = None
-            runtime.provider_call_id = "legacy-provider-call"
+            if status == "starting":
+                runtime.provider_attempt_started_at = datetime.now(UTC)  # the provider POST may have gone out
             db.commit()
-            db.query(VoiceSession).delete()
-            db.commit()
+
+    def test_a_legacy_launch_in_flight_never_creates_a_voice_session_or_a_second_call(self) -> None:
+        for status in ("starting", "reserved", "unknown", "ready"):
+            with self.subTest(legacy_status=status):
+                with SessionLocal() as db:
+                    for model in (TenantVoiceRuntimeCall, TenantVoiceContextSession, TenantVoiceExperienceSubmission):
+                        db.query(model).delete()
+                    db.query(CrmVoiceCall).delete()
+                    db.commit()
+                token = self._token()
+                self._legacy_ledger_row(token, status)
+                with SessionLocal() as db:
+                    crm_before = db.query(CrmVoiceCall).count()
+
+                response = self._launch(token)
+
+                self.assertEqual(response.status_code, 409, response.text)
+                self.assertEqual(response.json()["detail"]["code"], "call_already_started")
+                with SessionLocal() as db:
+                    runtime = db.scalars(select(TenantVoiceRuntimeCall)).one()
+                    self.assertIsNone(runtime.voice_session_id)
+                    self.assertEqual(runtime.status, status)
+                    self.assertEqual(db.query(VoiceSession).count(), 0)
+                    self.assertEqual(db.query(CrmVoiceCall).count(), crm_before)
+                self.assertEqual(self.livekit.dispatches, [])
+
+    def test_a_canonical_reserved_ledger_row_without_a_session_does_recover(self) -> None:
+        token = self._token()
+        self._claimed_launch(token)
+        with SessionLocal() as db:
+            runtime = db.scalars(select(TenantVoiceRuntimeCall)).one()
+            self.assertEqual((runtime.launch_runtime, runtime.status), (LAUNCH_RUNTIME_CANONICAL, "reserved"))
+            self.assertIsNone(runtime.voice_session_id)
+
         response = self._launch(token)
-        self.assertEqual(response.status_code, 409)
-        self.assertEqual(response.json()["detail"]["code"], "call_already_started")
+
+        self.assertEqual(response.status_code, 200, response.text)
+        with SessionLocal() as db:
+            self.assertEqual(db.query(VoiceSession).count(), 1)
+            self.assertEqual(db.scalars(select(TenantVoiceRuntimeCall)).one().launch_runtime, LAUNCH_RUNTIME_CANONICAL)
 
     def test_public_launch_never_calls_a_provider_directly(self) -> None:
         token = self._token()
@@ -510,8 +588,15 @@ class PublicVoiceCallTests(Integration2ATestCase):
         self.assertNotIn("loc", response.text)
         self.assertNotIn("input", response.text)
 
+    def _as_pre_canonical_launch(self) -> None:
+        with SessionLocal() as db:
+            runtime = db.scalars(select(TenantVoiceRuntimeCall)).one()
+            runtime.launch_runtime = LAUNCH_RUNTIME_LEGACY
+            db.commit()
+
     def test_runtime_webhook_is_signed_deduplicated_and_updates_analytics(self) -> None:
         self.assertEqual(self._launch(self._token()).status_code, 200)
+        self._as_pre_canonical_launch()
         with SessionLocal() as db:
             crm_call = db.scalars(select(CrmVoiceCall)).one()
 
@@ -538,8 +623,24 @@ class PublicVoiceCallTests(Integration2ATestCase):
         )
         self.assertEqual(unsigned.status_code, 401)
 
+    def test_a_provider_webhook_never_mutates_a_canonical_launch(self) -> None:
+        self.assertEqual(self._launch(self._token()).status_code, 200)
+        with SessionLocal() as db:
+            crm_call = db.scalars(select(CrmVoiceCall)).one()
+            self.assertEqual(db.scalars(select(TenantVoiceRuntimeCall)).one().launch_runtime, LAUNCH_RUNTIME_CANONICAL)
+
+        response = self._send_runtime_event(crm_call.id, "provider-x", "call.ended")
+
+        self.assertEqual(response.status_code, 401)
+        with SessionLocal() as db:
+            self.assertEqual(db.get(CrmVoiceCall, crm_call.id).status, "requested")
+            self.assertEqual(db.scalars(select(TenantVoiceRuntimeCall)).one().status, "ready")
+            self.assertEqual(db.scalars(select(VoiceSession)).one().status, "dispatched")
+            self.assertEqual(db.query(Call).count(), 0)
+
     def test_terminal_runtime_and_crm_do_not_regress_on_late_events(self) -> None:
         self.assertEqual(self._launch(self._token()).status_code, 200)
+        self._as_pre_canonical_launch()
         with SessionLocal() as db:
             crm_call = db.scalars(select(CrmVoiceCall)).one()
         send = lambda event_type: self._send_runtime_event(crm_call.id, "provider-monotonic", event_type)
@@ -548,6 +649,91 @@ class PublicVoiceCallTests(Integration2ATestCase):
         with SessionLocal() as db:
             self.assertEqual(db.get(CrmVoiceCall, crm_call.id).status, "completed")
             self.assertEqual(db.scalars(select(TenantVoiceRuntimeCall)).one().status, "ended")
+
+
+    # -- runtime context contract (SessionContextV1) is checked before the token is consumed ----------
+
+    def _replace_business_values(self, token: str, values: dict[str, object], modes: dict[str, str] | None = None) -> None:
+        """Persist exactly these answers (one Context Schema field each), bypassing API limits."""
+        with SessionLocal() as db:
+            context = db.scalars(select(TenantVoiceContextSession)).one()
+            submission_id = context.submission_id
+            db.query(TenantVoiceExperienceSubmissionValue).filter_by(submission_id=submission_id).delete()
+            base = db.scalar(select(func.max(TenantVoiceContextField.position)).where(TenantVoiceContextField.schema_id == self.schema_id)) + 1
+            for position, (key, value) in enumerate(values.items(), start=base):
+                db.add(
+                    TenantVoiceContextField(
+                        tenant_id=self.tenant.id, schema_id=self.schema_id, key=key, label=key[:20], field_type="text",
+                        collection_mode=(modes or {}).get(key, "ask_if_missing"), required=False, position=position, sensitivity="standard",
+                        validation_json={}, options_json=[],
+                    )
+                )
+                db.add(
+                    TenantVoiceExperienceSubmissionValue(
+                        tenant_id=self.tenant.id, submission_id=submission_id, field_key=key, field_type="text",
+                        value_json=value,
+                    )
+                )
+            db.commit()
+
+    def _assert_launch_rejected_before_claim(self, token: str) -> None:
+        response = self._launch(token)
+        self.assertEqual(response.status_code, 503, response.text)
+        self.assertEqual(response.json()["detail"], {"code": "call_unavailable"})
+        with SessionLocal() as db:
+            self.assertEqual(db.scalars(select(TenantVoiceContextSession)).one().status, "active")
+            self.assertEqual(db.query(TenantVoiceRuntimeCall).count(), 0)
+            self.assertEqual(db.query(CrmVoiceCall).count(), 0)
+            self.assertEqual(db.query(VoiceSession).count(), 0)
+        self.assertEqual(self.livekit.dispatches, [])
+
+    def test_exactly_twenty_business_variables_fit_and_locale_does_not_take_a_slot(self) -> None:
+        token = self._token()
+        self._replace_business_values(token, {f"answer_{index:02d}": f"v{index}" for index in range(20)})
+
+        response = self._launch(token)
+
+        self.assertEqual(response.status_code, 200, response.text)
+        with SessionLocal() as db:
+            variables = db.scalars(select(VoiceSession)).one().session_context_json["variables"]
+        self.assertEqual(len(variables), 20)
+        self.assertNotIn("locale", variables)
+
+    def test_more_than_twenty_variables_are_rejected_before_the_token_is_consumed(self) -> None:
+        token = self._token()
+        self._replace_business_values(token, {f"answer_{index:02d}": "v" for index in range(21)})
+        self._assert_launch_rejected_before_claim(token)
+
+    def test_an_oversized_runtime_context_is_rejected_before_the_token_is_consumed(self) -> None:
+        token = self._token()
+        self._replace_business_values(token, {"long_answer": "x" * 4500})  # valid textarea-sized answer
+        self._assert_launch_rejected_before_claim(token)
+
+    def test_a_secret_like_or_overlong_variable_key_is_rejected_before_the_token_is_consumed(self) -> None:
+        for key in ("customer_token", "k" * 61):
+            with self.subTest(key=key[:20]):
+                with SessionLocal() as db:
+                    for model in (TenantVoiceContextSession, TenantVoiceExperienceSubmission):
+                        db.query(model).delete()
+                    db.commit()
+                token = self._token()
+                self._replace_business_values(token, {key: "value-that-must-not-be-logged"})
+                with self.assertLogs("app.modules.voice_experiences.application.public_webrtc_service", "WARNING") as logs:
+                    self._assert_launch_rejected_before_claim(token)
+                text = "\n".join(logs.output) + "\n".join(str(record.__dict__) for record in logs.records)
+                self.assertNotIn("value-that-must-not-be-logged", text)
+                self.assertNotIn(token, text)
+
+    def test_a_non_public_collection_mode_never_reaches_the_runtime_context(self) -> None:
+        token = self._token()
+        self._replace_business_values(
+            token,
+            {"only_live": "x", "only_internal": "y"},
+            modes={"only_live": "collect_during_call", "only_internal": "internal_only"},
+        )
+        self.assertEqual(self._launch(token).status_code, 200)
+        with SessionLocal() as db:
+            self.assertEqual(db.scalars(select(VoiceSession)).one().session_context_json["variables"], {})
 
 
 if __name__ == "__main__":

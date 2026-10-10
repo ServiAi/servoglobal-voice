@@ -26,6 +26,20 @@ DISPATCH_WAIT_SECONDS = 10.0
 DISPATCH_POLL_SECONDS = 0.25
 
 
+WEBRTC_NOT_CONFIGURED = "voice_webrtc_not_configured"
+
+
+def livekit_webrtc_configured() -> bool:
+    return all((settings.LIVEKIT_URL, settings.LIVEKIT_API_KEY, settings.LIVEKIT_API_SECRET))
+
+
+def ensure_livekit_webrtc_configured() -> None:
+    """Preflight, before any session is dispatched: an unconfigured transport must leave the
+    session ``requested`` (retryable), not dispatched-and-failed."""
+    if not livekit_webrtc_configured():
+        raise VoiceSessionError(WEBRTC_NOT_CONFIGURED)
+
+
 class WebRTCJoinService:
     def __init__(self, db: Session, backend: RuntimeBackend | None = None) -> None:
         self.db = db
@@ -43,8 +57,8 @@ class WebRTCJoinService:
             raise VoiceSessionError("Voice session is terminal.")
         if session.channel != "webrtc" or session.runtime_engine != "livekit" or not session.livekit_room_name:
             raise VoiceSessionError("Voice session is not ready for LiveKit WebRTC.")
-        if not all((settings.LIVEKIT_URL, settings.LIVEKIT_API_KEY, settings.LIVEKIT_API_SECRET)):
-            raise VoiceSessionError("LiveKit WebRTC is not configured.")
+        if not livekit_webrtc_configured():
+            raise VoiceSessionError("LiveKit WebRTC is not configured.")  # QA endpoint contract
 
         from livekit import api
 
@@ -93,6 +107,7 @@ class WebRTCJoinService:
     async def ensure_join(self, session_id: str, tenant_id: str) -> WebRTCJoinInfo:
         """Dispatch the session's room exactly once (a replay or a concurrent
         caller never dispatches again) and issue a new participant token."""
+        ensure_livekit_webrtc_configured()
         session = self.sessions.get(session_id, tenant_id)
         if session.channel != "webrtc":
             raise VoiceSessionError("Voice session is not ready for LiveKit WebRTC.")

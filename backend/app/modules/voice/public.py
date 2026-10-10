@@ -70,10 +70,22 @@ __all__ = [
     "VoiceSessionsBusyError",
     "VoiceTelephonyFacade",
     "WebRTCJoinInfo",
+    "validate_session_variables",
 ]
 
 
 from app.modules.voice.domain.views import TranscriptCompleteness, VoiceConversationEvidence, VoiceToolOutcome
+
+
+def validate_session_variables(variables: dict[str, Any]) -> None:
+    """Checks ``variables`` against SessionContextV1 (key count/length, depth, size, secret-like
+    keys) without creating anything. Raises VoiceSessionError('session_context_invalid')."""
+    from pydantic import ValidationError
+
+    try:
+        SessionContextV1(variables=variables)
+    except (ValidationError, ValueError, TypeError) as exc:
+        raise VoiceSessionError("session_context_invalid") from exc
 
 
 class VoiceSessionFacade:

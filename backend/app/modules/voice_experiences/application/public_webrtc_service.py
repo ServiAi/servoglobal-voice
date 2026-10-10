@@ -12,8 +12,10 @@ every later step is idempotent so a crash at any point converges on one session.
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from uuid import uuid4
 
@@ -22,11 +24,15 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
 
-from app.modules.billing.public import BillingAccessGate
+from app.modules.billing.public import BillingAccessGate, BillingError
 from app.modules.crm.public import CreateVoiceCallCommand, CrmVoiceCalls
 from app.modules.identity.public import VOICE_EXPERIENCES, VOICE_RUNTIME_V2, FeatureFlags, TenantDirectory
 from app.modules.voice_experiences.application.ports import VoiceRuntimePort
 from app.modules.voice_experiences.domain.errors import PublicCallFailure, VoiceRuntimeUnavailable
+from app.modules.voice_experiences.domain.limits import (
+    LAUNCH_RUNTIME_CANONICAL,
+    PUBLIC_CONTEXT_COLLECTION_MODES,
+)
 from app.modules.voice_experiences.domain.views import WebRTCJoin
 from app.modules.voice_experiences.infrastructure.context_models import TenantVoiceContextField
 from app.modules.voice_experiences.infrastructure.experience_models import (
@@ -42,8 +48,15 @@ from app.modules.voice_experiences.infrastructure.submission_models import (
 
 logger = logging.getLogger(__name__)
 
-_LEGACY_ACTIVE_STATES = {"connected", "ended"}
 _OPEN_STATES = ("reserved", "starting", "ready")
+
+
+@dataclass(frozen=True, slots=True)
+class PreparedLaunch:
+    """What a launch will use, computed once and validated BEFORE the one-shot token is consumed."""
+
+    provider: str
+    variables: Mapping[str, object]
 
 
 class PublicWebRTCService:
@@ -66,8 +79,8 @@ class PublicWebRTCService:
         session, runtime = self._resolve_session_and_runtime(slug, context_token)
         if runtime is not None:
             return await self._start(runtime.id)
-        provider = self._precheck(session)
-        runtime_id, _owner = self._claim(slug, session.id, provider)
+        prepared = self._precheck(session)
+        runtime_id, _owner = self._claim(slug, session.id, prepared.provider)
         return await self._start(runtime_id)
 
     # -- resolution / precheck ----------------------------------------------
@@ -99,8 +112,9 @@ class PublicWebRTCService:
     def _utc(value: datetime) -> datetime:
         return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
 
-    def _precheck(self, context_session: TenantVoiceContextSession) -> str:
-        """Everything that must hold BEFORE the one-shot token is consumed. Returns the provider."""
+    def _precheck(self, context_session: TenantVoiceContextSession) -> PreparedLaunch:
+        """Everything that must hold BEFORE the one-shot token is consumed: billing, flags, an
+        executable agent and a submission that fits the runtime context contract."""
         if context_session.status != "active":
             raise PublicCallFailure(409, "context_session_unavailable")
         if self._utc(context_session.expires_at) <= datetime.now(UTC):
@@ -115,16 +129,30 @@ class PublicWebRTCService:
                 raise PublicCallFailure(503, "call_unavailable")
             try:
                 BillingAccessGate(db).ensure_call_allowed_by_slug(tenant.slug)
-                version = db.get(TenantVoiceExperienceVersion, context_session.experience_version_id)
-                if version is None:
-                    raise PublicCallFailure(503, "call_unavailable")
-                return self.runtime_factory(db).require_runnable_agent(
-                    tenant.id, version.agent_id, version.agent_version_id
-                )
-            except PublicCallFailure:
-                raise
-            except Exception:
+            except BillingError:
                 raise PublicCallFailure(503, "call_unavailable") from None
+            version = db.get(TenantVoiceExperienceVersion, context_session.experience_version_id)
+            submission = db.get(TenantVoiceExperienceSubmission, context_session.submission_id)
+            if version is None or submission is None or submission.tenant_id != tenant.id:
+                raise PublicCallFailure(503, "call_unavailable")
+            runtime = self.runtime_factory(db)
+            try:
+                provider = runtime.require_runnable_agent(tenant.id, version.agent_id, version.agent_version_id)
+                variables = self._trusted_variables(db, version, submission)
+                runtime.validate_session_variables(dict(variables))
+            except VoiceRuntimeUnavailable as exc:
+                if exc.code == "invalid_context":
+                    logger.warning(
+                        "Voice experience context does not fit the runtime contract",
+                        extra={
+                            "error_code": "session_context_invalid",
+                            "experience_version_id": version.id,
+                            "field_count": len(variables),
+                            "serialized_size": len(json.dumps(variables, default=str).encode()),
+                        },
+                    )
+                raise PublicCallFailure(503, "call_unavailable") from None
+            return PreparedLaunch(provider=provider, variables=variables)
 
     # -- claim ----------------------------------------------------------------
 
@@ -204,6 +232,7 @@ class PublicWebRTCService:
                             crm_voice_call_id=crm_id,
                             provider=provider,
                             status="reserved",
+                            launch_runtime=LAUNCH_RUNTIME_CANONICAL,
                             created_at=now,
                         )
                         .on_conflict_do_nothing(index_elements=["context_session_id"])
@@ -235,8 +264,9 @@ class PublicWebRTCService:
             runtime = db.get(TenantVoiceRuntimeCall, runtime_id)
             if runtime is None:
                 raise PublicCallFailure(409, "call_state_conflict")
-            if runtime.provider_call_id or runtime.status in _LEGACY_ACTIVE_STATES:
-                # A pre-#135 direct-provider call (or one already past ready): never re-launched.
+            if runtime.launch_runtime != LAUNCH_RUNTIME_CANONICAL:
+                # Explicit rollout discriminator: a pre-#135 direct-provider launch may have a provider
+                # call in flight whatever its status says. It is never promoted to a VoiceSession.
                 raise PublicCallFailure(409, "call_already_started")
             if runtime.status in {"failed", "unknown"}:
                 raise PublicCallFailure(503, "call_provider_unavailable")
@@ -257,7 +287,7 @@ class PublicWebRTCService:
             # session cannot be created, or its room could not be dispatched. A transient
             # runtime problem (e.g. the room service unconfigured) leaves it retryable.
             if creating or exc.code == "dispatch_failed":
-                self._fail(runtime_id, exc.code)
+                self._fail(runtime_id, exc.code)  # ``not_configured`` stays retryable
             if exc.code == "terminal":
                 raise PublicCallFailure(409, "call_already_started") from None
             if exc.code == "dispatch_failed":
@@ -278,6 +308,7 @@ class PublicWebRTCService:
             if version is None or submission is None:
                 raise VoiceRuntimeUnavailable("unavailable")
             variables = self._trusted_variables(db, version, submission)
+            self.runtime_factory(db).validate_session_variables(dict(variables))
             args = dict(
                 tenant_id=runtime.tenant_id,
                 agent_id=version.agent_id,
@@ -309,13 +340,17 @@ class PublicWebRTCService:
     def _trusted_variables(
         db: Session, version: TenantVoiceExperienceVersion, submission: TenantVoiceExperienceSubmission
     ) -> dict[str, object]:
-        """Variables come only from the persisted submission, never from the request. Fields
-        the Context Schema marks ``internal_only`` never reach the agent."""
-        modes = {
-            key: mode
-            for key, mode in db.execute(
-                select(TenantVoiceContextField.key, TenantVoiceContextField.collection_mode).where(
-                    TenantVoiceContextField.schema_id == version.context_schema_id
+        """Business variables come only from the persisted submission, never from the request, and
+        only for fields the Context Schema collects BEFORE the call. ``internal_only`` and
+        ``collect_during_call`` values never reach the agent. The locale is session metadata
+        (AgentVersion.language / ExperienceVersion.default_locale), not a variable: it must not
+        spend one of SessionContextV1's 20 slots."""
+        public_keys = {
+            key
+            for (key,) in db.execute(
+                select(TenantVoiceContextField.key).where(
+                    TenantVoiceContextField.schema_id == version.context_schema_id,
+                    TenantVoiceContextField.collection_mode.in_(sorted(PUBLIC_CONTEXT_COLLECTION_MODES)),
                 )
             ).all()
         }
@@ -324,11 +359,7 @@ class PublicWebRTCService:
                 TenantVoiceExperienceSubmissionValue.submission_id == submission.id
             )
         ).all()
-        variables: dict[str, object] = {
-            row.field_key: row.value_json for row in rows if modes.get(row.field_key) != "internal_only"
-        }
-        variables["locale"] = submission.locale or "es"
-        return variables
+        return {row.field_key: row.value_json for row in rows if row.field_key in public_keys}
 
     def _fail(self, runtime_id: str, code: str) -> None:
         failure_code = "provider_connect_failed" if code == "dispatch_failed" else "configuration_unavailable"

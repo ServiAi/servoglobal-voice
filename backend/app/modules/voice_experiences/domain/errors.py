@@ -6,8 +6,10 @@ class PublicCallFailure(Exception):
 
 class VoiceRuntimeUnavailable(Exception):
     """The canonical voice runtime cannot serve a launch. ``code`` is one of
-    ``unavailable`` (agent/config/context not usable), ``terminal`` (the session is
-    over) or ``dispatch_failed`` (the room could not be created)."""
+    ``unavailable`` (agent/config not usable), ``invalid_context`` (the persisted submission
+    does not fit the runtime context contract), ``not_configured`` (the room service is not
+    configured: retryable), ``terminal`` (the session is over) or ``dispatch_failed`` (the room
+    could not be created)."""
 
     def __init__(self, code: str) -> None:
         super().__init__(code)

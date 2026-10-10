@@ -185,6 +185,10 @@ class TenantVoiceRuntimeCall(Base):
             name="ck_voice_runtime_status",
         ),
         sa.CheckConstraint(
+            "launch_runtime IN ('legacy_provider', 'canonical_voice_session')",
+            name="ck_voice_runtime_launch_runtime",
+        ),
+        sa.CheckConstraint(
             "failure_code IS NULL OR failure_code IN ('provider_connect_failed', 'provider_rejected', "
             "'provider_ambiguous', 'provider_inconsistent', 'configuration_unavailable')",
             name="ck_voice_runtime_failure_code",
@@ -199,6 +203,9 @@ class TenantVoiceRuntimeCall(Base):
     experience_version_id: Mapped[str] = mapped_column(ForeignKey("tenant_voice_experience_versions.id"), nullable=False)
     agent_config_id: Mapped[str] = mapped_column(ForeignKey("tenant_voice_agent_configs.id"), nullable=False)
     crm_voice_call_id: Mapped[str] = mapped_column(ForeignKey("crm_voice_calls.id", ondelete="CASCADE"), nullable=False)
+    # Explicit rollout discriminator (never inferred from status/provider_call_id): rows created
+    # before PR #135 are ``legacy_provider`` and are never promoted to a VoiceSession.
+    launch_runtime: Mapped[str] = mapped_column(String(32), nullable=False, default="canonical_voice_session")
     voice_session_id: Mapped[str | None] = mapped_column(
         ForeignKey("voice_sessions.id", name="fk_voice_runtime_voice_session", ondelete="RESTRICT"),
         nullable=True,

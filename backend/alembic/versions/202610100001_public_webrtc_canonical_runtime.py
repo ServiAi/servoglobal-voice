@@ -15,6 +15,15 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # Rollout discriminator: every row that exists today was launched against the provider directly.
+    op.add_column("tenant_voice_runtime_calls", sa.Column("launch_runtime", sa.String(32), nullable=True))
+    op.execute("UPDATE tenant_voice_runtime_calls SET launch_runtime = 'legacy_provider'")
+    op.alter_column("tenant_voice_runtime_calls", "launch_runtime", existing_type=sa.String(32), nullable=False)
+    op.create_check_constraint(
+        "ck_voice_runtime_launch_runtime",
+        "tenant_voice_runtime_calls",
+        "launch_runtime IN ('legacy_provider', 'canonical_voice_session')",
+    )
     op.add_column("tenant_voice_runtime_calls", sa.Column("voice_session_id", sa.String(36), nullable=True))
     op.create_foreign_key(
         "fk_voice_runtime_voice_session",
@@ -38,3 +47,5 @@ def downgrade() -> None:
     op.drop_index("uq_voice_runtime_voice_session", table_name="tenant_voice_runtime_calls")
     op.drop_constraint("fk_voice_runtime_voice_session", "tenant_voice_runtime_calls", type_="foreignkey")
     op.drop_column("tenant_voice_runtime_calls", "voice_session_id")
+    op.drop_constraint("ck_voice_runtime_launch_runtime", "tenant_voice_runtime_calls", type_="check")
+    op.drop_column("tenant_voice_runtime_calls", "launch_runtime")

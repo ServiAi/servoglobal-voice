@@ -69,14 +69,25 @@ class PublicWebRTCCanonicalRuntimeMigrationTests(unittest.TestCase):
             with Operations.context(MigrationContext.configure(self.connection)):
                 step()
 
-    def _runtime(self, voice_session_id: str | None = None) -> str:
+    def _legacy_row(self, status: str = "starting") -> str:
+        """A row as it exists BEFORE the migration (no launch_runtime column yet)."""
         row_id = str(uuid4())
-        statement = (
-            "INSERT INTO tenant_voice_runtime_calls (id, status) VALUES (:id, 'ready')"
-            if voice_session_id is None
-            else "INSERT INTO tenant_voice_runtime_calls (id, status, voice_session_id) VALUES (:id, 'ready', :vs)"
+        self.connection.execute(
+            text("INSERT INTO tenant_voice_runtime_calls (id, status) VALUES (:id, :status)"),
+            {"id": row_id, "status": status},
         )
-        self.connection.execute(text(statement), {"id": row_id, "vs": voice_session_id})
+        return row_id
+
+    def _runtime(self, voice_session_id: str | None = None, launch_runtime: str = "canonical_voice_session") -> str:
+        """A row inserted AFTER the migration."""
+        row_id = str(uuid4())
+        self.connection.execute(
+            text(
+                "INSERT INTO tenant_voice_runtime_calls (id, status, launch_runtime, voice_session_id) "
+                "VALUES (:id, 'ready', :runtime, :vs)"
+            ),
+            {"id": row_id, "runtime": launch_runtime, "vs": voice_session_id},
+        )
         return row_id
 
     def _session(self) -> str:
@@ -85,21 +96,39 @@ class PublicWebRTCCanonicalRuntimeMigrationTests(unittest.TestCase):
         return session_id
 
     def test_legacy_rows_stay_null_and_canonical_rows_correlate(self) -> None:
-        legacy = self._runtime()
+        legacy = [self._legacy_row(status) for status in ("starting", "reserved", "ready", "ended", "unknown")]
         self.connection.commit()
         self._run(self.migration.upgrade)
 
-        self.assertIsNone(self.connection.execute(
-            text("SELECT voice_session_id FROM tenant_voice_runtime_calls WHERE id = :id"), {"id": legacy}
-        ).scalar_one())
+        rows = self.connection.execute(
+            text("SELECT launch_runtime, voice_session_id FROM tenant_voice_runtime_calls WHERE id = ANY(:ids)"),
+            {"ids": legacy},
+        ).all()
+        self.assertEqual(rows, [("legacy_provider", None)] * len(legacy))  # every pre-existing row is legacy
         columns = {c["name"]: c for c in inspect(self.connection).get_columns("tenant_voice_runtime_calls", schema=self.schema)}
         self.assertTrue(columns["voice_session_id"]["nullable"])
+        self.assertFalse(columns["launch_runtime"]["nullable"])
         session_id = self._session()
         canonical = self._runtime(session_id)
         self.assertEqual(self.connection.execute(
             text("SELECT voice_session_id FROM tenant_voice_runtime_calls WHERE id = :id"), {"id": canonical}
         ).scalar_one(), session_id)
+        self.assertEqual(self.connection.execute(
+            text("SELECT launch_runtime FROM tenant_voice_runtime_calls WHERE id = :id"), {"id": canonical}
+        ).scalar_one(), "canonical_voice_session")
         self.connection.commit()
+
+    def test_launch_runtime_only_accepts_the_two_known_modes(self) -> None:
+        self._run(self.migration.upgrade)
+        self._runtime(launch_runtime="legacy_provider")
+        self._runtime(launch_runtime="canonical_voice_session")
+        self.connection.commit()
+        with self.assertRaises(IntegrityError):
+            self._runtime(launch_runtime="foo")
+        self.connection.rollback()
+        with self.assertRaises(IntegrityError):  # NOT NULL after the backfill
+            self.connection.execute(text("INSERT INTO tenant_voice_runtime_calls (id, status) VALUES (:id, 'ready')"), {"id": str(uuid4())})
+        self.connection.rollback()
 
     def test_one_session_belongs_to_one_ledger_row_and_the_fk_is_enforced(self) -> None:
         self._run(self.migration.upgrade)
@@ -124,6 +153,7 @@ class PublicWebRTCCanonicalRuntimeMigrationTests(unittest.TestCase):
         self._run(self.migration.downgrade)
         names = {c["name"] for c in inspect(self.connection).get_columns("tenant_voice_runtime_calls", schema=self.schema)}
         self.assertNotIn("voice_session_id", names)
+        self.assertNotIn("launch_runtime", names)
         self._run(self.migration.upgrade)
         indexes = {i["name"] for i in inspect(self.connection).get_indexes("tenant_voice_runtime_calls", schema=self.schema)}
         self.assertIn("uq_voice_runtime_voice_session", indexes)

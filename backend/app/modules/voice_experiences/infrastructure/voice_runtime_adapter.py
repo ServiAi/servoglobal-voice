@@ -10,11 +10,13 @@ from app.modules.voice.public import (
     ContactResolutionError,
     VoiceSessionError,
     VoiceSessionFacade,
+    validate_session_variables,
 )
 from app.modules.voice_experiences.domain.errors import VoiceRuntimeUnavailable
 from app.modules.voice_experiences.domain.views import LaunchSession, WebRTCJoin
 
 _JOIN_CODES = {
+    "voice_webrtc_not_configured": "not_configured",
     "voice_session_terminal": "terminal",
     "voice_session_dispatch_failed": "dispatch_failed",
 }
@@ -33,6 +35,12 @@ class VoiceRuntimeAdapter:
         if not target.is_realtime or not target.realtime_provider:
             raise VoiceRuntimeUnavailable("unavailable")
         return target.realtime_provider
+
+    def validate_session_variables(self, variables: dict[str, object]) -> None:
+        try:
+            validate_session_variables(variables)
+        except VoiceSessionError as exc:
+            raise VoiceRuntimeUnavailable("invalid_context") from exc
 
     def create_exact_session(
         self,

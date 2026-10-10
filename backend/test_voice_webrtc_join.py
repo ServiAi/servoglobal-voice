@@ -104,6 +104,18 @@ class WebRTCJoinTests(Integration2ATestCase):
             self._join(ended, backend)
         self.assertEqual(backend.calls, 1)
 
+    def test_unconfigured_transport_is_detected_before_dispatch_and_leaves_the_session_requested(self) -> None:
+        session_id, backend = self._session("preflight"), _Backend()
+        for name in ("LIVEKIT_URL", "LIVEKIT_API_KEY", "LIVEKIT_API_SECRET"):
+            with self.subTest(missing=name), patch.object(settings, name, ""):
+                with self.assertRaisesRegex(VoiceSessionError, "^voice_webrtc_not_configured$"):
+                    self._join(session_id, backend)
+                with SessionLocal() as db:
+                    self.assertEqual(db.get(VoiceSession, session_id).status, "requested")
+        self.assertEqual(backend.calls, 0)
+        self.assertEqual(self._join(session_id, backend).room_name, f"sg-vs-{session_id}")  # recovers once configured
+        self.assertEqual(backend.calls, 1)
+
     def test_ensure_join_refuses_non_webrtc_and_foreign_tenant_sessions(self) -> None:
         with self.assertRaises(VoiceSessionError):
             self._join(self._session("sip", channel="sip"), _Backend())

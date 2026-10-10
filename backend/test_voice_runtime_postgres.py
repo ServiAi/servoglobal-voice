@@ -278,6 +278,7 @@ class VoiceRuntimePostgresConcurrencyTests(unittest.TestCase):
                 crm_voice_call_id=crm.id,
                 provider="ultravox",
                 status="reserved",
+                launch_runtime="legacy_provider",
                 created_at=datetime.now(UTC) - timedelta(seconds=10),
             )
             db.add(runtime)
@@ -339,6 +340,7 @@ class VoiceRuntimePostgresConcurrencyTests(unittest.TestCase):
             runtimes = db.scalars(select(TenantVoiceRuntimeCall)).all()
             self.assertEqual((len(sessions), len(runtimes), db.query(CrmVoiceCall).count()), (1, 1, 1))
             self.assertEqual(runtimes[0].voice_session_id, sessions[0].id)
+            self.assertEqual(runtimes[0].launch_runtime, 'canonical_voice_session')
             self.assertEqual(sessions[0].crm_voice_call_id, runtimes[0].crm_voice_call_id)
             self.assertEqual(sessions[0].status, "dispatched")
             self.assertEqual(db.get(TenantVoiceContextSession, seeded["context_id"]).status, "consumed")
@@ -360,7 +362,7 @@ class VoiceRuntimePostgresConcurrencyTests(unittest.TestCase):
         backend = _SlowLiveKit()
         service = self._canonical_launch_service(backend)
         context, _ = service._resolve_session_and_runtime(seeded["slug"], seeded["token"])
-        service._claim(seeded["slug"], context.id, service._precheck(context))  # crash right after the claim
+        service._claim(seeded["slug"], context.id, service._precheck(context).provider)  # crash right after the claim
 
         with _livekit_settings():
             outcomes = self._concurrent_launches(service, seeded)

@@ -17,6 +17,11 @@ class VoiceRuntimePort(Protocol):
         """Provider of an exact, executable, realtime AgentVersion of an ACTIVE agent."""
         ...
 
+    def validate_session_variables(self, variables: dict[str, object]) -> None:
+        """Raises ``VoiceRuntimeUnavailable('invalid_context')`` when the runtime context
+        contract (key count/length, size, secret-like keys) would reject ``variables``."""
+        ...
+
     def create_exact_session(
         self,
         *,
