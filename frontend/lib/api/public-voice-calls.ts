@@ -15,7 +15,7 @@ export type PublicCallErrorCode =
   | 'internal_error';
 
 export type PublicCallResult =
-  | { ok: true; data: { status: 'ready'; join_url: string } }
+  | { ok: true; data: { status: 'ready'; server_url: string; participant_token: string; expires_in: number } }
   | { ok: false; error: PublicCallErrorCode };
 
 export async function launchPublicVoiceCall(slug: string, contextToken: string): Promise<PublicCallResult> {

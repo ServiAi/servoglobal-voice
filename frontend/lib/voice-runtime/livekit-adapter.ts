@@ -16,6 +16,8 @@ type LiveKitAdapterCallbacks = {
   onMicrophoneChange?: (active: boolean) => void;
   onAgentSpeakingChange?: (speaking: boolean) => void;
   onAudioPlaybackBlocked?: () => void;
+  /** The published local microphone as a stream (for level meters); null once released. */
+  onMicrophoneStream?: (stream: MediaStream | null) => void;
 };
 
 export class LiveKitVoiceRuntimeAdapter implements VoiceRuntimeAdapter {
@@ -34,6 +36,7 @@ export class LiveKitVoiceRuntimeAdapter implements VoiceRuntimeAdapter {
     this.unbindListeners();
     this.releaseRemoteAudio();
     this.callbacks.onMicrophoneChange?.(false);
+    this.callbacks.onMicrophoneStream?.(null);
     this.callbacks.onAgentSpeakingChange?.(false);
     this.onState?.('ended');
     this.onState = null;
@@ -80,12 +83,20 @@ export class LiveKitVoiceRuntimeAdapter implements VoiceRuntimeAdapter {
         autoGainControl: true,
       });
       this.callbacks.onMicrophoneChange?.(true);
+      this.publishMicrophoneStream();
       onState('connected');
     } catch (error) {
       onState('error');
       await this.cleanup();
       throw error;
     }
+  }
+
+  private publishMicrophoneStream() {
+    if (!this.callbacks.onMicrophoneStream) return;
+    const mediaTrack = this.room.localParticipant.getTrackPublication?.(Track.Source.Microphone)?.track?.mediaStreamTrack;
+    // The published track itself feeds the meter: no second getUserMedia capture.
+    this.callbacks.onMicrophoneStream(mediaTrack ? new MediaStream([mediaTrack]) : null);
   }
 
   async enableAudio() {
@@ -129,6 +140,7 @@ export class LiveKitVoiceRuntimeAdapter implements VoiceRuntimeAdapter {
     await this.room.disconnect(true);
     this.releaseRemoteAudio();
     this.callbacks.onMicrophoneChange?.(false);
+    this.callbacks.onMicrophoneStream?.(null);
     this.callbacks.onAgentSpeakingChange?.(false);
     this.onState?.('ended');
     this.onState = null;

@@ -54,6 +54,18 @@ class TranscriptCompleteness(StrEnum):
     NOT_AVAILABLE = "not_available"
 
 
+@dataclass(frozen=True, slots=True)
+class WebRTCJoinInfo:
+    """Everything a browser needs to join a session's LiveKit room. The
+    participant token is sensitive: hand it to the HTTP response and nowhere else."""
+
+    voice_session_id: str
+    server_url: str
+    room_name: str
+    participant_token: str
+    expires_in: int
+
+
 @dataclass(frozen=True)
 class VoiceSessionRef:
     """What other modules get back for a session they asked Voice to create: identifiers and
