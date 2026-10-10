@@ -152,16 +152,25 @@ class TenantVoiceContextSession(Base):
 
 
 class TenantVoiceRuntimeCall(Base):
-    """Legacy public launch ledger, retained unchanged until runtime migration.
-
-    PR #135 replaces direct-provider WebRTC use; PR #136 replaces callback
-    provider/SIP use. This table is not a VoiceSession.
+    """Public launch ledger (one-shot claim, idempotency/recovery, CRM and
+    VoiceSession correlation). It is NOT the session: for public WebRTC the
+    authoritative lifecycle lives in ``voice_sessions`` (``voice_session_id``);
+    ``provider`` is only a compatibility snapshot there and never selects the
+    runtime. Rows created before PR #135 (direct provider call) keep a NULL
+    ``voice_session_id``. Callback/PSTN still uses the legacy columns until PR #136.
     """
 
     __tablename__ = "tenant_voice_runtime_calls"
     __table_args__ = (
         UniqueConstraint("context_session_id", name="uq_voice_runtime_context_session"),
         UniqueConstraint("crm_voice_call_id", name="uq_voice_runtime_crm_call"),
+        Index(
+            "uq_voice_runtime_voice_session",
+            "voice_session_id",
+            unique=True,
+            postgresql_where=sa.text("voice_session_id IS NOT NULL"),
+            sqlite_where=sa.text("voice_session_id IS NOT NULL"),
+        ),
         Index("ix_voice_runtime_tenant_status", "tenant_id", "status"),
         Index(
             "uq_voice_runtime_provider_call",
@@ -190,6 +199,10 @@ class TenantVoiceRuntimeCall(Base):
     experience_version_id: Mapped[str] = mapped_column(ForeignKey("tenant_voice_experience_versions.id"), nullable=False)
     agent_config_id: Mapped[str] = mapped_column(ForeignKey("tenant_voice_agent_configs.id"), nullable=False)
     crm_voice_call_id: Mapped[str] = mapped_column(ForeignKey("crm_voice_calls.id", ondelete="CASCADE"), nullable=False)
+    voice_session_id: Mapped[str | None] = mapped_column(
+        ForeignKey("voice_sessions.id", name="fk_voice_runtime_voice_session", ondelete="RESTRICT"),
+        nullable=True,
+    )
     provider: Mapped[str] = mapped_column(String(40), nullable=False, default="ultravox")
     provider_call_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="reserved")

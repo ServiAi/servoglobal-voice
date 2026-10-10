@@ -29,8 +29,11 @@ class VoiceRuntimeDispatcher:
         return AgentsFacade(self.sessions.db).get_agent_status(session.tenant_id, session.agent_id)
 
     async def dispatch(self, session: VoiceSession) -> VoiceSession:
-        self.sessions.db.refresh(session)
+        # Row lock: of N concurrent callers exactly one sees "requested" and claims the
+        # dispatch; the others wait here, then see "dispatching" and return untouched.
+        self.sessions.db.refresh(session, with_for_update=True)
         if session.status != "requested" or self._agent_status(session) != "active":
+            self.sessions.db.commit()  # release the row lock
             return session
         self.sessions.transition(session, "dispatching")
         try:

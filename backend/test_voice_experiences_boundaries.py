@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import functools
 import hashlib
 import inspect
 import io
@@ -47,22 +48,52 @@ def _hides_implementation(annotation: object) -> bool:
 
 
 BASE_REF = os.environ.get("OPENAPI_BASE_REF", "origin/develop")
-_OPENAPI_SCRIPT = (
-    "import hashlib, json, sys; sys.path.insert(0, '.'); from app.main import app; "
-    "print(hashlib.sha256(json.dumps(app.openapi(), sort_keys=True, separators=(',', ':')).encode()).hexdigest())"
+_SNAPSHOT_SCRIPT = """
+import json, sys
+sys.path.insert(0, '.')
+import app.models  # noqa: F401
+from app.main import app
+from app.db.base import Base
+from sqlalchemy.dialects import postgresql
+from sqlalchemy.schema import CreateIndex, CreateTable
+
+print(json.dumps({"openapi": app.openapi(), "ddl": %s}, sort_keys=True, separators=(",", ":")))
+""" % "__DDL_EXPR__"
+_DDL_EXPR = (
+    "{**{t.name: str(CreateTable(t).compile(dialect=postgresql.dialect())) for t in Base.metadata.tables.values()},"
+    " **{'index:' + (i.name or ''): str(CreateIndex(i).compile(dialect=postgresql.dialect()))"
+    " for t in Base.metadata.tables.values() for i in t.indexes}}"
 )
+_SNAPSHOT_SCRIPT = _SNAPSHOT_SCRIPT.replace("__DDL_EXPR__", _DDL_EXPR)
 
 
 def _openapi_digest(spec: dict) -> str:
     return hashlib.sha256(json.dumps(spec, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
-def _base_openapi_digest() -> str:
-    """Digest of the base ref's full OpenAPI, produced by importing its ``app`` from ``git archive``."""
+def _ddl_snapshot() -> dict[str, str]:
+    import app.models  # noqa: F401
+    from app.db.base import Base
+    from sqlalchemy.dialects import postgresql
+    from sqlalchemy.schema import CreateIndex, CreateTable
+
+    dialect = postgresql.dialect()
+    return {
+        **{t.name: str(CreateTable(t).compile(dialect=dialect)) for t in Base.metadata.tables.values()},
+        **{
+            "index:" + (i.name or ""): str(CreateIndex(i).compile(dialect=dialect))
+            for t in Base.metadata.tables.values()
+            for i in t.indexes
+        },
+    }
+
+
+@functools.lru_cache(maxsize=1)
+def _base_snapshot() -> dict:
+    """The base ref's full OpenAPI and per-table DDL, produced by importing its ``app`` from
+    ``git archive`` in this same environment (so dependency versions cannot create false diffs)."""
     repo = Path(__file__).resolve().parent.parent
-    archive = subprocess.run(
-        ["git", "archive", BASE_REF, "backend/app"], cwd=repo, capture_output=True
-    )
+    archive = subprocess.run(["git", "archive", BASE_REF, "backend/app"], cwd=repo, capture_output=True)
     if archive.returncode != 0:
         if os.environ.get("CI"):
             raise AssertionError(f"base ref {BASE_REF} unavailable in CI: {archive.stderr.decode()[:200]}")
@@ -72,7 +103,7 @@ def _base_openapi_digest() -> str:
             tar.extractall(tmp, filter="data")
         env = {key: value for key, value in os.environ.items() if key != "PYTHONPATH"}
         result = subprocess.run(
-            [sys.executable, "-c", _OPENAPI_SCRIPT],
+            [sys.executable, "-c", _SNAPSHOT_SCRIPT],
             cwd=Path(tmp) / "backend",
             env=env,
             capture_output=True,
@@ -80,8 +111,8 @@ def _base_openapi_digest() -> str:
             check=False,
         )
     if result.returncode != 0:
-        raise AssertionError(f"base OpenAPI generation failed: {result.stderr[-500:]}")
-    return result.stdout.strip().splitlines()[-1]
+        raise AssertionError(f"base snapshot generation failed: {result.stderr[-500:]}")
+    return json.loads(result.stdout.strip().splitlines()[-1])
 
 
 class VoiceExperiencesBoundaryTests(unittest.TestCase):
@@ -335,7 +366,7 @@ class VoiceExperiencesBoundaryTests(unittest.TestCase):
                         )
                     )
 
-    def test_ddl_matches_expected_canonical_binding_delta(self) -> None:
+    def test_ddl_differs_from_base_only_by_the_voice_session_correlation(self) -> None:
         import app.models
         from app.db.base import Base
         from app.modules.voice_experiences.infrastructure import models as voice_models  # noqa: F401
@@ -350,8 +381,19 @@ class VoiceExperiencesBoundaryTests(unittest.TestCase):
             for table in tables
             for index in sorted(table.indexes, key=lambda item: item.name or "")
         )
-        actual = hashlib.sha256("\n".join(ddl).encode()).hexdigest()
-        self.assertEqual(actual, "93e926f83628c73f6233e687879c4d5ce3175e39ab326d8099d8671b14061efd")
+        self.assertTrue(ddl)
+        base, branch = _base_snapshot()["ddl"], _ddl_snapshot()
+        changed = {key for key in base.keys() | branch.keys() if base.get(key) != branch.get(key)}
+        # PR #135: the launch ledger gains the VoiceSession correlation, nothing else.
+        self.assertEqual(changed, {"tenant_voice_runtime_calls", "index:uq_voice_runtime_voice_session"})
+        runtime_calls = Base.metadata.tables["tenant_voice_runtime_calls"]
+        self.assertTrue(runtime_calls.c.voice_session_id.nullable)
+        self.assertEqual(
+            {fk.name for fk in runtime_calls.c.voice_session_id.foreign_keys}, {"fk_voice_runtime_voice_session"}
+        )
+        self.assertEqual(
+            {fk.ondelete for fk in runtime_calls.c.voice_session_id.foreign_keys}, {"RESTRICT"}
+        )
         experiences = Base.metadata.tables["tenant_voice_experiences"]
         versions = Base.metadata.tables["tenant_voice_experience_versions"]
         self.assertFalse(experiences.c.agent_id.nullable)
@@ -381,18 +423,89 @@ class VoiceExperiencesBoundaryTests(unittest.TestCase):
             {"fk_tenant_voice_experience_versions_agent_version"},
         )
 
-    def test_openapi_matches_develop_baseline(self) -> None:
-        """Full OpenAPI (paths, requestBody, responses, components.schemas, enums, required,
-        nullable, defaults, constraints, $refs) must equal the base branch's, generated in
-        this same environment so dependency versions cannot create false diffs."""
+    def test_public_webrtc_path_uses_the_canonical_runtime_and_no_provider_or_legacy_code(self) -> None:
+        forbidden = (
+            "ultravox", "app.services", "app.models", "app.modules.voice_legacy",
+            "app.modules.voice_providers", "app.modules.voice.application",
+            "app.modules.voice.infrastructure", "app.modules.voice_experiences.infrastructure.legacy_runtime",
+        )
+        paths = [
+            MODULE / "application" / "public_webrtc_service.py",
+            MODULE / "application" / "ports.py",
+            MODULE / "infrastructure" / "voice_runtime_adapter.py",
+        ]
+        for path in paths:
+            for imported in _imports(path):
+                with self.subTest(path=path.name, imported=imported):
+                    self.assertFalse(
+                        any(imported == prefix or imported.startswith(prefix + ".") for prefix in forbidden),
+                        imported,
+                    )
+            source = path.read_text(encoding="utf-8")
+            for name in ("VoiceConfigService", "TenantVoiceProviderConfig", "TenantVoiceAgentConfig",
+                         "VoiceExperienceRuntimeProvider", "VoiceLegacyFacade"):
+                self.assertNotIn(name, source, f"{name} in {path.name}")
+
+    def test_voice_experiences_reaches_voice_only_through_its_public_api(self) -> None:
+        for path in _files(MODULE):
+            for imported in _imports(path):
+                if imported.startswith("app.modules.voice."):
+                    with self.subTest(path=path.relative_to(APP), imported=imported):
+                        self.assertEqual(imported, "app.modules.voice.public")
+
+    def test_legacy_public_webrtc_adapters_have_no_production_callers(self) -> None:
+        legacy = MODULE / "infrastructure" / "legacy_runtime"
+        for path in _files(APP):
+            if legacy in path.parents:
+                continue
+            for imported in _imports(path):
+                with self.subTest(path=path.relative_to(APP), imported=imported):
+                    self.assertFalse(
+                        imported.endswith(("legacy_runtime.public_call_compat", "legacy_runtime.provider_adapter")),
+                        "dead compatibility code (removed in PR #137) must not regain callers",
+                    )
+
+    def test_webrtc_join_info_is_a_frozen_framework_free_dto(self) -> None:
+        import typing
+
+        from app.modules.voice import public as voice_public
+
+        dto = voice_public.WebRTCJoinInfo
+        self.assertTrue(is_dataclass(dto) and dto.__dataclass_params__.frozen)
+        self.assertTrue(hasattr(dto, "__slots__"))
+        hints = typing.get_type_hints(dto)
+        self.assertEqual(set(hints), {"voice_session_id", "server_url", "room_name", "participant_token", "expires_in"})
+        self.assertFalse(any(_hides_implementation(hint) for hint in hints.values()))
+
+    def test_the_public_response_schema_cannot_leak_internal_identifiers(self) -> None:
+        from app.modules.voice_experiences.api.schemas.public_voice_calls import PublicVoiceCallResponse
+
+        self.assertEqual(
+            set(PublicVoiceCallResponse.model_fields),
+            {"status", "server_url", "participant_token", "expires_in", "capabilities"},
+        )
+
+    def test_openapi_differs_from_base_only_by_the_public_webrtc_response(self) -> None:
+        """Paths (so request bodies, parameters, every response and error), every other component
+        schema, and the security schemes must equal the base's; only PublicVoiceCallResponse changes."""
         from app.main import app
 
-        base = _base_openapi_digest()
-        self.assertEqual(
-            _openapi_digest(app.openapi()),
-            base,
-            "OpenAPI differs from the base branch; no normalization is applied.",
-        )
+        base, branch = _base_snapshot()["openapi"], json.loads(json.dumps(app.openapi()))
+        self.assertEqual(branch["paths"], base["paths"])
+        base_schemas, branch_schemas = base["components"]["schemas"], branch["components"]["schemas"]
+        self.assertEqual(set(branch_schemas), set(base_schemas))
+        changed = {name for name in base_schemas if base_schemas[name] != branch_schemas[name]}
+        self.assertEqual(changed, {"PublicVoiceCallResponse"})
+        for key in set(base) | set(branch):
+            if key not in ("paths", "components"):
+                self.assertEqual(base.get(key), branch.get(key), key)
+        for key in set(base["components"]) - {"schemas"}:
+            self.assertEqual(base["components"][key], branch["components"][key], key)
+        schema = branch_schemas["PublicVoiceCallResponse"]
+        self.assertEqual(set(schema["properties"]), {"status", "server_url", "participant_token", "expires_in", "capabilities"})
+        self.assertEqual(set(schema["required"]), {"status", "server_url", "participant_token", "expires_in"})
+        self.assertNotIn("join_url", schema["properties"])
+        self.assertEqual(base_schemas["PublicVoiceCallResponse"]["properties"]["join_url"], {"type": "string", "title": "Join Url"})
 
     def test_openapi_digest_detects_schema_level_changes(self) -> None:
         import copy

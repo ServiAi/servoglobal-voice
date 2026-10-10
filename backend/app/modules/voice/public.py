@@ -42,6 +42,7 @@ from app.modules.voice.domain.views import (
     ToolBindingView,
     ToolSessionView,
     VoiceSessionRef,
+    WebRTCJoinInfo,
 )
 
 __all__ = [
@@ -68,6 +69,7 @@ __all__ = [
     "VoiceSessionNotFoundError",
     "VoiceSessionsBusyError",
     "VoiceTelephonyFacade",
+    "WebRTCJoinInfo",
 ]
 
 
@@ -77,13 +79,14 @@ from app.modules.voice.domain.views import TranscriptCompleteness, VoiceConversa
 class VoiceSessionFacade:
     """VoiceSession operations other modules may perform, addressed by id."""
 
-    def __init__(self, db: Session) -> None:
+    def __init__(self, db: Session, *, runtime_backend: Any = None) -> None:
         self.db = db
+        self._runtime_backend = runtime_backend  # test seam for the LiveKit dispatch backend
 
     def _ops(self):
         from app.modules.voice.application.facade import VoiceSessionOperations
 
-        return VoiceSessionOperations(self.db)
+        return VoiceSessionOperations(self.db, self._runtime_backend)
 
     def create_session_from_agent_version(
         self,
@@ -110,6 +113,18 @@ class VoiceSessionFacade:
             idempotency_key=idempotency_key, contact_id=contact_id, lead_id=lead_id,
             caller_phone=caller_phone, variables=variables, purpose=purpose, qa_context_mode=qa_context_mode,
         )
+
+    def attach_crm_call(self, session_id: str, tenant_id: str, crm_voice_call_id: str) -> None:
+        """Correlates a session with its CRM call and commits. Idempotent. Raises
+        VoiceSessionError (crm_voice_call_not_found, crm_voice_call_conflict) or
+        VoiceSessionNotFoundError."""
+        self._ops().attach_crm_call(session_id, tenant_id, crm_voice_call_id)
+
+    async def ensure_webrtc_join(self, session_id: str, tenant_id: str) -> WebRTCJoinInfo:
+        """Dispatches the room exactly once, then issues a fresh participant token.
+        Replays and concurrent callers never dispatch again. Raises VoiceSessionError
+        (voice_session_terminal, voice_session_dispatch_failed, ...)."""
+        return await self._ops().ensure_webrtc_join(session_id, tenant_id)
 
     def get_tool_session(self, session_id: str) -> ToolSessionView:
         """Raises VoiceSessionNotFoundError."""

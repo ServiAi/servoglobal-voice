@@ -134,7 +134,13 @@ test.beforeAll(async () => {
     if (request.method === 'POST' && request.url?.endsWith('/calls')) {
       callLaunches += 1;
       response.writeHead(200, { ...cors, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
-      response.end(JSON.stringify({ status: 'ready', join_url: 'https://provider.invalid/join/secret' }));
+      response.end(JSON.stringify({
+        status: 'ready',
+        server_url: 'wss://livekit.invalid',
+        participant_token: 'test-participant-token',
+        expires_in: 300,
+        capabilities: { submissions: true, calls: true },
+      }));
       return;
     }
     if (request.method === 'POST' && request.url?.endsWith('/callback-requests')) {
@@ -306,7 +312,10 @@ test('preflights microphone, starts one fake WebRTC call, and leaks neither capa
     const stop = () => { (window as typeof window & { __preflightStopped?: boolean }).__preflightStopped = true; };
     Object.defineProperty(navigator.mediaDevices, 'getUserMedia', {
       configurable: true,
-      value: async () => ({ getTracks: () => [{ stop }] }),
+      value: async () => {
+        (window as typeof window & { __micRequests?: number }).__micRequests = ((window as typeof window & { __micRequests?: number }).__micRequests ?? 0) + 1;
+        return { getTracks: () => [{ stop }] };
+      },
     });
   });
   await completeRequiredFields(page);
@@ -321,12 +330,14 @@ test('preflights microphone, starts one fake WebRTC call, and leaks neither capa
   await expect(page.getByTestId('call-duration')).toHaveText(/^\d{2}:\d{2}$/);
   await expect(page.getByTestId('call-duration')).not.toHaveText('00:00', { timeout: 2_500 });
   expect(callLaunches).toBe(start + 1);
-  expect(await page.evaluate(() => (window as typeof window & { __preflightStopped?: boolean }).__preflightStopped)).not.toBe(true);
-  await expect(page.getByText('https://provider.invalid/join/secret')).toHaveCount(0);
-  expect((await context.cookies()).some((cookie) => cookie.value.includes('secret'))).toBe(false);
+  // One permission probe, released immediately: the runtime captures the only real microphone track.
+  expect(await page.evaluate(() => (window as typeof window & { __micRequests?: number }).__micRequests)).toBe(1);
+  expect(await page.evaluate(() => (window as typeof window & { __preflightStopped?: boolean }).__preflightStopped)).toBe(true);
+  await expect(page.getByText('test-participant-token')).toHaveCount(0);
+  await expect(page.getByText('wss://livekit.invalid')).toHaveCount(0);
+  expect((await context.cookies()).some((cookie) => cookie.value.includes('test-participant-token'))).toBe(false);
   await page.getByRole('button', { name: 'End call' }).click();
   await expect(page.getByText('Call ended')).toBeVisible();
-  expect(await page.evaluate(() => (window as typeof window & { __preflightStopped?: boolean }).__preflightStopped)).toBe(true);
 });
 
 test('microphone denial never launches a call', async ({ page }) => {
@@ -427,6 +438,17 @@ test('keeps the public client server-only, unauthenticated, and uncached', () =>
   expect(component).toContain("NEXT_PUBLIC_VOICE_PUBLIC_TURNSTILE_TEST_MODE === '1'");
   expect(component).not.toMatch(/NODE_ENV|hostname|localhost/);
   expect(component).toContain('disabled={!turnstileToken || isSubmitting}');
+});
+
+test('public runtime joins through LiveKit and never constructs a provider adapter', () => {
+  const hook = readFileSync(resolve(process.cwd(), 'hooks/usePublicVoiceRuntime.ts'), 'utf8');
+  const client = readFileSync(resolve(process.cwd(), 'lib/api/public-voice-calls.ts'), 'utf8');
+
+  expect(hook).toContain("import('@/lib/voice-runtime/livekit-adapter')");
+  expect(hook).toContain('onMicrophoneStream');
+  expect(hook).not.toMatch(/ultravox|@ultravox\/client|join_url|joinUrl/i);
+  expect(client).not.toMatch(/join_url/);
+  expect(client).toContain('participant_token');
 });
 
 test('keeps public translations aligned between Spanish and English', () => {

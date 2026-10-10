@@ -44,6 +44,7 @@ from app.modules.voice.application.context_resolution import ContactResolutionSe
 from app.modules.voice.application.runtime_dispatcher import VoiceRuntimeDispatcher
 from app.modules.voice.application.runtime_events import RuntimeEventIngestor
 from app.modules.voice.application.session_service import VoiceSessionService
+from app.modules.voice.application.webrtc import WebRTCJoinService
 from app.modules.voice.domain.errors import (
     ContactResolutionError,
     InvalidRuntimeEventError,
@@ -215,55 +216,13 @@ def create_webrtc_participant_token(
     try:
         FeatureFlags(db).require_enabled(context.tenant_id, VOICE_RUNTIME_V2)
         session = VoiceSessionService(db).get(session_id, tenant_id=context.tenant_id)
-        if _is_terminal(db, session):
-            raise VoiceSessionError("Voice session is terminal.")
-        if session.channel != "webrtc" or session.runtime_engine != "livekit" or not session.livekit_room_name:
-            raise VoiceSessionError("Voice session is not ready for LiveKit WebRTC.")
-        if not all((settings.LIVEKIT_URL, settings.LIVEKIT_API_KEY, settings.LIVEKIT_API_SECRET)):
-            raise VoiceSessionError("LiveKit WebRTC is not configured.")
-
-        from livekit import api
-
-        ttl_seconds = max(30, min(settings.VOICE_WEBRTC_TOKEN_TTL_SECONDS, 600))
-        token = (
-            api.AccessToken(settings.LIVEKIT_API_KEY, settings.LIVEKIT_API_SECRET)
-            .with_identity(f"web-{uuid4()}")
-            .with_ttl(timedelta(seconds=ttl_seconds))
-            .with_grants(
-                api.VideoGrants(
-                    room_join=True,
-                    room=session.livekit_room_name,
-                    can_subscribe=True,
-                    can_publish=True,
-                    can_publish_data=False,
-                    can_publish_sources=["microphone"],
-                    room_create=False,
-                    room_admin=False,
-                    room_record=False,
-                    ingress_admin=False,
-                    can_update_own_metadata=False,
-                )
-            )
-            .to_jwt()
-        )
-        logger.info(
-            "Voice WebRTC participant token issued",
-            extra={
-                "tenant_id": session.tenant_id,
-                "voice_session_id": session.id,
-                "agent_id": session.agent_id,
-                "agent_version_id": session.agent_version_id,
-                "livekit_room_name": session.livekit_room_name,
-                "runtime_engine": session.runtime_engine,
-                "channel": session.channel,
-            },
-        )
+        join = WebRTCJoinService(db).issue_token(session)
         return WebRTCParticipantTokenResponse(
-            voice_session_id=session.id,
-            server_url=settings.LIVEKIT_URL,
-            room_name=session.livekit_room_name,
-            participant_token=token,
-            expires_in=ttl_seconds,
+            voice_session_id=join.voice_session_id,
+            server_url=join.server_url,
+            room_name=join.room_name,
+            participant_token=join.participant_token,
+            expires_in=join.expires_in,
         )
     except FeatureDisabledError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc

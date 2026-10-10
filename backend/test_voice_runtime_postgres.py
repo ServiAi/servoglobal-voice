@@ -6,10 +6,12 @@ Run only against a dedicated disposable database:
     .\.venv\Scripts\python.exe -m unittest test_voice_runtime_postgres -v
 """
 
+import asyncio
 import hashlib
 import os
 import unittest
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import ExitStack
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from threading import Barrier
@@ -29,7 +31,11 @@ from sqlalchemy.orm import sessionmaker
 
 from _evaluation_test_seed import seed_voice_technical_health
 import app.models  # noqa: F401  (register every ORM table before create_all)
+from app.core.config import settings as app_settings
 from app.db.base import Base
+from app.modules.identity.public import VOICE_RUNTIME_V2
+from app.modules.voice.infrastructure.livekit_runtime import RuntimeDispatchResult
+from app.modules.voice.infrastructure.models import VoiceSession
 from app.modules.analytics.infrastructure.models import Call, CallEvent
 from app.modules.billing.infrastructure.models import TenantBillingPlan
 from app.modules.crm.infrastructure.models import CrmVoiceCall, CrmVoiceCallEvent
@@ -44,11 +50,35 @@ from app.modules.voice_experiences.infrastructure.submission_models import (
     TenantVoiceExperienceSubmission,
     TenantVoiceRuntimeCall,
 )
-from app.modules.voice_experiences.infrastructure.legacy_runtime.public_call_compat import PublicCallFailure, PublicVoiceCallService
+from app.modules.voice_experiences.domain.errors import PublicCallFailure
 from app.services.secret_manager_service import SecretManager
-from app.modules.voice_experiences.infrastructure.legacy_runtime.provider_adapter import ProviderCallResult
 from app.modules.voice_experiences.infrastructure.legacy_runtime.webhook_compat import VoiceRuntimeWebhookService
 from app.modules.voice_experiences.public import VoiceRuntimeWebhookTarget
+
+
+class _SlowLiveKit:
+    """LiveKit dispatch double: slow enough that concurrent launches overlap."""
+
+    def __init__(self) -> None:
+        self.dispatches: list[str] = []
+
+    async def dispatch(self, session_id: str):
+        await asyncio.sleep(0.3)
+        self.dispatches.append(session_id)
+        return RuntimeDispatchResult(f"sg-vs-{session_id}", "dispatch-1")
+
+    async def close_session_room(self, session_id: str) -> None: ...
+
+
+def _livekit_settings():
+    stack = ExitStack()
+    for name, value in (
+        ("LIVEKIT_URL", "wss://livekit.example"),
+        ("LIVEKIT_API_KEY", "test-key"),
+        ("LIVEKIT_API_SECRET", "s" * 32),
+    ):
+        stack.enter_context(patch.object(app_settings, name, value))
+    return stack
 
 
 @unittest.skipUnless(
@@ -227,14 +257,6 @@ class VoiceRuntimePostgresConcurrencyTests(unittest.TestCase):
                 "agent_id": agent.id,
             }
 
-    def _service(self) -> PublicVoiceCallService:
-        return PublicVoiceCallService(
-            session_factory=self.SessionLocal,
-            provider_timeout_seconds=1,
-            reserved_lease_seconds=1,
-            starting_lease_seconds=1,
-        )
-
     def _seed_reserved_runtime(self, seeded: dict[str, str]) -> str:
         with self.SessionLocal() as db:
             crm = CrmVoiceCall(
@@ -278,59 +300,73 @@ class VoiceRuntimePostgresConcurrencyTests(unittest.TestCase):
             lead_id=call.lead_id,
         )
 
-    def test_simultaneous_first_launch_creates_one_runtime_crm_call_and_provider_call(self) -> None:
-        seeded = self._seed_context()
+    def _canonical_launch_service(self, backend):
+        from app.modules.voice_experiences.application.public_webrtc_service import PublicWebRTCService
+        from app.modules.voice_experiences.infrastructure.voice_runtime_adapter import VoiceRuntimeAdapter
+
+        with self.SessionLocal() as db:
+            db.add(
+                TenantFeatureGrant(
+                    tenant_id=db.scalars(select(Tenant.id)).first(),
+                    feature_key=VOICE_RUNTIME_V2,
+                    enabled=True,
+                    limits_json={},
+                )
+            )
+            db.commit()
+        return PublicWebRTCService(
+            session_factory=self.SessionLocal,
+            runtime_factory=lambda db: VoiceRuntimeAdapter(db, runtime_backend=backend),
+        )
+
+    def _concurrent_launches(self, service, seeded):
         barrier = Barrier(2)
 
         def launch():
             barrier.wait()
             try:
-                return self._service().launch(seeded["slug"], seeded["token"])["status"]
+                join = asyncio.run(service.launch(seeded["slug"], seeded["token"]))
+                return ("ok", join.server_url)
             except PublicCallFailure as exc:
-                return exc.code
+                return ("failure", exc.code)
 
-        with patch(
-            "app.modules.voice_experiences.infrastructure.legacy_runtime.provider_adapter.VoiceExperienceRuntimeProvider.create_webrtc_call",
-            return_value=ProviderCallResult("provider-first", "https://provider.invalid/join/first"),
-        ) as create_call, patch(
-            "app.modules.voice_experiences.infrastructure.legacy_runtime.provider_adapter.VoiceExperienceRuntimeProvider.get_call",
-            return_value=ProviderCallResult("provider-first", "https://provider.invalid/join/first"),
-        ):
-            with ThreadPoolExecutor(max_workers=2) as pool:
-                outcomes = list(pool.map(lambda _: launch(), range(2)))
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            return list(pool.map(lambda _: launch(), range(2)))
 
-        self.assertTrue(set(outcomes) <= {"ready", "call_already_started"})
-        self.assertEqual(create_call.call_count, 1)
+    def _assert_one_canonical_launch(self, backend, seeded) -> None:
         with self.SessionLocal() as db:
-            self.assertEqual(db.query(TenantVoiceRuntimeCall).count(), 1)
-            self.assertEqual(db.query(CrmVoiceCall).count(), 1)
+            sessions = db.scalars(select(VoiceSession)).all()
+            runtimes = db.scalars(select(TenantVoiceRuntimeCall)).all()
+            self.assertEqual((len(sessions), len(runtimes), db.query(CrmVoiceCall).count()), (1, 1, 1))
+            self.assertEqual(runtimes[0].voice_session_id, sessions[0].id)
+            self.assertEqual(sessions[0].crm_voice_call_id, runtimes[0].crm_voice_call_id)
+            self.assertEqual(sessions[0].status, "dispatched")
             self.assertEqual(db.get(TenantVoiceContextSession, seeded["context_id"]).status, "consumed")
+        self.assertEqual(backend.dispatches, [sessions[0].id])
 
-    def test_stale_reserved_takeover_has_one_update_returning_winner_and_provider_call(self) -> None:
-        runtime_id = self._seed_reserved_runtime(self._seed_context())
-        barrier = Barrier(2)
+    def test_simultaneous_public_webrtc_launch_creates_one_ledger_crm_call_session_and_room(self) -> None:
+        seeded = self._seed_context()
+        backend = _SlowLiveKit()
+        service = self._canonical_launch_service(backend)
 
-        def recover():
-            barrier.wait()
-            try:
-                return self._service()._recover(runtime_id)["status"]
-            except PublicCallFailure as exc:
-                return exc.code
+        with _livekit_settings():
+            outcomes = self._concurrent_launches(service, seeded)
 
-        with patch(
-            "app.modules.voice_experiences.infrastructure.legacy_runtime.provider_adapter.VoiceExperienceRuntimeProvider.create_webrtc_call",
-            return_value=ProviderCallResult("provider-takeover", "https://provider.invalid/join/takeover"),
-        ) as create_call, patch(
-            "app.modules.voice_experiences.infrastructure.legacy_runtime.provider_adapter.VoiceExperienceRuntimeProvider.get_call",
-            return_value=ProviderCallResult("provider-takeover", "https://provider.invalid/join/takeover"),
-        ):
-            with ThreadPoolExecutor(max_workers=2) as pool:
-                outcomes = list(pool.map(lambda _: recover(), range(2)))
+        self.assertEqual([kind for kind, _ in outcomes], ["ok", "ok"], outcomes)
+        self._assert_one_canonical_launch(backend, seeded)
 
-        self.assertTrue(set(outcomes) <= {"ready", "call_already_started"})
-        self.assertEqual(create_call.call_count, 1)
-        with self.SessionLocal() as db:
-            self.assertEqual(db.get(TenantVoiceRuntimeCall, runtime_id).status, "ready")
+    def test_concurrent_recovery_of_an_already_claimed_launch_converges_on_one_session(self) -> None:
+        seeded = self._seed_context()
+        backend = _SlowLiveKit()
+        service = self._canonical_launch_service(backend)
+        context, _ = service._resolve_session_and_runtime(seeded["slug"], seeded["token"])
+        service._claim(seeded["slug"], context.id, service._precheck(context))  # crash right after the claim
+
+        with _livekit_settings():
+            outcomes = self._concurrent_launches(service, seeded)
+
+        self.assertEqual([kind for kind, _ in outcomes], ["ok", "ok"], outcomes)
+        self._assert_one_canonical_launch(backend, seeded)
 
     def test_concurrent_identical_webhook_has_one_owner_and_one_core_mutation(self) -> None:
         runtime_id = self._seed_reserved_runtime(self._seed_context())
