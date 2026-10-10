@@ -19,6 +19,12 @@ class VoiceContextSchemaReader(Protocol):
     ) -> VoiceContextSchemaSnapshot | None: ...
 
 
+class VoiceAgentReferenceReader(Protocol):
+    def is_agent_referenced(self, tenant_id: str, agent_id: str) -> bool:
+        """True while any Experience or Experience version points at the Agent."""
+        ...
+
+
 class VoiceRuntimeWebhookServicePort(Protocol):
     def resolve_target(
         self, provider: str, payload: dict[str, object]
@@ -38,6 +44,12 @@ class VoiceCallbackWorkerPort(Protocol):
 def create_context_schema_reader(session: DatabaseSession) -> VoiceContextSchemaReader:
     """Resolve the DB adapter lazily so importing this module stays lightweight."""
     from app.modules.voice_experiences.wiring import create_context_schema_reader as create
+
+    return create(session)
+
+
+def create_agent_reference_reader(session: DatabaseSession) -> VoiceAgentReferenceReader:
+    from app.modules.voice_experiences.wiring import create_agent_reference_reader as create
 
     return create(session)
 
@@ -73,6 +85,7 @@ def create_callback_worker(
 __all__ = [
     "DatabaseSession",
     "SessionFactory",
+    "VoiceAgentReferenceReader",
     "VoiceCallbackWorkerPort",
     "VoiceContextFieldSnapshot",
     "VoiceContextOptionSnapshot",
@@ -80,6 +93,7 @@ __all__ = [
     "VoiceContextSchemaSnapshot",
     "VoiceRuntimeWebhookServicePort",
     "VoiceRuntimeWebhookTarget",
+    "create_agent_reference_reader",
     "create_callback_worker",
     "create_context_schema_reader",
     "create_runtime_webhook_service",

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timezone
 from unittest.mock import patch
 
@@ -13,6 +14,8 @@ from app.db.session import SessionLocal
 from app.modules.identity.infrastructure.models import TenantMembership, User
 from app.models.integrations import TenantVoiceAgentConfig
 from app.modules.agents.infrastructure.models import TenantAgent, TenantAgentVersion
+from app.modules.agents.domain.errors import AgentConflictError
+from app.modules.agents.wiring import agent_service
 from app.modules.voice_experiences.application.experience_service import VoiceExperienceService
 from app.modules.voice_experiences.infrastructure.experience_models import (
     TenantVoiceExperience,
@@ -26,7 +29,7 @@ from app.modules.voice_experiences.infrastructure.experience_models import (
 )
 from app.modules.voice_experiences.infrastructure.submission_models import TenantVoiceExperienceSubmission
 from app.modules.voice_experiences.api.schemas.voice_experiences import VoiceExperienceWriteRequest
-from app.modules.identity.application.feature_service import VOICE_EXPERIENCES, TenantFeatureService
+from app.modules.identity.application.feature_service import AGENT_BUILDER, VOICE_EXPERIENCES, TenantFeatureService
 from app.modules.identity.public import FeatureFlags
 from app.modules.voice_experiences.application.experience_service import (
     VoiceExperienceConflictError,
@@ -696,6 +699,47 @@ class VoiceExperienceTests(Integration2ATestCase):
             ).status_code,
             204,
         )
+
+    def test_deleting_a_referenced_agent_is_rejected_before_voice_sessions_are_released(self) -> None:
+        from unittest.mock import AsyncMock
+
+        from app.modules.voice.infrastructure.models import VoiceSession
+
+        self._enable_feature()
+        self.assertEqual(self._create().status_code, 201)
+        agent_id = self._canonical_agent_id(self.agent_id)
+        with SessionLocal() as db:
+            agent = db.get(TenantAgent, agent_id)
+            session = VoiceSession(
+                tenant_id=self.tenant.id,
+                agent_id=agent_id,
+                agent_version_id=agent.published_version_id,
+                channel="internal_test",
+                direction="internal",
+                provider="ultravox",
+                status="connected",
+            )
+            db.add(session)
+            db.commit()
+            session_id = session.id
+        with SessionLocal() as db:
+            TenantFeatureService(db).set_feature(self.tenant.id, AGENT_BUILDER, True, {}, self.user.id)
+            agent_service(db).archive_agent(self.tenant.id, agent_id, None)
+
+        with patch(
+            "app.modules.voice.infrastructure.livekit_runtime.LiveKitRuntimeBackend.close_session_room",
+            new_callable=AsyncMock,
+        ) as close, SessionLocal() as db:
+            with self.assertRaises(AgentConflictError) as raised:
+                asyncio.run(agent_service(db).delete_agent(self.tenant.id, agent_id, None))
+
+        self.assertEqual(str(raised.exception), "agent_delete_experience_referenced")
+        close.assert_not_called()
+        with SessionLocal() as db:
+            untouched = db.get(VoiceSession, session_id)
+            self.assertEqual(untouched.status, "connected")
+            self.assertEqual(untouched.agent_id, agent_id)
+            self.assertIsNotNone(db.get(TenantAgent, agent_id))
 
     def test_delete_referenced_version_is_rejected(self) -> None:
         self._enable_feature()

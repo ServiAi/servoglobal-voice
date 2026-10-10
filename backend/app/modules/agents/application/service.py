@@ -413,6 +413,12 @@ class AgentService:
         agent = self._locked_agent(tenant_id, agent_id)
         if agent.status != "archived":
             raise AgentConflictError("agent_delete_requires_archived")
+        # Refuse before touching Voice: closing LiveKit rooms is not reversible
+        # by a later rollback. The agent row lock serializes this with Experience
+        # publication, which locks the same Agent.
+        references = self.ports.experience_references
+        if references is not None and references.is_agent_referenced(tenant_id, agent.id):
+            raise AgentConflictError("agent_delete_experience_referenced")
         # Voice owns VoiceSession/LiveKit: it closes rooms, cancels and
         # detaches the agent's sessions inside this same transaction.
         try:

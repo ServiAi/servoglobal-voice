@@ -65,9 +65,16 @@ class VoiceSessionsPort(Protocol):
         ...
 
 
+class ExperienceReferencesPort(Protocol):
+    def is_agent_referenced(self, tenant_id: str, agent_id: str) -> bool:
+        """True while a Voice Experience (or one of its versions) uses the Agent."""
+        ...
+
+
 @dataclass(frozen=True)
 class AgentPorts:
     voice_provider: VoiceProviderPort
     legacy_voice: LegacyVoicePort
     integrations: IntegrationReadinessPort
     voice_sessions: VoiceSessionsPort
+    experience_references: ExperienceReferencesPort | None = None
