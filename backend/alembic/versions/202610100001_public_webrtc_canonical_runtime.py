@@ -18,7 +18,15 @@ def upgrade() -> None:
     # Rollout discriminator: every row that exists today was launched against the provider directly.
     op.add_column("tenant_voice_runtime_calls", sa.Column("launch_runtime", sa.String(32), nullable=True))
     op.execute("UPDATE tenant_voice_runtime_calls SET launch_runtime = 'legacy_provider'")
-    op.alter_column("tenant_voice_runtime_calls", "launch_runtime", existing_type=sa.String(32), nullable=False)
+    # Conservative default: during a rolling deploy an old replica (PR #134) keeps inserting rows
+    # without knowing this column, and those are legacy launches. Canonical writers set it explicitly.
+    op.alter_column(
+        "tenant_voice_runtime_calls",
+        "launch_runtime",
+        existing_type=sa.String(32),
+        nullable=False,
+        server_default=sa.text("'legacy_provider'"),
+    )
     op.create_check_constraint(
         "ck_voice_runtime_launch_runtime",
         "tenant_voice_runtime_calls",

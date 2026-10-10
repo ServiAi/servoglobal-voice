@@ -126,9 +126,28 @@ class PublicWebRTCCanonicalRuntimeMigrationTests(unittest.TestCase):
         with self.assertRaises(IntegrityError):
             self._runtime(launch_runtime="foo")
         self.connection.rollback()
-        with self.assertRaises(IntegrityError):  # NOT NULL after the backfill
-            self.connection.execute(text("INSERT INTO tenant_voice_runtime_calls (id, status) VALUES (:id, 'ready')"), {"id": str(uuid4())})
+        with self.assertRaises(IntegrityError):  # NULL is never valid
+            self.connection.execute(
+                text("INSERT INTO tenant_voice_runtime_calls (id, status, launch_runtime) VALUES (:id, 'ready', NULL)"),
+                {"id": str(uuid4())},
+            )
         self.connection.rollback()
+
+    def test_an_old_replica_writing_without_launch_runtime_gets_the_conservative_default(self) -> None:
+        self._run(self.migration.upgrade)
+        old_writer_row = self._legacy_row("starting")  # INSERT (id, status): knows nothing of launch_runtime
+        canonical = self._runtime()  # explicit canonical_voice_session
+        self.connection.commit()
+
+        modes = dict(self.connection.execute(
+            text("SELECT id, launch_runtime FROM tenant_voice_runtime_calls WHERE id = ANY(:ids)"),
+            {"ids": [old_writer_row, canonical]},
+        ).all())
+        self.assertEqual(modes[old_writer_row], "legacy_provider")
+        self.assertEqual(modes[canonical], "canonical_voice_session")
+        column = {c["name"]: c for c in inspect(self.connection).get_columns("tenant_voice_runtime_calls", schema=self.schema)}["launch_runtime"]
+        self.assertFalse(column["nullable"])
+        self.assertIn("legacy_provider", column["default"])
 
     def test_one_session_belongs_to_one_ledger_row_and_the_fk_is_enforced(self) -> None:
         self._run(self.migration.upgrade)

@@ -388,6 +388,8 @@ class VoiceExperiencesBoundaryTests(unittest.TestCase):
         self.assertEqual(changed, {"tenant_voice_runtime_calls", "index:uq_voice_runtime_voice_session"})
         runtime_calls = Base.metadata.tables["tenant_voice_runtime_calls"]
         self.assertFalse(runtime_calls.c.launch_runtime.nullable)
+        self.assertIsNone(runtime_calls.c.launch_runtime.default)  # no implicit canonical classification
+        self.assertIn("legacy_provider", str(runtime_calls.c.launch_runtime.server_default.arg))
         self.assertIn(
             "ck_voice_runtime_launch_runtime",
             {constraint.name for constraint in runtime_calls.constraints},
