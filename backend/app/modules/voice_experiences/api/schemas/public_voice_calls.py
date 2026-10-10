@@ -17,7 +17,9 @@ class PublicVoiceCallCapabilities(BaseModel):
 
 class PublicVoiceCallResponse(BaseModel):
     status: Literal["ready"]
-    join_url: str
+    server_url: str
+    participant_token: str
+    expires_in: int
     capabilities: PublicVoiceCallCapabilities = PublicVoiceCallCapabilities()
 
 

@@ -12,20 +12,22 @@ from sqlalchemy.orm import Session
 from app.modules.agents.public import AgentsFacade
 from app.modules.crm.public import ContactRef, LeadRef
 from app.modules.voice.application.session_service import VoiceSessionService
-from app.modules.voice.domain.errors import VoiceSessionNotFoundError
+from app.modules.voice.domain.errors import VoiceSessionError, VoiceSessionNotFoundError
 from app.modules.voice.domain.session_context import SessionContextV1
 from app.modules.voice.domain.views import (
     SessionEventFact,
     SessionProjectionFacts,
     ToolSessionView,
     VoiceSessionRef,
+    WebRTCJoinInfo,
 )
 from app.modules.voice.infrastructure.models import VoiceSession, VoiceSessionEvent
 
 
 class VoiceSessionOperations:
-    def __init__(self, db: Session) -> None:
+    def __init__(self, db: Session, runtime_backend: Any = None) -> None:
         self.db = db
+        self.runtime_backend = runtime_backend
         self.sessions = VoiceSessionService(db)
 
     def create_session_from_agent_version(
@@ -38,6 +40,32 @@ class VoiceSessionOperations:
             purpose=session.purpose, status=session.status, pipeline_type=session.pipeline_type,
             provider=session.provider,
         )
+
+    def attach_crm_call(self, session_id: str, tenant_id: str, crm_voice_call_id: str) -> None:
+        """Correlates the session with its CRM call (commits). Idempotent; a different
+        call id, another tenant's session or a missing/foreign CRM call is rejected."""
+        from app.modules.crm.public import CrmVoiceCalls
+
+        call = CrmVoiceCalls(self.db).get(crm_voice_call_id)
+        if call is None or call.tenant_id != tenant_id:
+            raise VoiceSessionError("crm_voice_call_not_found")
+        session = self.db.scalar(
+            select(VoiceSession)
+            .where(VoiceSession.id == session_id, VoiceSession.tenant_id == tenant_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        if session is None:
+            raise VoiceSessionNotFoundError("Voice session not found.")
+        if session.crm_voice_call_id not in (None, crm_voice_call_id):
+            raise VoiceSessionError("crm_voice_call_conflict")
+        session.crm_voice_call_id = crm_voice_call_id
+        self.db.commit()
+
+    async def ensure_webrtc_join(self, session_id: str, tenant_id: str) -> WebRTCJoinInfo:
+        from app.modules.voice.application.webrtc import WebRTCJoinService
+
+        return await WebRTCJoinService(self.db, self.runtime_backend).ensure_join(session_id, tenant_id)
 
     def get_tool_session(self, session_id: str) -> ToolSessionView:
         session = self.sessions.get(session_id)

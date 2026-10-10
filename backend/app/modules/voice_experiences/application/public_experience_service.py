@@ -16,8 +16,10 @@ from app.modules.voice_experiences.infrastructure.experience_models import (
 from app.modules.identity.public import VOICE_EXPERIENCES, FeatureFlags
 from app.modules.telephony.public import SipRouteFacade
 
+from app.modules.voice_experiences.domain.limits import PUBLIC_CONTEXT_COLLECTION_MODES
+
 PUBLIC_SLUG_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
-PUBLIC_FIELD_MODES = ("ask_if_missing", "prefill_and_confirm", "trust_prefill")
+PUBLIC_FIELD_MODES = tuple(sorted(PUBLIC_CONTEXT_COLLECTION_MODES))
 CALL_SETTINGS_FIELDS = frozenset({
     "auto_start", "show_microphone_help", "language", "mode",
     "phone_field_key", "default_country", "allowed_countries",

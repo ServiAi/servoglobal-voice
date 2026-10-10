@@ -155,7 +155,7 @@ class PublicVoiceCallService:
                     crm_id, runtime_id = str(uuid4()), str(uuid4())
                     CrmVoiceCalls(db).create(CreateVoiceCallCommand(id=crm_id, tenant_id=context_session.tenant_id, lead_id=submission.crm_lead_id, contact_id=submission.crm_contact_id, provider="ultravox", provider_agent_id=agent.provider_agent_id, direction="webrtc", status="requested"), flush=True)
                     insert = sqlite_insert if db.get_bind().dialect.name == "sqlite" else pg_insert
-                    result = db.execute(insert(TenantVoiceRuntimeCall).values(id=runtime_id, tenant_id=context_session.tenant_id, context_session_id=context_session.id, submission_id=submission.id, experience_id=experience.id, experience_version_id=version.id, agent_config_id=version.agent_config_id, crm_voice_call_id=crm_id, provider="ultravox", status="reserved", created_at=now).on_conflict_do_nothing(index_elements=["context_session_id"]).returning(TenantVoiceRuntimeCall.id)).scalar_one_or_none()
+                    result = db.execute(insert(TenantVoiceRuntimeCall).values(id=runtime_id, tenant_id=context_session.tenant_id, context_session_id=context_session.id, submission_id=submission.id, experience_id=experience.id, experience_version_id=version.id, agent_config_id=version.agent_config_id, crm_voice_call_id=crm_id, provider="ultravox", status="reserved", launch_runtime="legacy_provider", created_at=now).on_conflict_do_nothing(index_elements=["context_session_id"]).returning(TenantVoiceRuntimeCall.id)).scalar_one_or_none()
                     if result is None:
                         raise RuntimeError("claim_lost")
                     if not context_session.mark_consumed(db, now=now, commit=False):

@@ -42,3 +42,20 @@ class VoiceRuntimeWebhookTarget:
     provider_call_id: str | None
     contact_id: str | None
     lead_id: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class LaunchSession:
+    """The canonical VoiceSession a public launch is bound to."""
+
+    session_id: str
+    provider: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class WebRTCJoin:
+    """What the browser may know to join: never ids, room or provider details."""
+
+    server_url: str
+    participant_token: str
+    expires_in: int

@@ -4,6 +4,14 @@ from dataclasses import dataclass
 from collections.abc import Mapping
 
 
+# Context fields the visitor fills in BEFORE the call: the only ones that may feed the agent.
+# ``internal_only`` and ``collect_during_call`` values never reach the runtime context.
+PUBLIC_CONTEXT_COLLECTION_MODES = frozenset({"ask_if_missing", "prefill_and_confirm", "trust_prefill"})
+
+LAUNCH_RUNTIME_LEGACY = "legacy_provider"
+LAUNCH_RUNTIME_CANONICAL = "canonical_voice_session"
+
+
 @dataclass(frozen=True, slots=True)
 class VoiceExperienceLimits:
     max_experiences: int

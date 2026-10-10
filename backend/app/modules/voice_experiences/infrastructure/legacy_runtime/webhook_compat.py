@@ -45,6 +45,9 @@ class VoiceRuntimeWebhookService:
         runtime = self.db.scalar(select(TenantVoiceRuntimeCall).where(TenantVoiceRuntimeCall.crm_voice_call_id == call.id))
         if runtime is None:
             return None
+        if runtime.launch_runtime != "legacy_provider":
+            # A canonical (VoiceSession) launch is owned by Voice: a provider webhook never mutates it.
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Webhook validation failed")
         config = self.config_service.get_provider_config(runtime.tenant_id, provider)
         if not config or provider != call.provider or provider != runtime.provider or config.provider != provider:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Webhook validation failed")

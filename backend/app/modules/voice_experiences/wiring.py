@@ -20,18 +20,11 @@ def create_agent_reference_reader(session: DatabaseSession):
 
 
 def get_public_call_service():
-    from app.core.config import settings
     from app.db.session import SessionLocal
-    from app.modules.voice_experiences.infrastructure.legacy_runtime.public_call_compat import (
-        PublicVoiceCallService,
-    )
+    from app.modules.voice_experiences.application.public_webrtc_service import PublicWebRTCService
+    from app.modules.voice_experiences.infrastructure.voice_runtime_adapter import VoiceRuntimeAdapter
 
-    return PublicVoiceCallService(
-        session_factory=SessionLocal,
-        provider_timeout_seconds=settings.VOICE_RUNTIME_PROVIDER_TIMEOUT_SECONDS,
-        reserved_lease_seconds=settings.VOICE_RUNTIME_RESERVED_LEASE_SECONDS,
-        starting_lease_seconds=settings.VOICE_RUNTIME_STARTING_LEASE_SECONDS,
-    )
+    return PublicWebRTCService(session_factory=SessionLocal, runtime_factory=VoiceRuntimeAdapter)
 
 
 def get_public_callback_service():

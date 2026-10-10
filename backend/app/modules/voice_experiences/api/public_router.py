@@ -35,6 +35,7 @@ from app.modules.voice_experiences.application.submission_service import (
     SubmissionValidationFailed,
 )
 from app.modules.voice_experiences.application.ports import TurnstileVerificationPort
+from app.modules.voice_experiences.application.public_webrtc_service import PublicWebRTCService
 from app.modules.voice_experiences.api.commands import command_from_model
 from app.modules.voice_experiences.application.rate_limiter import (
     VoicePublicRateLimiter,
@@ -251,7 +252,7 @@ async def launch_public_voice_call(
     request: Request,
     response: Response,
     limiter: VoicePublicRateLimiter = Depends(get_public_rate_limiter),
-    service: PublicVoiceCallService = Depends(get_public_call_service),
+    service: PublicWebRTCService = Depends(get_public_call_service),
 ) -> PublicVoiceCallResponse:
     response.headers.update(NO_STORE_HEADERS)
     normalized_ip = resolve_public_client_ip(request, settings.TRUST_CLOUDFLARE_CONNECTING_IP)
@@ -280,7 +281,13 @@ async def launch_public_voice_call(
             settings.VOICE_PUBLIC_CALL_LAUNCH_RATE_LIMIT_TENANT_IP_PER_MINUTE,
         ):
             raise _call_error(status.HTTP_429_TOO_MANY_REQUESTS, "rate_limited")
-        return service.launch(slug, payload.context_token)
+        join = await service.launch(slug, payload.context_token)
+        return PublicVoiceCallResponse(
+            status="ready",
+            server_url=join.server_url,
+            participant_token=join.participant_token,
+            expires_in=join.expires_in,
+        )
     except HTTPException:
         raise
     except PublicCallFailure as exc:
