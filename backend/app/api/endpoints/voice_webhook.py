@@ -22,13 +22,16 @@ router = APIRouter(prefix="/api/v1/voice", tags=["Voice Webhooks"])
 
 def _billed_minutes(payload: dict[str, Any], call_obj: dict[str, Any]) -> Decimal | None:
     """``billedMinutes`` wins; otherwise the provider's ``billedDuration`` (e.g. ``75s`` -> 1.25)."""
-    raw = call_obj.get("billedMinutes") or payload.get("billedMinutes")
+    raw = call_obj.get("billedMinutes")
+    if raw is None:
+        raw = payload.get("billedMinutes")
     if raw is not None:
         try:
             return Decimal(str(raw))
         except (InvalidOperation, ValueError):
             return None
-    return provider_duration_to_minutes(call_obj.get("billedDuration") or payload.get("billedDuration"))
+    duration = call_obj.get("billedDuration")
+    return provider_duration_to_minutes(payload.get("billedDuration") if duration is None else duration)
 
 _NOTIFIABLE_CALL_STATUSES = {"completed", "failed", "no_answer", "busy"}
 

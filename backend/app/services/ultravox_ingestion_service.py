@@ -368,17 +368,14 @@ class UltravoxIngestionService:
 
     def _billed_minutes(self, payload: dict[str, Any]) -> Decimal | None:
         metadata = self._metadata(payload)
-        explicit_minutes = self._decimal_or_none(
-            self._field(payload, "billed_minutes", "billedMinutes", "billed_duration_minutes")
-            or metadata.get("billed_minutes")
-        )
+        explicit = self._field(payload, "billed_minutes", "billedMinutes", "billed_duration_minutes")
+        explicit_minutes = self._decimal_or_none(explicit if explicit is not None else metadata.get("billed_minutes"))
         if explicit_minutes is not None:
             return explicit_minutes
 
-        billed_duration = (
-            self._field(payload, "billedDuration", "billed_duration")
-            or self._nested_field(self._field(payload, "sipDetails", "sip_details"), "billedDuration")
-        )
+        billed_duration = self._field(payload, "billedDuration", "billed_duration")
+        if billed_duration is None:
+            billed_duration = self._nested_field(self._field(payload, "sipDetails", "sip_details"), "billedDuration")
         return self._duration_to_minutes(billed_duration)
 
     @staticmethod

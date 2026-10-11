@@ -677,6 +677,16 @@ class PublicVoiceCallTests(Integration2ATestCase):
         self.assertTrue(response.json()["processed"], response.text)
         self.assertEqual(self._billed_minutes_of("historical-minutes-1"), Decimal("2.5"))
 
+    def test_billed_minutes_zero_is_settled_as_zero_not_replaced_by_billed_duration(self) -> None:
+        from decimal import Decimal
+
+        crm_id = self._historical_call("historical-zero-1")
+        response = self._send_runtime_event(
+            crm_id, "historical-zero-1", "call.billed", billedMinutes=0, billedDuration="60s"
+        )
+        self.assertTrue(response.json()["processed"], response.text)
+        self.assertEqual(self._billed_minutes_of("historical-zero-1"), Decimal("0"))
+
     def test_billing_settlement_does_not_reopen_the_historical_lifecycle(self) -> None:
         crm_id = self._historical_call("historical-terminal-1")
         for event in ("call.billed", "call.joined", "call.started"):
