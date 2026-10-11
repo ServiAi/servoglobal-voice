@@ -5,9 +5,9 @@ The request is still asynchronous: it validates, records ONE ``CrmVoiceCall`` (p
 call itself is placed later by the callback worker through Telephony, against the
 ExperienceVersion's exact AgentVersion.
 
-Rollout: with ``VOICE_RUNTIME_V2`` and ``LIVEKIT_SIP_OUTBOUND_V2`` both on for the tenant this
-service handles the request; otherwise the request goes, unchanged, to the temporary legacy
-runtime (removed in PR #137). The two paths are never mixed for one request.
+``VOICE_RUNTIME_V2`` and ``LIVEKIT_SIP_OUTBOUND_V2`` are kill switches: when either is off for the
+tenant the request fails closed (503 ``call_unavailable``) and nothing is consumed or created. There
+is no other runtime to fall back to.
 """
 
 from __future__ import annotations

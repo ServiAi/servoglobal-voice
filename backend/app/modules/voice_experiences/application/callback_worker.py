@@ -6,12 +6,12 @@ For a canonical call (CRM provider ``livekit_sip``) the worker:
   ExperienceVersion  ->  TelephonyFacade.place_outbound_call (VoiceSession + realtime room +
   runtime-ready wait + SIP participant) driving the SAME CrmVoiceCall.
 
-No row lock is held across any network operation, a failed canonical call is never retried on the
-legacy provider runtime, and once a SIP attempt started it is never repeated (Telephony enforces it
-from the session's persisted ``voice.sip.dial.started`` evidence).
+No row lock is held across any network operation, a failed canonical call is never retried on any
+provider-originated path (none exists), and once a SIP attempt started it is never repeated
+(Telephony enforces it from the session's persisted ``voice.sip.dial.started`` evidence).
 
-Calls of the temporary legacy runtime (provider-originated) are handed, untouched, to the injected
-legacy worker; they disappear with PR #137.
+The worker is canonical-only: it claims, recovers and places only ``origin = voice_experience_callback``
+calls and returns ``False`` when there is none. Historical provider-originated calls are never touched.
 """
 
 from __future__ import annotations

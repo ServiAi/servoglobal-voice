@@ -59,6 +59,14 @@ def get_public_rate_limiter():
     return VoicePublicRateLimiter(session_factory=SessionLocal)
 
 
+def create_historical_call_settlement(session: DatabaseSession):
+    from app.modules.voice_experiences.application.historical_settlement import (
+        HistoricalProviderCallSettlement,
+    )
+
+    return HistoricalProviderCallSettlement(session)
+
+
 def create_callback_worker(session_factory: SessionFactory, *, starting_lease_seconds: int):
     from app.modules.voice_experiences.application.callback_worker import CallbackWorker
     from app.modules.voice_experiences.infrastructure.voice_runtime_adapter import VoiceRuntimeAdapter

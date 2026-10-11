@@ -475,6 +475,21 @@ class VoiceExperiencesBoundaryTests(unittest.TestCase):
                 self.assertIsNone(legacy_launch.search(source), "new launch_runtime=legacy_provider writer")
                 self.assertIsNone(legacy_callback.search(source), "new legacy_voice_experience_callback writer")
 
+    def test_historical_settlement_is_a_ledger_only_component_not_a_runtime(self) -> None:
+        path = MODULE / "application" / "historical_settlement.py"
+        source = path.read_text(encoding="utf-8")
+        for symbol in (
+            "VoiceSession", "TelephonyFacade", "place_outbound_call", "CreateVoiceCallCommand", "VoiceClient",
+            "LiveKit", "httpx", "SipRoute", "dispatch", "dial", ".create(", "retry", "runtime_factory",
+            "launch_runtime =", "voice_session_id =", "status =",
+        ):
+            with self.subTest(symbol=symbol):
+                self.assertNotIn(symbol, source)
+        for imported in _imports(path):
+            with self.subTest(imported=imported):
+                self.assertFalse(imported.startswith(("app.services", "app.modules.voice.", "app.modules.telephony")))
+        self.assertNotIn("legacy_runtime", path.name)
+
     def test_historical_markers_stay_allowed_by_the_database(self) -> None:
         from app.modules.crm.infrastructure.models import CrmVoiceCall
         from app.modules.voice_experiences.infrastructure.submission_models import TenantVoiceRuntimeCall

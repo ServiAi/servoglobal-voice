@@ -615,6 +615,97 @@ class PublicVoiceCallTests(Integration2ATestCase):
             self.assertEqual(db.get(CrmVoiceCall, call_id).status, "completed")
             self.assertEqual(db.query(VoiceSession).count(), 0)  # still no session invented for history
 
+    # -- late billing of HISTORICAL provider-originated calls (settlement only, never a runtime) -------
+
+    def _historical_call(self, provider_call_id: str, *, connected: bool = False) -> str:
+        """A provider-originated public call exactly as it exists after the drain: terminal, no session."""
+        with SessionLocal() as db:
+            crm = CrmVoiceCall(
+                tenant_id=self.tenant.id, provider="ultravox", provider_call_id=provider_call_id,
+                direction="webrtc", status="completed", origin="crm_outbound",
+            )
+            db.add(crm)
+            db.flush()
+            db.add(TenantVoiceRuntimeCall(
+                tenant_id=self.tenant.id, context_session_id=f"ctx-{provider_call_id}", submission_id="s",
+                experience_id="e", experience_version_id="v", agent_config_id="a", crm_voice_call_id=crm.id,
+                provider="ultravox", provider_call_id=provider_call_id, status="ended",
+                launch_runtime=LAUNCH_RUNTIME_LEGACY, voice_session_id=None,
+                connected_at=datetime.now(UTC) if connected else None,
+            ))
+            db.commit()
+            return crm.id
+
+    def _billed_minutes_of(self, provider_call_id: str):
+        with SessionLocal() as db:
+            return db.scalars(select(Call).where(Call.external_call_id == provider_call_id)).one().billed_minutes
+
+    def test_a_drained_historical_call_still_settles_late_billing_exactly_once(self) -> None:
+        from decimal import Decimal
+
+        from scripts.check_legacy_voice_runtime_drain import active_legacy_calls
+
+        crm_id = self._historical_call("historical-billed-1")
+        with SessionLocal() as db:  # terminal history is "drained": the gate is safe...
+            self.assertEqual(sum(len(rows) for rows in active_legacy_calls(db.connection()).values()), 0)
+
+        first = self._send_runtime_event(crm_id, "historical-billed-1", "call.billed", billedDuration="75s")
+        # ...but safe to deploy does not mean no more provider events can arrive.
+        self.assertEqual(first.status_code, 200, first.text)
+        self.assertTrue(first.json()["processed"])
+        self.assertEqual(self._billed_minutes_of("historical-billed-1"), Decimal("1.25"))
+
+        duplicate = self._send_runtime_event(crm_id, "historical-billed-1", "call.billed", billedDuration="120s")
+        self.assertEqual(duplicate.status_code, 200)
+        self.assertFalse(duplicate.json()["processed"])
+        self.assertEqual(self._billed_minutes_of("historical-billed-1"), Decimal("1.25"))  # never billed twice
+
+    def test_billed_minutes_win_over_billed_duration(self) -> None:
+        from decimal import Decimal
+
+        crm_id = self._historical_call("historical-minutes-1")
+        response = self._send_runtime_event(
+            crm_id, "historical-minutes-1", "call.billed", billedMinutes=2.5, billedDuration="60s"
+        )
+        self.assertTrue(response.json()["processed"], response.text)
+        self.assertEqual(self._billed_minutes_of("historical-minutes-1"), Decimal("2.5"))
+
+    def test_billing_settlement_does_not_reopen_the_historical_lifecycle(self) -> None:
+        crm_id = self._historical_call("historical-terminal-1")
+        for event in ("call.billed", "call.joined", "call.started"):
+            kwargs = {"billedDuration": "60s"} if event == "call.billed" else {}
+            self.assertEqual(self._send_runtime_event(crm_id, "historical-terminal-1", event, **kwargs).status_code, 200)
+        with SessionLocal() as db:
+            self.assertEqual(db.get(CrmVoiceCall, crm_id).status, "completed")
+            runtime = db.scalars(select(TenantVoiceRuntimeCall)).one()
+            self.assertEqual((runtime.status, runtime.launch_runtime, runtime.voice_session_id), ("ended", LAUNCH_RUNTIME_LEGACY, None))
+            self.assertEqual(db.query(VoiceSession).count(), 0)  # settlement never invents a session
+
+    def test_late_billing_needs_a_valid_signature(self) -> None:
+        crm_id = self._historical_call("historical-unsigned-1")
+        response = self.client.post(
+            "/api/v1/voice/webhook/ultravox",
+            json={"event": "call.billed", "call": {"callId": "historical-unsigned-1", "billedDuration": "75s",
+                                                   "metadata": {"voice_call_id": crm_id}}},
+        )
+        self.assertEqual(response.status_code, 401)
+        with SessionLocal() as db:
+            self.assertEqual(db.query(Call).count(), 0)
+
+    def test_provider_billing_for_a_session_backed_call_is_ignored(self) -> None:
+        self.assertEqual(self._launch(self._token()).status_code, 200)
+        with SessionLocal() as db:
+            crm_call = db.scalars(select(CrmVoiceCall)).one()
+            session_status = db.scalars(select(VoiceSession)).one().status
+
+        response = self._send_runtime_event(crm_call.id, "provider-x", "call.billed", billedDuration="75s")
+
+        self.assertEqual(response.json(), {"status": "ignored", "processed": False})
+        with SessionLocal() as db:
+            self.assertEqual(db.query(Call).count(), 0)  # no Analytics mutation from a provider webhook
+            self.assertEqual(db.get(CrmVoiceCall, crm_call.id).status, "requested")
+            self.assertEqual(db.scalars(select(VoiceSession)).one().status, session_status)
+
     # -- runtime context contract (SessionContextV1) is checked before the token is consumed ----------
 
     def _replace_business_values(self, token: str, values: dict[str, object], modes: dict[str, str] | None = None) -> None:
