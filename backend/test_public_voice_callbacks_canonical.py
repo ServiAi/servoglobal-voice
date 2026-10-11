@@ -149,6 +149,7 @@ class CanonicalCallbackTests(Integration2ATestCase):
                 db, ports=default_telephony_ports(db, sip_transport=sip, runtime_backend=backend)
             ),
             starting_lease_seconds=starting_lease_seconds,
+            defer_cooldown_seconds=0,  # tests drive the retry explicitly
         )
 
     def _run(self, worker: CallbackWorker) -> bool:
@@ -304,6 +305,25 @@ class CanonicalCallbackTests(Integration2ATestCase):
             self.assertEqual((call.status, call.error_message), ("failed", "callback_provenance_unavailable"))
             self.assertEqual(db.query(VoiceSession).count(), 0)
         self.assertEqual(self.legacy.calls, 0)  # and no fallback to the provider runtime
+
+    def test_lost_provenance_is_processed_even_when_the_route_is_full(self) -> None:
+        """Permanent errors win over a temporary capacity condition: the claim does not look at
+        capacity, so the call reaches the provenance check instead of waiting behind a full route."""
+        self._accepted_callback()
+        self._delete_the_submission_for_real()
+        self._occupy_route(legacy=False)  # max_concurrent_calls = 1: the route is completely taken
+        order: list[str] = []
+        sip = FakeSip(order)
+
+        self._run(self._worker(sip, ReadyBackend(order)))
+
+        with SessionLocal() as db:
+            call = db.scalars(select(CrmVoiceCall).where(CrmVoiceCall.origin == "voice_experience_callback")).one()
+            self.assertIsNone(call.source_submission_id)
+            self.assertEqual((call.status, call.error_message), ("failed", "callback_provenance_unavailable"))
+            self.assertEqual(db.query(VoiceSession).filter(VoiceSession.sip_call_id.is_not(None)).count(), 0)
+            self.assertEqual(db.query(VoiceSession).count(), 1)  # only the blocker's own session
+        self.assertEqual((sip.calls, order, self.legacy.calls), (0, [], 0))  # no SIP, no room, no provider path
 
     def test_the_callback_worker_never_claims_a_crm_outbound_call(self) -> None:
         with SessionLocal() as db:
@@ -485,7 +505,13 @@ class CanonicalCallbackTests(Integration2ATestCase):
                         select(CrmVoiceCall).where(CrmVoiceCall.provider == "livekit_sip")
                     ).one()
                     self.assertEqual(call.status, "requested")  # retryable, not failed
-                    self.assertEqual(db.query(VoiceSession).filter(VoiceSession.channel == "sip").count(), 0 if legacy else 1)
+                    # Telephony deferred it: its own session exists but is only requested (nothing dialed).
+                    ours = db.scalars(
+                        select(VoiceSession).where(VoiceSession.channel == "sip", VoiceSession.status == "requested")
+                    ).one()  # not yet correlated: the capacity check precedes the correlation
+                    self.assertEqual(ours.status, "requested")
+                    self.assertIsNone(ours.livekit_sip_participant_identity)
+                    ours_id, call_id = ours.id, call.id
                 with SessionLocal() as db:  # capacity frees up
                     if legacy:
                         db.get(CrmVoiceCall, blocker).status = "completed"
@@ -497,14 +523,14 @@ class CanonicalCallbackTests(Integration2ATestCase):
 
                 self.assertEqual(sip.calls, 1)
                 with SessionLocal() as db:
-                    self.assertEqual(
-                        db.scalars(select(CrmVoiceCall).where(CrmVoiceCall.provider == "livekit_sip")).one().status,
-                        "answered",
-                    )
+                    call = db.scalars(select(CrmVoiceCall).where(CrmVoiceCall.provider == "livekit_sip")).one()
+                    self.assertEqual((call.id, call.status), (call_id, "answered"))  # same call, now placed
+                    placed = db.scalars(select(VoiceSession).where(VoiceSession.crm_voice_call_id == call.id)).one()
+                    self.assertEqual(placed.id, ours_id)  # same session
 
-    def _fill_the_route_on_the_third_count(self, filled_from_call: int = 3):
-        """The claim and Telephony's first check see a free route; the dialer's own (race-closing)
-        check, made AFTER the call was marked dialing, finds it full."""
+    def _fill_the_route_on_the_second_count(self, filled_from_call: int = 2):
+        """Telephony's first check (the claim decides no capacity) sees a free route; the dialer's own
+        (race-closing) check, made AFTER the call was marked dialing, finds it full."""
         from app.modules.voice.public import VoiceTelephonyFacade
 
         original = VoiceTelephonyFacade.count_active_telephony_sessions
@@ -522,7 +548,7 @@ class CanonicalCallbackTests(Integration2ATestCase):
         sip, backend = FakeSip(order), ReadyBackend(order)
         worker = self._worker(sip, backend)
 
-        with self._fill_the_route_on_the_third_count():
+        with self._fill_the_route_on_the_second_count():
             self.assertFalse(self._run(worker))  # deferred: nothing to do until capacity frees up
 
         self.assertEqual(sip.calls, 0)

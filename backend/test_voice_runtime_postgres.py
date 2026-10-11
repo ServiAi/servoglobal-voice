@@ -481,13 +481,18 @@ class VoiceRuntimePostgresConcurrencyTests(unittest.TestCase):
                 tenant_id=seeded["tenant_id"], provider_config_id=provider_id, status="active",
                 pbx_host="pbx.example.com", pbx_port=5060, sip_username=f"u{uuid4().hex[:8]}",
                 sip_password_encrypted=SecretManager().encrypt_secret("pw"), caller_id="+573001112233",
-                default_country="CO", allowed_countries_json=["CO"], max_concurrent_calls=5,
+                default_country="CO", allowed_countries_json=["CO"], max_concurrent_calls=1,
                 provision_status="active", desired_revision=1, applied_revision=1,
                 livekit_outbound_trunk_id="ST_pg_del", livekit_provision_status="active",
                 livekit_provisioned_at=datetime.now(UTC),
             )
             db.add(route)
             db.flush()
+            db.add(VoiceSession(  # the route's only channel is taken: lost provenance must still be processed
+                tenant_id=seeded["tenant_id"], channel="sip", direction="outbound", purpose="production",
+                runtime_engine="livekit", pipeline_type="realtime", provider="ultravox", status="connected",
+                sip_route_id=route.id,
+            ))
             crm_call = CrmVoiceCall(
                 tenant_id=seeded["tenant_id"], source_submission_id=seeded["submission_id"], sip_route_id=route.id,
                 provider="livekit_sip", origin="voice_experience_callback", direction="outbound", status="requested",
@@ -522,7 +527,7 @@ class VoiceRuntimePostgresConcurrencyTests(unittest.TestCase):
             self.assertEqual((call.source_submission_id, call.origin), (None, "voice_experience_callback"))
             self.assertEqual((call.status, call.error_message), ("failed", "callback_provenance_unavailable"))
             self.assertEqual((other_call.status, other_call.error_message), ("requested", None))
-            self.assertEqual(db.query(VoiceSession).count(), 0)
+            self.assertEqual(db.query(VoiceSession).count(), 1)  # only the blocker's own session
 
     def test_concurrent_identical_webhook_has_one_owner_and_one_core_mutation(self) -> None:
         runtime_id = self._seed_reserved_runtime(self._seed_context())

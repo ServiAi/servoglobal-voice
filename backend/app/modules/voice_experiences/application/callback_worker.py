@@ -19,6 +19,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+from time import monotonic
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta
 from typing import Protocol
@@ -34,9 +35,7 @@ from app.modules.crm.public import (
 from app.modules.telephony.public import (
     CANONICAL_SIP_PROVIDER,
     CapacityDeferred,
-    CapacityFacade,
     PlaceOutboundCallCommand,
-    SipRouteFacade,
     TelephonyFacade,
 )
 from app.modules.voice_experiences.application.callback_ledger import VoiceExperienceCallbackLedger
@@ -67,12 +66,15 @@ class CallbackWorker:
         legacy: LegacyCallbackWorker,
         telephony_factory: Callable[[Session], TelephonyFacade] = TelephonyFacade,
         starting_lease_seconds: int = 120,
+        defer_cooldown_seconds: float = 5.0,
     ) -> None:
         self.session_factory = session_factory
         self.runtime_factory = runtime_factory
         self.legacy = legacy
         self.telephony_factory = telephony_factory
         self.starting_lease_seconds = starting_lease_seconds
+        self.defer_cooldown_seconds = defer_cooldown_seconds
+        self._cooling: dict[str, float] = {}
 
     async def process_once(self) -> bool:
         self._recover_stale_starting()
@@ -98,25 +100,21 @@ class CallbackWorker:
             logger.warning("Recovered canonical callbacks stuck in starting", extra={"recovered_count": recovered})
 
     def _claim(self) -> str | None:
+        """Ownership + lease only: take the oldest requested callback that is ours and mark it
+        ``starting``. Nothing is decided here -- not provenance, not the agent, not capacity: a
+        permanent error (e.g. lost provenance) must be reached even while the route is full, and the
+        temporary capacity condition is Telephony's to defer. ``defer_cooldown_seconds`` only keeps a
+        call that was just deferred from being re-claimed at once (and from starving the calls
+        behind it)."""
+        now = monotonic()
+        self._cooling = {call_id: until for call_id, until in self._cooling.items() if until > now}
         with self.session_factory() as db:
             with db.begin():
                 calls = CrmVoiceCalls(db)
                 for call in calls.lock_requested_callbacks(
                     CLAIM_BATCH_SIZE, provider=CANONICAL_SIP_PROVIDER, origin=VOICE_EXPERIENCE_CALLBACK_ORIGIN
                 ):
-                    route = SipRouteFacade(db).lock_route(call.sip_route_id)
-                    if route is None or route.status != "active":
-                        calls.update(
-                            call.id,
-                            UpdateVoiceCallCommand(status="failed", error_message="Outbound SIP route is unavailable."),
-                        )
-                        return call.id
-                    load = CapacityFacade(db).route_load(
-                        tenant_id=call.tenant_id, route_id=route.id, exclude_call_id=call.id
-                    )
-                    if load >= route.max_concurrent_calls:
-                        # Temporarily full: stays requested (an accepted callback is not lost) and
-                        # must not starve other tenants' calls behind it.
+                    if call.id in self._cooling:
                         continue
                     calls.update(
                         call.id,
@@ -147,6 +145,7 @@ class CallbackWorker:
                 await self.telephony_factory(db).place_outbound_call(command, ledger)
             except CapacityDeferred:
                 self._defer(call.id)
+                self._cooling[call.id] = monotonic() + self.defer_cooldown_seconds
                 return False
             except Exception as exc:  # noqa: BLE001 - boundary: any failure must leave the call terminal
                 self._fail(db, call, self._code_of(exc))
