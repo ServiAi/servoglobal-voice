@@ -29,11 +29,17 @@ def get_public_call_service():
 
 def get_public_callback_service():
     from app.db.session import SessionLocal
+    from app.modules.voice_experiences.application.public_callback_service import PublicCallbackService
     from app.modules.voice_experiences.infrastructure.legacy_runtime.callback_compat import (
         PublicVoiceCallbackService,
     )
+    from app.modules.voice_experiences.infrastructure.voice_runtime_adapter import VoiceRuntimeAdapter
 
-    return PublicVoiceCallbackService(session_factory=SessionLocal)
+    return PublicCallbackService(
+        session_factory=SessionLocal,
+        runtime_factory=VoiceRuntimeAdapter,
+        legacy=PublicVoiceCallbackService(session_factory=SessionLocal),  # rollback path, removed in PR #137
+    )
 
 
 def get_public_submission_service():
@@ -75,13 +81,21 @@ def create_callback_worker(
     reconcile_after_seconds: int,
     max_active_seconds: int,
 ):
+    from app.modules.voice_experiences.application.callback_worker import CallbackWorker
     from app.modules.voice_experiences.infrastructure.legacy_runtime.callback_compat import (
-        VoiceCallbackWorker,
+        VoiceCallbackWorker as LegacyCallbackWorker,
     )
+    from app.modules.voice_experiences.infrastructure.voice_runtime_adapter import VoiceRuntimeAdapter
 
-    return VoiceCallbackWorker(
+    return CallbackWorker(
         session_factory,
+        runtime_factory=VoiceRuntimeAdapter,
+        # Provider-originated calls still in flight / flags off: legacy runtime, removed in PR #137.
+        legacy=LegacyCallbackWorker(
+            session_factory,
+            starting_lease_seconds=starting_lease_seconds,
+            reconcile_after_seconds=reconcile_after_seconds,
+            max_active_seconds=max_active_seconds,
+        ),
         starting_lease_seconds=starting_lease_seconds,
-        reconcile_after_seconds=reconcile_after_seconds,
-        max_active_seconds=max_active_seconds,
     )

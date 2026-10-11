@@ -337,9 +337,20 @@ class CrmFacade:
         CrmIngestionService(self.db).process_call_event(payload, call)
 
     # -- voice calls (Telephony's CallLoadPort, for the legacy callback flow) -----
-    def count_voice_calls_in_statuses(self, tenant_id: str, route_id: str, statuses: Sequence[str]) -> int:
-        """CRM voice calls of the tenant holding a channel on the SIP route."""
-        return CrmVoiceCalls(self.db).count_in_statuses(tenant_id, route_id, statuses)
+    def count_voice_calls_in_statuses(
+        self,
+        tenant_id: str,
+        route_id: str,
+        statuses: Sequence[str],
+        *,
+        exclude_call_id: str | None = None,
+        exclude_provider: str | None = None,
+    ) -> int:
+        """CRM voice calls of the tenant holding a channel on the SIP route (optionally without
+        one call -- a call never counts against itself -- or without one provider)."""
+        return CrmVoiceCalls(self.db).count_in_statuses(
+            tenant_id, route_id, statuses, exclude_call_id=exclude_call_id, exclude_provider=exclude_provider
+        )
 
 
 class CrmVoiceCalls:
@@ -372,8 +383,18 @@ class CrmVoiceCalls:
     def list_for_lead(self, tenant_id: str, lead_id: str) -> list[VoiceCallView]:
         return self._ledger().list_for_lead(tenant_id, lead_id)
 
-    def count_in_statuses(self, tenant_id: str, route_id: str, statuses: Sequence[str]) -> int:
-        return self._ledger().count_in_statuses(tenant_id, route_id, statuses)
+    def count_in_statuses(
+        self,
+        tenant_id: str,
+        route_id: str,
+        statuses: Sequence[str],
+        *,
+        exclude_call_id: str | None = None,
+        exclude_provider: str | None = None,
+    ) -> int:
+        return self._ledger().count_in_statuses(
+            tenant_id, route_id, statuses, exclude_call_id=exclude_call_id, exclude_provider=exclude_provider
+        )
 
     def create(self, command: CreateVoiceCallCommand, *, flush: bool = False) -> VoiceCallView:
         return self._ledger().create(command, flush=flush)
@@ -381,14 +402,22 @@ class CrmVoiceCalls:
     def update(self, call_id: str, command: UpdateVoiceCallCommand) -> VoiceCallView:
         return self._ledger().update(call_id, command)
 
-    def lock_stale_active(self, statuses: Sequence[str], updated_before: datetime) -> VoiceCallView | None:
-        return self._ledger().lock_stale_active(statuses, updated_before)
+    def lock_stale_active(
+        self, statuses: Sequence[str], updated_before: datetime, *, exclude_provider: str | None = None
+    ) -> VoiceCallView | None:
+        return self._ledger().lock_stale_active(statuses, updated_before, exclude_provider=exclude_provider)
 
-    def recover_stale_starting(self, attempt_started_before: datetime) -> int:
-        return self._ledger().recover_stale_starting(attempt_started_before)
+    def recover_stale_starting(
+        self, attempt_started_before: datetime, *, provider: str | None = None, exclude_provider: str | None = None
+    ) -> int:
+        return self._ledger().recover_stale_starting(
+            attempt_started_before, provider=provider, exclude_provider=exclude_provider
+        )
 
-    def lock_requested_callbacks(self, limit: int) -> list[VoiceCallView]:
-        return self._ledger().lock_requested_callbacks(limit)
+    def lock_requested_callbacks(
+        self, limit: int, *, provider: str | None = None, exclude_provider: str | None = None
+    ) -> list[VoiceCallView]:
+        return self._ledger().lock_requested_callbacks(limit, provider=provider, exclude_provider=exclude_provider)
 
     def add_event(
         self, *, tenant_id: str, voice_call_id: str, provider: str, event_type: str, status: str,
@@ -445,6 +474,10 @@ class OutboundCallLedger:
         if call is None or call.tenant_id != self.tenant_id:
             raise ValueError("Idempotent voice call state is invalid.")
         return call
+
+    def existing_call_id(self) -> str | None:
+        """A lead-initiated call always opens its own record."""
+        return None
 
     def call_state(self, call_id: str) -> CallState:
         call = self._own(call_id)

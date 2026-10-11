@@ -131,6 +131,8 @@ cd backend
 .\.venv\Scripts\python.exe -m app.workers.voice_callback_worker
 ```
 
+Desde PR #136 el worker es un único proceso asyncio (`python -m app.workers.voice_callback_worker`) y, con `VOICE_RUNTIME_V2` + `LIVEKIT_SIP_OUTBOUND_V2` activos para el tenant, coloca los callbacks por Telephony (VoiceSession + LiveKit SIP; requiere un trunk LiveKit provisionado en la ruta). Con los flags apagados mantiene el runtime anterior (rollback). Durante un rolling deploy un worker viejo no reclama filas `livekit_sip` con éxito (las falla sin llamar al proveedor); nunca se originan dos llamadas para una solicitud.
+
 El callback usa una cola persistente en PostgreSQL; no requiere Redis, RabbitMQ
 ni Celery. `crm_voice_calls` es la fuente de verdad: el endpoint público valida
 la solicitud, crea la llamada con estado `requested` y responde `202`. El worker

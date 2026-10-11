@@ -92,19 +92,27 @@ class VoiceCallLedger:
         ).all()
         return [view_of(row) for row in rows]
 
-    def count_in_statuses(self, tenant_id: str, route_id: str, statuses: Sequence[str]) -> int:
+    def count_in_statuses(
+        self,
+        tenant_id: str,
+        route_id: str,
+        statuses: Sequence[str],
+        *,
+        exclude_call_id: str | None = None,
+        exclude_provider: str | None = None,
+    ) -> int:
         from sqlalchemy import func
 
-        return int(
-            self.db.scalar(
-                select(func.count(CrmVoiceCall.id)).where(
-                    CrmVoiceCall.tenant_id == tenant_id,
-                    CrmVoiceCall.sip_route_id == route_id,
-                    CrmVoiceCall.status.in_(tuple(statuses)),
-                )
-            )
-            or 0
+        query = select(func.count(CrmVoiceCall.id)).where(
+            CrmVoiceCall.tenant_id == tenant_id,
+            CrmVoiceCall.sip_route_id == route_id,
+            CrmVoiceCall.status.in_(tuple(statuses)),
         )
+        if exclude_call_id is not None:
+            query = query.where(CrmVoiceCall.id != exclude_call_id)
+        if exclude_provider is not None:
+            query = query.where(CrmVoiceCall.provider != exclude_provider)
+        return int(self.db.scalar(query) or 0)
 
     # -- writes (no commit) ------------------------------------------------------------
     def create(self, command: CreateVoiceCallCommand, *, flush: bool = False) -> VoiceCallView:
@@ -133,50 +141,55 @@ class VoiceCallLedger:
         return view_of(row)
 
     # -- worker claims -------------------------------------------------------------
-    def lock_stale_active(self, statuses: Sequence[str], updated_before: datetime) -> VoiceCallView | None:
+    def lock_stale_active(
+        self, statuses: Sequence[str], updated_before: datetime, *, exclude_provider: str | None = None
+    ) -> VoiceCallView | None:
         """The oldest call with a provider id whose state has not moved since
         ``updated_before`` (``FOR UPDATE SKIP LOCKED``): a reconciliation candidate."""
-        row = self.db.scalar(
-            select(CrmVoiceCall)
-            .where(
-                CrmVoiceCall.status.in_(tuple(statuses)),
-                CrmVoiceCall.provider_call_id.is_not(None),
-                CrmVoiceCall.updated_at < updated_before,
-            )
-            .order_by(CrmVoiceCall.updated_at)
-            .with_for_update(skip_locked=True)
-            .limit(1)
+        query = select(CrmVoiceCall).where(
+            CrmVoiceCall.status.in_(tuple(statuses)),
+            CrmVoiceCall.provider_call_id.is_not(None),
+            CrmVoiceCall.updated_at < updated_before,
         )
+        if exclude_provider is not None:
+            query = query.where(CrmVoiceCall.provider != exclude_provider)
+        row = self.db.scalar(query.order_by(CrmVoiceCall.updated_at).with_for_update(skip_locked=True).limit(1))
         return _opt(row)
 
-    def recover_stale_starting(self, attempt_started_before: datetime) -> int:
+    def recover_stale_starting(
+        self, attempt_started_before: datetime, *, provider: str | None = None, exclude_provider: str | None = None
+    ) -> int:
         """``starting`` calls whose provider attempt lease expired go back to ``requested``."""
+        conditions = [
+            CrmVoiceCall.status == "starting",
+            CrmVoiceCall.provider_attempt_started_at.is_not(None),
+            CrmVoiceCall.provider_attempt_started_at < attempt_started_before,
+        ]
+        if provider is not None:
+            conditions.append(CrmVoiceCall.provider == provider)
+        if exclude_provider is not None:
+            conditions.append(CrmVoiceCall.provider != exclude_provider)
         result = self.db.execute(
-            update(CrmVoiceCall)
-            .where(
-                CrmVoiceCall.status == "starting",
-                CrmVoiceCall.provider_attempt_started_at.is_not(None),
-                CrmVoiceCall.provider_attempt_started_at < attempt_started_before,
-            )
-            .values(status="requested", provider_attempt_started_at=None)
+            update(CrmVoiceCall).where(*conditions).values(status="requested", provider_attempt_started_at=None)
         )
         return int(result.rowcount or 0)
 
-    def lock_requested_callbacks(self, limit: int) -> list[VoiceCallView]:
+    def lock_requested_callbacks(
+        self, limit: int, *, provider: str | None = None, exclude_provider: str | None = None
+    ) -> list[VoiceCallView]:
         """Oldest ``requested`` outbound callbacks with a route, locked
         (``FOR UPDATE SKIP LOCKED``) for the claiming transaction."""
-        rows = self.db.scalars(
-            select(CrmVoiceCall)
-            .where(
-                CrmVoiceCall.status == "requested",
-                CrmVoiceCall.direction == "outbound",
-                CrmVoiceCall.source_submission_id.is_not(None),
-                CrmVoiceCall.sip_route_id.is_not(None),
-            )
-            .order_by(CrmVoiceCall.created_at)
-            .with_for_update(skip_locked=True)
-            .limit(limit)
-        ).all()
+        query = select(CrmVoiceCall).where(
+            CrmVoiceCall.status == "requested",
+            CrmVoiceCall.direction == "outbound",
+            CrmVoiceCall.source_submission_id.is_not(None),
+            CrmVoiceCall.sip_route_id.is_not(None),
+        )
+        if provider is not None:
+            query = query.where(CrmVoiceCall.provider == provider)
+        if exclude_provider is not None:
+            query = query.where(CrmVoiceCall.provider != exclude_provider)
+        rows = self.db.scalars(query.order_by(CrmVoiceCall.created_at).with_for_update(skip_locked=True).limit(limit)).all()
         return [view_of(row) for row in rows]
 
     # -- events ------------------------------------------------------------------

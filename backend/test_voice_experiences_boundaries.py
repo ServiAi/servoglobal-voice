@@ -366,7 +366,7 @@ class VoiceExperiencesBoundaryTests(unittest.TestCase):
                         )
                     )
 
-    def test_ddl_differs_from_base_only_by_the_voice_session_correlation(self) -> None:
+    def test_ddl_is_unchanged_from_the_base(self) -> None:
         import app.models
         from app.db.base import Base
         from app.modules.voice_experiences.infrastructure import models as voice_models  # noqa: F401
@@ -384,8 +384,8 @@ class VoiceExperiencesBoundaryTests(unittest.TestCase):
         self.assertTrue(ddl)
         base, branch = _base_snapshot()["ddl"], _ddl_snapshot()
         changed = {key for key in base.keys() | branch.keys() if base.get(key) != branch.get(key)}
-        # PR #135: the launch ledger gains the VoiceSession correlation, nothing else.
-        self.assertEqual(changed, {"tenant_voice_runtime_calls", "index:uq_voice_runtime_voice_session"})
+        # PR #136 is a runtime migration: no table, column, constraint or index changes.
+        self.assertEqual(changed, set())
         runtime_calls = Base.metadata.tables["tenant_voice_runtime_calls"]
         self.assertFalse(runtime_calls.c.launch_runtime.nullable)
         self.assertIsNone(runtime_calls.c.launch_runtime.default)  # no implicit canonical classification
@@ -492,27 +492,64 @@ class VoiceExperiencesBoundaryTests(unittest.TestCase):
             {"status", "server_url", "participant_token", "expires_in", "capabilities"},
         )
 
-    def test_openapi_differs_from_base_only_by_the_public_webrtc_response(self) -> None:
-        """Paths (so request bodies, parameters, every response and error), every other component
-        schema, and the security schemes must equal the base's; only PublicVoiceCallResponse changes."""
+    def test_canonical_callback_application_has_no_provider_sip_or_legacy_imports(self) -> None:
+        forbidden = (
+            "ultravox", "app.services", "app.models", "app.modules.voice_legacy", "app.modules.voice_providers",
+            "app.modules.voice.application", "app.modules.voice.infrastructure",
+            "app.modules.telephony.application", "app.modules.telephony.infrastructure",
+            "app.modules.crm.infrastructure", "app.modules.agents.infrastructure",
+            "app.modules.voice_experiences.infrastructure.legacy_runtime",
+        )
+        for name in ("public_callback_service.py", "callback_worker.py", "callback_ledger.py", "launch_context.py"):
+            path = MODULE / "application" / name
+            source = path.read_text(encoding="utf-8")
+            for imported in _imports(path):
+                with self.subTest(path=name, imported=imported):
+                    self.assertFalse(
+                        any(imported == prefix or imported.startswith(prefix + ".") for prefix in forbidden), imported
+                    )
+            for symbol in (
+                "VoiceClient", "VoiceConfigService", "VoiceLegacyFacade", "TenantVoiceAgentConfig",
+                "TenantVoiceProviderConfig", "LiveKitSipService", "VoiceRuntimeDispatcher", "LiveKitRuntimeBackend",
+                "VoiceSipRouteConfig", "start_outbound_call",
+            ):
+                self.assertNotIn(symbol, source, f"{symbol} in {name}")
+
+    def test_voice_experiences_never_reaches_the_sip_transport_or_the_runtime_backend(self) -> None:
+        for path in _files(MODULE):
+            source = path.read_text(encoding="utf-8")
+            with self.subTest(path=str(path.relative_to(APP))):
+                for symbol in ("LiveKitSipService", "VoiceRuntimeDispatcher", "LiveKitRuntimeBackend"):
+                    self.assertNotIn(symbol, source)
+
+    def test_livekit_sip_transport_is_only_reachable_from_telephony(self) -> None:
+        for path in _files(APP):
+            relative = path.relative_to(APP)
+            if relative.parts[:2] == ("modules", "telephony"):
+                continue
+            for imported in _imports(path):
+                with self.subTest(path=str(relative), imported=imported):
+                    self.assertNotEqual(imported, "app.modules.telephony.infrastructure.livekit_sip")
+
+    def test_the_callback_worker_port_is_async(self) -> None:
+        from app.modules.voice_experiences import public
+
+        self.assertTrue(inspect.iscoroutinefunction(public.VoiceCallbackWorkerPort.process_once))
+
+    def test_openapi_is_unchanged_from_the_base(self) -> None:
+        """PR #136 keeps every public contract: the full OpenAPI (paths, request bodies, responses,
+        errors, component schemas) equals the base branch's, generated in this same environment."""
         from app.main import app
 
         base, branch = _base_snapshot()["openapi"], json.loads(json.dumps(app.openapi()))
         self.assertEqual(branch["paths"], base["paths"])
-        base_schemas, branch_schemas = base["components"]["schemas"], branch["components"]["schemas"]
-        self.assertEqual(set(branch_schemas), set(base_schemas))
-        changed = {name for name in base_schemas if base_schemas[name] != branch_schemas[name]}
-        self.assertEqual(changed, {"PublicVoiceCallResponse"})
-        for key in set(base) | set(branch):
-            if key not in ("paths", "components"):
-                self.assertEqual(base.get(key), branch.get(key), key)
-        for key in set(base["components"]) - {"schemas"}:
-            self.assertEqual(base["components"][key], branch["components"][key], key)
-        schema = branch_schemas["PublicVoiceCallResponse"]
-        self.assertEqual(set(schema["properties"]), {"status", "server_url", "participant_token", "expires_in", "capabilities"})
-        self.assertEqual(set(schema["required"]), {"status", "server_url", "participant_token", "expires_in"})
-        self.assertNotIn("join_url", schema["properties"])
-        self.assertEqual(base_schemas["PublicVoiceCallResponse"]["properties"]["join_url"], {"type": "string", "title": "Join Url"})
+        self.assertEqual(branch["components"], base["components"])
+        self.assertEqual(
+            {key: value for key, value in branch.items() if key not in ("paths", "components")},
+            {key: value for key, value in base.items() if key not in ("paths", "components")},
+        )
+        callback = branch["paths"]["/api/v1/public/voice-experiences/{slug}/callback-requests"]["post"]
+        self.assertEqual(set(callback["responses"]) & {"202"}, {"202"})
 
     def test_openapi_digest_detects_schema_level_changes(self) -> None:
         import copy

@@ -27,6 +27,7 @@ from app.modules.crm.public import (
 )
 from app.modules.identity.public import FeatureFlags, TenantDirectory
 from app.modules.telephony.public import (
+    CANONICAL_SIP_PROVIDER,
     CapacityFacade,
     SipRouteFacade,
     VoicePhoneValidationError,
@@ -46,6 +47,9 @@ from app.services.voice_webhook_service import VoiceWebhookService
 
 logger = logging.getLogger(__name__)
 CLAIM_BATCH_SIZE = 25
+# Calls placed through Telephony (LiveKit SIP + VoiceSession) are not this runtime's: the canonical
+# worker owns them, so the legacy worker never claims, recovers or reconciles them.
+CANONICAL_PROVIDER = CANONICAL_SIP_PROVIDER
 
 
 class _CapacityReached(Exception):
@@ -180,7 +184,7 @@ class PublicVoiceCallbackService:
                     except VoicePhoneValidationError:
                         raise PublicCallFailure(422, "destination_not_allowed") from None
 
-                    active_count = CapacityFacade(db).callbacks_in_flight(
+                    active_count = CapacityFacade(db).route_load(
                         tenant_id=context_session.tenant_id,
                         route_id=route.id,
                     )
@@ -270,7 +274,7 @@ class VoiceCallbackWorker:
         with self.session_factory() as db:
             with db.begin():
                 calls = CrmVoiceCalls(db)
-                call = calls.lock_stale_active(("queued", "in_progress"), reconcile_cutoff)
+                call = calls.lock_stale_active(("queued", "in_progress"), reconcile_cutoff, exclude_provider=CANONICAL_PROVIDER)
                 if call is None:
                     return False
                 calls.update(call.id, UpdateVoiceCallCommand(updated_at=now))
@@ -348,7 +352,7 @@ class VoiceCallbackWorker:
         cutoff = datetime.now(UTC) - timedelta(seconds=self.starting_lease_seconds)
         with self.session_factory() as db:
             with db.begin():
-                recovered = CrmVoiceCalls(db).recover_stale_starting(cutoff)
+                recovered = CrmVoiceCalls(db).recover_stale_starting(cutoff, exclude_provider=CANONICAL_PROVIDER)
             if recovered:
                 logger.warning(
                     "Recovered voice callback calls stuck in starting",
@@ -359,14 +363,14 @@ class VoiceCallbackWorker:
         with self.session_factory() as db:
             with db.begin():
                 calls = CrmVoiceCalls(db)
-                candidates = calls.lock_requested_callbacks(CLAIM_BATCH_SIZE)
+                candidates = calls.lock_requested_callbacks(CLAIM_BATCH_SIZE, exclude_provider=CANONICAL_PROVIDER)
 
                 for call in candidates:
                     route = SipRouteFacade(db).lock_route(call.sip_route_id)
                     if route is None or route.status != "active":
                         calls.update(call.id, UpdateVoiceCallCommand(status="failed", error_message="Outbound SIP route is unavailable."))
                         return call.id
-                    active_count = CapacityFacade(db).callbacks_in_flight(
+                    active_count = CapacityFacade(db).route_load(
                         tenant_id=call.tenant_id,
                         route_id=route.id,
                     )

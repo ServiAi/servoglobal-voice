@@ -18,6 +18,10 @@ CAPACITY_EVENT_TYPES = (
 
 CAPACITY_END_REASON = "telephony_capacity_exceeded"
 
+# CRM calls whose channel is a LiveKit SIP VoiceSession carry this provider; their load is
+# counted through the session, never through the CRM record.
+CANONICAL_SIP_PROVIDER = "livekit_sip"
+
 
 def is_at_capacity(active_calls: int, max_concurrent_calls: int) -> bool:
     return active_calls >= max_concurrent_calls

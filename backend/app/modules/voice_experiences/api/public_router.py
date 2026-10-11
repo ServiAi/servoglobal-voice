@@ -35,6 +35,7 @@ from app.modules.voice_experiences.application.submission_service import (
     SubmissionValidationFailed,
 )
 from app.modules.voice_experiences.application.ports import TurnstileVerificationPort
+from app.modules.voice_experiences.application.public_callback_service import PublicCallbackService
 from app.modules.voice_experiences.application.public_webrtc_service import PublicWebRTCService
 from app.modules.voice_experiences.api.commands import command_from_model
 from app.modules.voice_experiences.application.rate_limiter import (
@@ -307,7 +308,7 @@ async def request_public_voice_callback(
     request: Request,
     response: Response,
     limiter: VoicePublicRateLimiter = Depends(get_public_rate_limiter),
-    service: PublicVoiceCallbackService = Depends(get_public_callback_service),
+    service: PublicCallbackService = Depends(get_public_callback_service),
 ) -> PublicVoiceCallbackResponse:
     response.headers.update(NO_STORE_HEADERS)
     normalized_ip = resolve_public_client_ip(

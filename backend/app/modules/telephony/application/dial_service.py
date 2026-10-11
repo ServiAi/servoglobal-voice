@@ -7,7 +7,7 @@ from app.core.config import settings
 from app.modules.telephony.application.ports import SipTransportPort, VoiceTelephonyPort
 from app.modules.telephony.application.route_service import SipRouteService
 from app.modules.telephony.domain.capacity import CAPACITY_END_REASON, is_at_capacity
-from app.modules.telephony.domain.errors import SipDialError
+from app.modules.telephony.domain.errors import CapacityDeferred, SipDialError
 from app.modules.telephony.domain.phone_numbers import normalize_outbound_phone
 from app.modules.telephony.infrastructure.livekit_sip import LiveKitSipDialError
 from app.modules.voice.public import TelephonySessionView
@@ -37,12 +37,28 @@ class TelephonyDialService:
         self.sip = sip
 
     async def dial(
-        self, session_id: str, tenant_id: str, to_phone: str, *, manage_failure: bool = True
+        self,
+        session_id: str,
+        tenant_id: str,
+        to_phone: str,
+        *,
+        manage_failure: bool = True,
+        resume: bool = False,
+        defer_on_capacity: bool = False,
     ) -> TelephonySessionView:
+        """``resume`` continues a session whose earlier attempt stopped BEFORE any SIP participant
+        was requested (``begin_sip_dial`` never ran). Once a dial attempt started it is never
+        repeated: the outcome of a real PSTN attempt is unknown and a blind redial could ring the
+        customer twice."""
         session = self.voice.get_session(session_id, tenant_id)
         if session.channel != "sip" or session.direction != "outbound":
             raise SipDialError("invalid_sip_session")
-        if session.status != "requested":
+        resumable = (
+            resume
+            and session.status in {"dispatching", "dispatched"}
+            and session.livekit_sip_participant_identity is None
+        )
+        if session.status != "requested" and not resumable:
             return session
         route = self.routes.get_active_route(tenant_id, for_update=True, require_livekit=True)
         number = normalize_outbound_phone(
@@ -52,6 +68,8 @@ class TelephonyDialService:
         )
         active = self.voice.count_active_telephony_sessions(tenant_id, route.id, exclude_session_id=session.id)
         if is_at_capacity(active, route.max_concurrent_calls):
+            if defer_on_capacity:
+                raise CapacityDeferred()  # nothing bound or dialed: the session stays requested
             self.voice.cancel_session(session.id, tenant_id, end_reason=CAPACITY_END_REASON)
             raise SipDialError(CAPACITY_END_REASON, "cancelled")
 

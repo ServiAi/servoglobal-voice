@@ -27,6 +27,7 @@ from sqlalchemy.orm import Session
 from app.modules.billing.public import BillingAccessGate, BillingError
 from app.modules.crm.public import CreateVoiceCallCommand, CrmVoiceCalls
 from app.modules.identity.public import VOICE_EXPERIENCES, VOICE_RUNTIME_V2, FeatureFlags, TenantDirectory
+from app.modules.voice_experiences.application.launch_context import trusted_variables
 from app.modules.voice_experiences.application.ports import VoiceRuntimePort
 from app.modules.voice_experiences.domain.errors import PublicCallFailure, VoiceRuntimeUnavailable
 from app.modules.voice_experiences.domain.limits import (
@@ -340,26 +341,7 @@ class PublicWebRTCService:
     def _trusted_variables(
         db: Session, version: TenantVoiceExperienceVersion, submission: TenantVoiceExperienceSubmission
     ) -> dict[str, object]:
-        """Business variables come only from the persisted submission, never from the request, and
-        only for fields the Context Schema collects BEFORE the call. ``internal_only`` and
-        ``collect_during_call`` values never reach the agent. The locale is session metadata
-        (AgentVersion.language / ExperienceVersion.default_locale), not a variable: it must not
-        spend one of SessionContextV1's 20 slots."""
-        public_keys = {
-            key
-            for (key,) in db.execute(
-                select(TenantVoiceContextField.key).where(
-                    TenantVoiceContextField.schema_id == version.context_schema_id,
-                    TenantVoiceContextField.collection_mode.in_(sorted(PUBLIC_CONTEXT_COLLECTION_MODES)),
-                )
-            ).all()
-        }
-        rows = db.scalars(
-            select(TenantVoiceExperienceSubmissionValue).where(
-                TenantVoiceExperienceSubmissionValue.submission_id == submission.id
-            )
-        ).all()
-        return {row.field_key: row.value_json for row in rows if row.field_key in public_keys}
+        return trusted_variables(db, version, submission)
 
     def _fail(self, runtime_id: str, code: str) -> None:
         failure_code = "provider_connect_failed" if code == "dispatch_failed" else "configuration_unavailable"

@@ -9,7 +9,7 @@ from app.modules.telephony.application.dial_service import TelephonyDialService
 from app.modules.telephony.application.ports import OutboundCallLedger, TelephonyPorts
 from app.modules.telephony.application.route_service import SipRouteService
 from app.modules.telephony.domain.capacity import CAPACITY_END_REASON, is_at_capacity
-from app.modules.telephony.domain.errors import SipDialError
+from app.modules.telephony.domain.errors import CapacityDeferred, SipDialError
 from app.modules.telephony.domain.phone_numbers import normalize_outbound_phone
 from app.modules.telephony.domain.views import (
     OutboundCallResult,
@@ -57,15 +57,29 @@ class OutboundCallService:
             default_country=route.default_country,
             allowed_countries=set(route.allowed_countries_json),
         )
+        existing_call_id = ledger.existing_call_id()
         try:
-            session = voice.create_outbound_sip_session(
-                tenant_id,
-                command.agent_id,
-                idempotency_key=command.idempotency_key,
-                contact_id=target.contact_id,
-                lead_id=target.lead_id,
-                caller_phone=number.e164,
-            )
+            if command.agent_version_id:
+                # A frozen target (e.g. the ExperienceVersion's AgentVersion): never today's published one.
+                session = voice.create_outbound_sip_session_from_agent_version(
+                    tenant_id,
+                    command.agent_id,
+                    command.agent_version_id,
+                    idempotency_key=command.idempotency_key,
+                    contact_id=target.contact_id,
+                    lead_id=target.lead_id,
+                    caller_phone=number.e164,
+                    variables=command.variables,
+                )
+            else:
+                session = voice.create_outbound_sip_session(
+                    tenant_id,
+                    command.agent_id,
+                    idempotency_key=command.idempotency_key,
+                    contact_id=target.contact_id,
+                    lead_id=target.lead_id,
+                    caller_phone=number.e164,
+                )
         except VoiceSessionError as exc:
             raise ValueError(str(exc)) from exc
 
@@ -73,8 +87,22 @@ class OutboundCallService:
             session = voice.lock_session(session.id, tenant_id)
         except VoiceSessionNotFoundError:
             raise ValueError("Voice session does not belong to this tenant.") from None
+        resume_call_id: str | None = None
         if session.crm_voice_call_id:
+            dial_started = session.livekit_sip_participant_identity is not None
+            if (
+                existing_call_id is not None
+                and session.crm_voice_call_id == existing_call_id
+                and not dial_started
+                and not session.is_terminal
+            ):
+                # The earlier attempt stopped before any SIP participant was requested: continue the
+                # SAME session and call record.
+                resume_call_id = existing_call_id
+        if session.crm_voice_call_id and resume_call_id is None:
             state = ledger.call_state(session.crm_voice_call_id)
+            if existing_call_id is not None and state.status in {"requested", "starting"}:
+                ledger.mark_dialing(session.crm_voice_call_id)  # an attempt is in flight: never redial
             return OutboundCallResult(
                 voice_session_id=session.id,
                 status=state.status,
@@ -84,8 +112,22 @@ class OutboundCallService:
             )
 
         route = self.routes.get_active_route(tenant_id, for_update=True, require_livekit=True)
-        active = self.capacity.callbacks_in_flight(tenant_id=tenant_id, route_id=route.id)
+        if existing_call_id is not None or command.defer_on_capacity:
+            # A call that is not the CRM's own: both runtimes share the route, a call never counts
+            # against itself (its record is "starting" while it is placed).
+            active = self.capacity.route_load(
+                tenant_id=tenant_id,
+                route_id=route.id,
+                voice=voice,
+                exclude_call_id=existing_call_id,
+                exclude_session_id=session.id,
+            )
+        else:
+            active = self.capacity.callbacks_in_flight(tenant_id=tenant_id, route_id=route.id)
         if is_at_capacity(active, route.max_concurrent_calls):
+            if command.defer_on_capacity:
+                self.db.rollback()  # release the route lock; the session stays requested
+                raise CapacityDeferred()
             voice.cancel_session(session.id, tenant_id, end_reason=CAPACITY_END_REASON)
             self.capacity.record_capacity_reached(
                 tenant_id=tenant_id,
@@ -95,15 +137,18 @@ class OutboundCallService:
             )
             raise ValueError("Outbound telephony capacity exceeded.")
 
-        call_id = ledger.open_call(
-            sip_route_id=route.id,
-            agent_version_id=session.agent_version_id,
-            to_phone=number.e164,
-            from_number=route.caller_id,
-        )
-        voice.correlate_crm_call(session.id, tenant_id, call_id)
-        self.ports.projection.project_session(session.id, tenant_id, commit=False)
-        self.db.commit()
+        if resume_call_id is not None:
+            call_id = resume_call_id
+        else:
+            call_id = ledger.open_call(
+                sip_route_id=route.id,
+                agent_version_id=session.agent_version_id,
+                to_phone=number.e164,
+                from_number=route.caller_id,
+            ) if existing_call_id is None else existing_call_id
+            voice.correlate_crm_call(session.id, tenant_id, call_id)
+            self.ports.projection.project_session(session.id, tenant_id, commit=False)
+            self.db.commit()
         logger.info(
             "LiveKit SIP outbound requested | tenant_id=%s | crm_voice_call_id=%s | voice_session_id=%s | livekit_sip_trunk_id=%s",
             tenant_id,
@@ -114,7 +159,16 @@ class OutboundCallService:
 
         ledger.mark_dialing(call_id)
         try:
-            session = await self.dialer.dial(session.id, tenant_id, number.e164, manage_failure=False)
+            session = await self.dialer.dial(
+                session.id,
+                tenant_id,
+                number.e164,
+                manage_failure=False,
+                resume=resume_call_id is not None,
+                defer_on_capacity=command.defer_on_capacity,
+            )
+        except CapacityDeferred:
+            raise
         except SipDialError as exc:
             await self._fail(ledger, call_id, session, exc.call_status, exc.code)
             if exc.code == "runtime_not_ready":

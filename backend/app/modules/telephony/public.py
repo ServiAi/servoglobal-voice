@@ -19,12 +19,13 @@ from sqlalchemy.orm import Session
 
 from app.modules.telephony.domain.capacity import (
     ACTIVE_CALLBACK_STATUSES,
+    CANONICAL_SIP_PROVIDER,
     CAPACITY_EVENT_TYPES,
     VOICE_CALLBACK_FORCED_RELEASE,
     VOICE_CALLBACK_RECONCILED,
     VOICE_CAPACITY_REACHED,
 )
-from app.modules.telephony.domain.errors import SipDialError
+from app.modules.telephony.domain.errors import CapacityDeferred, SipDialError
 from app.modules.telephony.domain.phone_numbers import (
     SUPPORTED_OUTBOUND_COUNTRIES,
     NormalizedVoicePhone,
@@ -50,11 +51,13 @@ if TYPE_CHECKING:
 
 __all__ = [
     "ACTIVE_CALLBACK_STATUSES",
+    "CANONICAL_SIP_PROVIDER",
     "CAPACITY_EVENT_TYPES",
     "SUPPORTED_OUTBOUND_COUNTRIES",
     "VOICE_CALLBACK_FORCED_RELEASE",
     "VOICE_CALLBACK_RECONCILED",
     "VOICE_CAPACITY_REACHED",
+    "CapacityDeferred",
     "CapacityFacade",
     "NormalizedVoicePhone",
     "OutboundCallResult",
@@ -139,6 +142,26 @@ class CapacityFacade:
 
     def callbacks_in_flight(self, *, tenant_id: str, route_id: str) -> int:
         return self._service().callbacks_in_flight(tenant_id=tenant_id, route_id=route_id)
+
+    def route_load(
+        self,
+        *,
+        tenant_id: str,
+        route_id: str,
+        exclude_call_id: str | None = None,
+        exclude_session_id: str | None = None,
+    ) -> int:
+        """Channels held on the route by legacy callbacks and canonical SIP sessions together,
+        counted once each (a canonical call is its session, not its CRM record)."""
+        from app.modules.voice.public import VoiceTelephonyFacade
+
+        return self._service().route_load(
+            tenant_id=tenant_id,
+            route_id=route_id,
+            voice=VoiceTelephonyFacade(self.db),
+            exclude_call_id=exclude_call_id,
+            exclude_session_id=exclude_session_id,
+        )
 
     def record_capacity_reached(
         self, *, tenant_id: str, route_id: str, active_calls: int, max_concurrent_calls: int
