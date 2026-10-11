@@ -33,7 +33,7 @@ class HistoricalProviderCallSettlement:
     def __init__(self, db: Session) -> None:
         self.db = db
 
-    def _legacy_runtime(self, crm_call_id: str) -> TenantVoiceRuntimeCall | None:
+    def _historical_launch(self, crm_call_id: str) -> TenantVoiceRuntimeCall | None:
         runtime = self.db.scalar(
             select(TenantVoiceRuntimeCall).where(TenantVoiceRuntimeCall.crm_voice_call_id == crm_call_id)
         )
@@ -43,7 +43,7 @@ class HistoricalProviderCallSettlement:
 
     def owns(self, crm_call_id: str) -> bool:
         """True only for a persisted historical provider launch (never inferred from provider/status)."""
-        return self._legacy_runtime(crm_call_id) is not None
+        return self._historical_launch(crm_call_id) is not None
 
     def settle_billed(
         self,
@@ -61,7 +61,7 @@ class HistoricalProviderCallSettlement:
         with self.db.begin():
             calls = CrmVoiceCalls(self.db)
             call = calls.get(crm_call_id)
-            runtime = self._legacy_runtime(crm_call_id)
+            runtime = self._historical_launch(crm_call_id)
             if call is None or runtime is None or call.tenant_id != runtime.tenant_id:
                 return {"status": "ignored", "processed": False}
             claimed = calls.claim_event(
