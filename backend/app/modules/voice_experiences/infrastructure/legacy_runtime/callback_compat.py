@@ -20,6 +20,8 @@ from app.modules.voice_experiences.infrastructure.submission_models import (
     TenantVoiceExperienceSubmissionValue,
 )
 from app.modules.crm.public import (
+    LEGACY_VOICE_EXPERIENCE_CALLBACK_ORIGIN,
+    VOICE_EXPERIENCE_CALLBACK_ORIGIN,
     CreateVoiceCallCommand,
     CrmFacade,
     CrmVoiceCalls,
@@ -201,6 +203,7 @@ class PublicVoiceCallbackService:
                         contact_id=submission.crm_contact_id,
                         source_submission_id=submission.id,
                         sip_route_id=route.id,
+                        origin=LEGACY_VOICE_EXPERIENCE_CALLBACK_ORIGIN,
                         provider=agent.provider,
                         provider_agent_id=agent.provider_agent_id,
                         direction="outbound",
@@ -274,7 +277,12 @@ class VoiceCallbackWorker:
         with self.session_factory() as db:
             with db.begin():
                 calls = CrmVoiceCalls(db)
-                call = calls.lock_stale_active(("queued", "in_progress"), reconcile_cutoff, exclude_provider=CANONICAL_PROVIDER)
+                call = calls.lock_stale_active(
+                    ("queued", "in_progress"),
+                    reconcile_cutoff,
+                    exclude_provider=CANONICAL_PROVIDER,
+                    exclude_origin=VOICE_EXPERIENCE_CALLBACK_ORIGIN,
+                )
                 if call is None:
                     return False
                 calls.update(call.id, UpdateVoiceCallCommand(updated_at=now))
@@ -352,7 +360,9 @@ class VoiceCallbackWorker:
         cutoff = datetime.now(UTC) - timedelta(seconds=self.starting_lease_seconds)
         with self.session_factory() as db:
             with db.begin():
-                recovered = CrmVoiceCalls(db).recover_stale_starting(cutoff, exclude_provider=CANONICAL_PROVIDER)
+                recovered = CrmVoiceCalls(db).recover_stale_starting(
+                    cutoff, exclude_provider=CANONICAL_PROVIDER, exclude_origin=VOICE_EXPERIENCE_CALLBACK_ORIGIN
+                )
             if recovered:
                 logger.warning(
                     "Recovered voice callback calls stuck in starting",
@@ -363,7 +373,11 @@ class VoiceCallbackWorker:
         with self.session_factory() as db:
             with db.begin():
                 calls = CrmVoiceCalls(db)
-                candidates = calls.lock_requested_callbacks(CLAIM_BATCH_SIZE, exclude_provider=CANONICAL_PROVIDER)
+                candidates = calls.lock_requested_callbacks(
+                    CLAIM_BATCH_SIZE,
+                    exclude_provider=CANONICAL_PROVIDER,
+                    exclude_origin=VOICE_EXPERIENCE_CALLBACK_ORIGIN,
+                )
 
                 for call in candidates:
                     route = SipRouteFacade(db).lock_route(call.sip_route_id)

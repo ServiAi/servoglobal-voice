@@ -36,6 +36,7 @@ def view_of(row: CrmVoiceCall) -> VoiceCallView:
         contact_id=row.contact_id,
         source_submission_id=row.source_submission_id,
         sip_route_id=row.sip_route_id,
+        origin=row.origin,
         provider=row.provider,
         provider_call_id=row.provider_call_id,
         provider_session_id=row.provider_session_id,
@@ -142,7 +143,12 @@ class VoiceCallLedger:
 
     # -- worker claims -------------------------------------------------------------
     def lock_stale_active(
-        self, statuses: Sequence[str], updated_before: datetime, *, exclude_provider: str | None = None
+        self,
+        statuses: Sequence[str],
+        updated_before: datetime,
+        *,
+        exclude_provider: str | None = None,
+        exclude_origin: str | None = None,
     ) -> VoiceCallView | None:
         """The oldest call with a provider id whose state has not moved since
         ``updated_before`` (``FOR UPDATE SKIP LOCKED``): a reconciliation candidate."""
@@ -153,11 +159,19 @@ class VoiceCallLedger:
         )
         if exclude_provider is not None:
             query = query.where(CrmVoiceCall.provider != exclude_provider)
+        if exclude_origin is not None:
+            query = query.where(CrmVoiceCall.origin != exclude_origin)
         row = self.db.scalar(query.order_by(CrmVoiceCall.updated_at).with_for_update(skip_locked=True).limit(1))
         return _opt(row)
 
     def recover_stale_starting(
-        self, attempt_started_before: datetime, *, provider: str | None = None, exclude_provider: str | None = None
+        self,
+        attempt_started_before: datetime,
+        *,
+        provider: str | None = None,
+        exclude_provider: str | None = None,
+        origin: str | None = None,
+        exclude_origin: str | None = None,
     ) -> int:
         """``starting`` calls whose provider attempt lease expired go back to ``requested``."""
         conditions = [
@@ -169,26 +183,43 @@ class VoiceCallLedger:
             conditions.append(CrmVoiceCall.provider == provider)
         if exclude_provider is not None:
             conditions.append(CrmVoiceCall.provider != exclude_provider)
+        if origin is not None:
+            conditions.append(CrmVoiceCall.origin == origin)
+        if exclude_origin is not None:
+            conditions.append(CrmVoiceCall.origin != exclude_origin)
         result = self.db.execute(
             update(CrmVoiceCall).where(*conditions).values(status="requested", provider_attempt_started_at=None)
         )
         return int(result.rowcount or 0)
 
     def lock_requested_callbacks(
-        self, limit: int, *, provider: str | None = None, exclude_provider: str | None = None
+        self,
+        limit: int,
+        *,
+        provider: str | None = None,
+        exclude_provider: str | None = None,
+        origin: str | None = None,
+        exclude_origin: str | None = None,
     ) -> list[VoiceCallView]:
         """Oldest ``requested`` outbound callbacks with a route, locked
-        (``FOR UPDATE SKIP LOCKED``) for the claiming transaction."""
+        (``FOR UPDATE SKIP LOCKED``) for the claiming transaction. Selecting by ``origin`` does not
+        require ``source_submission_id``: a callback whose submission was deleted is still that
+        callback (the worker then fails it closed instead of leaving it requested forever)."""
         query = select(CrmVoiceCall).where(
             CrmVoiceCall.status == "requested",
             CrmVoiceCall.direction == "outbound",
-            CrmVoiceCall.source_submission_id.is_not(None),
             CrmVoiceCall.sip_route_id.is_not(None),
         )
+        if origin is None:
+            query = query.where(CrmVoiceCall.source_submission_id.is_not(None))
+        else:
+            query = query.where(CrmVoiceCall.origin == origin)
         if provider is not None:
             query = query.where(CrmVoiceCall.provider == provider)
         if exclude_provider is not None:
             query = query.where(CrmVoiceCall.provider != exclude_provider)
+        if exclude_origin is not None:
+            query = query.where(CrmVoiceCall.origin != exclude_origin)
         rows = self.db.scalars(query.order_by(CrmVoiceCall.created_at).with_for_update(skip_locked=True).limit(limit)).all()
         return [view_of(row) for row in rows]
 

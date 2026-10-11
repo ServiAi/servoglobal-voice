@@ -273,21 +273,55 @@ class CanonicalCallbackTests(Integration2ATestCase):
             self.assertEqual(db.query(VoiceSession).count(), 0)
         self.assertEqual(self.legacy.calls, 0)
 
-    def test_missing_provenance_fails_closed_instead_of_using_the_current_agent(self) -> None:
+    def _delete_the_submission_for_real(self) -> None:
+        """Delete the Submission through a connection that enforces foreign keys, so the database
+        itself applies ``crm_voice_calls.source_submission_id ON DELETE SET NULL``."""
+        from sqlalchemy import text
+
+        from app.db.session import engine
+
+        with engine.connect() as connection:
+            connection.exec_driver_sql("PRAGMA foreign_keys=ON")
+            connection.execute(text("DELETE FROM tenant_voice_experience_submission_values"))
+            connection.execute(text("DELETE FROM tenant_voice_context_sessions"))
+            connection.execute(text("DELETE FROM tenant_voice_experience_submissions"))
+            connection.commit()
+
+    def test_lost_provenance_fails_the_callback_closed_instead_of_leaving_it_requested_forever(self) -> None:
         self._accepted_callback()
-        with SessionLocal() as db:
-            call = db.scalars(select(CrmVoiceCall)).one()
-            call.source_submission_id = None  # provenance lost
-            db.commit()
+        self._delete_the_submission_for_real()
+        call = self._call()
+        self.assertEqual((call.origin, call.source_submission_id), ("voice_experience_callback", None))
         order: list[str] = []
         sip = FakeSip(order)
 
         self._run(self._worker(sip, ReadyBackend(order)))
 
         self.assertEqual(sip.calls, 0)
+        self.assertEqual(order, [])  # no room either
         with SessionLocal() as db:
-            self.assertEqual(db.scalars(select(CrmVoiceCall)).one().status, "requested")  # not even claimable
+            call = db.scalars(select(CrmVoiceCall)).one()
+            self.assertEqual((call.status, call.error_message), ("failed", "callback_provenance_unavailable"))
             self.assertEqual(db.query(VoiceSession).count(), 0)
+        self.assertEqual(self.legacy.calls, 0)  # and no fallback to the provider runtime
+
+    def test_the_callback_worker_never_claims_a_crm_outbound_call(self) -> None:
+        with SessionLocal() as db:
+            route = db.scalars(select(TenantSipRoute)).one()
+            db.add(CrmVoiceCall(
+                tenant_id=self.tenant.id, sip_route_id=route.id, provider="livekit_sip", origin="crm_outbound",
+                direction="outbound", status="requested", to_phone="+573009999999", from_number=route.caller_id,
+            ))
+            db.commit()
+        before = self._call()
+        order: list[str] = []
+        sip = FakeSip(order)
+
+        self._run(self._worker(sip, ReadyBackend(order)))
+
+        after = self._call()
+        self.assertEqual((after.status, after.updated_at, after.error_message), (before.status, before.updated_at, None))
+        self.assertEqual((sip.calls, order, self._counts()), (0, [], (1, 0)))
 
     # -- trusted context ----------------------------------------------------------------------------
 
@@ -467,6 +501,76 @@ class CanonicalCallbackTests(Integration2ATestCase):
                         db.scalars(select(CrmVoiceCall).where(CrmVoiceCall.provider == "livekit_sip")).one().status,
                         "answered",
                     )
+
+    def _fill_the_route_on_the_third_count(self, filled_from_call: int = 3):
+        """The claim and Telephony's first check see a free route; the dialer's own (race-closing)
+        check, made AFTER the call was marked dialing, finds it full."""
+        from app.modules.voice.public import VoiceTelephonyFacade
+
+        original = VoiceTelephonyFacade.count_active_telephony_sessions
+        counter = {"calls": 0}
+
+        def count(facade, tenant_id, route_id, **kwargs):
+            counter["calls"] += 1
+            return 1 if counter["calls"] == filled_from_call else original(facade, tenant_id, route_id, **kwargs)
+
+        return patch.object(VoiceTelephonyFacade, "count_active_telephony_sessions", count)
+
+    def test_capacity_deferred_after_mark_dialing_goes_back_to_requested_and_retries_once(self) -> None:
+        self._accepted_callback()
+        order: list[str] = []
+        sip, backend = FakeSip(order), ReadyBackend(order)
+        worker = self._worker(sip, backend)
+
+        with self._fill_the_route_on_the_third_count():
+            self.assertFalse(self._run(worker))  # deferred: nothing to do until capacity frees up
+
+        self.assertEqual(sip.calls, 0)
+        with SessionLocal() as db:
+            call = db.scalars(select(CrmVoiceCall)).one()
+            self.assertEqual(
+                (call.status, call.provider_attempt_started_at, call.started_at, call.error_message),
+                ("requested", None, None, None),
+            )
+            session = db.scalars(select(VoiceSession)).one()  # created, reusable, not cancelled
+            self.assertEqual((session.status, session.crm_voice_call_id), ("requested", call.id))
+            self.assertIsNone(session.livekit_sip_participant_identity)
+            deferred_session_id, call_id = session.id, call.id
+
+        self.assertTrue(self._run(worker))  # capacity is free again
+
+        self.assertEqual(sip.calls, 1)  # exactly one dial
+        with SessionLocal() as db:
+            call = db.scalars(select(CrmVoiceCall)).one()
+            self.assertEqual((call.id, call.status), (call_id, "answered"))
+            self.assertEqual(db.scalars(select(VoiceSession)).one().id, deferred_session_id)  # same session
+        self.assertEqual(self._counts(), (1, 1))
+
+    def test_a_deferral_never_reverts_a_call_whose_sip_attempt_already_started(self) -> None:
+        from app.modules.telephony.application.dial_service import TelephonyDialService
+        from app.modules.telephony.domain.errors import CapacityDeferred
+        from app.modules.voice.public import VoiceTelephonyFacade
+
+        self._accepted_callback()
+        order: list[str] = []
+        sip, backend = FakeSip(order), ReadyBackend(order)
+
+        async def dial_then_defer(dialer, session_id, tenant_id, to_phone, **kwargs):
+            with SessionLocal() as db:  # a SIP attempt is recorded...
+                VoiceTelephonyFacade(db).begin_sip_dial(
+                    session_id, tenant_id, route_id="r", participant_identity=f"sip-{session_id}"
+                )
+            raise CapacityDeferred()  # ...and only then the dialer reports "deferred" (must be impossible)
+
+        with patch.object(TelephonyDialService, "dial", dial_then_defer):
+            self._run(self._worker(sip, backend))
+
+        with SessionLocal() as db:
+            call = db.scalars(select(CrmVoiceCall)).one()
+            self.assertEqual(call.status, "dialing")  # NOT requested: a retry could ring the customer twice
+        self.assertEqual(sip.calls, 0)
+        self._run(self._worker(sip, backend))  # and later runs do not dial it either
+        self.assertEqual(sip.calls, 0)
 
     def _accepted_callback_for(self, token: str) -> None:
         response = self._request_callback(token)

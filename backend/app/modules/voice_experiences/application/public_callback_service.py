@@ -24,7 +24,12 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.modules.billing.public import BillingAccessGate, BillingError
-from app.modules.crm.public import CreateVoiceCallCommand, CrmFacade, CrmVoiceCalls
+from app.modules.crm.public import (
+    VOICE_EXPERIENCE_CALLBACK_ORIGIN,
+    CreateVoiceCallCommand,
+    CrmFacade,
+    CrmVoiceCalls,
+)
 from app.modules.identity.public import (
     LIVEKIT_SIP_OUTBOUND_V2,
     VOICE_EXPERIENCES,
@@ -170,6 +175,7 @@ class PublicCallbackService:
                             source_submission_id=submission.id,
                             sip_route_id=route.id,
                             provider=CANONICAL_SIP_PROVIDER,
+                            origin=VOICE_EXPERIENCE_CALLBACK_ORIGIN,
                             direction="outbound",
                             status="requested",
                             to_phone=phone,

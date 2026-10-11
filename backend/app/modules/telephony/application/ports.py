@@ -180,6 +180,11 @@ class OutboundCallLedger(Protocol):
         """Commits."""
         ...
 
+    def revert_dialing(self, call_id: str) -> None:
+        """No SIP attempt was made after ``mark_dialing``: put the call back to ``requested`` so the
+        same request can be retried (clears the attempt timestamps and error). Commits."""
+        ...
+
     def mark_answered(self, call_id: str, provider_call_id: str | None) -> None:
         """No commit."""
         ...

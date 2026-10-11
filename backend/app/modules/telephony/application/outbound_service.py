@@ -168,6 +168,19 @@ class OutboundCallService:
                 defer_on_capacity=command.defer_on_capacity,
             )
         except CapacityDeferred:
+            # The dialer's own (race-closing) capacity check refused AFTER ``mark_dialing``. It raises
+            # strictly before any SIP participant is requested, but never trust that blindly: only a
+            # session with no persisted dial attempt may go back to ``requested``.
+            latest = voice.get_session(session.id, tenant_id)
+            if latest.livekit_sip_participant_identity is not None:
+                return OutboundCallResult(
+                    voice_session_id=latest.id,
+                    status="dialing",
+                    sip_call_id=latest.sip_call_id,
+                    provider_call_id=latest.sip_call_id,
+                    provider_session_id=latest.provider_session_id,
+                )
+            ledger.revert_dialing(call_id)
             raise
         except SipDialError as exc:
             await self._fail(ledger, call_id, session, exc.call_status, exc.code)

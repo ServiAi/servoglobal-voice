@@ -401,8 +401,8 @@ class VoiceRuntimePostgresConcurrencyTests(unittest.TestCase):
             db.flush()
             call = CrmVoiceCall(
                 tenant_id=seeded["tenant_id"], source_submission_id=seeded["submission_id"], sip_route_id=route.id,
-                provider="livekit_sip", direction="outbound", status="requested", to_phone="+573001112233",
-                from_number="+573001112233",
+                provider="livekit_sip", origin="voice_experience_callback", direction="outbound",
+                status="requested", to_phone="+573001112233", from_number="+573001112233",
             )
             db.add(call)
             db.commit()
@@ -464,6 +464,65 @@ class VoiceRuntimePostgresConcurrencyTests(unittest.TestCase):
             self.assertEqual(sessions[0].crm_voice_call_id, call_id)
             self.assertEqual(calls[0].status, "answered")
         self.assertEqual(state, {"dispatches": 1, "dials": 1})
+
+    def test_a_callback_whose_submission_was_deleted_is_failed_closed_by_the_worker(self) -> None:
+        """PostgreSQL applies ON DELETE SET NULL for real: the callback must stay recognizable by its
+        origin and be failed (not left requested forever, not placed, not handed to a provider)."""
+        from sqlalchemy import text
+
+        from app.modules.telephony.infrastructure.models import TenantSipRoute
+        from app.modules.voice_experiences.application.callback_worker import CallbackWorker
+        from app.modules.voice_experiences.infrastructure.voice_runtime_adapter import VoiceRuntimeAdapter
+
+        seeded = self._seed_context()
+        with self.SessionLocal() as db:
+            provider_id = db.scalars(select(TenantVoiceProviderConfig.id)).first()
+            route = TenantSipRoute(
+                tenant_id=seeded["tenant_id"], provider_config_id=provider_id, status="active",
+                pbx_host="pbx.example.com", pbx_port=5060, sip_username=f"u{uuid4().hex[:8]}",
+                sip_password_encrypted=SecretManager().encrypt_secret("pw"), caller_id="+573001112233",
+                default_country="CO", allowed_countries_json=["CO"], max_concurrent_calls=5,
+                provision_status="active", desired_revision=1, applied_revision=1,
+                livekit_outbound_trunk_id="ST_pg_del", livekit_provision_status="active",
+                livekit_provisioned_at=datetime.now(UTC),
+            )
+            db.add(route)
+            db.flush()
+            crm_call = CrmVoiceCall(
+                tenant_id=seeded["tenant_id"], source_submission_id=seeded["submission_id"], sip_route_id=route.id,
+                provider="livekit_sip", origin="voice_experience_callback", direction="outbound", status="requested",
+                to_phone="+573001112233", from_number="+573001112233",
+            )
+            other = CrmVoiceCall(  # a CRM-initiated outbound call on the same provider: never ours
+                tenant_id=seeded["tenant_id"], sip_route_id=route.id, provider="livekit_sip", origin="crm_outbound",
+                direction="outbound", status="requested", to_phone="+573009999999", from_number="+573001112233",
+            )
+            db.add_all([crm_call, other])
+            db.commit()
+            call_id, other_id = crm_call.id, other.id
+        with self.engine.begin() as connection:  # delete the submission for real
+            connection.execute(text("DELETE FROM tenant_voice_runtime_calls"))
+            connection.execute(text("DELETE FROM tenant_voice_context_sessions"))
+            connection.execute(text("DELETE FROM tenant_voice_experience_submission_values"))
+            connection.execute(text("DELETE FROM tenant_voice_experience_submissions"))
+
+        class Legacy:
+            def process_once(self) -> bool:
+                return False
+
+        worker = CallbackWorker(
+            self.SessionLocal,
+            runtime_factory=lambda db: VoiceRuntimeAdapter(db),
+            legacy=Legacy(),
+        )
+        asyncio.run(worker.process_once())
+
+        with self.SessionLocal() as db:
+            call, other_call = db.get(CrmVoiceCall, call_id), db.get(CrmVoiceCall, other_id)
+            self.assertEqual((call.source_submission_id, call.origin), (None, "voice_experience_callback"))
+            self.assertEqual((call.status, call.error_message), ("failed", "callback_provenance_unavailable"))
+            self.assertEqual((other_call.status, other_call.error_message), ("requested", None))
+            self.assertEqual(db.query(VoiceSession).count(), 0)
 
     def test_concurrent_identical_webhook_has_one_owner_and_one_core_mutation(self) -> None:
         runtime_id = self._seed_reserved_runtime(self._seed_context())

@@ -366,7 +366,7 @@ class VoiceExperiencesBoundaryTests(unittest.TestCase):
                         )
                     )
 
-    def test_ddl_is_unchanged_from_the_base(self) -> None:
+    def test_ddl_differs_from_base_only_by_the_crm_call_origin(self) -> None:
         import app.models
         from app.db.base import Base
         from app.modules.voice_experiences.infrastructure import models as voice_models  # noqa: F401
@@ -384,8 +384,12 @@ class VoiceExperiencesBoundaryTests(unittest.TestCase):
         self.assertTrue(ddl)
         base, branch = _base_snapshot()["ddl"], _ddl_snapshot()
         changed = {key for key in base.keys() | branch.keys() if base.get(key) != branch.get(key)}
-        # PR #136 is a runtime migration: no table, column, constraint or index changes.
-        self.assertEqual(changed, set())
+        # PR #136's only DDL: the explicit origin of a CRM voice call (column + CHECK), nothing else.
+        self.assertEqual(changed, {"crm_voice_calls"})
+        crm_calls = Base.metadata.tables["crm_voice_calls"]
+        self.assertFalse(crm_calls.c.origin.nullable)
+        self.assertIn("crm_outbound", str(crm_calls.c.origin.server_default.arg))
+        self.assertIn("ck_crm_voice_calls_origin", {constraint.name for constraint in crm_calls.constraints})
         runtime_calls = Base.metadata.tables["tenant_voice_runtime_calls"]
         self.assertFalse(runtime_calls.c.launch_runtime.nullable)
         self.assertIsNone(runtime_calls.c.launch_runtime.default)  # no implicit canonical classification

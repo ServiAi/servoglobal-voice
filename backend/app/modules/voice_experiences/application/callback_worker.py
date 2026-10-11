@@ -25,7 +25,12 @@ from typing import Protocol
 
 from sqlalchemy.orm import Session
 
-from app.modules.crm.public import CrmVoiceCalls, UpdateVoiceCallCommand, VoiceCallView
+from app.modules.crm.public import (
+    VOICE_EXPERIENCE_CALLBACK_ORIGIN,
+    CrmVoiceCalls,
+    UpdateVoiceCallCommand,
+    VoiceCallView,
+)
 from app.modules.telephony.public import (
     CANONICAL_SIP_PROVIDER,
     CapacityDeferred,
@@ -86,7 +91,9 @@ class CallbackWorker:
         cutoff = datetime.now(UTC) - timedelta(seconds=self.starting_lease_seconds)
         with self.session_factory() as db:
             with db.begin():
-                recovered = CrmVoiceCalls(db).recover_stale_starting(cutoff, provider=CANONICAL_SIP_PROVIDER)
+                recovered = CrmVoiceCalls(db).recover_stale_starting(
+                    cutoff, provider=CANONICAL_SIP_PROVIDER, origin=VOICE_EXPERIENCE_CALLBACK_ORIGIN
+                )
         if recovered:
             logger.warning("Recovered canonical callbacks stuck in starting", extra={"recovered_count": recovered})
 
@@ -94,7 +101,9 @@ class CallbackWorker:
         with self.session_factory() as db:
             with db.begin():
                 calls = CrmVoiceCalls(db)
-                for call in calls.lock_requested_callbacks(CLAIM_BATCH_SIZE, provider=CANONICAL_SIP_PROVIDER):
+                for call in calls.lock_requested_callbacks(
+                    CLAIM_BATCH_SIZE, provider=CANONICAL_SIP_PROVIDER, origin=VOICE_EXPERIENCE_CALLBACK_ORIGIN
+                ):
                     route = SipRouteFacade(db).lock_route(call.sip_route_id)
                     if route is None or route.status != "active":
                         calls.update(

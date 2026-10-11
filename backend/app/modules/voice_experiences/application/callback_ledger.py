@@ -67,6 +67,18 @@ class VoiceExperienceCallbackLedger:
         self._calls().update(call_id, UpdateVoiceCallCommand(status="dialing", started_at=datetime.now(UTC)))
         self.db.commit()
 
+    def revert_dialing(self, call_id: str) -> None:
+        """Commits. Only called by Telephony when no SIP attempt exists for the call's session."""
+        self._own(call_id)
+        self._calls().refresh(call_id)
+        self._calls().update(
+            call_id,
+            UpdateVoiceCallCommand(
+                status="requested", started_at=None, provider_attempt_started_at=None, error_message=None
+            ),
+        )
+        self.db.commit()
+
     def mark_answered(self, call_id: str, provider_call_id: str | None) -> None:
         """No commit: the caller commits together with the projection."""
         self._own(call_id)
