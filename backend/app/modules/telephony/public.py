@@ -37,7 +37,6 @@ from app.modules.telephony.domain.routes import sip_username_for_route
 from app.modules.telephony.domain.views import (
     OutboundCallResult,
     PlaceOutboundCallCommand,
-    SipRouteConnection,
     SipRouteSettings,
     SipRouteView,
 )
@@ -63,7 +62,6 @@ __all__ = [
     "OutboundCallResult",
     "PlaceOutboundCallCommand",
     "SipDialError",
-    "SipRouteConnection",
     "SipRouteFacade",
     "SipRouteSettings",
     "SipRouteView",
@@ -77,9 +75,8 @@ __all__ = [
 
 
 class SipRouteFacade:
-    """A tenant's SIP route, as DTOs. The SIP password never appears in a
-    view; ``get_connection`` is the single, explicit exception, for the
-    trusted legacy process that actually places the provider call."""
+    """A tenant's SIP route, as DTOs. The SIP password never leaves Telephony:
+    it is read only by Telephony's own provisioning and transport code."""
 
     def __init__(self, db: Session, secret_manager=None) -> None:
         self.db = db
@@ -106,12 +103,6 @@ class SipRouteFacade:
         """SELECT ... FOR UPDATE by id, for the caller's transaction."""
         routes = self._routes()
         return routes.view(routes.get_route_by_id(route_id, for_update=True))
-
-    def get_connection(self, tenant_id: str) -> SipRouteConnection:
-        """The tenant's active route with its decrypted SIP password. Same
-        validations as get_active_route."""
-        routes = self._routes()
-        return routes.connection(routes.get_active_route(tenant_id))
 
     def upsert(
         self, tenant_id: str, provider_config: ProviderConfigRef, settings: SipRouteSettings

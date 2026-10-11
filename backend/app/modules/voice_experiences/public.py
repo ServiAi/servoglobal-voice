@@ -9,7 +9,6 @@ from app.modules.voice_experiences.domain.views import (
     VoiceContextFieldSnapshot,
     VoiceContextOptionSnapshot,
     VoiceContextSchemaSnapshot,
-    VoiceRuntimeWebhookTarget,
 )
 
 
@@ -23,18 +22,6 @@ class VoiceAgentReferenceReader(Protocol):
     def is_agent_referenced(self, tenant_id: str, agent_id: str) -> bool:
         """True while any Experience or Experience version points at the Agent."""
         ...
-
-
-class VoiceRuntimeWebhookServicePort(Protocol):
-    def resolve_target(
-        self, provider: str, payload: dict[str, object]
-    ) -> VoiceRuntimeWebhookTarget | None: ...
-
-    def runtime_secret(self, target: VoiceRuntimeWebhookTarget) -> str: ...
-
-    def process(
-        self, provider: str, payload: dict[str, object], target: VoiceRuntimeWebhookTarget
-    ) -> dict[str, object]: ...
 
 
 class VoiceCallbackWorkerPort(Protocol):
@@ -59,12 +46,6 @@ def register_models() -> None:
     from app.modules.voice_experiences.infrastructure import models  # noqa: F401
 
 
-def create_runtime_webhook_service(session: DatabaseSession) -> VoiceRuntimeWebhookServicePort:
-    from app.modules.voice_experiences.wiring import create_runtime_webhook_service as create
-
-    return create(session)
-
-
 async def run_callback_worker(worker: VoiceCallbackWorkerPort) -> None:
     """Runs the worker until cancelled, on the caller's event loop."""
     from app.modules.voice_experiences.application.callback_worker import run_forever
@@ -76,17 +57,10 @@ def create_callback_worker(
     session_factory: SessionFactory,
     *,
     starting_lease_seconds: int,
-    reconcile_after_seconds: int,
-    max_active_seconds: int,
 ) -> VoiceCallbackWorkerPort:
     from app.modules.voice_experiences.wiring import create_callback_worker as create
 
-    return create(
-        session_factory,
-        starting_lease_seconds=starting_lease_seconds,
-        reconcile_after_seconds=reconcile_after_seconds,
-        max_active_seconds=max_active_seconds,
-    )
+    return create(session_factory, starting_lease_seconds=starting_lease_seconds)
 
 
 __all__ = [
@@ -98,12 +72,9 @@ __all__ = [
     "VoiceContextOptionSnapshot",
     "VoiceContextSchemaReader",
     "VoiceContextSchemaSnapshot",
-    "VoiceRuntimeWebhookServicePort",
-    "VoiceRuntimeWebhookTarget",
     "create_agent_reference_reader",
     "create_callback_worker",
     "create_context_schema_reader",
-    "create_runtime_webhook_service",
     "register_models",
     "run_callback_worker",
 ]

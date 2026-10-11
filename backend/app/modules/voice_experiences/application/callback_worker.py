@@ -22,7 +22,6 @@ import re
 from time import monotonic
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta
-from typing import Protocol
 
 from sqlalchemy.orm import Session
 
@@ -51,26 +50,18 @@ CLAIM_BATCH_SIZE = 25
 _SAFE_CODE = re.compile(r"^[a-z0-9_]{1,80}$")
 
 
-class LegacyCallbackWorker(Protocol):
-    """The temporary provider-originated runtime (synchronous)."""
-
-    def process_once(self) -> bool: ...
-
-
 class CallbackWorker:
     def __init__(
         self,
         session_factory: Callable[[], Session],
         *,
         runtime_factory: Callable[[Session], VoiceRuntimePort],
-        legacy: LegacyCallbackWorker,
         telephony_factory: Callable[[Session], TelephonyFacade] = TelephonyFacade,
         starting_lease_seconds: int = 120,
         defer_cooldown_seconds: float = 5.0,
     ) -> None:
         self.session_factory = session_factory
         self.runtime_factory = runtime_factory
-        self.legacy = legacy
         self.telephony_factory = telephony_factory
         self.starting_lease_seconds = starting_lease_seconds
         self.defer_cooldown_seconds = defer_cooldown_seconds
@@ -81,8 +72,7 @@ class CallbackWorker:
         call_id = self._claim()
         if call_id is not None:
             return await self._place(call_id)
-        # Nothing canonical to place: let the legacy runtime reconcile/claim its own calls.
-        return await asyncio.to_thread(self.legacy.process_once)
+        return False
 
     # -- claim / lease ----------------------------------------------------------------------------
 

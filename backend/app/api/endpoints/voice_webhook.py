@@ -9,8 +9,8 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.modules.notifications.public import publish_call_event
 from app.modules.telephony.public import CANONICAL_SIP_PROVIDER
+from app.modules.voice.public import VoiceSessionFacade
 from app.services.voice_webhook_service import VoiceWebhookService
-from app.modules.voice_experiences.public import create_runtime_webhook_service
 
 logger = logging.getLogger(__name__)
 
@@ -38,25 +38,15 @@ async def voice_webhook(
         ) from exc
 
     service = VoiceWebhookService(db)
-    runtime_service = create_runtime_webhook_service(db)
-    runtime_target = runtime_service.resolve_target(provider, payload)
-
-    if runtime_target:
-        secret = runtime_service.runtime_secret(runtime_target)
-        service.verify_webhook_signature(request, raw_body, secret)
-        try:
-            return runtime_service.process(provider, payload, runtime_target)
-        except HTTPException:
-            raise
-        except Exception as exc:
-            logger.error("Error processing runtime voice webhook", extra={"error_type": type(exc).__name__})
-            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Webhook processing error") from None
-
     # Resolve call to get tenant signature validation
     call = service.resolve_call_by_metadata_or_provider_id(payload)
-    if call and call.provider == CANONICAL_SIP_PROVIDER:
-        # A call placed through Telephony (VoiceSession + LiveKit SIP) takes its lifecycle from
-        # the voice runtime's events: a provider webhook never mutates it.
+    if call and (
+        call.provider == CANONICAL_SIP_PROVIDER
+        or call.id in VoiceSessionFacade(db).agent_ids_by_crm_call(call.tenant_id, [call.id])
+    ):
+        # A call backed by a VoiceSession (LiveKit SIP, or a public WebRTC launch) takes its lifecycle
+        # from the voice runtime's events: a provider webhook never mutates it. Only historical
+        # provider-originated calls, which have no session, are still reconciled below.
         return {"status": "ignored", "processed": False}
     if call:
         config = service.config_service.get_provider_config(call.tenant_id, provider)

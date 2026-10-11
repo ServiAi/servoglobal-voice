@@ -7,6 +7,7 @@ import inspect
 import io
 import json
 import os
+import re
 import subprocess
 import sys
 import tarfile
@@ -213,7 +214,7 @@ class VoiceExperiencesBoundaryTests(unittest.TestCase):
             value for value in vars(public).values()
             if is_dataclass(value) and value.__module__.startswith("app.modules.voice_experiences")
         ]
-        self.assertGreaterEqual(len(dtos), 4)
+        self.assertGreaterEqual(len(dtos), 3)
         for dto in dtos:
             self.assertTrue(dto.__dataclass_params__.frozen, dto)
             hints = typing.get_type_hints(dto)
@@ -236,7 +237,7 @@ class VoiceExperiencesBoundaryTests(unittest.TestCase):
                     for method, member in vars(value).items()
                     if inspect.isfunction(member) and not method.startswith("_")
                 )
-        self.assertGreaterEqual(len(callables), 8)
+        self.assertGreaterEqual(len(callables), 5)
         for name, function in callables:
             hints = typing.get_type_hints(function)
             self.assertIn("return", hints, name)
@@ -253,10 +254,6 @@ class VoiceExperiencesBoundaryTests(unittest.TestCase):
         from app.modules.voice_experiences import public
 
         self.assertIs(
-            typing.get_type_hints(public.create_runtime_webhook_service)["return"],
-            public.VoiceRuntimeWebhookServicePort,
-        )
-        self.assertIs(
             typing.get_type_hints(public.create_callback_worker)["return"],
             public.VoiceCallbackWorkerPort,
         )
@@ -264,16 +261,6 @@ class VoiceExperiencesBoundaryTests(unittest.TestCase):
             typing.get_type_hints(public.create_context_schema_reader)["return"],
             public.VoiceContextSchemaReader,
         )
-
-    def test_runtime_webhook_target_is_a_framework_free_handle(self) -> None:
-        import typing
-
-        from app.modules.voice_experiences.public import VoiceRuntimeWebhookTarget
-
-        self.assertTrue(VoiceRuntimeWebhookTarget.__dataclass_params__.frozen)
-        for name, annotation in typing.get_type_hints(VoiceRuntimeWebhookTarget).items():
-            with self.subTest(field=name):
-                self.assertIn(annotation, (str, str | None))
 
     def test_public_module_source_imports_no_implementation_or_framework(self) -> None:
         forbidden = (
@@ -306,12 +293,12 @@ class VoiceExperiencesBoundaryTests(unittest.TestCase):
 
         self.assertIn("tenant_voice_experience_submissions", Base.metadata.tables)
 
-    def test_legacy_adapters_do_not_touch_identity_orm(self) -> None:
-        for path in _files(MODULE / "infrastructure" / "legacy_runtime"):
+    def test_the_legacy_runtime_directory_is_gone_and_nothing_imports_it(self) -> None:
+        self.assertFalse((MODULE / "infrastructure" / "legacy_runtime").exists())
+        for path in _files(APP):
             for imported in _imports(path):
-                with self.subTest(path=path.name, imported=imported):
-                    self.assertNotEqual(imported, "app.models")
-                    self.assertFalse(imported.startswith("app.modules.identity.infrastructure"))
+                with self.subTest(path=str(path.relative_to(APP)), imported=imported):
+                    self.assertNotIn("legacy_runtime", imported)
 
     def test_public_import_does_not_load_implementation_layers(self) -> None:
         code = (
@@ -366,7 +353,7 @@ class VoiceExperiencesBoundaryTests(unittest.TestCase):
                         )
                     )
 
-    def test_ddl_differs_from_base_only_by_the_crm_call_origin(self) -> None:
+    def test_ddl_is_unchanged_from_the_base(self) -> None:
         import app.models
         from app.db.base import Base
         from app.modules.voice_experiences.infrastructure import models as voice_models  # noqa: F401
@@ -384,8 +371,8 @@ class VoiceExperiencesBoundaryTests(unittest.TestCase):
         self.assertTrue(ddl)
         base, branch = _base_snapshot()["ddl"], _ddl_snapshot()
         changed = {key for key in base.keys() | branch.keys() if base.get(key) != branch.get(key)}
-        # PR #136's only DDL: the explicit origin of a CRM voice call (column + CHECK), nothing else.
-        self.assertEqual(changed, {"crm_voice_calls"})
+        # PR #137 retires the runtime, not the data: no table, column, constraint or index changes.
+        self.assertEqual(changed, set())
         crm_calls = Base.metadata.tables["crm_voice_calls"]
         self.assertFalse(crm_calls.c.origin.nullable)
         self.assertIn("crm_outbound", str(crm_calls.c.origin.server_default.arg))
@@ -464,17 +451,42 @@ class VoiceExperiencesBoundaryTests(unittest.TestCase):
                     with self.subTest(path=path.relative_to(APP), imported=imported):
                         self.assertEqual(imported, "app.modules.voice.public")
 
-    def test_legacy_public_webrtc_adapters_have_no_production_callers(self) -> None:
-        legacy = MODULE / "infrastructure" / "legacy_runtime"
+    def test_no_production_code_can_originate_a_call_through_the_ai_provider(self) -> None:
+        forbidden = (
+            "start_outbound_call", "VoiceSipRouteConfig", "VoiceClientConfig", "voice_client",
+            "create_runtime_webhook_service", "VoiceRuntimeWebhookService", "start_lead_call",
+            "LegacyCallbackWorker", "LegacyCallbackRequests", "PublicVoiceCallbackService",
+            "PublicVoiceCallService", "VoiceExperienceRuntimeProvider", "VoiceCallbackWorker(",
+        )
         for path in _files(APP):
-            if legacy in path.parents:
-                continue
-            for imported in _imports(path):
-                with self.subTest(path=path.relative_to(APP), imported=imported):
-                    self.assertFalse(
-                        imported.endswith(("legacy_runtime.public_call_compat", "legacy_runtime.provider_adapter")),
-                        "dead compatibility code (removed in PR #137) must not regain callers",
-                    )
+            source = path.read_text(encoding="utf-8")
+            for symbol in forbidden:
+                with self.subTest(path=str(path.relative_to(APP)), symbol=symbol):
+                    self.assertNotIn(symbol, source)
+
+    def test_no_production_writer_creates_legacy_launches_or_legacy_callbacks(self) -> None:
+        legacy_launch = re.compile(r"launch_runtime\s*=\s*[\"']legacy_provider|launch_runtime\s*=\s*LAUNCH_RUNTIME_LEGACY")
+        legacy_callback = re.compile(
+            r"origin\s*=\s*(?:[\"']legacy_voice_experience_callback|LEGACY_VOICE_EXPERIENCE_CALLBACK_ORIGIN)"
+        )
+        for path in _files(APP):
+            source = path.read_text(encoding="utf-8")
+            with self.subTest(path=str(path.relative_to(APP))):
+                self.assertIsNone(legacy_launch.search(source), "new launch_runtime=legacy_provider writer")
+                self.assertIsNone(legacy_callback.search(source), "new legacy_voice_experience_callback writer")
+
+    def test_historical_markers_stay_allowed_by_the_database(self) -> None:
+        from app.modules.crm.infrastructure.models import CrmVoiceCall
+        from app.modules.voice_experiences.infrastructure.submission_models import TenantVoiceRuntimeCall
+
+        checks = {
+            constraint.name: str(constraint.sqltext)
+            for table in (CrmVoiceCall.__table__, TenantVoiceRuntimeCall.__table__)
+            for constraint in table.constraints
+            if getattr(constraint, "sqltext", None) is not None
+        }
+        self.assertIn("legacy_voice_experience_callback", checks["ck_crm_voice_calls_origin"])
+        self.assertIn("legacy_provider", checks["ck_voice_runtime_launch_runtime"])
 
     def test_webrtc_join_info_is_a_frozen_framework_free_dto(self) -> None:
         import typing

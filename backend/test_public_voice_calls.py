@@ -4,7 +4,7 @@ import asyncio
 import hashlib
 import hmac
 import json
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from unittest.mock import patch
 
 import jwt
@@ -17,8 +17,8 @@ from app.db.session import SessionLocal
 from app.main import app
 from app.models.integrations import TenantVoiceProviderConfig
 from app.modules.agents.infrastructure.models import TenantAgent, TenantAgentVersion
-from app.modules.analytics.infrastructure.models import Call, CallEvent
-from app.modules.crm.infrastructure.models import CrmContact, CrmLead, CrmPipelineStage, CrmVoiceCall, CrmVoiceCallEvent
+from app.modules.analytics.infrastructure.models import Call
+from app.modules.crm.infrastructure.models import CrmVoiceCall
 from app.modules.identity.application.feature_service import VOICE_EXPERIENCES, VOICE_RUNTIME_V2, TenantFeatureService
 from app.modules.voice.infrastructure.livekit_runtime import RuntimeDispatchResult
 from app.modules.voice.infrastructure.models import VoiceSession
@@ -508,7 +508,7 @@ class PublicVoiceCallTests(Integration2ATestCase):
                 runtime.provider_attempt_started_at = datetime.now(UTC)  # the provider POST may have gone out
             db.commit()
 
-    def test_a_legacy_launch_in_flight_never_creates_a_voice_session_or_a_second_call(self) -> None:
+    def test_a_historical_legacy_launch_is_never_promoted_to_a_voice_session_or_a_second_call(self) -> None:
         for status in ("starting", "reserved", "unknown", "ready"):
             with self.subTest(legacy_status=status):
                 with SessionLocal() as db:
@@ -548,18 +548,11 @@ class PublicVoiceCallTests(Integration2ATestCase):
             self.assertEqual(db.query(VoiceSession).count(), 1)
             self.assertEqual(db.scalars(select(TenantVoiceRuntimeCall)).one().launch_runtime, LAUNCH_RUNTIME_CANONICAL)
 
-    def test_public_launch_never_calls_a_provider_directly(self) -> None:
+    def test_public_launch_makes_no_outbound_provider_http(self) -> None:
         token = self._token()
-        with patch(
-            "app.modules.voice_experiences.infrastructure.legacy_runtime.provider_adapter."
-            "VoiceExperienceRuntimeProvider.create_webrtc_call",
-            side_effect=AssertionError("direct provider call"),
-        ) as create_call, patch(
-            "app.services.voice_client.VoiceClient.__init__", side_effect=AssertionError("VoiceClient used")
-        ), patch("httpx.AsyncClient.send", side_effect=AssertionError("outbound HTTP")):
+        with patch("httpx.AsyncClient.send", side_effect=AssertionError("outbound HTTP")):
             response = self._launch(token)
         self.assertEqual(response.status_code, 200, response.text)
-        create_call.assert_not_called()
 
     # -- ledger / regressions ---------------------------------------------------
 
@@ -588,68 +581,39 @@ class PublicVoiceCallTests(Integration2ATestCase):
         self.assertNotIn("loc", response.text)
         self.assertNotIn("input", response.text)
 
-    def _as_pre_canonical_launch(self) -> None:
-        with SessionLocal() as db:
-            runtime = db.scalars(select(TenantVoiceRuntimeCall)).one()
-            runtime.launch_runtime = LAUNCH_RUNTIME_LEGACY
-            db.commit()
-
-    def test_runtime_webhook_is_signed_deduplicated_and_updates_analytics(self) -> None:
-        self.assertEqual(self._launch(self._token()).status_code, 200)
-        self._as_pre_canonical_launch()
-        with SessionLocal() as db:
-            crm_call = db.scalars(select(CrmVoiceCall)).one()
-
-        send = lambda event_type, **values: self._send_runtime_event(
-            crm_call.id, "provider-webhook", event_type, **values
-        )
-        self.assertEqual(send("call.joined").status_code, 200)
-        self.assertEqual(send("call.billed", billedDuration="75s").status_code, 200)
-        duplicate = send("call.billed", billedDuration="120s")
-        self.assertEqual(duplicate.status_code, 200)
-        self.assertFalse(duplicate.json()["processed"])
-        self.assertEqual(send("call.ended", duration=75).status_code, 200)
-        with SessionLocal() as db:
-            runtime = db.scalars(select(TenantVoiceRuntimeCall)).one()
-            analytics = db.scalars(select(Call)).one()
-            self.assertEqual(runtime.status, "ended")
-            self.assertEqual(str(analytics.billed_minutes), "1.25")
-            self.assertEqual(db.query(CallEvent).count(), 3)
-            self.assertEqual(db.query(CrmVoiceCallEvent).count(), 3)
-
-        unsigned = self.client.post(
-            "/api/v1/voice/webhook/ultravox",
-            json={"event": "call.started", "call": {"callId": "provider-webhook", "metadata": {"voice_call_id": crm_call.id}}},
-        )
-        self.assertEqual(unsigned.status_code, 401)
-
-    def test_a_provider_webhook_never_mutates_a_canonical_launch(self) -> None:
+    def test_a_signed_provider_webhook_never_mutates_a_session_backed_launch(self) -> None:
         self.assertEqual(self._launch(self._token()).status_code, 200)
         with SessionLocal() as db:
             crm_call = db.scalars(select(CrmVoiceCall)).one()
             self.assertEqual(db.scalars(select(TenantVoiceRuntimeCall)).one().launch_runtime, LAUNCH_RUNTIME_CANONICAL)
 
-        response = self._send_runtime_event(crm_call.id, "provider-x", "call.ended")
+        for event in ("call.joined", "call.ended"):
+            response = self._send_runtime_event(crm_call.id, "provider-x", event)
+            self.assertEqual(response.status_code, 200, response.text)
+            self.assertEqual(response.json(), {"status": "ignored", "processed": False})
 
-        self.assertEqual(response.status_code, 401)
         with SessionLocal() as db:
             self.assertEqual(db.get(CrmVoiceCall, crm_call.id).status, "requested")
             self.assertEqual(db.scalars(select(TenantVoiceRuntimeCall)).one().status, "ready")
             self.assertEqual(db.scalars(select(VoiceSession)).one().status, "dispatched")
             self.assertEqual(db.query(Call).count(), 0)
 
-    def test_terminal_runtime_and_crm_do_not_regress_on_late_events(self) -> None:
-        self.assertEqual(self._launch(self._token()).status_code, 200)
-        self._as_pre_canonical_launch()
+    def test_a_late_provider_webhook_does_not_reopen_a_terminal_historical_call(self) -> None:
         with SessionLocal() as db:
-            crm_call = db.scalars(select(CrmVoiceCall)).one()
-        send = lambda event_type: self._send_runtime_event(crm_call.id, "provider-monotonic", event_type)
-        self.assertEqual(send("call.ended").status_code, 200)
-        self.assertEqual(send("call.joined").status_code, 200)
-        with SessionLocal() as db:
-            self.assertEqual(db.get(CrmVoiceCall, crm_call.id).status, "completed")
-            self.assertEqual(db.scalars(select(TenantVoiceRuntimeCall)).one().status, "ended")
+            call = CrmVoiceCall(
+                tenant_id=self.tenant.id, provider="ultravox", provider_call_id="historical-1",
+                direction="outbound", status="completed", to_phone="+573001112233",
+            )
+            db.add(call)
+            db.commit()
+            call_id = call.id
 
+        for event in ("call.joined", "call.started"):
+            self.assertEqual(self._send_runtime_event(call_id, "historical-1", event).status_code, 200)
+
+        with SessionLocal() as db:
+            self.assertEqual(db.get(CrmVoiceCall, call_id).status, "completed")
+            self.assertEqual(db.query(VoiceSession).count(), 0)  # still no session invented for history
 
     # -- runtime context contract (SessionContextV1) is checked before the token is consumed ----------
 

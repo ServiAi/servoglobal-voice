@@ -17,7 +17,6 @@ import json
 import logging
 from collections.abc import Callable
 from datetime import UTC, datetime
-from typing import Protocol
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -61,12 +60,6 @@ from app.modules.voice_experiences.infrastructure.submission_models import (
 logger = logging.getLogger(__name__)
 
 
-class LegacyCallbackRequests(Protocol):
-    """The temporary pre-canonical request path (kept only for rollback until PR #137)."""
-
-    def request(self, slug: str, context_token: str) -> dict[str, str]: ...
-
-
 class _CapacityReached(Exception):
     def __init__(self, tenant_id: str, route_id: str, active_calls: int, limit: int) -> None:
         self.tenant_id = tenant_id
@@ -86,11 +79,9 @@ class PublicCallbackService:
         *,
         session_factory: Callable[[], Session],
         runtime_factory: Callable[[Session], VoiceRuntimePort],
-        legacy: LegacyCallbackRequests,
     ) -> None:
         self.session_factory = session_factory
         self.runtime_factory = runtime_factory
-        self.legacy = legacy
 
     def resolve_tenant(self, slug: str, context_token: str) -> str:
         token_hash = hashlib.sha256(context_token.encode()).hexdigest()
@@ -106,9 +97,11 @@ class PublicCallbackService:
     def request(self, slug: str, context_token: str) -> dict[str, str]:
         tenant_id = self.resolve_tenant(slug, context_token)
         with self.session_factory() as db:
-            canonical = canonical_callbacks_enabled(db, tenant_id)
-        if not canonical:
-            return self.legacy.request(slug, context_token)  # rollout/rollback path only
+            enabled = canonical_callbacks_enabled(db, tenant_id)
+        if not enabled:
+            # Kill switch: calling is off. There is no other runtime to fall back to, and nothing
+            # (token, call record, session) is consumed or created.
+            raise PublicCallFailure(503, "call_unavailable")
         return self._request_canonical(slug, context_token, tenant_id)
 
     # -- canonical request ------------------------------------------------------------------------

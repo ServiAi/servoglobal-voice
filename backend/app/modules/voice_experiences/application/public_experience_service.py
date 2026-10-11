@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.modules.voice_experiences.application.contracts import Command, View
+from app.modules.voice_experiences.application.contracts import View
 
 from app.modules.voice_experiences.infrastructure.context_models import TenantVoiceContextField, TenantVoiceContextSchema
 from app.modules.voice_experiences.infrastructure.experience_models import (

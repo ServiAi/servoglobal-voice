@@ -36,9 +36,8 @@ from app.db.base import Base
 from app.modules.identity.public import VOICE_RUNTIME_V2
 from app.modules.voice.infrastructure.livekit_runtime import RuntimeDispatchResult
 from app.modules.voice.infrastructure.models import VoiceSession
-from app.modules.analytics.infrastructure.models import Call, CallEvent
 from app.modules.billing.infrastructure.models import TenantBillingPlan
-from app.modules.crm.infrastructure.models import CrmVoiceCall, CrmVoiceCallEvent
+from app.modules.crm.infrastructure.models import CrmVoiceCall
 from app.modules.identity.infrastructure.models import Tenant
 from app.modules.agents.infrastructure.models import TenantAgent, TenantAgentVersion
 from app.models.integrations import TenantVoiceAgentConfig, TenantVoiceProviderConfig
@@ -52,8 +51,6 @@ from app.modules.voice_experiences.infrastructure.submission_models import (
 )
 from app.modules.voice_experiences.domain.errors import PublicCallFailure
 from app.services.secret_manager_service import SecretManager
-from app.modules.voice_experiences.infrastructure.legacy_runtime.webhook_compat import VoiceRuntimeWebhookService
-from app.modules.voice_experiences.public import VoiceRuntimeWebhookTarget
 
 
 class _SlowLiveKit:
@@ -257,50 +254,6 @@ class VoiceRuntimePostgresConcurrencyTests(unittest.TestCase):
                 "agent_id": agent.id,
             }
 
-    def _seed_reserved_runtime(self, seeded: dict[str, str]) -> str:
-        with self.SessionLocal() as db:
-            crm = CrmVoiceCall(
-                tenant_id=seeded["tenant_id"],
-                provider="ultravox",
-                provider_agent_id="runtime-agent",
-                direction="webrtc",
-                status="requested",
-            )
-            db.add(crm)
-            db.flush()
-            runtime = TenantVoiceRuntimeCall(
-                tenant_id=seeded["tenant_id"],
-                context_session_id=seeded["context_id"],
-                submission_id=seeded["submission_id"],
-                experience_id=seeded["experience_id"],
-                experience_version_id=seeded["version_id"],
-                agent_config_id=seeded["agent_id"],
-                crm_voice_call_id=crm.id,
-                provider="ultravox",
-                status="reserved",
-                launch_runtime="legacy_provider",
-                created_at=datetime.now(UTC) - timedelta(seconds=10),
-            )
-            db.add(runtime)
-            context = db.get(TenantVoiceContextSession, seeded["context_id"])
-            context.status = "consumed"
-            context.consumed_at = datetime.now(UTC)
-            db.commit()
-            return runtime.id
-
-    def _webhook_target(self, db, runtime_id: str) -> VoiceRuntimeWebhookTarget:
-        runtime = db.get(TenantVoiceRuntimeCall, runtime_id)
-        call = db.get(CrmVoiceCall, runtime.crm_voice_call_id)
-        return VoiceRuntimeWebhookTarget(
-            tenant_id=runtime.tenant_id,
-            runtime_call_id=runtime.id,
-            voice_call_id=call.id,
-            provider=runtime.provider,
-            provider_call_id=runtime.provider_call_id,
-            contact_id=call.contact_id,
-            lead_id=call.lead_id,
-        )
-
     def _canonical_launch_service(self, backend):
         from app.modules.voice_experiences.application.public_webrtc_service import PublicWebRTCService
         from app.modules.voice_experiences.infrastructure.voice_runtime_adapter import VoiceRuntimeAdapter
@@ -379,7 +332,6 @@ class VoiceRuntimePostgresConcurrencyTests(unittest.TestCase):
         from app.modules.telephony.infrastructure.models import TenantSipRoute
         from app.modules.telephony.public import TelephonyFacade
         from app.modules.telephony.wiring import default_telephony_ports
-        from app.modules.voice.application.session_service import VoiceSessionService
         from app.modules.voice_experiences.application.callback_worker import CallbackWorker
         from app.modules.voice_experiences.infrastructure.voice_runtime_adapter import VoiceRuntimeAdapter
 
@@ -432,16 +384,12 @@ class VoiceRuntimePostgresConcurrencyTests(unittest.TestCase):
                     room_name=kwargs["room_name"], sip_call_id="SC_pg",
                 )
 
-        class Legacy:
-            def process_once(self) -> bool:
-                return False
 
         def worker() -> CallbackWorker:
             backend = Backend()
             return CallbackWorker(
                 session_factory,
                 runtime_factory=lambda db: VoiceRuntimeAdapter(db, runtime_backend=backend),
-                legacy=Legacy(),
                 telephony_factory=lambda db: TelephonyFacade(
                     db, ports=default_telephony_ports(db, sip_transport=Sip(), runtime_backend=backend)
                 ),
@@ -511,14 +459,10 @@ class VoiceRuntimePostgresConcurrencyTests(unittest.TestCase):
             connection.execute(text("DELETE FROM tenant_voice_experience_submission_values"))
             connection.execute(text("DELETE FROM tenant_voice_experience_submissions"))
 
-        class Legacy:
-            def process_once(self) -> bool:
-                return False
 
         worker = CallbackWorker(
             self.SessionLocal,
             runtime_factory=lambda db: VoiceRuntimeAdapter(db),
-            legacy=Legacy(),
         )
         asyncio.run(worker.process_once())
 
@@ -529,63 +473,8 @@ class VoiceRuntimePostgresConcurrencyTests(unittest.TestCase):
             self.assertEqual((other_call.status, other_call.error_message), ("requested", None))
             self.assertEqual(db.query(VoiceSession).count(), 1)  # only the blocker's own session
 
-    def test_concurrent_identical_webhook_has_one_owner_and_one_core_mutation(self) -> None:
-        runtime_id = self._seed_reserved_runtime(self._seed_context())
-        with self.SessionLocal() as db:
-            runtime = db.get(TenantVoiceRuntimeCall, runtime_id)
-            runtime.status = "ready"
-            runtime.provider_call_id = "provider-webhook-race"
-            db.get(CrmVoiceCall, runtime.crm_voice_call_id).status = "queued"
-            db.commit()
-        payload = {"event": "call.joined", "call": {"callId": "provider-webhook-race"}}
-        barrier = Barrier(2)
-
-        def process() -> bool:
-            with self.SessionLocal() as db:
-                target = self._webhook_target(db, runtime_id)
-                barrier.wait()
-                return VoiceRuntimeWebhookService(db).process("ultravox", payload, target)["processed"]
-
-        with ThreadPoolExecutor(max_workers=2) as pool:
-            results = list(pool.map(lambda _: process(), range(2)))
-
-        self.assertEqual(sorted(results), [False, True])
-        with self.SessionLocal() as db:
-            runtime = db.get(TenantVoiceRuntimeCall, runtime_id)
-            self.assertEqual(runtime.status, "connected")
-            self.assertEqual(db.get(CrmVoiceCall, runtime.crm_voice_call_id).status, "in_progress")
-            self.assertEqual(db.query(CallEvent).count(), 1)
-            self.assertEqual(db.query(CrmVoiceCallEvent).count(), 1)
-            self.assertEqual(db.query(Call).count(), 1)
-
-    def test_core_webhook_rollback_releases_dedup_for_retry(self) -> None:
-        runtime_id = self._seed_reserved_runtime(self._seed_context())
-        with self.SessionLocal() as db:
-            runtime = db.get(TenantVoiceRuntimeCall, runtime_id)
-            runtime.status = "ready"
-            runtime.provider_call_id = "provider-webhook-retry"
-            db.commit()
-        payload = {
-            "event": "call.ended",
-            "call": {"callId": "provider-webhook-retry", "duration": "75s"},
-        }
-        with self.SessionLocal() as db:
-            service = VoiceRuntimeWebhookService(db)
-            target = self._webhook_target(db, runtime_id)
-            with patch.object(service, "_integer", side_effect=RuntimeError("forced core rollback")):
-                with self.assertRaisesRegex(RuntimeError, "forced core rollback"):
-                    service.process("ultravox", payload, target)
-            self.assertEqual(db.query(CrmVoiceCallEvent).count(), 0)
-            self.assertTrue(service.process("ultravox", payload, target)["processed"])
-
-        with self.SessionLocal() as db:
-            runtime = db.get(TenantVoiceRuntimeCall, runtime_id)
-            self.assertEqual(runtime.status, "ended")
-            self.assertEqual(db.query(CallEvent).count(), 1)
-            self.assertEqual(db.query(CrmVoiceCallEvent).count(), 1)
-
     def test_agent_publish_and_experience_publish_serialize_on_the_agent_row(self) -> None:
-        from threading import Event, Thread
+        from threading import Thread
 
         from app.modules.agents.application.ports import AgentPorts
         from app.modules.agents.application.service import AgentService

@@ -14,7 +14,6 @@ from app.modules.telephony.domain.routes import (
     validate_sip_password,
 )
 from app.modules.telephony.domain.views import (
-    SipRouteConnection,
     SipRouteSettings,
     SipRouteView,
 )
@@ -30,7 +29,7 @@ from app.services.secret_manager_service import SecretManager
 class SipRouteService:
     """A tenant's SIP route: configuration, activation checks, secret
     handling and LiveKit trunk provisioning. Works on TenantSipRoute rows
-    internally; other modules get SipRouteView / SipRouteConnection."""
+    internally; other modules get SipRouteView."""
 
     def __init__(self, db: Session, secret_manager: SecretManager | None = None) -> None:
         self.db = db
@@ -252,17 +251,4 @@ class SipRouteService:
             livekit_provision_status=route.livekit_provision_status,
             livekit_provision_error_code=route.livekit_provision_error_code,
             livekit_provisioned_at=route.livekit_provisioned_at,
-        )
-
-    def connection(self, route: TenantSipRoute) -> SipRouteConnection:
-        return SipRouteConnection(
-            route_id=route.id,
-            provider_config_id=route.provider_config_id,
-            host=route.pbx_host,
-            port=route.pbx_port,
-            username=route.sip_username,
-            password=self.decrypt_password(route),
-            caller_id=route.caller_id,
-            default_country=route.default_country,
-            allowed_countries=tuple(route.allowed_countries_json),
         )

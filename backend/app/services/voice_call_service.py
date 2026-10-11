@@ -1,32 +1,19 @@
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy.orm import Session
 
 from app.modules.crm.public import (
-    CreateVoiceCallCommand,
     CrmFacade,
     CrmVoiceCalls,
-    UpdateVoiceCallCommand,
     VoiceCallView,
 )
-from app.modules.telephony.public import SipRouteFacade
 from app.schemas.integrations import (
-    VoiceCallActionRequest,
-    VoiceCallActionResponse,
     VoiceCallResponse,
 )
 from app.modules.integrations.public import IntegrationEvents
-from app.services.voice_agent_service import VoiceAgentService
-from app.services.voice_client import (
-    VoiceClient,
-    VoiceClientConfig,
-    VoiceSipRouteConfig,
-)
-from app.services.voice_config_service import VoiceConfigService
 
 logger = logging.getLogger(__name__)
 
@@ -34,166 +21,9 @@ logger = logging.getLogger(__name__)
 class VoiceCallService:
     def __init__(self, db: Session) -> None:
         self.db = db
-        self.config_service = VoiceConfigService(db)
-        self.route_service = SipRouteFacade(db, self.config_service.secret_manager)
-        self.agent_service = VoiceAgentService(db)
         self.crm = CrmFacade(db)
         self.calls = CrmVoiceCalls(db)
         self.integration_event_service = IntegrationEvents(db)
-
-    def start_lead_call(
-        self,
-        tenant_id: str,
-        lead_id: str,
-        body: VoiceCallActionRequest,
-    ) -> VoiceCallActionResponse:
-        lead = self.crm.get_lead_profile(tenant_id, lead_id)
-        if not lead:
-            raise ValueError("Lead does not exist or does not belong to this tenant.")
-
-        contact = lead.contact
-        if not contact or contact.tenant_id != tenant_id:
-            raise ValueError("Contact associated with this lead does not exist.")
-
-        to_phone = body.to_phone or contact.phone
-        if not to_phone:
-            raise ValueError("El contacto no tiene teléfono para iniciar una llamada.")
-
-        provider_config = self.config_service.get_active_provider_config(tenant_id, "ultravox")
-        api_key = self.config_service.decrypt_api_key(provider_config)
-        sip_route = self.route_service.get_active_route(tenant_id)
-        if sip_route.provider_config_id != provider_config.id:
-            raise ValueError("Outbound SIP route is not linked to the active voice provider.")
-
-        if body.agent_config_id:
-            agent_config = self.agent_service.validate_agent_belongs_to_tenant(tenant_id, body.agent_config_id)
-        else:
-            agent_config = self.agent_service.get_default_agent(tenant_id, provider_config.provider)
-            if not agent_config:
-                raise ValueError("No active voice agent config found for this tenant.")
-
-        voice_call = self.calls.create(CreateVoiceCallCommand(tenant_id=tenant_id,
-            lead_id=lead_id,
-            contact_id=contact.id,
-            provider=provider_config.provider,
-            provider_agent_id=agent_config.provider_agent_id,
-            direction="outbound",
-            status="requested",
-            to_phone=to_phone,
-            from_number=sip_route.caller_id))
-        self.db.commit()
-
-        metadata = {
-            "tenant_id": tenant_id,
-            "lead_id": lead_id,
-            "contact_id": contact.id,
-            "voice_call_id": voice_call.id,
-            "source": "serviglobal_crm",
-        }
-
-        context = {
-            "contact_name": contact.name,
-            "contact_phone": to_phone,
-            "company": contact.company,
-        }
-        if body.context:
-            context.update(body.context)
-
-        context = self._safe_context(context)
-
-        client = VoiceClient()
-
-        try:
-            client_config = VoiceClientConfig(
-                provider=provider_config.provider,
-                api_key=api_key,
-                base_url=provider_config.base_url,
-                default_language=provider_config.default_language,
-                default_timezone=provider_config.default_timezone,
-                sip_route=self._sip_route_config(tenant_id),
-            )
-            response = client.start_outbound_call(
-                client_config,
-                to_phone=to_phone,
-                agent_id=agent_config.provider_agent_id,
-                metadata=metadata,
-                context=context,
-            )
-
-            norm = client.normalize_provider_response(provider_config.provider, response)
-            voice_call = self.calls.update(voice_call.id, UpdateVoiceCallCommand(provider_call_id=norm.get("provider_call_id"),
-                provider_session_id=norm.get("provider_session_id"),
-                status="queued",
-                started_at=datetime.now(UTC)))
-            self.db.commit()
-
-            self.record_call_event(
-                tenant_id=tenant_id,
-                voice_call_id=voice_call.id,
-                provider=provider_config.provider,
-                event_type="call_requested",
-                status="success",
-                payload_summary={"provider_call_id": voice_call.provider_call_id},
-            )
-
-            self.record_crm_activity(
-                tenant_id=tenant_id,
-                lead_id=lead_id,
-                contact_id=contact.id,
-                activity_type="voice_call_requested",
-                title="Llamada saliente iniciada",
-                description=f"Se solicitó el inicio de llamada a través del agente {agent_config.display_name}.",
-                payload={"voice_call_id": voice_call.id, "provider": provider_config.provider, "status": "requested"},
-            )
-
-            self.record_integration_event(
-                tenant_id=tenant_id,
-                provider=provider_config.provider,
-                event_type="call_start",
-                status="success",
-                metadata={"voice_call_id": voice_call.id, "provider_call_id": voice_call.provider_call_id},
-            )
-
-            return VoiceCallActionResponse(
-                status=voice_call.status,
-                voice_call_id=voice_call.id,
-                provider_call_id=voice_call.provider_call_id,
-                provider_session_id=voice_call.provider_session_id,
-            )
-
-        except Exception as e:
-            voice_call = self.calls.update(voice_call.id, UpdateVoiceCallCommand(status="failed", error_message=client.sanitize_voice_error(e)))
-            self.db.commit()
-
-            self.record_call_event(
-                tenant_id=tenant_id,
-                voice_call_id=voice_call.id,
-                provider=provider_config.provider,
-                event_type="call_failed",
-                status="failed",
-                payload_summary={"error": voice_call.error_message},
-            )
-
-            self.record_crm_activity(
-                tenant_id=tenant_id,
-                lead_id=lead_id,
-                contact_id=contact.id,
-                activity_type="voice_call_failed",
-                title="Llamada saliente fallida",
-                description=f"Error al iniciar llamada: {voice_call.error_message}",
-                payload={"voice_call_id": voice_call.id, "error": voice_call.error_message},
-            )
-
-            self.record_integration_event(
-                tenant_id=tenant_id,
-                provider=provider_config.provider,
-                event_type="call_start",
-                status="failed",
-                message=voice_call.error_message,
-                metadata={"voice_call_id": voice_call.id},
-            )
-
-            raise ValueError(f"Failed to initiate voice call: {voice_call.error_message}")
 
     def list_lead_calls(self, tenant_id: str, lead_id: str) -> list[VoiceCallView]:
         return self.calls.list_for_lead(tenant_id, lead_id)
@@ -283,21 +113,6 @@ class VoiceCallService:
             else:
                 sanitized[k] = v
         return sanitized
-
-    def _sip_route_config(self, tenant_id: str) -> VoiceSipRouteConfig:
-        """Route + decrypted SIP password for the provider call (the one
-        trusted place that needs it); decrypt failures surface here, inside
-        the call attempt, exactly where they always did."""
-        connection = self.route_service.get_connection(tenant_id)
-        return VoiceSipRouteConfig(
-            host=connection.host,
-            port=connection.port,
-            username=connection.username,
-            password=connection.password,
-            caller_id=connection.caller_id,
-            default_country=connection.default_country,
-            allowed_countries=connection.allowed_countries,
-        )
 
     def responses_for_lead(self, tenant_id: str, lead_id: str) -> list[VoiceCallResponse]:
         from app.modules.agents.public import AgentsFacade

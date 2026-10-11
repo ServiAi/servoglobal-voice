@@ -32,19 +32,6 @@ class VoiceContextSchemaSnapshot:
 
 
 @dataclass(frozen=True, slots=True)
-class VoiceRuntimeWebhookTarget:
-    """Framework-free handle for a runtime call a provider webhook refers to."""
-
-    tenant_id: str
-    runtime_call_id: str
-    voice_call_id: str
-    provider: str
-    provider_call_id: str | None
-    contact_id: str | None
-    lead_id: str | None
-
-
-@dataclass(frozen=True, slots=True)
 class LaunchSession:
     """The canonical VoiceSession a public launch is bound to."""
 
