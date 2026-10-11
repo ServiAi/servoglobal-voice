@@ -208,11 +208,16 @@ class VoiceTelephonyFacade:
         return self._ops().lock_session(session_id, tenant_id)
 
     def count_active_telephony_sessions(
-        self, tenant_id: str, route_id: str, *, exclude_session_id: str | None = None
+        self,
+        tenant_id: str,
+        route_id: str,
+        *,
+        exclude_session_id: str | None = None,
+        exclude_crm_call_id: str | None = None,
     ) -> int:
         """Non-terminal sessions bound to the route (tenant-scoped)."""
         return self._ops().count_active_telephony_sessions(
-            tenant_id, route_id, exclude_session_id=exclude_session_id
+            tenant_id, route_id, exclude_session_id=exclude_session_id, exclude_crm_call_id=exclude_crm_call_id
         )
 
     def create_outbound_sip_session(
@@ -233,6 +238,31 @@ class VoiceTelephonyFacade:
             contact_id=contact_id,
             lead_id=lead_id,
             caller_phone=caller_phone,
+        )
+
+    def create_outbound_sip_session_from_agent_version(
+        self,
+        tenant_id: str,
+        agent_id: str,
+        agent_version_id: str,
+        *,
+        idempotency_key: str,
+        contact_id: str | None,
+        lead_id: str | None,
+        caller_phone: str,
+        variables: dict[str, Any] | None = None,
+    ) -> TelephonySessionView:
+        """Idempotent per (tenant, idempotency_key); pinned to exactly ``agent_version_id``,
+        however the agent's published pointer moves later. Raises VoiceSessionError."""
+        return self._ops().create_outbound_sip_session_from_agent_version(
+            tenant_id,
+            agent_id,
+            agent_version_id,
+            idempotency_key=idempotency_key,
+            contact_id=contact_id,
+            lead_id=lead_id,
+            caller_phone=caller_phone,
+            variables=variables,
         )
 
     def correlate_crm_call(self, session_id: str, tenant_id: str, crm_voice_call_id: str) -> None:

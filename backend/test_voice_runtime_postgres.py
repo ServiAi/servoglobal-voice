@@ -370,6 +370,165 @@ class VoiceRuntimePostgresConcurrencyTests(unittest.TestCase):
         self.assertEqual([kind for kind, _ in outcomes], ["ok", "ok"], outcomes)
         self._assert_one_canonical_launch(backend, seeded)
 
+    def test_two_workers_placing_the_same_callback_make_one_session_one_dial_one_call(self) -> None:
+        """The CrmVoiceCall is the serialized claim: of two concurrent workers exactly one places
+        the call; the other finds nothing to claim (never a second session, room or SIP leg)."""
+        from threading import Lock
+
+        from app.modules.telephony.infrastructure.livekit_sip import LiveKitSipDialResult
+        from app.modules.telephony.infrastructure.models import TenantSipRoute
+        from app.modules.telephony.public import TelephonyFacade
+        from app.modules.telephony.wiring import default_telephony_ports
+        from app.modules.voice.application.session_service import VoiceSessionService
+        from app.modules.voice_experiences.application.callback_worker import CallbackWorker
+        from app.modules.voice_experiences.infrastructure.voice_runtime_adapter import VoiceRuntimeAdapter
+
+        seeded = self._seed_context()
+        session_factory = self.SessionLocal
+        with session_factory() as db:
+            provider_id = db.scalars(select(TenantVoiceProviderConfig.id)).first()
+            route = TenantSipRoute(
+                tenant_id=seeded["tenant_id"], provider_config_id=provider_id, status="active",
+                pbx_host="pbx.example.com", pbx_port=5060, sip_username=f"u{uuid4().hex[:8]}",
+                sip_password_encrypted=SecretManager().encrypt_secret("pw"), caller_id="+573001112233",
+                default_country="CO", allowed_countries_json=["CO"], max_concurrent_calls=5,
+                provision_status="active", desired_revision=1, applied_revision=1,
+                livekit_outbound_trunk_id="ST_pg", livekit_provision_status="active",
+                livekit_provisioned_at=datetime.now(UTC),
+            )
+            db.add(route)
+            db.add(TenantFeatureGrant(tenant_id=seeded["tenant_id"], feature_key=VOICE_RUNTIME_V2, enabled=True, limits_json={}))
+            db.flush()
+            call = CrmVoiceCall(
+                tenant_id=seeded["tenant_id"], source_submission_id=seeded["submission_id"], sip_route_id=route.id,
+                provider="livekit_sip", origin="voice_experience_callback", direction="outbound",
+                status="requested", to_phone="+573001112233", from_number="+573001112233",
+            )
+            db.add(call)
+            db.commit()
+            call_id = call.id
+
+        lock, state = Lock(), {"dispatches": 0, "dials": 0}
+
+        class Backend:
+            async def dispatch(self, session_id: str):
+                await asyncio.sleep(0.2)
+                with session_factory() as db:
+                    row = db.get(VoiceSession, session_id)
+                    row.runtime_ready_at = datetime.now(UTC)
+                    db.commit()
+                with lock:
+                    state["dispatches"] += 1
+                return RuntimeDispatchResult(f"sg-vs-{session_id}", "dispatch-1")
+
+            async def close_session_room(self, session_id: str) -> None: ...
+
+        class Sip:
+            async def dial(self, **kwargs):
+                with lock:
+                    state["dials"] += 1
+                return LiveKitSipDialResult(
+                    participant_id="PA", participant_identity=kwargs["participant_identity"],
+                    room_name=kwargs["room_name"], sip_call_id="SC_pg",
+                )
+
+        class Legacy:
+            def process_once(self) -> bool:
+                return False
+
+        def worker() -> CallbackWorker:
+            backend = Backend()
+            return CallbackWorker(
+                session_factory,
+                runtime_factory=lambda db: VoiceRuntimeAdapter(db, runtime_backend=backend),
+                legacy=Legacy(),
+                telephony_factory=lambda db: TelephonyFacade(
+                    db, ports=default_telephony_ports(db, sip_transport=Sip(), runtime_backend=backend)
+                ),
+            )
+
+        barrier = Barrier(2)
+
+        def run() -> bool:
+            barrier.wait()
+            return asyncio.run(worker().process_once())
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            list(pool.map(lambda _: run(), range(2)))
+
+        with session_factory() as db:
+            sessions = db.scalars(select(VoiceSession)).all()
+            calls = db.scalars(select(CrmVoiceCall)).all()
+            self.assertEqual((len(sessions), len(calls)), (1, 1))
+            self.assertEqual(calls[0].id, call_id)
+            self.assertEqual(sessions[0].crm_voice_call_id, call_id)
+            self.assertEqual(calls[0].status, "answered")
+        self.assertEqual(state, {"dispatches": 1, "dials": 1})
+
+    def test_a_callback_whose_submission_was_deleted_is_failed_closed_by_the_worker(self) -> None:
+        """PostgreSQL applies ON DELETE SET NULL for real: the callback must stay recognizable by its
+        origin and be failed (not left requested forever, not placed, not handed to a provider)."""
+        from sqlalchemy import text
+
+        from app.modules.telephony.infrastructure.models import TenantSipRoute
+        from app.modules.voice_experiences.application.callback_worker import CallbackWorker
+        from app.modules.voice_experiences.infrastructure.voice_runtime_adapter import VoiceRuntimeAdapter
+
+        seeded = self._seed_context()
+        with self.SessionLocal() as db:
+            provider_id = db.scalars(select(TenantVoiceProviderConfig.id)).first()
+            route = TenantSipRoute(
+                tenant_id=seeded["tenant_id"], provider_config_id=provider_id, status="active",
+                pbx_host="pbx.example.com", pbx_port=5060, sip_username=f"u{uuid4().hex[:8]}",
+                sip_password_encrypted=SecretManager().encrypt_secret("pw"), caller_id="+573001112233",
+                default_country="CO", allowed_countries_json=["CO"], max_concurrent_calls=1,
+                provision_status="active", desired_revision=1, applied_revision=1,
+                livekit_outbound_trunk_id="ST_pg_del", livekit_provision_status="active",
+                livekit_provisioned_at=datetime.now(UTC),
+            )
+            db.add(route)
+            db.flush()
+            db.add(VoiceSession(  # the route's only channel is taken: lost provenance must still be processed
+                tenant_id=seeded["tenant_id"], channel="sip", direction="outbound", purpose="production",
+                runtime_engine="livekit", pipeline_type="realtime", provider="ultravox", status="connected",
+                sip_route_id=route.id,
+            ))
+            crm_call = CrmVoiceCall(
+                tenant_id=seeded["tenant_id"], source_submission_id=seeded["submission_id"], sip_route_id=route.id,
+                provider="livekit_sip", origin="voice_experience_callback", direction="outbound", status="requested",
+                to_phone="+573001112233", from_number="+573001112233",
+            )
+            other = CrmVoiceCall(  # a CRM-initiated outbound call on the same provider: never ours
+                tenant_id=seeded["tenant_id"], sip_route_id=route.id, provider="livekit_sip", origin="crm_outbound",
+                direction="outbound", status="requested", to_phone="+573009999999", from_number="+573001112233",
+            )
+            db.add_all([crm_call, other])
+            db.commit()
+            call_id, other_id = crm_call.id, other.id
+        with self.engine.begin() as connection:  # delete the submission for real
+            connection.execute(text("DELETE FROM tenant_voice_runtime_calls"))
+            connection.execute(text("DELETE FROM tenant_voice_context_sessions"))
+            connection.execute(text("DELETE FROM tenant_voice_experience_submission_values"))
+            connection.execute(text("DELETE FROM tenant_voice_experience_submissions"))
+
+        class Legacy:
+            def process_once(self) -> bool:
+                return False
+
+        worker = CallbackWorker(
+            self.SessionLocal,
+            runtime_factory=lambda db: VoiceRuntimeAdapter(db),
+            legacy=Legacy(),
+        )
+        asyncio.run(worker.process_once())
+
+        with self.SessionLocal() as db:
+            call, other_call = db.get(CrmVoiceCall, call_id), db.get(CrmVoiceCall, other_id)
+            self.assertEqual((call.source_submission_id, call.origin), (None, "voice_experience_callback"))
+            self.assertEqual((call.status, call.error_message), ("failed", "callback_provenance_unavailable"))
+            self.assertEqual((other_call.status, other_call.error_message), ("requested", None))
+            self.assertEqual(db.query(VoiceSession).count(), 1)  # only the blocker's own session
+
     def test_concurrent_identical_webhook_has_one_owner_and_one_core_mutation(self) -> None:
         runtime_id = self._seed_reserved_runtime(self._seed_context())
         with self.SessionLocal() as db:

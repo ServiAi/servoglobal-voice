@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
 
@@ -69,10 +70,17 @@ class SipRouteSettings:
 
 @dataclass(frozen=True)
 class PlaceOutboundCallCommand:
+    """``agent_version_id`` present -> a VoiceSession pinned to exactly that version; absent -> the
+    agent's current published version (the CRM behavior). ``defer_on_capacity`` makes a full route
+    raise CapacityDeferred (retryable) instead of cancelling the call."""
+
     tenant_id: str
     agent_id: str | None
     idempotency_key: str | None
     to_phone: str | None = None
+    agent_version_id: str | None = None
+    variables: Mapping[str, object] | None = None
+    defer_on_capacity: bool = False
 
 
 @dataclass(frozen=True)

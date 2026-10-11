@@ -7,7 +7,7 @@ structural Protocol of one) -- never an ORM row.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -24,7 +24,12 @@ class VoiceTelephonyPort(Protocol):
     def lock_session(self, session_id: str, tenant_id: str) -> TelephonySessionView: ...
 
     def count_active_telephony_sessions(
-        self, tenant_id: str, route_id: str, *, exclude_session_id: str | None = None
+        self,
+        tenant_id: str,
+        route_id: str,
+        *,
+        exclude_session_id: str | None = None,
+        exclude_crm_call_id: str | None = None,
     ) -> int: ...
 
     def create_outbound_sip_session(
@@ -36,6 +41,19 @@ class VoiceTelephonyPort(Protocol):
         contact_id: str | None,
         lead_id: str | None,
         caller_phone: str,
+    ) -> TelephonySessionView: ...
+
+    def create_outbound_sip_session_from_agent_version(
+        self,
+        tenant_id: str,
+        agent_id: str,
+        agent_version_id: str,
+        *,
+        idempotency_key: str,
+        contact_id: str | None,
+        lead_id: str | None,
+        caller_phone: str,
+        variables: Mapping[str, object] | None = None,
     ) -> TelephonySessionView: ...
 
     def correlate_crm_call(self, session_id: str, tenant_id: str, crm_voice_call_id: str) -> None: ...
@@ -101,7 +119,15 @@ class CallLoadPort(Protocol):
     """Channel load held by CRM call records (legacy provider callbacks).
     Implemented by crm.public.CrmFacade."""
 
-    def count_voice_calls_in_statuses(self, tenant_id: str, route_id: str, statuses: Sequence[str]) -> int: ...
+    def count_voice_calls_in_statuses(
+        self,
+        tenant_id: str,
+        route_id: str,
+        statuses: Sequence[str],
+        *,
+        exclude_call_id: str | None = None,
+        exclude_provider: str | None = None,
+    ) -> int: ...
 
 
 class CallProjectionPort(Protocol):
@@ -136,6 +162,11 @@ class OutboundCallLedger(Protocol):
         """Raises ValueError when the lead/contact is not usable."""
         ...
 
+    def existing_call_id(self) -> str | None:
+        """The call record this ledger already owns, to be driven instead of opening a new one
+        (a request that was accepted earlier, e.g. a public callback). None otherwise."""
+        ...
+
     def call_state(self, call_id: str) -> LedgerCallState:
         """State of a call opened earlier (idempotent replay). Raises
         ValueError when it is invalid for the tenant."""
@@ -147,6 +178,11 @@ class OutboundCallLedger(Protocol):
 
     def mark_dialing(self, call_id: str) -> None:
         """Commits."""
+        ...
+
+    def revert_dialing(self, call_id: str) -> None:
+        """No SIP attempt was made after ``mark_dialing``: put the call back to ``requested`` so the
+        same request can be retried (clears the attempt timestamps and error). Commits."""
         ...
 
     def mark_answered(self, call_id: str, provider_call_id: str | None) -> None:

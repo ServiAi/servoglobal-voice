@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.modules.notifications.public import publish_call_event
+from app.modules.telephony.public import CANONICAL_SIP_PROVIDER
 from app.services.voice_webhook_service import VoiceWebhookService
 from app.modules.voice_experiences.public import create_runtime_webhook_service
 
@@ -53,6 +54,10 @@ async def voice_webhook(
 
     # Resolve call to get tenant signature validation
     call = service.resolve_call_by_metadata_or_provider_id(payload)
+    if call and call.provider == CANONICAL_SIP_PROVIDER:
+        # A call placed through Telephony (VoiceSession + LiveKit SIP) takes its lifecycle from
+        # the voice runtime's events: a provider webhook never mutates it.
+        return {"status": "ignored", "processed": False}
     if call:
         config = service.config_service.get_provider_config(call.tenant_id, provider)
         if config and config.webhook_secret_encrypted:

@@ -8,7 +8,7 @@ and outbound flows always had.
 
 from __future__ import annotations
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.modules.voice.application.runtime_dispatcher import VoiceRuntimeDispatcher
@@ -75,7 +75,12 @@ class TelephonySessionOperations:
         return telephony_view(session)
 
     def count_active_telephony_sessions(
-        self, tenant_id: str, route_id: str, *, exclude_session_id: str | None = None
+        self,
+        tenant_id: str,
+        route_id: str,
+        *,
+        exclude_session_id: str | None = None,
+        exclude_crm_call_id: str | None = None,
     ) -> int:
         query = select(func.count(VoiceSession.id)).where(
             VoiceSession.tenant_id == tenant_id,
@@ -84,6 +89,11 @@ class TelephonySessionOperations:
         )
         if exclude_session_id is not None:
             query = query.where(VoiceSession.id != exclude_session_id)
+        if exclude_crm_call_id is not None:
+            # The session of a call being (re)placed is that call, not another channel.
+            query = query.where(
+                or_(VoiceSession.crm_voice_call_id.is_(None), VoiceSession.crm_voice_call_id != exclude_crm_call_id)
+            )
         return int(self.db.scalar(query) or 0)
 
     # -- commands ------------------------------------------------------------
@@ -108,6 +118,34 @@ class TelephonySessionOperations:
             contact_id=contact_id,
             lead_id=lead_id,
             caller_phone=caller_phone,
+        )
+        return telephony_view(session)
+
+    def create_outbound_sip_session_from_agent_version(
+        self,
+        tenant_id: str,
+        agent_id: str,
+        agent_version_id: str,
+        *,
+        idempotency_key: str,
+        contact_id: str | None,
+        lead_id: str | None,
+        caller_phone: str,
+        variables: dict | None = None,
+    ) -> TelephonySessionView:
+        """Same session algorithm, pinned to exactly ``agent_version_id`` (published or superseded)."""
+        session = self.sessions.create_from_agent_version(
+            tenant_id,
+            agent_id,
+            agent_version_id,
+            channel="sip",
+            direction="outbound",
+            purpose="production",
+            idempotency_key=idempotency_key,
+            contact_id=contact_id,
+            lead_id=lead_id,
+            caller_phone=caller_phone,
+            variables=dict(variables) if variables else None,
         )
         return telephony_view(session)
 

@@ -255,12 +255,22 @@ class CrmVoiceCall(Base, TimestampMixin):
         Index("ix_crm_voice_calls_tenant_status", "tenant_id", "status"),
         Index("ix_crm_voice_calls_provider_call", "provider", "provider_call_id"),
         UniqueConstraint("source_submission_id", name="uq_crm_voice_calls_source_submission"),
+        sa.CheckConstraint(
+            "origin IN ('crm_outbound', 'voice_experience_callback', 'legacy_voice_experience_callback')",
+            name="ck_crm_voice_calls_origin",
+        ),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
     tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False)
     lead_id: Mapped[str | None] = mapped_column(ForeignKey("crm_leads.id"), nullable=True)
     contact_id: Mapped[str | None] = mapped_column(ForeignKey("crm_contacts.id"), nullable=True)
+    # Who owns the call, independent of ``source_submission_id`` (which ON DELETE SET NULL can clear)
+    # and of the provider. The conservative default keeps a writer that predates this column from
+    # being mistaken for a Voice Experience callback.
+    origin: Mapped[str] = mapped_column(
+        String(40), nullable=False, default="crm_outbound", server_default=sa.text("'crm_outbound'")
+    )
     source_submission_id: Mapped[str | None] = mapped_column(
         ForeignKey("tenant_voice_experience_submissions.id", ondelete="SET NULL"), nullable=True
     )

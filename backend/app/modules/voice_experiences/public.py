@@ -38,7 +38,7 @@ class VoiceRuntimeWebhookServicePort(Protocol):
 
 
 class VoiceCallbackWorkerPort(Protocol):
-    def process_once(self) -> bool: ...
+    async def process_once(self) -> bool: ...
 
 
 def create_context_schema_reader(session: DatabaseSession) -> VoiceContextSchemaReader:
@@ -63,6 +63,13 @@ def create_runtime_webhook_service(session: DatabaseSession) -> VoiceRuntimeWebh
     from app.modules.voice_experiences.wiring import create_runtime_webhook_service as create
 
     return create(session)
+
+
+async def run_callback_worker(worker: VoiceCallbackWorkerPort) -> None:
+    """Runs the worker until cancelled, on the caller's event loop."""
+    from app.modules.voice_experiences.application.callback_worker import run_forever
+
+    await run_forever(worker)
 
 
 def create_callback_worker(
@@ -98,4 +105,5 @@ __all__ = [
     "create_context_schema_reader",
     "create_runtime_webhook_service",
     "register_models",
+    "run_callback_worker",
 ]

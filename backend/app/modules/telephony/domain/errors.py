@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from app.modules.telephony.domain.phone_numbers import VoicePhoneValidationError
 
-__all__ = ["SipDialError", "VoicePhoneValidationError"]
+__all__ = ["CapacityDeferred", "SipDialError", "VoicePhoneValidationError"]
 
 
 class SipDialError(ValueError):
@@ -16,3 +16,14 @@ class SipDialError(ValueError):
         super().__init__(code)
         self.code = code
         self.call_status = call_status
+
+
+class CapacityDeferred(ValueError):
+    """The route is temporarily full and the caller asked to be told instead of failing the
+    call (``PlaceOutboundCallCommand.defer_on_capacity``): nothing was dialed and the session,
+    if any, stays ``requested`` so the same request can be retried later."""
+
+    code = "telephony_capacity_deferred"
+
+    def __init__(self) -> None:
+        super().__init__(self.code)

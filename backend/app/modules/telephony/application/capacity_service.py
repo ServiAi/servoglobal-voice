@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 from app.modules.telephony.application.ports import CallLoadPort
 from app.modules.telephony.domain.capacity import (
     ACTIVE_CALLBACK_STATUSES,
+    CANONICAL_SIP_PROVIDER,
     VOICE_CALLBACK_FORCED_RELEASE,
     VOICE_CALLBACK_RECONCILED,
     VOICE_CAPACITY_REACHED,
@@ -33,6 +34,31 @@ class CapacityService:
 
     def callbacks_in_flight(self, *, tenant_id: str, route_id: str) -> int:
         return self.call_load.count_voice_calls_in_statuses(tenant_id, route_id, ACTIVE_CALLBACK_STATUSES)
+
+    def route_load(
+        self,
+        *,
+        tenant_id: str,
+        route_id: str,
+        voice,
+        exclude_call_id: str | None = None,
+        exclude_session_id: str | None = None,
+    ) -> int:
+        """Channels held on a route by BOTH runtimes, without counting anything twice: legacy
+        provider-callback records (canonical SIP calls are excluded here, their VoiceSession is
+        the channel) plus active SIP VoiceSessions. ``exclude_*`` keep a call from counting
+        against itself (its record is ``starting`` while it is being placed)."""
+        legacy = self.call_load.count_voice_calls_in_statuses(
+            tenant_id,
+            route_id,
+            ACTIVE_CALLBACK_STATUSES,
+            exclude_call_id=exclude_call_id,
+            exclude_provider=CANONICAL_SIP_PROVIDER,
+        )
+        sessions = voice.count_active_telephony_sessions(
+            tenant_id, route_id, exclude_session_id=exclude_session_id, exclude_crm_call_id=exclude_call_id
+        )
+        return legacy + sessions
 
     def record_capacity_reached(
         self,

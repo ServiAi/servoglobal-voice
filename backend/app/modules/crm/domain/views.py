@@ -141,6 +141,7 @@ class VoiceCallView:
     contact_id: str | None
     source_submission_id: str | None
     sip_route_id: str | None
+    origin: str
     provider: str
     provider_call_id: str | None
     provider_session_id: str | None
@@ -250,6 +251,7 @@ class CreateVoiceCallCommand:
     status: str | None = None
     to_phone: str | None = None
     from_number: str | None = None
+    origin: str | None = None
 
 
 @dataclass(frozen=True)
