@@ -19,6 +19,7 @@ from app.modules.analytics.public import (
     PersistCallEventCommand,
 )
 from app.modules.identity.public import TenantDirectory, TenantView
+from app.services.billing_duration import provider_duration_to_minutes
 
 ULTRAVOX_PROVIDER = "ultravox"
 OFFICIAL_ULTRAVOX_EVENTS = {
@@ -382,22 +383,7 @@ class UltravoxIngestionService:
 
     @staticmethod
     def _duration_to_minutes(value: Any) -> Decimal | None:
-        if value is None:
-            return None
-        if isinstance(value, (int, float, Decimal)):
-            return (Decimal(str(value)) / Decimal("60")).quantize(Decimal("0.01"))
-        if not isinstance(value, str):
-            return None
-
-        duration = value.strip().lower()
-        try:
-            if duration.endswith("s"):
-                return (Decimal(duration[:-1]) / Decimal("60")).quantize(Decimal("0.01"))
-            if duration.endswith("m"):
-                return Decimal(duration[:-1]).quantize(Decimal("0.01"))
-        except Exception:
-            return None
-        return None
+        return provider_duration_to_minutes(value)
 
     def _nested_field(self, value: Any, key: str) -> Any:
         if isinstance(value, dict):

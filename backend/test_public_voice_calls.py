@@ -158,7 +158,9 @@ class PublicVoiceCallTests(Integration2ATestCase):
     def _decode(self, token: str) -> dict:
         return jwt.decode(token, LIVEKIT_SECRET, algorithms=["HS256"], options={"verify_aud": False})
 
-    def _send_runtime_event(self, voice_call_id: str, provider_call_id: str, event_type: str, **call_values):
+    def _send_runtime_event(
+        self, voice_call_id: str, provider_call_id: str, event_type: str, *, provider: str = "ultravox", **call_values
+    ):
         payload = {
             "event": event_type,
             "call": {
@@ -171,7 +173,7 @@ class PublicVoiceCallTests(Integration2ATestCase):
         timestamp = datetime.now(UTC).isoformat()
         signature = hmac.new(b"tenant-webhook-secret", raw + timestamp.encode(), hashlib.sha256).hexdigest()
         return self.client.post(
-            "/api/v1/voice/webhook/ultravox",
+            f"/api/v1/voice/webhook/{provider}",
             content=raw,
             headers={
                 "Content-Type": "application/json",
@@ -617,11 +619,16 @@ class PublicVoiceCallTests(Integration2ATestCase):
 
     # -- late billing of HISTORICAL provider-originated calls (settlement only, never a runtime) -------
 
-    def _historical_call(self, provider_call_id: str, *, connected: bool = False) -> str:
+    def _historical_call(
+        self, provider_call_id: str, *, connected: bool = False, crm_call_id: str | None = "same",
+        runtime_call_id: str | None = "same", crm_provider: str = "ultravox", runtime_provider: str = "ultravox",
+    ) -> str:
         """A provider-originated public call exactly as it exists after the drain: terminal, no session."""
+        crm_call_id = provider_call_id if crm_call_id == "same" else crm_call_id
+        runtime_call_id = provider_call_id if runtime_call_id == "same" else runtime_call_id
         with SessionLocal() as db:
             crm = CrmVoiceCall(
-                tenant_id=self.tenant.id, provider="ultravox", provider_call_id=provider_call_id,
+                tenant_id=self.tenant.id, provider=crm_provider, provider_call_id=crm_call_id,
                 direction="webrtc", status="completed", origin="crm_outbound",
             )
             db.add(crm)
@@ -629,7 +636,7 @@ class PublicVoiceCallTests(Integration2ATestCase):
             db.add(TenantVoiceRuntimeCall(
                 tenant_id=self.tenant.id, context_session_id=f"ctx-{provider_call_id}", submission_id="s",
                 experience_id="e", experience_version_id="v", agent_config_id="a", crm_voice_call_id=crm.id,
-                provider="ultravox", provider_call_id=provider_call_id, status="ended",
+                provider=runtime_provider, provider_call_id=runtime_call_id, status="ended",
                 launch_runtime=LAUNCH_RUNTIME_LEGACY, voice_session_id=None,
                 connected_at=datetime.now(UTC) if connected else None,
             ))
@@ -691,6 +698,99 @@ class PublicVoiceCallTests(Integration2ATestCase):
         self.assertEqual(response.status_code, 401)
         with SessionLocal() as db:
             self.assertEqual(db.query(Call).count(), 0)
+
+    # -- a valid signature proves the sender; ownership proves it owns THIS persisted call ---------------
+
+    def _add_provider_config(self, provider: str) -> None:
+        with SessionLocal() as db:
+            db.add(TenantVoiceProviderConfig(
+                tenant_id=self.tenant.id, provider=provider, status="active",
+                api_key_encrypted=SecretManager().encrypt_secret("other-key"),
+                webhook_secret_encrypted=SecretManager().encrypt_secret("tenant-webhook-secret"),
+            ))
+            db.commit()
+
+    def _state(self) -> tuple:
+        from app.modules.analytics.infrastructure.models import CallEvent
+        from app.modules.crm.infrastructure.models import CrmVoiceCallEvent
+
+        with SessionLocal() as db:
+            return (
+                db.query(Call).count(), db.query(CallEvent).count(),
+                db.query(CrmVoiceCallEvent).filter(CrmVoiceCallEvent.dedup_key.like("%call.billed")).count(),
+                [(c.status, c.provider, c.provider_call_id) for c in db.scalars(select(CrmVoiceCall))],
+                [(r.status, r.provider, r.provider_call_id, r.voice_session_id) for r in db.scalars(select(TenantVoiceRuntimeCall))],
+            )
+
+    def _assert_rejected_untouched(self, response, before: tuple) -> None:
+        self.assertEqual(response.status_code, 401, response.text)
+        self.assertEqual(response.json()["detail"], "Webhook validation failed")
+        self.assertEqual(self._state(), before)
+
+    def test_billing_from_another_provider_is_rejected_even_with_a_valid_signature(self) -> None:
+        self._add_provider_config("other_provider")
+        crm_id = self._historical_call("historical-1")
+        before = self._state()
+        response = self._send_runtime_event(
+            crm_id, "historical-1", "call.billed", provider="other_provider", billedDuration="75s"
+        )
+        self._assert_rejected_untouched(response, before)
+
+    def test_billing_with_another_call_id_is_rejected(self) -> None:
+        crm_id = self._historical_call("historical-1")
+        before = self._state()
+        response = self._send_runtime_event(crm_id, "historical-2", "call.billed", billedDuration="75s")
+        self._assert_rejected_untouched(response, before)
+
+    def test_inconsistent_persisted_call_ids_fail_closed(self) -> None:
+        crm_id = self._historical_call("historical-1", runtime_call_id="historical-runtime-other")
+        before = self._state()
+        for incoming in ("historical-1", "historical-runtime-other"):  # never picks one of the two
+            response = self._send_runtime_event(crm_id, incoming, "call.billed", billedDuration="75s")
+            self._assert_rejected_untouched(response, before)
+
+    def test_inconsistent_persisted_providers_fail_closed(self) -> None:
+        for kwargs in ({"runtime_provider": "another_provider"}, {"crm_provider": "another_provider"}):
+            with self.subTest(**kwargs):
+                crm_id = self._historical_call(f"historical-{next(iter(kwargs))}", **kwargs)
+                before = self._state()
+                response = self._send_runtime_event(
+                    crm_id, f"historical-{next(iter(kwargs))}", "call.billed", billedDuration="75s"
+                )
+                self._assert_rejected_untouched(response, before)
+
+    def test_a_missing_persisted_call_id_is_verified_against_the_other_one(self) -> None:
+        from decimal import Decimal
+
+        crm_id = self._historical_call("historical-crm-null", crm_call_id=None)
+        self.assertTrue(self._send_runtime_event(crm_id, "historical-crm-null", "call.billed", billedDuration="60s").json()["processed"])
+        self.assertEqual(self._billed_minutes_of("historical-crm-null"), Decimal("1.00"))
+
+        crm_id = self._historical_call("historical-runtime-null", runtime_call_id=None)
+        self.assertTrue(self._send_runtime_event(crm_id, "historical-runtime-null", "call.billed", billedDuration="60s").json()["processed"])
+        self.assertEqual(self._billed_minutes_of("historical-runtime-null"), Decimal("1.00"))
+
+    def test_an_incoming_call_id_with_no_persisted_identity_to_check_fails_closed(self) -> None:
+        crm_id = self._historical_call("historical-1", crm_call_id=None, runtime_call_id=None)
+        before = self._state()
+        response = self._send_runtime_event(crm_id, "historical-1", "call.billed", billedDuration="75s")
+        self._assert_rejected_untouched(response, before)
+
+    def test_rejected_billing_is_checked_before_the_dedup_key_is_claimed(self) -> None:
+        from decimal import Decimal
+
+        from app.modules.crm.public import CrmVoiceCalls
+
+        crm_id = self._historical_call("historical-1")
+        with patch.object(CrmVoiceCalls, "claim_event", wraps=None) as claim:
+            response = self._send_runtime_event(crm_id, "historical-2", "call.billed", billedDuration="75s")
+        self.assertEqual(response.status_code, 401)
+        claim.assert_not_called()  # an invalid event never reaches (or consumes) the dedup ledger
+
+        # ...so the legitimate event for the same call still settles afterwards.
+        ok = self._send_runtime_event(crm_id, "historical-1", "call.billed", billedDuration="75s")
+        self.assertTrue(ok.json()["processed"])
+        self.assertEqual(self._billed_minutes_of("historical-1"), Decimal("1.25"))
 
     def test_provider_billing_for_a_session_backed_call_is_ignored(self) -> None:
         self.assertEqual(self._launch(self._token()).status_code, 200)

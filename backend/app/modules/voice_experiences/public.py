@@ -5,6 +5,7 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Protocol
 
+from app.modules.voice_experiences.domain.errors import HistoricalSettlementOwnershipError
 from app.modules.voice_experiences.domain.ports import DatabaseSession, SessionFactory
 from app.modules.voice_experiences.domain.views import (
     VoiceContextFieldSnapshot,
@@ -90,6 +91,7 @@ def create_callback_worker(
 __all__ = [
     "DatabaseSession",
     "HistoricalCallSettlementPort",
+    "HistoricalSettlementOwnershipError",
     "SessionFactory",
     "VoiceAgentReferenceReader",
     "VoiceCallbackWorkerPort",

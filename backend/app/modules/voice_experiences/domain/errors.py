@@ -4,6 +4,11 @@ class PublicCallFailure(Exception):
         self.code = code
 
 
+class HistoricalSettlementOwnershipError(Exception):
+    """The provider event does not provably belong to the persisted historical call (different
+    provider, different provider call id, or inconsistent persisted identities). Carries no detail."""
+
+
 class VoiceRuntimeUnavailable(Exception):
     """The canonical voice runtime cannot serve a launch. ``code`` is one of
     ``unavailable`` (agent/config not usable), ``invalid_context`` (the persisted submission

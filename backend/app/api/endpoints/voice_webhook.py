@@ -11,7 +11,8 @@ from app.db.session import get_db
 from app.modules.notifications.public import publish_call_event
 from app.modules.telephony.public import CANONICAL_SIP_PROVIDER
 from app.modules.voice.public import VoiceSessionFacade
-from app.modules.voice_experiences.public import create_historical_call_settlement
+from app.modules.voice_experiences.public import HistoricalSettlementOwnershipError, create_historical_call_settlement
+from app.services.billing_duration import provider_duration_to_minutes
 from app.services.voice_webhook_service import VoiceWebhookService
 
 logger = logging.getLogger(__name__)
@@ -21,15 +22,13 @@ router = APIRouter(prefix="/api/v1/voice", tags=["Voice Webhooks"])
 
 def _billed_minutes(payload: dict[str, Any], call_obj: dict[str, Any]) -> Decimal | None:
     """``billedMinutes`` wins; otherwise the provider's ``billedDuration`` (e.g. ``75s`` -> 1.25)."""
-    from app.services.ultravox_ingestion_service import UltravoxIngestionService
-
     raw = call_obj.get("billedMinutes") or payload.get("billedMinutes")
     if raw is not None:
         try:
             return Decimal(str(raw))
         except (InvalidOperation, ValueError):
             return None
-    return UltravoxIngestionService._duration_to_minutes(call_obj.get("billedDuration") or payload.get("billedDuration"))
+    return provider_duration_to_minutes(call_obj.get("billedDuration") or payload.get("billedDuration"))
 
 _NOTIFIABLE_CALL_STATUSES = {"completed", "failed", "no_answer", "busy"}
 
@@ -91,17 +90,20 @@ async def voice_webhook(
             if not signature_verified:
                 raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Webhook validation failed")
             call_obj = payload.get("call") or payload
-            provider_call_id = call_obj.get("callId") or call_obj.get("id") or call.provider_call_id
+            provider_call_id = call_obj.get("callId") or call_obj.get("id")
             if not provider_call_id:
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Webhook call identifier missing")
-            return settlement.settle_billed(
-                crm_call_id=call.id,
-                provider=provider,
-                provider_call_id=str(provider_call_id),
-                billed_minutes=_billed_minutes(payload, call_obj),
-                provider_status=str(call_obj.get("status") or call_obj.get("state") or "call.billed"),
-                provider_agent_id=str(call_obj["agentId"]) if call_obj.get("agentId") else None,
-            )
+            try:
+                return settlement.settle_billed(
+                    crm_call_id=call.id,
+                    provider=provider,
+                    provider_call_id=str(provider_call_id),
+                    billed_minutes=_billed_minutes(payload, call_obj),
+                    provider_status=str(call_obj.get("status") or call_obj.get("state") or "call.billed"),
+                    provider_agent_id=str(call_obj["agentId"]) if call_obj.get("agentId") else None,
+                )
+            except HistoricalSettlementOwnershipError:
+                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Webhook validation failed") from None
 
     try:
         result = service.handle_provider_event(provider, payload)

@@ -489,6 +489,10 @@ class VoiceExperiencesBoundaryTests(unittest.TestCase):
             with self.subTest(imported=imported):
                 self.assertFalse(imported.startswith(("app.services", "app.modules.voice.", "app.modules.telephony")))
         self.assertNotIn("legacy_runtime", path.name)
+        for imported in _imports(path):  # no HTTP, no Telephony, no Voice internals, no services
+            self.assertFalse(imported.startswith(("httpx", "requests", "app.api", "fastapi")), imported)
+        for ownership_rule in ("call.provider", "runtime.provider", "provider_call_id"):
+            self.assertIn(ownership_rule, source)  # the component, not the endpoint, owns the rules
 
     def test_historical_markers_stay_allowed_by_the_database(self) -> None:
         from app.modules.crm.infrastructure.models import CrmVoiceCall

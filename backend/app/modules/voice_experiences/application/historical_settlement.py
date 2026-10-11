@@ -5,8 +5,11 @@ reported its billing later (``call.billed``). Those calls are over -- the runtim
 gone and the drain gate treats a terminal one as drained -- but the provider may still deliver the
 billing event afterwards. This component only *settles* that event into Analytics:
 
-  receive (already signature-verified) -> prove the call is a historical provider launch -> dedup ->
-  persist ``billed_minutes`` partially.
+  receive (already signature-verified) -> prove the call is a historical provider launch AND that the
+  sender's provider / call id are the ones persisted for it -> dedup -> persist ``billed_minutes``.
+
+A valid signature proves the sender; ownership proves the sender owns THIS persisted call. Both are
+needed, and an event that fails ownership never touches the dedup ledger or Analytics.
 
 It is not a runtime: it never creates a call record, a session or a room, never places a call,
 never contacts the provider, never retries, and never changes the lifecycle of the CRM call or of the
@@ -23,6 +26,7 @@ from sqlalchemy.orm import Session
 
 from app.modules.analytics.public import AnalyticsCallLedger, PersistCallCommand, PersistCallEventCommand
 from app.modules.crm.public import CrmVoiceCalls
+from app.modules.voice_experiences.domain.errors import HistoricalSettlementOwnershipError
 from app.modules.voice_experiences.domain.limits import LAUNCH_RUNTIME_LEGACY
 from app.modules.voice_experiences.infrastructure.submission_models import TenantVoiceRuntimeCall
 
@@ -45,6 +49,18 @@ class HistoricalProviderCallSettlement:
         """True only for a persisted historical provider launch (never inferred from provider/status)."""
         return self._historical_launch(crm_call_id) is not None
 
+    @staticmethod
+    def _verify_ownership(call, runtime: TenantVoiceRuntimeCall, provider: str, provider_call_id: str) -> None:
+        """Fail closed unless the sender is the provider (and call id) persisted for this call.
+
+        Persisted identities may be NULL for old rows, but at least one must exist to verify the
+        incoming id against; if two exist they must agree with it (so they agree with each other)."""
+        if not provider or provider != call.provider or provider != runtime.provider:
+            raise HistoricalSettlementOwnershipError
+        persisted = [value for value in (call.provider_call_id, runtime.provider_call_id) if value is not None]
+        if not provider_call_id or not persisted or any(value != provider_call_id for value in persisted):
+            raise HistoricalSettlementOwnershipError
+
     def settle_billed(
         self,
         *,
@@ -64,6 +80,7 @@ class HistoricalProviderCallSettlement:
             runtime = self._historical_launch(crm_call_id)
             if call is None or runtime is None or call.tenant_id != runtime.tenant_id:
                 return {"status": "ignored", "processed": False}
+            self._verify_ownership(call, runtime, provider, provider_call_id)
             claimed = calls.claim_event(
                 tenant_id=runtime.tenant_id,
                 voice_call_id=call.id,
