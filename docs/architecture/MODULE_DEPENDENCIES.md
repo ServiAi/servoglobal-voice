@@ -91,7 +91,7 @@ Leyenda: ✅ permitida · ⚠️ cuestionable · ❌ eliminar · 🔁 circular.
 | Integrations → CRM (antes `crm_activity_service`, `models.crm`) | timeline de mensajes/emails, lead/contacto de la acción | ✅ **resuelto** (2026-10-04) | `crm.public` (`record_activity`, `get_lead_profile`, `find_contact_by_phone_digits`). Sólo queda `CrmWhatsAppMessage` (Messaging). |
 | Identity → Integrations (`admin/tenants.py` → 10 servicios) | panel admin | ⚠️ | Es un BFF de administración: consumir `public.py` de cada módulo. |
 | Identity ? Billing ?? | onboarding provisiona el plan; Billing consulta tenant/suspensi?n | ? por APIs p?blicas | Identity usa `BillingOnboardingFacade`; Billing usa `identity.public.TenantLifecycle` y directorios. |
-| Voice Experiences → Identity / Integrations / CRM / Telephony / Voice Legacy | flags, eventos, CRM projections, rutas, validación de agent_config_id | Migrado (2026-10-08) | Application usa identity.public, integrations.public, crm.public, telephony.public y voice_legacy.public; WhatsApp Flows consume voice_experiences.public. No crea VoiceSession; runtime/callback siguen detrás de adaptadores legacy. |
+| Voice Experiences → Identity / Integrations / CRM / Telephony / Agents | flags, eventos, CRM projections, rutas, existencia del Agent | Migrado (2026-10-08) | Application usa identity.public, integrations.public, crm.public, telephony.public y agents.public (ya no importa voice_legacy, un test lo impide); WhatsApp Flows consume voice_experiences.public. No crea VoiceSession; runtime/callback siguen detrás de adaptadores legacy. |
 
 ## Voice Experiences after migration (2026-10-08)
 
@@ -343,4 +343,4 @@ Consumers outside `app.modules.analytics` use only `analytics.public` (`main.py`
 | Ruff `app` | 1390 | 1381 (F 26 -> 22, sin F nuevos) |
 
 ## Voice Experiences → Agents
-Voice Experiences usa `app.modules.agents.public` para resolver el binding legacy `agent_config_id` a `agent_id` y para bloquear/leer la versión publicada exacta al publicar una experiencia. No importa ORM de Agents ni agrega relaciones ORM cross-module. Agent Builder usa el contrato público de Voice Legacy para proteger la unicidad del binding legacy.
+Voice Experiences usa `app.modules.agents.public` para comprobar que el Agent existe en el tenant (`get_agent_status`) y para bloquear/leer la versión publicada exacta al publicar una experiencia (la resolución legacy `agent_config_id`→`agent_id` se retiró en #138). No importa ORM de Agents ni agrega relaciones ORM cross-module. Agent Builder usa el contrato público de Voice Legacy para proteger la unicidad del binding legacy.

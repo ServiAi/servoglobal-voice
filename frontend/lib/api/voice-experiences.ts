@@ -79,22 +79,22 @@ export function deleteVoiceExperienceVersion(
   );
 }
 
-export function fetchVoiceContextSchemas(accessToken: string, agentConfigId: string) {
+export function fetchVoiceContextSchemas(accessToken: string, agentId: string) {
   return requestVoiceEndpoint<VoiceContextSchemaSummaryResponse[]>(
     'GET',
-    `agents/${agentConfigId}/context-schemas`,
+    `agents/${agentId}/context-schemas`,
     accessToken
   );
 }
 
 export function createVoiceContextSchema(
   accessToken: string,
-  agentConfigId: string,
+  agentId: string,
   payload: VoiceContextSchemaCreateRequest
 ) {
   return requestVoiceEndpoint<VoiceContextSchemaResponse>(
     'POST',
-    `agents/${agentConfigId}/context-schemas`,
+    `agents/${agentId}/context-schemas`,
     accessToken,
     undefined,
     payload
@@ -103,12 +103,12 @@ export function createVoiceContextSchema(
 
 export function fetchVoiceContextSchemaVersions(
   accessToken: string,
-  agentConfigId: string,
+  agentId: string,
   schemaKey: string
 ) {
   return requestVoiceEndpoint<VoiceContextSchemaSummaryResponse[]>(
     'GET',
-    `agents/${agentConfigId}/context-schemas/${schemaKey}/versions`,
+    `agents/${agentId}/context-schemas/${schemaKey}/versions`,
     accessToken
   );
 }

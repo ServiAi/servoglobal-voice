@@ -16,7 +16,7 @@ from app.modules.voice_experiences.infrastructure.experience_models import (
 from app.modules.identity.public import VOICE_EXPERIENCES, FeatureFlags
 from app.modules.integrations.public import IntegrationEvents
 from app.modules.voice_experiences.domain.limits import VoiceExperienceLimits
-from app.modules.voice_legacy.public import VoiceLegacyFacade
+from app.modules.agents.public import AgentsFacade
 
 
 class VoiceContextNotFoundError(ValueError):
@@ -31,6 +31,7 @@ class VoiceContextConflictError(PermissionError):
     pass
 
 
+EVENT_PROVIDER = "voice_experiences"
 FIELD_KEY_CONSTRAINT = "uq_tenant_voice_context_fields_schema_key"
 FIELD_POSITION_CONSTRAINT = "uq_tenant_voice_context_fields_schema_position"
 ACTIVE_LINEAGE_INDEX = "uq_tenant_voice_context_schemas_active_lineage"
@@ -62,19 +63,19 @@ class VoiceContextService:
     def __init__(self, db: Session) -> None:
         self.db = db
         self.feature_service = FeatureFlags(db)
-        self.agent_service = VoiceLegacyFacade(db)
+        self.agents = AgentsFacade(db)
         self.event_service = IntegrationEvents(db)
 
     def list_schemas(
-        self, tenant_id: str, agent_config_id: str
+        self, tenant_id: str, agent_id: str
     ) -> list[View]:
-        self._require_feature_and_agent(tenant_id, agent_config_id)
+        self._require_feature_and_agent(tenant_id, agent_id)
         schemas = list(
             self.db.scalars(
                 select(TenantVoiceContextSchema)
                 .where(
                     TenantVoiceContextSchema.tenant_id == tenant_id,
-                    TenantVoiceContextSchema.agent_config_id == agent_config_id,
+                    TenantVoiceContextSchema.agent_id == agent_id,
                 )
                 .order_by(TenantVoiceContextSchema.schema_key, TenantVoiceContextSchema.version.desc())
             ).all()
@@ -92,14 +93,14 @@ class VoiceContextService:
         return [self.summary_response(schema) for schema in selected]
 
     def list_versions(
-        self, tenant_id: str, agent_config_id: str, schema_key: str
+        self, tenant_id: str, agent_id: str, schema_key: str
     ) -> list[View]:
-        self._require_feature_and_agent(tenant_id, agent_config_id)
+        self._require_feature_and_agent(tenant_id, agent_id)
         schemas = self.db.scalars(
             select(TenantVoiceContextSchema)
             .where(
                 TenantVoiceContextSchema.tenant_id == tenant_id,
-                TenantVoiceContextSchema.agent_config_id == agent_config_id,
+                TenantVoiceContextSchema.agent_id == agent_id,
                 TenantVoiceContextSchema.schema_key == schema_key,
             )
             .order_by(TenantVoiceContextSchema.version.desc())
@@ -116,21 +117,21 @@ class VoiceContextService:
         )
         if schema is None:
             raise VoiceContextNotFoundError("Voice context schema not found.")
-        self._require_agent(tenant_id, schema.agent_config_id)
+        self._require_agent(tenant_id, schema.agent_id)
         return schema
 
     def create_schema(
         self,
         tenant_id: str,
-        agent_config_id: str,
+        agent_id: str,
         body: Command,
         user_id: str | None,
     ) -> TenantVoiceContextSchema:
-        _, agent = self._require_feature_and_agent(tenant_id, agent_config_id)
+        self._require_feature_and_agent(tenant_id, agent_id)
         existing = self.db.scalar(
             select(TenantVoiceContextSchema.id).where(
                 TenantVoiceContextSchema.tenant_id == tenant_id,
-                TenantVoiceContextSchema.agent_config_id == agent_config_id,
+                TenantVoiceContextSchema.agent_id == agent_id,
                 TenantVoiceContextSchema.schema_key == body.schema_key,
             )
         )
@@ -138,7 +139,7 @@ class VoiceContextService:
             raise VoiceContextValidationError("Schema key already exists for this voice agent.")
         schema = TenantVoiceContextSchema(
             tenant_id=tenant_id,
-            agent_config_id=agent_config_id,
+            agent_id=agent_id,
             schema_key=body.schema_key,
             version=1,
             status="draft",
@@ -149,7 +150,7 @@ class VoiceContextService:
         self.db.add(schema)
         try:
             self.db.flush()
-            self._record_event(schema, agent.agent_provider, "context_schema_created")
+            self._record_event(schema, "context_schema_created")
         except IntegrityError as exc:
             self.db.rollback()
             if self._is_lineage_status_violation(exc, DRAFT_LINEAGE_INDEX):
@@ -240,13 +241,13 @@ class VoiceContextService:
         self._ensure_draft(schema)
         if not schema.fields:
             raise VoiceContextValidationError("A schema must have at least one field before activation.")
-        agent = self._require_agent(tenant_id, schema.agent_config_id)
+        self._require_agent(tenant_id, schema.agent_id)
         now = datetime.now(timezone.utc)
         active_schemas = self.db.scalars(
             select(TenantVoiceContextSchema)
             .where(
                 TenantVoiceContextSchema.tenant_id == tenant_id,
-                TenantVoiceContextSchema.agent_config_id == schema.agent_config_id,
+                TenantVoiceContextSchema.agent_id == schema.agent_id,
                 TenantVoiceContextSchema.schema_key == schema.schema_key,
                 TenantVoiceContextSchema.status == "active",
                 TenantVoiceContextSchema.id != schema.id,
@@ -263,7 +264,7 @@ class VoiceContextService:
             schema.activated_at = now
             schema.archived_at = None
             self._record_event(
-                schema, agent.agent_provider, "context_schema_activated", user_id
+                schema, "context_schema_activated", user_id
             )
         except IntegrityError as exc:
             self.db.rollback()
@@ -278,13 +279,13 @@ class VoiceContextService:
     def archive_schema(
         self, tenant_id: str, schema_id: str, user_id: str | None
     ) -> TenantVoiceContextSchema:
-        schema = self.get_schema(tenant_id, schema_id)
+        schema = self._locked_schema(tenant_id, schema_id)
         if schema.status == "archived":
             raise VoiceContextConflictError("Archived schemas are immutable.")
-        agent = self._require_agent(tenant_id, schema.agent_config_id)
+        self._require_agent(tenant_id, schema.agent_id)
         schema.status = "archived"
         schema.archived_at = datetime.now(timezone.utc)
-        self._record_event(schema, agent.agent_provider, "context_schema_archived", user_id)
+        self._record_event(schema, "context_schema_archived", user_id)
         self.db.refresh(schema)
         return schema
 
@@ -296,7 +297,7 @@ class VoiceContextService:
             raise VoiceContextConflictError(
                 "Only archived voice context schemas can be deleted."
             )
-        agent = self._require_agent(tenant_id, schema.agent_config_id)
+        self._require_agent(tenant_id, schema.agent_id)
         schema_key = schema.schema_key
         schema_version = schema.version
 
@@ -329,7 +330,7 @@ class VoiceContextService:
 
         self.event_service.record(
             tenant_id=tenant_id,
-            provider=agent.agent_provider,
+            provider=EVENT_PROVIDER,
             event_type="context_schema_deleted",
             status="success",
             resource_type="voice_context_schema",
@@ -347,11 +348,11 @@ class VoiceContextService:
         source = self.get_schema(tenant_id, schema_id)
         if source.status == "draft":
             raise VoiceContextConflictError("Draft schemas must be edited directly.")
-        _, agent = self._require_feature_and_agent(tenant_id, source.agent_config_id)
+        self._require_feature_and_agent(tenant_id, source.agent_id)
         existing_draft = self.db.scalar(
             select(TenantVoiceContextSchema.id).where(
                 TenantVoiceContextSchema.tenant_id == tenant_id,
-                TenantVoiceContextSchema.agent_config_id == source.agent_config_id,
+                TenantVoiceContextSchema.agent_id == source.agent_id,
                 TenantVoiceContextSchema.schema_key == source.schema_key,
                 TenantVoiceContextSchema.status == "draft",
             )
@@ -363,13 +364,13 @@ class VoiceContextService:
         next_version = (self.db.scalar(
             select(func.max(TenantVoiceContextSchema.version)).where(
                 TenantVoiceContextSchema.tenant_id == tenant_id,
-                TenantVoiceContextSchema.agent_config_id == source.agent_config_id,
+                TenantVoiceContextSchema.agent_id == source.agent_id,
                 TenantVoiceContextSchema.schema_key == source.schema_key,
             )
         ) or 0) + 1
         schema = TenantVoiceContextSchema(
             tenant_id=tenant_id,
-            agent_config_id=source.agent_config_id,
+            agent_id=source.agent_id,
             schema_key=source.schema_key,
             version=next_version,
             status="draft",
@@ -396,7 +397,7 @@ class VoiceContextService:
         self.db.add(schema)
         try:
             self.db.flush()
-            self._record_event(schema, agent.agent_provider, "context_schema_created")
+            self._record_event(schema, "context_schema_created")
         except IntegrityError as exc:
             self.db.rollback()
             if self._is_lineage_status_violation(exc, DRAFT_LINEAGE_INDEX):
@@ -426,7 +427,7 @@ class VoiceContextService:
     def schema_response(self, schema: TenantVoiceContextSchema) -> View:
         return View(
             id=schema.id,
-            agent_config_id=schema.agent_config_id,
+            agent_id=schema.agent_id,
             schema_key=schema.schema_key,
             version=schema.version,
             status=schema.status,
@@ -443,7 +444,7 @@ class VoiceContextService:
     def summary_response(schema: TenantVoiceContextSchema) -> View:
         return View(
             id=schema.id,
-            agent_config_id=schema.agent_config_id,
+            agent_id=schema.agent_id,
             schema_key=schema.schema_key,
             version=schema.version,
             status=schema.status,
@@ -452,18 +453,14 @@ class VoiceContextService:
             updated_at=schema.updated_at,
         )
 
-    def _require_feature_and_agent(self, tenant_id: str, agent_config_id: str):
+    def _require_feature_and_agent(self, tenant_id: str, agent_id: str):
         grant = self.feature_service.require_enabled(tenant_id, VOICE_EXPERIENCES)
-        agent = self._require_agent(tenant_id, agent_config_id)
-        return grant, agent
+        self._require_agent(tenant_id, agent_id)
+        return grant
 
-    def _require_agent(self, tenant_id: str, agent_config_id: str):
-        try:
-            return self.agent_service.require_voice_agent_defaults(
-                tenant_id, agent_config_id
-            )
-        except ValueError as exc:
-            raise VoiceContextNotFoundError(str(exc)) from exc
+    def _require_agent(self, tenant_id: str, agent_id: str) -> None:
+        if self.agents.get_agent_status(tenant_id, agent_id) is None:
+            raise VoiceContextNotFoundError("Voice agent not found.")
 
     def _require_draft(self, tenant_id: str, schema_id: str) -> TenantVoiceContextSchema:
         schema = self.get_schema(tenant_id, schema_id)
@@ -487,7 +484,7 @@ class VoiceContextService:
         )
         if schema is None:
             raise VoiceContextNotFoundError("Voice context schema not found.")
-        self._require_agent(tenant_id, schema.agent_config_id)
+        self._require_agent(tenant_id, schema.agent_id)
         return schema
 
     @staticmethod
@@ -531,7 +528,7 @@ class VoiceContextService:
             name,
             (
                 "tenant_voice_context_schemas.tenant_id",
-                "tenant_voice_context_schemas.agent_config_id",
+                "tenant_voice_context_schemas.agent_id",
                 "tenant_voice_context_schemas.schema_key",
             ),
         )
@@ -539,13 +536,12 @@ class VoiceContextService:
     def _record_event(
         self,
         schema: TenantVoiceContextSchema,
-        provider: str,
         event_type: str,
         user_id: str | None = None,
     ) -> None:
         self.event_service.record(
             tenant_id=schema.tenant_id,
-            provider=provider,
+            provider=EVENT_PROVIDER,
             event_type=event_type,
             status="success",
             resource_type="voice_context_schema",

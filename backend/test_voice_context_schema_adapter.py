@@ -4,7 +4,7 @@ from dataclasses import is_dataclass
 
 from _integrations_2a_test_base import Integration2ATestCase
 from app.db.session import SessionLocal
-from app.models.integrations import TenantVoiceAgentConfig
+from app.modules.agents.infrastructure.models import TenantAgent
 from app.modules.integrations.application.ports import VoiceContextSchemaPort
 from app.modules.integrations.domain.whatsapp_flow_context import (
     ContextFieldSnapshot,
@@ -29,14 +29,12 @@ class VoiceContextSchemaAdapterTests(Integration2ATestCase):
     def setUp(self) -> None:
         super().setUp()
         with SessionLocal() as db:
-            agent = TenantVoiceAgentConfig(
-                tenant_id=self.tenant.id, provider="ultravox", provider_agent_id="agent", display_name="Agent", status="active"
-            )
+            agent = TenantAgent(tenant_id=self.tenant.id, name="Agent", status="active")
             db.add(agent)
             db.flush()
             schema = TenantVoiceContextSchema(
                 tenant_id=self.tenant.id,
-                agent_config_id=agent.id,
+                agent_id=agent.id,
                 schema_key="adapter",
                 version=1,
                 status="active",

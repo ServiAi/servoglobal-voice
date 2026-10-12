@@ -52,7 +52,7 @@ export type VoiceExperienceCallSettings = {
 };
 
 export type VoiceExperienceWriteRequest = {
-  agent_config_id: string;
+  agent_id: string;
   context_schema_id: string;
   name: string;
   default_locale: string;
@@ -118,7 +118,7 @@ export type VoiceContextSchemaMetaUpdateRequest = {
 
 export type VoiceContextSchemaResponse = {
   id: string;
-  agent_config_id: string;
+  agent_id: string;
   schema_key: string;
   version: number;
   status: VoiceContextSchemaStatus;
@@ -133,7 +133,7 @@ export type VoiceContextSchemaResponse = {
 
 export type VoiceContextSchemaSummaryResponse = {
   id: string;
-  agent_config_id: string;
+  agent_id: string;
   schema_key: string;
   version: number;
   status: VoiceContextSchemaStatus;

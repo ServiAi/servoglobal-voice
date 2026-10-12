@@ -54,7 +54,7 @@ import {
   validateVoiceExperience,
   type ValidationErrors,
 } from '@/lib/voice-experiences/validation';
-import type { VoiceAgentConfigResponse } from '@/types/crm';
+import type { AgentResponse } from '@/types/agents';
 import type {
   VoiceContextSchemaResponse,
   VoiceContextSchemaSummaryResponse,
@@ -68,7 +68,7 @@ const FIELD_CLASS =
 
 const EDITOR_ERROR_PREFIXES = {
   general: ['name', 'default_locale'],
-  agentContext: ['agent_config_id', 'context_schema_id'],
+  agentContext: ['agent_id', 'context_schema_id'],
   content: ['content.'],
   appearance: ['theme.'],
   consent: ['consent.'],
@@ -80,7 +80,7 @@ type Props = {
   mode: 'create' | 'edit';
   locale: string;
   canEdit: boolean;
-  agents: VoiceAgentConfigResponse[];
+  agents: AgentResponse[];
   initialExperience?: VoiceExperienceResponse | null;
   initialVersions?: VoiceExperienceVersionResponse[];
   // true when the version history could not be read; deletion fails closed.
@@ -95,7 +95,7 @@ function toWriteRequest(
   experience: VoiceExperienceResponse | VoiceExperienceVersionResponse
 ): VoiceExperienceWriteRequest {
   return {
-    agent_config_id: experience.agent_config_id,
+    agent_id: experience.agent_id,
     context_schema_id: experience.context_schema_id,
     name: experience.name,
     default_locale: experience.default_locale,
@@ -208,7 +208,7 @@ export function VoiceExperienceBuilder({
   const validateStep = (step: number) => {
     const all = validateVoiceExperience(form);
     const prefixes: Record<number, string[]> = {
-      0: ['agent_config_id'],
+      0: ['agent_id'],
       1: ['context_schema_id'],
       2: ['name', 'default_locale'],
       3: ['content.'],
@@ -405,10 +405,10 @@ export function VoiceExperienceBuilder({
         </span>
         <select
           className={FIELD_CLASS}
-          value={form.agent_config_id}
+          value={form.agent_id}
           disabled={!editable || agentLocked}
           onChange={(event) => {
-            updateRoot('agent_config_id', event.target.value);
+            updateRoot('agent_id', event.target.value);
             updateRoot('context_schema_id', '');
             setSchemaDetail(null);
             setSchemas([]);
@@ -419,11 +419,11 @@ export function VoiceExperienceBuilder({
             .filter((agent) => agent.status === 'active')
             .map((agent) => (
               <option key={agent.id} value={agent.id}>
-                {agent.display_name}
+                {agent.name}
               </option>
             ))}
         </select>
-        {validationMessage('agent_config_id')}
+        {validationMessage('agent_id')}
       </label>
     </div>
   );
@@ -439,7 +439,7 @@ export function VoiceExperienceBuilder({
       </div>
       {validationMessage('context_schema_id')}
       <ContextSchemaManager
-        agentConfigId={form.agent_config_id}
+        agentId={form.agent_id}
         locale={locale}
         canEdit={editable}
         selectedSchemaId={form.context_schema_id}

@@ -2,7 +2,7 @@ import { getTranslations } from 'next-intl/server';
 import { notFound, redirect } from 'next/navigation';
 import { VoiceExperienceBuilder } from '@/components/crm/voice-experiences/VoiceExperienceBuilder';
 import { getAccessToken } from '@/lib/auth/server';
-import { fetchVoiceAgents } from '@/lib/api/crm';
+import { fetchAgents } from '@/lib/api/agents';
 import { fetchMeProfile } from '@/lib/api/me';
 import {
   fetchVoiceContextSchema,
@@ -29,7 +29,7 @@ export default async function VoiceExperienceEditorPage({
   const [profileResult, experienceResult, agentsResult] = await Promise.all([
     fetchMeProfile(accessToken),
     fetchVoiceExperience(accessToken, experienceId),
-    fetchVoiceAgents(accessToken),
+    fetchAgents(accessToken),
   ]);
   if (!experienceResult.ok && experienceResult.status === 404) notFound();
 
@@ -47,7 +47,7 @@ export default async function VoiceExperienceEditorPage({
   const experience = experienceResult.data;
   const [versionsResult, schemasResult, schemaResult] = await Promise.all([
     fetchVoiceExperienceVersions(accessToken, experience.id),
-    fetchVoiceContextSchemas(accessToken, experience.agent_config_id),
+    fetchVoiceContextSchemas(accessToken, experience.agent_id),
     fetchVoiceContextSchema(accessToken, experience.context_schema_id),
   ]);
 

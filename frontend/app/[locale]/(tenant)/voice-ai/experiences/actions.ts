@@ -145,9 +145,9 @@ export async function deleteVoiceExperienceVersionAction(
 }
 
 export async function fetchVoiceContextSchemasAction(
-  agentConfigId: string
+  agentId: string
 ): Promise<FetchResult<VoiceContextSchemaSummaryResponse[]>> {
-  return withAccessToken((token) => fetchVoiceContextSchemas(token, agentConfigId));
+  return withAccessToken((token) => fetchVoiceContextSchemas(token, agentId));
 }
 
 export async function fetchVoiceContextSchemaAction(
@@ -157,21 +157,21 @@ export async function fetchVoiceContextSchemaAction(
 }
 
 export async function fetchVoiceContextSchemaVersionsAction(
-  agentConfigId: string,
+  agentId: string,
   schemaKey: string
 ): Promise<FetchResult<VoiceContextSchemaSummaryResponse[]>> {
   return withAccessToken((token) =>
-    fetchVoiceContextSchemaVersions(token, agentConfigId, schemaKey)
+    fetchVoiceContextSchemaVersions(token, agentId, schemaKey)
   );
 }
 
 export async function createVoiceContextSchemaAction(
   locale: string,
-  agentConfigId: string,
+  agentId: string,
   payload: VoiceContextSchemaCreateRequest
 ): Promise<FetchResult<VoiceContextSchemaResponse>> {
   const result = await withAccessToken((token) =>
-    createVoiceContextSchema(token, agentConfigId, payload)
+    createVoiceContextSchema(token, agentId, payload)
   );
   if (result.ok) revalidateVoiceExperiences(locale);
   return result;

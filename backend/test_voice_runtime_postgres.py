@@ -154,7 +154,7 @@ class VoiceRuntimePostgresConcurrencyTests(unittest.TestCase):
             canonical_agent.published_version_id = canonical_version.id
             schema = TenantVoiceContextSchema(
                 tenant_id=tenant.id,
-                agent_config_id=agent.id,
+                agent_id=canonical_agent.id,
                 schema_key="runtime",
                 version=1,
                 status="active",
@@ -165,7 +165,6 @@ class VoiceRuntimePostgresConcurrencyTests(unittest.TestCase):
             db.flush()
             experience = TenantVoiceExperience(
                 tenant_id=tenant.id,
-                agent_config_id=agent.id,
                 agent_id=canonical_agent.id,
                 context_schema_id=schema.id,
                 name="Runtime",
@@ -182,7 +181,6 @@ class VoiceRuntimePostgresConcurrencyTests(unittest.TestCase):
                 experience_id=experience.id,
                 tenant_id=tenant.id,
                 version=1,
-                agent_config_id=agent.id,
                 agent_id=canonical_agent.id,
                 agent_version_id=canonical_version.id,
                 context_schema_id=schema.id,
@@ -563,6 +561,79 @@ class VoiceRuntimePostgresConcurrencyTests(unittest.TestCase):
             pinned = db.get(TenantAgentVersion, bound.agent_version_id)
             self.assertEqual((pinned.agent_id, pinned.tenant_id), (agent_id, tenant_id))
             self.assertEqual(db.get(TenantVoiceExperience, seeded["experience_id"]).published_version_id, bound.id)
+
+    def test_experience_publish_and_context_schema_archive_serialize_on_the_schema_row(self) -> None:
+        from threading import Thread
+
+        from app.modules.voice_experiences.application.context_service import VoiceContextService
+        from app.modules.voice_experiences.application.experience_service import (
+            VoiceExperienceService,
+            VoiceExperienceValidationError,
+        )
+
+        seeded = self._seed_context()
+        tenant_id = seeded["tenant_id"]
+        with self.SessionLocal() as db:
+            experience = db.get(TenantVoiceExperience, seeded["experience_id"])
+            experience.call_settings_json = {"mode": "webrtc"}
+            schema_id = experience.context_schema_id
+            db.commit()
+        with self.SessionLocal() as db:
+            VoiceExperienceService(db).unpublish_experience(tenant_id, seeded["experience_id"])
+
+        outcome: dict[str, object] = {}
+
+        def publish() -> None:
+            try:
+                with self.SessionLocal() as db:
+                    VoiceExperienceService(db).publish_experience(tenant_id, seeded["experience_id"], None)
+                outcome["publish"] = "published"
+            except VoiceExperienceValidationError as exc:
+                outcome["publish"] = str(exc)
+            except BaseException as exc:  # noqa: BLE001 - surfaced by the assertions below
+                outcome["publish"] = repr(exc)
+
+        def archive() -> None:
+            try:
+                with self.SessionLocal() as db:
+                    VoiceContextService(db).archive_schema(tenant_id, schema_id, None)
+                outcome["archive"] = "archived"
+            except BaseException as exc:  # noqa: BLE001
+                outcome["archive"] = repr(exc)
+
+        with self.SessionLocal() as holder:
+            holder.execute(
+                select(TenantVoiceContextSchema).where(TenantVoiceContextSchema.id == schema_id).with_for_update()
+            ).scalar_one()
+            threads = [Thread(target=publish), Thread(target=archive)]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join(timeout=1.5)
+            # Both need the schema row lock: neither may finish while it is held.
+            self.assertTrue(all(thread.is_alive() for thread in threads), repr(outcome))
+            holder.rollback()
+        for thread in threads:
+            thread.join(timeout=30)
+        self.assertFalse(any(thread.is_alive() for thread in threads), "deadlock")
+        self.assertEqual(outcome["archive"], "archived")
+
+        with self.SessionLocal() as db:
+            versions = db.scalars(
+                select(TenantVoiceExperienceVersion)
+                .where(TenantVoiceExperienceVersion.experience_id == seeded["experience_id"])
+                .order_by(TenantVoiceExperienceVersion.version)
+            ).all()
+            self.assertEqual(db.get(TenantVoiceContextSchema, schema_id).status, "archived")
+            if outcome["publish"] == "published":
+                # publish won the lock: it froze the schema it validated as ACTIVE, and the archive that
+                # followed cannot change that already-published row's content or identity
+                self.assertEqual(len(versions), 2)
+                self.assertEqual(versions[-1].context_schema_id, schema_id)
+            else:
+                # archive won the lock: the publish saw the archived schema and published nothing
+                self.assertEqual(outcome["publish"], "Only an active context schema can be published.")
+                self.assertEqual(len(versions), 1)
 
 
 if __name__ == "__main__":

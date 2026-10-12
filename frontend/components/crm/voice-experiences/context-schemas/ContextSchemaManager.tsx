@@ -46,7 +46,7 @@ const FIELD_CLASS =
 function toSummary(schema: VoiceContextSchemaResponse): VoiceContextSchemaSummaryResponse {
   return {
     id: schema.id,
-    agent_config_id: schema.agent_config_id,
+    agent_id: schema.agent_id,
     schema_key: schema.schema_key,
     version: schema.version,
     status: schema.status,
@@ -57,7 +57,7 @@ function toSummary(schema: VoiceContextSchemaResponse): VoiceContextSchemaSummar
 }
 
 type Props = {
-  agentConfigId: string;
+  agentId: string;
   locale: string;
   canEdit: boolean;
   selectedSchemaId: string;
@@ -69,7 +69,7 @@ type Props = {
 };
 
 export function ContextSchemaManager({
-  agentConfigId,
+  agentId,
   locale,
   canEdit,
   selectedSchemaId,
@@ -83,7 +83,7 @@ export function ContextSchemaManager({
   const [schemas, setSchemas] = useState(initialSchemas);
   const [detail, setDetail] = useState<VoiceContextSchemaResponse | null>(initialSchema);
   const [versions, setVersions] = useState<VoiceContextSchemaSummaryResponse[]>([]);
-  const [loadedAgentId, setLoadedAgentId] = useState(initialSchemas.length ? agentConfigId : '');
+  const [loadedAgentId, setLoadedAgentId] = useState(initialSchemas.length ? agentId : '');
   const [showCreate, setShowCreate] = useState(false);
   const [newSchema, setNewSchema] = useState({ schema_key: '', name: '', description: '' });
   const [editingField, setEditingField] = useState<VoiceContextFieldResponse | null>(null);
@@ -99,21 +99,21 @@ export function ContextSchemaManager({
     setMessage({ type: 'error', text: t(getVoiceExperienceMessageKey(status, detailText)) });
   };
 
-  const refreshSchemas = async (agentId = agentConfigId) => {
-    if (!agentId) {
+  const refreshSchemas = async (targetAgentId = agentId) => {
+    if (!targetAgentId) {
       setSchemas([]);
       setDetail(null);
       onSchemaDetailChange(null);
       return;
     }
-    const result = await fetchVoiceContextSchemasAction(agentId);
+    const result = await fetchVoiceContextSchemasAction(targetAgentId);
     if (!result.ok) {
       showResultError(result.status, result.detail);
       return;
     }
     setSchemas(result.data);
     onSchemasChange?.(result.data);
-    setLoadedAgentId(agentId);
+    setLoadedAgentId(targetAgentId);
   };
 
   const loadSchema = async (
@@ -123,7 +123,7 @@ export function ContextSchemaManager({
     latestSchemaRequestId.current = summary.id;
     const [detailResult, versionsResult] = await Promise.all([
       fetchVoiceContextSchemaAction(summary.id),
-      fetchVoiceContextSchemaVersionsAction(summary.agent_config_id, summary.schema_key),
+      fetchVoiceContextSchemaVersionsAction(summary.agent_id, summary.schema_key),
     ]);
     if (latestSchemaRequestId.current !== summary.id) return;
     if (!detailResult.ok) {
@@ -139,7 +139,7 @@ export function ContextSchemaManager({
   };
 
   useEffect(() => {
-    if (!agentConfigId) {
+    if (!agentId) {
       latestSchemaRequestId.current = null;
       setSchemas([]);
       setDetail(null);
@@ -147,19 +147,19 @@ export function ContextSchemaManager({
       onSchemaDetailChange(null);
       return;
     }
-    if (loadedAgentId === agentConfigId) return;
+    if (loadedAgentId === agentId) return;
     latestSchemaRequestId.current = null;
-    setLoadedAgentId(agentConfigId);
+    setLoadedAgentId(agentId);
     setSchemas([]);
     setDetail(null);
     setVersions([]);
     onSchemaDetailChange(null);
     startTransition(() => {
-      void refreshSchemas(agentConfigId);
+      void refreshSchemas(agentId);
     });
     // Server action helpers and parent callbacks are intentionally read from the current render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [agentConfigId, loadedAgentId]);
+  }, [agentId, loadedAgentId]);
 
   useEffect(() => {
     if (!selectedSchemaId || detail?.id === selectedSchemaId) return;
@@ -184,7 +184,7 @@ export function ContextSchemaManager({
   }, [detail?.id, schemas, selectedSchemaId]);
 
   const createSchema = async () => {
-    const result = await createVoiceContextSchemaAction(locale, agentConfigId, {
+    const result = await createVoiceContextSchemaAction(locale, agentId, {
       schema_key: newSchema.schema_key.trim(),
       name: newSchema.name.trim(),
       description: newSchema.description.trim() || null,
@@ -311,7 +311,7 @@ export function ContextSchemaManager({
     const [, versionsResult] = await Promise.all([
       refreshSchemas(),
       fetchVoiceContextSchemaVersionsAction(
-        result.data.agent_config_id,
+        result.data.agent_id,
         result.data.schema_key
       ),
     ]);
@@ -323,7 +323,7 @@ export function ContextSchemaManager({
     if (!detail) return;
     const findAndOpenDraft = async () => {
       const versionsResult = await fetchVoiceContextSchemaVersionsAction(
-        detail.agent_config_id,
+        detail.agent_id,
         detail.schema_key
       );
       if (!versionsResult.ok) return false;
@@ -344,7 +344,7 @@ export function ContextSchemaManager({
     await replaceDetail(async () => result, true);
   };
 
-  if (!agentConfigId) {
+  if (!agentId) {
     return (
       <div className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
         {t('contextSchemas.selectAgentFirst')}

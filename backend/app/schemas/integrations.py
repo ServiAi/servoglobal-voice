@@ -128,7 +128,6 @@ class VoiceAgentConfigResponse(BaseModel):
 
 
 class VoiceCallActionRequest(BaseModel):
-    agent_config_id: Optional[str] = None
     agent_id: Optional[str] = Field(None, min_length=1, max_length=36)
     idempotency_key: Optional[str] = Field(None, min_length=1, max_length=160)
     to_phone: Optional[str] = Field(None, max_length=80)

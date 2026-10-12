@@ -226,7 +226,6 @@ class PublicWebRTCService:
                             submission_id=submission.id,
                             experience_id=experience.id,
                             experience_version_id=version.id,
-                            agent_config_id=version.agent_config_id,
                             crm_voice_call_id=crm_id,
                             provider=provider,
                             status="reserved",

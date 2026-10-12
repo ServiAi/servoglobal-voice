@@ -174,7 +174,7 @@ class CrmVoiceActionTests(Integration2ATestCase):
                     for key in (VOICE_RUNTIME_V2, LIVEKIT_SIP_OUTBOUND_V2):
                         features.set_feature(self.tenant.id, key, key in enabled, {}, self.user.id)
                 response = self.client.post(
-                    f"/api/v1/crm/leads/{lead_id}/actions/call", json={"agent_config_id": agent_id}
+                    f"/api/v1/crm/leads/{lead_id}/actions/call", json={"agent_id": agent_id}
                 )
                 self.assertEqual(response.status_code, 503, response.text)
                 self.assertEqual(response.json()["detail"], "Voice calling is currently unavailable.")
