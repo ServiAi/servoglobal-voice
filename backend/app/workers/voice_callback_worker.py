@@ -14,8 +14,6 @@ async def amain() -> None:
     worker = create_callback_worker(
         SessionLocal,
         starting_lease_seconds=settings.VOICE_CALLBACK_STARTING_LEASE_SECONDS,
-        reconcile_after_seconds=settings.VOICE_CALLBACK_RECONCILE_AFTER_SECONDS,
-        max_active_seconds=settings.VOICE_CALLBACK_MAX_ACTIVE_SECONDS,
     )
     logger.info("Voice callback worker started")
     await run_callback_worker(worker)

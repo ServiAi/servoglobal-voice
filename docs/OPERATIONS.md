@@ -131,26 +131,20 @@ cd backend
 .\.venv\Scripts\python.exe -m app.workers.voice_callback_worker
 ```
 
-Desde PR #136 el worker es un único proceso asyncio (`python -m app.workers.voice_callback_worker`) y, con `VOICE_RUNTIME_V2` + `LIVEKIT_SIP_OUTBOUND_V2` activos para el tenant, coloca los callbacks por Telephony (VoiceSession + LiveKit SIP; requiere un trunk LiveKit provisionado en la ruta). Con los flags apagados mantiene el runtime anterior (rollback). Durante un rolling deploy un worker viejo no reclama filas `livekit_sip` con éxito (las falla sin llamar al proveedor); nunca se originan dos llamadas para una solicitud.
+Desde PR #136 el worker es un único proceso asyncio (`python -m app.workers.voice_callback_worker`) y, con `VOICE_RUNTIME_V2` + `LIVEKIT_SIP_OUTBOUND_V2` activos para el tenant, coloca los callbacks por Telephony (VoiceSession + LiveKit SIP; requiere un trunk LiveKit provisionado en la ruta). Desde PR #137 es el único runtime: los flags son *kill switches* (apagados ⇒ 503, nada se consume ni se crea) y ya no existe una ruta legacy.
 
 El callback usa una cola persistente en PostgreSQL; no requiere Redis, RabbitMQ
 ni Celery. `crm_voice_calls` es la fuente de verdad: el endpoint público valida
 la solicitud, crea la llamada con estado `requested` y responde `202`. El worker
-toma primero las solicitudes más antiguas mediante `SELECT ... FOR UPDATE SKIP
-LOCKED`, respeta la concurrencia de cada ruta SIP y cambia cada llamada a
-`starting` antes de contactar al proveedor. Esto permite ejecutar varios workers
-sin procesar dos veces la misma llamada. Una llamada que permanezca en `starting`
-por más de 120 segundos se recupera automáticamente a `requested`.
-
-Los eventos firmados `call.joined` y `call.ended` actualizan la fila a
-`in_progress` y a un estado terminal, respectivamente. Como respaldo ante un
-webhook perdido, el mismo worker consulta a Ultravox las llamadas
-`queued`/`in_progress` después de `VOICE_CALLBACK_RECONCILE_AFTER_SECONDS`
-(30 segundos por defecto). Si Ultravox confirma `ended`, la capacidad se libera
-automáticamente. `VOICE_CALLBACK_MAX_ACTIVE_SECONDS` (7200 por defecto) evita
-un bloqueo indefinido cuando ni el webhook ni la consulta al proveedor permiten
-confirmar el cierre. Los eventos tardíos no pueden devolver una llamada terminal
-a un estado activo.
+reclama (`SELECT ... FOR UPDATE SKIP LOCKED`) las solicitudes más antiguas con
+`origin = voice_experience_callback` y las pasa a `starting` (propiedad + lease,
+sin decidir capacidad); después coloca cada llamada por Telephony (capacidad de
+la ruta, sesión, runtime y participante SIP). Una ruta llena difiere la llamada
+(vuelve a `requested`); una procedencia perdida la falla cerrada. Una llamada
+que permanezca en `starting` por más de 120 segundos (`VOICE_CALLBACK_STARTING_LEASE_SECONDS`)
+vuelve a `requested`. El ciclo de vida posterior (answered, terminal) lo aportan
+la `VoiceSession` y los eventos del runtime; los webhooks del proveedor no
+mutan llamadas respaldadas por una sesión.
 
 El dashboard CRM muestra por separado **Rendimiento de llamadas (Ultravox)** y
 **Capacidad de llamadas salientes (SIP)**. La capacidad actual cuenta llamadas
@@ -281,3 +275,24 @@ La cobertura local/mocked no demuestra audio bidireccional, LiveKit real, carrie
 ## Worker de Evaluations
 
 Aplica la migración con `cd backend; python -m alembic upgrade head` y ejecuta el worker sólo contra PostgreSQL mediante `python -m app.modules.evaluations.runtime.worker`. `--once` procesa un batch y termina; sin argumento queda en polling. El worker reclama hasta 25 runs por batch con lease de 60 segundos, sin mantener locks durante el cálculo. La suite `test_evaluations_postgres` requiere una base aislada cuyo nombre termine en `_evaluations_test` mediante `EVALUATIONS_TEST_DATABASE_URL`; CI crea esa base y falla si el suite se omite.
+
+## Legacy Voice Runtime Retirement (PR #137)
+
+El runtime directo del proveedor (llamadas originadas por el proveedor conversacional) se retiró. Desde esta versión, apagar `VOICE_RUNTIME_V2` o `LIVEKIT_SIP_OUTBOUND_V2` **desactiva las llamadas** (503); ya no devuelve al runtime anterior.
+
+Orden de despliegue (no hay migración de datos ni llamadas en vuelo que migrar):
+
+1. Confirme que los flags canónicos están habilitados para los tenants migrados.
+2. Ejecute el gate de drenaje (sólo lectura, no modifica ni termina nada):
+   ```powershell
+   cd backend
+   $env:DATABASE_URL = "postgresql+psycopg://..."
+   .\.venv\Scripts\python.exe scripts\check_legacy_voice_runtime_drain.py
+   ```
+   Salida: conteos e ids técnicos, nunca teléfonos ni datos personales. Código 0 = `SAFE TO DEPLOY`; 1 = `LEGACY VOICE RUNTIME NOT DRAINED` (hay llamadas legacy activas: espere o reconcilie y repita); 2 = no pudo ejecutarse.
+3. Espere a que el conteo activo sea 0.
+4. Despliegue los workers #137 y verifique que quedan sanos.
+5. Despliegue la API #137.
+6. Verifique el smoke canónico (WebRTC público, callback y outbound CRM).
+
+Rollback: deshabilitar flags **no** vuelve al runtime anterior. Revertir significa desplegar explícitamente una versión anterior del software, decisión que sólo procede si el gate de drenaje se cumplió antes. El gate de drenaje trata una llamada histórica terminal como drenada, pero el proveedor puede entregar después su `call.billed`: el webhook lo liquida en Analytics (sólo `billed_minutes`, idempotente y con firma verificada) sin reabrir el CRM ni el ledger. Los datos históricos (`launch_runtime = legacy_provider`, `origin = legacy_voice_experience_callback`, `provider_call_id`) se conservan como evidencia y nunca se promueven a `VoiceSession`.

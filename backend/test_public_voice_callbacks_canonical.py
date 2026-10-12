@@ -1,8 +1,8 @@
 """Public callbacks over the canonical runtime (VoiceSession + Telephony + LiveKit SIP).
 
 A callback is accepted asynchronously (202), then placed by the worker through Telephony against the
-ExperienceVersion's exact AgentVersion, driving the SAME CrmVoiceCall. The provider runtime
-(VoiceClient) must never be involved.
+ExperienceVersion's exact AgentVersion, driving the SAME CrmVoiceCall. There is no provider-originated
+runtime to fall back to (the symbol no longer exists; see the architecture guard).
 """
 
 from __future__ import annotations
@@ -48,30 +48,34 @@ from test_outbound_voice_call_service import FakeSip, NeverReadyBackend, ReadyBa
 from app.modules.voice_experiences.api.public_router import get_public_rate_limiter, get_public_turnstile_verifier
 from app.modules.identity.application.feature_service import VOICE_EXPERIENCES
 from app.services.secret_manager_service import SecretManager
-import test_public_voice_callbacks as callbacks_tests
 import test_public_voice_experience_submissions as submissions_tests
 
 
-class _Legacy:
-    """The temporary provider runtime: counts how often the worker falls through to it."""
-
-    def __init__(self) -> None:
-        self.calls = 0
-
-    def process_once(self) -> bool:
-        self.calls += 1
-        return False
-
-
 class CanonicalCallbackTests(Integration2ATestCase):
-    _seed_agent = callbacks_tests.PublicVoiceCallbackTests._seed_agent
-    _seed_schema = callbacks_tests.PublicVoiceCallbackTests._seed_schema
-    _seed_fields = callbacks_tests.PublicVoiceCallbackTests._seed_fields
-    _experience_payload = callbacks_tests.PublicVoiceCallbackTests._experience_payload
-    _publish = callbacks_tests.PublicVoiceCallbackTests._publish
-    _body = callbacks_tests.PublicVoiceCallbackTests._body
-    _post = callbacks_tests.PublicVoiceCallbackTests._post
-    _request_callback = callbacks_tests.PublicVoiceCallbackTests._request_callback
+    _seed_agent = submissions_tests.PublicVoiceExperienceSubmissionTests._seed_agent
+    _seed_schema = submissions_tests.PublicVoiceExperienceSubmissionTests._seed_schema
+    _seed_fields = submissions_tests.PublicVoiceExperienceSubmissionTests._seed_fields
+    _publish = submissions_tests.PublicVoiceExperienceSubmissionTests._publish
+    _body = submissions_tests.PublicVoiceExperienceSubmissionTests._body
+    _post = submissions_tests.PublicVoiceExperienceSubmissionTests._post
+
+    def _experience_payload(self) -> dict:
+        payload = submissions_tests.PublicVoiceExperienceSubmissionTests._experience_payload(self)
+        payload["call_settings"] = {
+            "mode": "callback",
+            "phone_field_key": "mobile_number",
+            "default_country": "CO",
+            "auto_start": False,
+            "show_microphone_help": False,
+            "language": "es",
+        }
+        return payload
+
+    def _request_callback(self, token: str):
+        return self.client.post(
+            f"/api/v1/public/voice-experiences/{self.published['slug']}/callback-requests",
+            json={"context_token": token},
+        )
 
     def setUp(self) -> None:
         self.original_encryption_key = settings.INTEGRATIONS_ENCRYPTION_KEY
@@ -122,14 +126,6 @@ class CanonicalCallbackTests(Integration2ATestCase):
             )
             db.commit()
         self.published = self._publish()
-        self.legacy = _Legacy()
-        # The provider runtime must never start a canonical callback.
-        forbidden = patch(
-            "app.services.voice_client.VoiceClient.start_outbound_call",
-            side_effect=AssertionError("provider-originated call"),
-        )
-        forbidden.start()
-        self.addCleanup(forbidden.stop)
 
     def tearDown(self) -> None:
         app.dependency_overrides.pop(get_public_rate_limiter, None)
@@ -144,7 +140,6 @@ class CanonicalCallbackTests(Integration2ATestCase):
         return CallbackWorker(
             SessionLocal,
             runtime_factory=lambda db: VoiceRuntimeAdapter(db, runtime_backend=backend),
-            legacy=self.legacy,
             telephony_factory=lambda db: TelephonyFacade(
                 db, ports=default_telephony_ports(db, sip_transport=sip, runtime_backend=backend)
             ),
@@ -230,7 +225,6 @@ class CanonicalCallbackTests(Integration2ATestCase):
             self.assertEqual(session.crm_voice_call_id, call.id)
             self.assertEqual(session.sip_call_id, "SC_1")
             self.assertEqual(session.sip_route_id, call.sip_route_id)
-        self.assertEqual(self.legacy.calls, 0)
 
     def test_the_call_uses_the_experience_versions_exact_agent_version(self) -> None:
         self._accepted_callback()
@@ -272,7 +266,6 @@ class CanonicalCallbackTests(Integration2ATestCase):
             call = db.scalars(select(CrmVoiceCall)).one()
             self.assertEqual((call.status, call.error_message), ("failed", "agent_unavailable"))
             self.assertEqual(db.query(VoiceSession).count(), 0)
-        self.assertEqual(self.legacy.calls, 0)
 
     def _delete_the_submission_for_real(self) -> None:
         """Delete the Submission through a connection that enforces foreign keys, so the database
@@ -304,7 +297,6 @@ class CanonicalCallbackTests(Integration2ATestCase):
             call = db.scalars(select(CrmVoiceCall)).one()
             self.assertEqual((call.status, call.error_message), ("failed", "callback_provenance_unavailable"))
             self.assertEqual(db.query(VoiceSession).count(), 0)
-        self.assertEqual(self.legacy.calls, 0)  # and no fallback to the provider runtime
 
     def test_lost_provenance_is_processed_even_when_the_route_is_full(self) -> None:
         """Permanent errors win over a temporary capacity condition: the claim does not look at
@@ -323,7 +315,7 @@ class CanonicalCallbackTests(Integration2ATestCase):
             self.assertEqual((call.status, call.error_message), ("failed", "callback_provenance_unavailable"))
             self.assertEqual(db.query(VoiceSession).filter(VoiceSession.sip_call_id.is_not(None)).count(), 0)
             self.assertEqual(db.query(VoiceSession).count(), 1)  # only the blocker's own session
-        self.assertEqual((sip.calls, order, self.legacy.calls), (0, [], 0))  # no SIP, no room, no provider path
+        self.assertEqual((sip.calls, order), (0, []))  # no SIP, no room
 
     def test_the_callback_worker_never_claims_a_crm_outbound_call(self) -> None:
         with SessionLocal() as db:
@@ -693,30 +685,104 @@ class CanonicalCallbackTests(Integration2ATestCase):
             self.assertEqual(db.scalars(select(TenantVoiceContextSession)).one().status, "active")
             self.assertEqual((db.query(CrmVoiceCall).count(), db.query(VoiceSession).count()), (0, 0))
 
-    # -- rollout / rollback -----------------------------------------------------------------------
+    # -- kill switches / canonical-only worker ------------------------------------------------------
 
-    def test_with_the_canonical_flags_off_the_request_stays_on_the_legacy_runtime(self) -> None:
+    def test_a_canonical_flag_off_refuses_the_request_without_side_effects(self) -> None:
+        for enabled in ((), (VOICE_RUNTIME_V2,), (LIVEKIT_SIP_OUTBOUND_V2,)):
+            with self.subTest(enabled=enabled):
+                with SessionLocal() as db:
+                    for model in (VoiceSession, CrmVoiceCall, TenantVoiceContextSession, TenantVoiceExperienceSubmission):
+                        db.query(model).delete()
+                    features = TenantFeatureService(db)
+                    for key in (VOICE_RUNTIME_V2, LIVEKIT_SIP_OUTBOUND_V2):
+                        features.set_feature(self.tenant.id, key, key in enabled, {}, self.user.id)
+                token = self._token()
+
+                response = self._request_callback(token)
+
+                self.assertEqual(response.status_code, 503, response.text)
+                self.assertEqual(response.json()["detail"], {"code": "call_unavailable"})
+                with SessionLocal() as db:  # nothing consumed, nothing created
+                    self.assertEqual(db.scalars(select(TenantVoiceContextSession)).one().status, "active")
+                    self.assertEqual((db.query(CrmVoiceCall).count(), db.query(VoiceSession).count()), (0, 0))
+
+    def test_the_worker_only_claims_canonical_callbacks_and_has_nothing_else_to_do(self) -> None:
         with SessionLocal() as db:
-            features = TenantFeatureService(db)
-            for key in (VOICE_RUNTIME_V2, LIVEKIT_SIP_OUTBOUND_V2):
-                features.set_feature(self.tenant.id, key, False, {}, self.user.id)
-
-        self._accepted_callback()
-
-        call = self._call()
-        self.assertEqual(call.provider, "ultravox")  # provider-originated: the legacy worker's call
+            route = db.scalars(select(TenantSipRoute)).one()
+            history = []
+            for origin, provider in (
+                ("legacy_voice_experience_callback", "ultravox"),
+                ("crm_outbound", "ultravox"),
+                ("crm_outbound", "livekit_sip"),
+            ):
+                row = CrmVoiceCall(
+                    tenant_id=self.tenant.id, sip_route_id=route.id, provider=provider, origin=origin,
+                    direction="outbound", status="requested", to_phone="+573009999999", from_number=route.caller_id,
+                )
+                db.add(row)
+                history.append(row)
+            db.commit()
+            before = {row.id: (row.status, row.provider_attempt_started_at) for row in history}
         order: list[str] = []
         sip = FakeSip(order)
-        self._run(self._worker(sip, ReadyBackend(order)))
-        self.assertEqual((sip.calls, self.legacy.calls), (0, 1))  # the canonical worker did not claim it
-        self.assertEqual(self._call().status, "requested")
 
-    def test_the_legacy_worker_never_claims_a_canonical_call(self) -> None:
-        from app.modules.voice_experiences.infrastructure.legacy_runtime.callback_compat import VoiceCallbackWorker
+        self.assertFalse(self._run(self._worker(sip, ReadyBackend(order))))  # no work: nothing legacy to fall to
 
-        self._accepted_callback()
-        VoiceCallbackWorker(SessionLocal).process_once()  # would fail/redirect it if it touched it
-        self.assertEqual(self._call().status, "requested")
+        with SessionLocal() as db:
+            after = {row.id: (row.status, row.provider_attempt_started_at) for row in db.scalars(select(CrmVoiceCall)).all()}
+        self.assertEqual(after, before)  # none of them was claimed or touched
+        self.assertEqual((sip.calls, order, self._counts()[1]), (0, [], 0))
+
+    def test_the_worker_has_no_legacy_collaborator(self) -> None:
+        import inspect
+
+        self.assertNotIn("legacy", inspect.signature(CallbackWorker.__init__).parameters)
+
+    def test_both_mode_allows_callback_request(self) -> None:
+        payload = self._experience_payload()
+        payload["call_settings"]["mode"] = "both"
+        created = self.client.post("/api/v1/voice/experiences", json=payload)
+        self.assertEqual(created.status_code, 201, created.text)
+        published = self.client.post(f"/api/v1/voice/experiences/{created.json()['id']}/publish")
+        self.assertEqual(published.status_code, 200, published.text)
+        app.dependency_overrides.pop(get_current_auth_context, None)  # the visitor is anonymous
+        slug = published.json()["slug"]
+        token = self.client.post(f"/api/v1/public/voice-experiences/{slug}/submissions", json=self._body()).json()["context_token"]
+
+        response = self.client.post(
+            f"/api/v1/public/voice-experiences/{slug}/callback-requests", json={"context_token": token}
+        )
+
+        self.assertEqual((response.status_code, response.json()), (202, {"status": "accepted"}))
+
+    def test_a_phone_outside_the_routes_allowed_countries_is_refused_at_submission(self) -> None:
+        body = self._body(answers={
+            "full_name": "Ana", "client_email": "ana@example.com", "mobile_number": "+522221234567",
+            "company": "ServiAI", "guests": 0, "plan": "pro", "verified": False, "date": "2026-08-12",
+        })
+        response = self._post(body)
+        self.assertEqual(response.status_code, 422, response.text)
+        fields = {(item["key"], item["code"]) for item in response.json()["detail"]["fields"]}
+        self.assertIn(("mobile_number", "invalid_format"), fields)
+
+    def test_a_full_route_rejects_the_request_with_429_and_records_no_pii(self) -> None:
+        from app.modules.integrations.infrastructure.models import TenantIntegrationEvent
+
+        token = self._token()
+        self._occupy_route(legacy=False)
+
+        response = self._request_callback(token)
+
+        self.assertEqual((response.status_code, response.json()["detail"]["code"]), (429, "call_capacity_reached"))
+        with SessionLocal() as db:
+            event = db.scalar(
+                select(TenantIntegrationEvent).where(TenantIntegrationEvent.event_type == "voice_capacity_reached")
+            )
+            self.assertEqual((event.status, event.resource_type), ("blocked", "sip_route"))
+            self.assertEqual(
+                event.metadata_json, {"active_calls": 1, "max_concurrent_calls": 1, "source": "public_callback"}
+            )
+            self.assertEqual(db.scalars(select(TenantVoiceContextSession)).one().status, "active")
 
     def test_a_provider_webhook_does_not_mutate_a_canonical_call(self) -> None:
         self._accepted_callback()

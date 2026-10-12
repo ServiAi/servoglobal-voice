@@ -514,6 +514,15 @@ class Sprint3UltravoxIngestionTests(unittest.TestCase):
             call = db.query(Call).filter_by(external_call_id="uvx-multiple-signatures").one()
             self.assertEqual(call.agent_id, agent.id)
 
+    def test_billed_minutes_zero_is_a_value_not_a_missing_field(self):
+        with SessionLocal() as db:
+            service = UltravoxIngestionService(db)
+            self.assertEqual(service._billed_minutes({"billedMinutes": 0, "billedDuration": "60s"}), Decimal("0"))
+            self.assertEqual(service._billed_minutes({"call": {"billedMinutes": 0}, "billedDuration": "60s"}), Decimal("0"))
+            self.assertEqual(service._billed_minutes({"billedMinutes": 2.5, "billedDuration": "60s"}), Decimal("2.5"))
+            self.assertEqual(service._billed_minutes({"billedDuration": "60s"}), Decimal("1.00"))
+            self.assertEqual(service._billed_minutes({"billedDuration": 0}), Decimal("0.00"))
+
 
 if __name__ == "__main__":
     unittest.main()

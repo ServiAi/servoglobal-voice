@@ -37,24 +37,6 @@ class SipRouteView:
 
 
 @dataclass(frozen=True)
-class SipRouteConnection:
-    """What a trusted legacy process needs to place a call through the PBX.
-    Carries the decrypted SIP password: only ever obtained through
-    SipRouteFacade.get_connection, only by the process that dials, and never
-    returned over HTTP or written to events/logs."""
-
-    route_id: str
-    provider_config_id: str | None
-    host: str
-    port: int
-    username: str
-    password: str = field(repr=False)
-    caller_id: str = ""
-    default_country: str = "CO"
-    allowed_countries: tuple[str, ...] = ()
-
-
-@dataclass(frozen=True)
 class SipRouteSettings:
     """Command: the settings an admin submits for a tenant's SIP route."""
 

@@ -75,15 +75,10 @@ TELEPHONY_LEGACY_ALLOWED = {
     "app.services.secret_manager_service",  # shared encryption (Fernet)
 }
 
-# TEMPORARY: the only code allowed to read the decrypted SIP password through
-# ``SipRouteFacade.get_connection`` / ``SipRouteConnection``. Both are Voice
-# Legacy debt (the Ultravox direct-call and callback flows place the provider
-# call with the route credentials), not Telephony's: remove each entry when
-# that flow retires or moves behind ``telephony.public.place_outbound_call``.
-SIP_CREDENTIAL_CONSUMERS = {
-    "app.services.voice_call_service",
-    "app.modules.voice_experiences.infrastructure.legacy_runtime.callback_compat",
-}
+# The decrypted SIP password is read only inside Telephony (provisioning and the SIP transport):
+# no application/service outside it may hold SIP credentials. The list stays so a regression is a
+# test failure, not a review comment.
+SIP_CREDENTIAL_CONSUMERS: set[str] = set()
 
 # Legacy/shared code Scheduling may import. ``integration_event_service`` +
 # ``models.integrations`` (TenantIntegrationEvent) are the shared provider
@@ -1076,7 +1071,6 @@ CRITICAL_PUBLIC_APIS = {
         "VoiceContextSchemaReader",
         "create_context_schema_reader",
         "create_callback_worker",
-        "create_runtime_webhook_service",
         "register_models",
     ],
 
@@ -1124,7 +1118,6 @@ PUBLIC_DTOS = {
     ],
     "app.modules.telephony.public": [
         "SipRouteView",
-        "SipRouteConnection",
         "SipRouteSettings",
         "PlaceOutboundCallCommand",
         "OutboundCallResult",

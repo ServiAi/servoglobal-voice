@@ -6,12 +6,12 @@ For a canonical call (CRM provider ``livekit_sip``) the worker:
   ExperienceVersion  ->  TelephonyFacade.place_outbound_call (VoiceSession + realtime room +
   runtime-ready wait + SIP participant) driving the SAME CrmVoiceCall.
 
-No row lock is held across any network operation, a failed canonical call is never retried on the
-legacy provider runtime, and once a SIP attempt started it is never repeated (Telephony enforces it
-from the session's persisted ``voice.sip.dial.started`` evidence).
+No row lock is held across any network operation, a failed canonical call is never retried on any
+provider-originated path (none exists), and once a SIP attempt started it is never repeated
+(Telephony enforces it from the session's persisted ``voice.sip.dial.started`` evidence).
 
-Calls of the temporary legacy runtime (provider-originated) are handed, untouched, to the injected
-legacy worker; they disappear with PR #137.
+The worker is canonical-only: it claims, recovers and places only ``origin = voice_experience_callback``
+calls and returns ``False`` when there is none. Historical provider-originated calls are never touched.
 """
 
 from __future__ import annotations
@@ -22,7 +22,6 @@ import re
 from time import monotonic
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta
-from typing import Protocol
 
 from sqlalchemy.orm import Session
 
@@ -51,26 +50,18 @@ CLAIM_BATCH_SIZE = 25
 _SAFE_CODE = re.compile(r"^[a-z0-9_]{1,80}$")
 
 
-class LegacyCallbackWorker(Protocol):
-    """The temporary provider-originated runtime (synchronous)."""
-
-    def process_once(self) -> bool: ...
-
-
 class CallbackWorker:
     def __init__(
         self,
         session_factory: Callable[[], Session],
         *,
         runtime_factory: Callable[[Session], VoiceRuntimePort],
-        legacy: LegacyCallbackWorker,
         telephony_factory: Callable[[Session], TelephonyFacade] = TelephonyFacade,
         starting_lease_seconds: int = 120,
         defer_cooldown_seconds: float = 5.0,
     ) -> None:
         self.session_factory = session_factory
         self.runtime_factory = runtime_factory
-        self.legacy = legacy
         self.telephony_factory = telephony_factory
         self.starting_lease_seconds = starting_lease_seconds
         self.defer_cooldown_seconds = defer_cooldown_seconds
@@ -81,8 +72,7 @@ class CallbackWorker:
         call_id = self._claim()
         if call_id is not None:
             return await self._place(call_id)
-        # Nothing canonical to place: let the legacy runtime reconcile/claim its own calls.
-        return await asyncio.to_thread(self.legacy.process_once)
+        return False
 
     # -- claim / lease ----------------------------------------------------------------------------
 

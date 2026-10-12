@@ -5,8 +5,6 @@ from unittest.mock import patch
 
 from _integrations_2a_test_base import Integration2ATestCase, SessionLocal
 from app.modules.telephony.infrastructure.models import TenantSipRoute
-from app.models.integrations import TenantVoiceProviderConfig
-from app.modules.integrations.infrastructure.models import TenantIntegrationEvent
 
 
 class VoiceEndpointTests(Integration2ATestCase):
@@ -118,49 +116,6 @@ class VoiceEndpointTests(Integration2ATestCase):
             mock_test.assert_called_once()
             call_args = mock_test.call_args
             self.assertEqual(call_args[0][0], self.tenant.id)
-
-
-class VoiceClientLogSanitizationTests(Integration2ATestCase):
-    def test_voice_client_does_not_log_provider_response_body(self):
-        from app.services.voice_client import VoiceClient, VoiceClientConfig, VoiceSipRouteConfig
-        import httpx
-
-        config = VoiceClientConfig(
-            provider="ultravox",
-            api_key="test_key",
-            base_url="https://api.ultravox.ai",
-            sip_route=VoiceSipRouteConfig(
-                host="pbx.example.com",
-                port=5060,
-                username="tenant-a",
-                password="test-sip-password",
-                caller_id="+573001112233",
-                default_country="CO",
-                allowed_countries=("CO",),
-            ),
-        )
-
-        with patch("httpx.Client.post") as mock_post:
-            mock_response = httpx.Response(
-                status_code=500,
-                content=b'{"detail": "secret provider data here"}',
-                request=httpx.Request("POST", "https://api.ultravox.ai/test"),
-            )
-            mock_post.side_effect = httpx.HTTPStatusError(
-                "Server error",
-                request=httpx.Request("POST", "https://api.ultravox.ai/test"),
-                response=mock_response,
-            )
-
-            with self.assertRaises(httpx.HTTPStatusError):
-                client = VoiceClient()
-                client.start_outbound_call(
-                    config,
-                    to_phone="+573001112233",
-                    agent_id="agent-123",
-                    metadata={"voice_call_id": "vc-1"},
-                    context={},
-                )
 
 
 if __name__ == "__main__":

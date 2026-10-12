@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import Protocol
 
+from app.modules.voice_experiences.domain.errors import HistoricalSettlementOwnershipError
 from app.modules.voice_experiences.domain.ports import DatabaseSession, SessionFactory
 from app.modules.voice_experiences.domain.views import (
     VoiceContextFieldSnapshot,
     VoiceContextOptionSnapshot,
     VoiceContextSchemaSnapshot,
-    VoiceRuntimeWebhookTarget,
 )
 
 
@@ -25,15 +26,20 @@ class VoiceAgentReferenceReader(Protocol):
         ...
 
 
-class VoiceRuntimeWebhookServicePort(Protocol):
-    def resolve_target(
-        self, provider: str, payload: dict[str, object]
-    ) -> VoiceRuntimeWebhookTarget | None: ...
+class HistoricalCallSettlementPort(Protocol):
+    """Late billing of calls that a provider-originated runtime placed before PR #135."""
 
-    def runtime_secret(self, target: VoiceRuntimeWebhookTarget) -> str: ...
+    def owns(self, crm_call_id: str) -> bool: ...
 
-    def process(
-        self, provider: str, payload: dict[str, object], target: VoiceRuntimeWebhookTarget
+    def settle_billed(
+        self,
+        *,
+        crm_call_id: str,
+        provider: str,
+        provider_call_id: str,
+        billed_minutes: Decimal | None,
+        provider_status: str | None = None,
+        provider_agent_id: str | None = None,
     ) -> dict[str, object]: ...
 
 
@@ -59,8 +65,8 @@ def register_models() -> None:
     from app.modules.voice_experiences.infrastructure import models  # noqa: F401
 
 
-def create_runtime_webhook_service(session: DatabaseSession) -> VoiceRuntimeWebhookServicePort:
-    from app.modules.voice_experiences.wiring import create_runtime_webhook_service as create
+def create_historical_call_settlement(session: DatabaseSession) -> HistoricalCallSettlementPort:
+    from app.modules.voice_experiences.wiring import create_historical_call_settlement as create
 
     return create(session)
 
@@ -76,21 +82,16 @@ def create_callback_worker(
     session_factory: SessionFactory,
     *,
     starting_lease_seconds: int,
-    reconcile_after_seconds: int,
-    max_active_seconds: int,
 ) -> VoiceCallbackWorkerPort:
     from app.modules.voice_experiences.wiring import create_callback_worker as create
 
-    return create(
-        session_factory,
-        starting_lease_seconds=starting_lease_seconds,
-        reconcile_after_seconds=reconcile_after_seconds,
-        max_active_seconds=max_active_seconds,
-    )
+    return create(session_factory, starting_lease_seconds=starting_lease_seconds)
 
 
 __all__ = [
     "DatabaseSession",
+    "HistoricalCallSettlementPort",
+    "HistoricalSettlementOwnershipError",
     "SessionFactory",
     "VoiceAgentReferenceReader",
     "VoiceCallbackWorkerPort",
@@ -98,12 +99,10 @@ __all__ = [
     "VoiceContextOptionSnapshot",
     "VoiceContextSchemaReader",
     "VoiceContextSchemaSnapshot",
-    "VoiceRuntimeWebhookServicePort",
-    "VoiceRuntimeWebhookTarget",
     "create_agent_reference_reader",
     "create_callback_worker",
     "create_context_schema_reader",
-    "create_runtime_webhook_service",
+    "create_historical_call_settlement",
     "register_models",
     "run_callback_worker",
 ]

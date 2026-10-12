@@ -163,14 +163,15 @@ async def start_voice_call(
     req = body or VoiceCallActionRequest()
     try:
         features = FeatureFlags(db)
-        if (
+        if not (
             features.is_enabled(context.tenant.id, VOICE_RUNTIME_V2)
             and features.is_enabled(context.tenant.id, LIVEKIT_SIP_OUTBOUND_V2)
         ):
-            return await OutboundVoiceCallService(db).start_call(
-                context.tenant.id, lead_id, req
+            # Kill switch: no other runtime exists, and nothing is persisted before refusing.
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Voice calling is currently unavailable."
             )
-        return VoiceCallService(db).start_lead_call(context.tenant.id, lead_id, req)
+        return await OutboundVoiceCallService(db).start_call(context.tenant.id, lead_id, req)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
 
