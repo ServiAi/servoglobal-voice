@@ -15,18 +15,18 @@ class TenantVoiceContextSchema(Base, TimestampMixin):
     __table_args__ = (
         UniqueConstraint(
             "tenant_id",
-            "agent_config_id",
+            "agent_id",
             "schema_key",
             "version",
             name="uq_tenant_voice_context_schemas_lineage_version",
         ),
-        Index("ix_tenant_voice_context_schemas_tenant_agent", "tenant_id", "agent_config_id"),
+        Index("ix_tenant_voice_context_schemas_tenant_agent", "tenant_id", "agent_id"),
         Index("ix_tenant_voice_context_schemas_tenant_key", "tenant_id", "schema_key"),
         Index("ix_tenant_voice_context_schemas_tenant_status", "tenant_id", "status"),
         Index(
             "uq_tenant_voice_context_schemas_active_lineage",
             "tenant_id",
-            "agent_config_id",
+            "agent_id",
             "schema_key",
             unique=True,
             postgresql_where=sa.text("status = 'active'"),
@@ -35,7 +35,7 @@ class TenantVoiceContextSchema(Base, TimestampMixin):
         Index(
             "uq_tenant_voice_context_schemas_draft_lineage",
             "tenant_id",
-            "agent_config_id",
+            "agent_id",
             "schema_key",
             unique=True,
             postgresql_where=sa.text("status = 'draft'"),
@@ -47,8 +47,11 @@ class TenantVoiceContextSchema(Base, TimestampMixin):
     tenant_id: Mapped[str] = mapped_column(
         ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
     )
-    agent_config_id: Mapped[str] = mapped_column(
-        ForeignKey("tenant_voice_agent_configs.id", ondelete="CASCADE"), nullable=False
+    # Canonical owner: the Agent (never the provider-bound legacy config). A schema that no
+    # Experience references dies with its Agent; a referenced one keeps the Agent undeletable.
+    agent_id: Mapped[str] = mapped_column(
+        ForeignKey("tenant_agents.id", name="fk_tenant_voice_context_schemas_agent", ondelete="CASCADE"),
+        nullable=False,
     )
     schema_key: Mapped[str] = mapped_column(String(80), nullable=False)
     version: Mapped[int] = mapped_column(sa.Integer, nullable=False, default=1)

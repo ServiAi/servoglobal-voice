@@ -9,6 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.modules.agents.public import AgentsFacade
 from app.modules.voice_experiences.application.contracts import Command, View
 
 from app.modules.voice_experiences.infrastructure.context_models import TenantVoiceContextSchema
@@ -25,9 +26,9 @@ from app.modules.voice_experiences.infrastructure.submission_models import (
 from app.modules.identity.public import VOICE_EXPERIENCES, FeatureFlags
 from app.modules.integrations.public import IntegrationEvents
 from app.modules.voice_experiences.domain.limits import VoiceExperienceLimits
-from app.modules.voice_legacy.public import VoiceLegacyFacade
 
 VERSION_CONSTRAINT = "uq_tenant_voice_experience_versions_experience_version"
+EVENT_PROVIDER = "voice_experiences"
 SLUG_CONSTRAINT = "uq_tenant_voice_experiences_slug"
 
 
@@ -59,7 +60,6 @@ class VoiceExperienceService:
         self.db = db
         self.feature_service = FeatureFlags(db)
         self.event_service = IntegrationEvents(db)
-        self.agent_service = VoiceLegacyFacade(db)
         self.agents = AgentsFacade(db)
 
     def list_experiences(self, tenant_id: str) -> list[View]:
@@ -90,10 +90,7 @@ class VoiceExperienceService:
         user_id: str | None,
     ) -> TenantVoiceExperience:
         grant = self.feature_service.require_enabled(tenant_id, VOICE_EXPERIENCES)
-        agent, schema = self._require_relations(
-            tenant_id, body.agent_config_id, body.context_schema_id
-        )
-        binding = self._resolve_agent_binding(tenant_id, body.agent_config_id)
+        schema = self._require_relations(tenant_id, body.agent_id, body.context_schema_id)
         self._validate_callback_settings(body, schema)
         count = self.db.scalar(
             select(func.count(TenantVoiceExperience.id)).where(
@@ -109,7 +106,6 @@ class VoiceExperienceService:
             slug=secrets.token_urlsafe(24),
             status="draft",
             created_by_user_id=user_id,
-            agent_id=binding.agent_id,
             **self._draft_values(body),
         )
         self.db.add(experience)
@@ -120,9 +116,7 @@ class VoiceExperienceService:
             if _matches_constraint(exc, SLUG_CONSTRAINT, "tenant_voice_experiences.slug"):
                 raise VoiceExperienceConflictError("Could not allocate a unique experience slug.") from exc
             raise
-        self._record_event(
-            experience, agent.agent_provider, "voice_experience_created", user_id
-        )
+        self._record_event(experience, "voice_experience_created", user_id)
         self.db.refresh(experience)
         return experience
 
@@ -134,20 +128,16 @@ class VoiceExperienceService:
     ) -> TenantVoiceExperience:
         experience = self.get_experience(tenant_id, experience_id)
         self._ensure_mutable(experience)
-        if body.agent_config_id != experience.agent_config_id and self._has_versions(
+        if body.agent_id != experience.agent_id and self._has_versions(
             experience.id
         ):
             raise VoiceExperienceConflictError(
                 "Voice experience agent cannot change after publication history exists."
             )
-        _, schema = self._require_relations(
-            tenant_id, body.agent_config_id, body.context_schema_id
-        )
-        binding = self._resolve_agent_binding(tenant_id, body.agent_config_id)
+        schema = self._require_relations(tenant_id, body.agent_id, body.context_schema_id)
         self._validate_callback_settings(body, schema)
         for key, value in self._draft_values(body).items():
             setattr(experience, key, value)
-        experience.agent_id = binding.agent_id
         self.db.commit()
         self.db.refresh(experience)
         return experience
@@ -159,8 +149,8 @@ class VoiceExperienceService:
         self._ensure_mutable(experience)
         if experience.status == "published":
             raise VoiceExperienceConflictError("Voice experience is already published.")
-        agent, schema = self._require_relations(
-            tenant_id, experience.agent_config_id, experience.context_schema_id
+        schema = self._require_relations(
+            tenant_id, experience.agent_id, experience.context_schema_id, lock_schema=True
         )
         if schema.status != "active":
             raise VoiceExperienceValidationError("Only an active context schema can be published.")
@@ -171,8 +161,6 @@ class VoiceExperienceService:
             )
         except ValueError as exc:
             raise VoiceExperienceConflictError("agent_binding_changed") from exc
-        if target.legacy_voice_agent_config_id != experience.agent_config_id:
-            raise VoiceExperienceConflictError("agent_binding_changed")
         next_version = (
             self.db.scalar(
                 select(func.max(TenantVoiceExperienceVersion.version)).where(
@@ -186,7 +174,6 @@ class VoiceExperienceService:
             experience_id=experience.id,
             tenant_id=tenant_id,
             version=next_version,
-            agent_config_id=experience.agent_config_id,
             agent_id=target.agent_id,
             agent_version_id=target.agent_version_id,
             context_schema_id=experience.context_schema_id,
@@ -218,7 +205,6 @@ class VoiceExperienceService:
             raise
         self._record_event(
             experience,
-            agent.agent_provider,
             "voice_experience_published",
             user_id,
             {"version": next_version},
@@ -231,17 +217,13 @@ class VoiceExperienceService:
     ) -> TenantVoiceExperience:
         experience = self._locked_experience(tenant_id, experience_id)
         self._ensure_mutable(experience)
-        agent, _ = self._require_relations(
-            tenant_id, experience.agent_config_id, experience.context_schema_id
-        )
+        self._require_relations(tenant_id, experience.agent_id, experience.context_schema_id)
         if experience.status != "published":
             raise VoiceExperienceConflictError("Only a published experience can be unpublished.")
         experience.status = "unpublished"
         experience.published_version_id = None
         self.db.commit()
-        self._record_event(
-            experience, agent.agent_provider, "voice_experience_unpublished", user_id
-        )
+        self._record_event(experience, "voice_experience_unpublished", user_id)
         self.db.refresh(experience)
         return experience
 
@@ -250,9 +232,7 @@ class VoiceExperienceService:
     ) -> TenantVoiceExperience:
         experience = self._locked_experience(tenant_id, experience_id)
         self._ensure_mutable(experience)
-        agent, _ = self._require_relations(
-            tenant_id, experience.agent_config_id, experience.context_schema_id
-        )
+        self._require_relations(tenant_id, experience.agent_id, experience.context_schema_id)
         if experience.status == "published":
             raise VoiceExperienceConflictError(
                 "A published experience must be unpublished before archiving."
@@ -261,9 +241,7 @@ class VoiceExperienceService:
         experience.archived_at = datetime.now(timezone.utc)
         experience.published_version_id = None
         self.db.commit()
-        self._record_event(
-            experience, agent.agent_provider, "voice_experience_archived", user_id
-        )
+        self._record_event(experience, "voice_experience_archived", user_id)
         self.db.refresh(experience)
         return experience
 
@@ -275,15 +253,11 @@ class VoiceExperienceService:
             raise VoiceExperienceConflictError(
                 "Only an archived voice experience can be reactivated."
             )
-        agent, _ = self._require_relations(
-            tenant_id, experience.agent_config_id, experience.context_schema_id
-        )
+        self._require_relations(tenant_id, experience.agent_id, experience.context_schema_id)
         experience.status = "unpublished" if self._has_versions(experience.id) else "draft"
         experience.archived_at = None
         self.db.commit()
-        self._record_event(
-            experience, agent.agent_provider, "voice_experience_unarchived", user_id
-        )
+        self._record_event(experience, "voice_experience_unarchived", user_id)
         self.db.refresh(experience)
         return experience
 
@@ -295,10 +269,7 @@ class VoiceExperienceService:
             raise VoiceExperienceConflictError(
                 "Only archived voice experiences can be deleted."
             )
-        agent, _ = self._require_relations(
-            tenant_id, experience.agent_config_id, experience.context_schema_id
-        )
-        provider = agent.agent_provider
+        self._require_relations(tenant_id, experience.agent_id, experience.context_schema_id)
         submission_ids = select(TenantVoiceExperienceSubmission.id).where(
             TenantVoiceExperienceSubmission.tenant_id == tenant_id,
             TenantVoiceExperienceSubmission.experience_id == experience_id,
@@ -327,7 +298,7 @@ class VoiceExperienceService:
         self.db.commit()
         self.event_service.record(
             tenant_id=tenant_id,
-            provider=provider,
+            provider=EVENT_PROVIDER,
             event_type="voice_experience_deleted",
             status="success",
             resource_type="voice_experience",
@@ -390,9 +361,7 @@ class VoiceExperienceService:
             ) from exc
         self.event_service.record(
             tenant_id=tenant_id,
-            provider=self.agent_service.require_voice_agent_defaults(
-                tenant_id, experience.agent_config_id
-            ).agent_provider,
+            provider=EVENT_PROVIDER,
             event_type="voice_experience_version_deleted",
             status="success",
             resource_type="voice_experience_version",
@@ -462,7 +431,6 @@ class VoiceExperienceService:
     def _record_event(
         self,
         experience: TenantVoiceExperience,
-        provider: str,
         event_type: str,
         user_id: str | None,
         extra_metadata: dict[str, Any] | None = None,
@@ -476,7 +444,7 @@ class VoiceExperienceService:
         metadata.update(extra_metadata or {})
         self.event_service.record(
             tenant_id=experience.tenant_id,
-            provider=provider,
+            provider=EVENT_PROVIDER,
             event_type=event_type,
             status="success",
             resource_type="voice_experience",
@@ -501,35 +469,25 @@ class VoiceExperienceService:
         return experience
 
     def _require_relations(
-        self, tenant_id: str, agent_config_id: str, schema_id: str
-    ):
-        try:
-            agent = self.agent_service.require_voice_agent_defaults(
-                tenant_id, agent_config_id
-            )
-        except ValueError as exc:
-            raise VoiceExperienceNotFoundError(str(exc)) from exc
-        schema = self.db.scalar(
-            select(TenantVoiceContextSchema).where(
-                TenantVoiceContextSchema.id == schema_id,
-                TenantVoiceContextSchema.tenant_id == tenant_id,
-            )
+        self, tenant_id: str, agent_id: str, schema_id: str, *, lock_schema: bool = False
+    ) -> TenantVoiceContextSchema:
+        """The Agent and the Context Schema must exist in the tenant and the schema must belong to
+        that Agent. ``lock_schema`` serialises with schema archive/activation, so a publication
+        freezes exactly the schema row it validated."""
+        if self.agents.get_agent_status(tenant_id, agent_id) is None:
+            raise VoiceExperienceNotFoundError("Voice agent not found.")
+        query = select(TenantVoiceContextSchema).where(
+            TenantVoiceContextSchema.id == schema_id,
+            TenantVoiceContextSchema.tenant_id == tenant_id,
         )
+        schema = self.db.scalar(query.with_for_update() if lock_schema else query)
         if schema is None:
             raise VoiceExperienceNotFoundError("Voice context schema not found.")
-        if schema.agent_config_id != agent.config_id:
+        if schema.agent_id != agent_id:
             raise VoiceExperienceValidationError(
                 "Voice context schema does not belong to the selected voice agent."
             )
-        return agent, schema
-
-    def _resolve_agent_binding(
-        self, tenant_id: str, agent_config_id: str
-    ) -> AgentLegacyBinding:
-        try:
-            return self.agents.resolve_legacy_binding(tenant_id, agent_config_id)
-        except LegacyAgentBindingError as exc:
-            raise VoiceExperienceValidationError(exc.code) from exc
+        return schema
 
     @staticmethod
     def _validate_callback_settings(body, schema) -> None:
@@ -559,7 +517,7 @@ class VoiceExperienceService:
     def _draft_values(body: Command) -> dict:
         payload = body.as_mapping()
         return {
-            "agent_config_id": payload["agent_config_id"],
+            "agent_id": payload["agent_id"],
             "context_schema_id": payload["context_schema_id"],
             "name": payload["name"],
             "default_locale": payload["default_locale"],
@@ -573,7 +531,7 @@ class VoiceExperienceService:
     def response(experience: TenantVoiceExperience) -> View:
         return View(
             id=experience.id,
-            agent_config_id=experience.agent_config_id,
+            agent_id=experience.agent_id,
             context_schema_id=experience.context_schema_id,
             name=experience.name,
             slug=experience.slug,
@@ -598,7 +556,7 @@ class VoiceExperienceService:
             id=version.id,
             experience_id=version.experience_id,
             version=version.version,
-            agent_config_id=version.agent_config_id,
+            agent_id=version.agent_id,
             context_schema_id=version.context_schema_id,
             name=version.name,
             slug=version.slug,
@@ -612,4 +570,3 @@ class VoiceExperienceService:
             can_delete=delete_block_reason is None,
             delete_block_reason=delete_block_reason,
         )
-from app.modules.agents.public import AgentLegacyBinding, AgentsFacade, LegacyAgentBindingError

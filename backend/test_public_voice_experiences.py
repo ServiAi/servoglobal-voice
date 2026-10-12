@@ -48,7 +48,7 @@ class PublicVoiceExperienceTests(Integration2ATestCase):
             db.flush()
             agent.published_version_id = version.id
             db.commit()
-            return config.id
+            return agent.id
 
     def _seed_schema(
         self,
@@ -61,7 +61,7 @@ class PublicVoiceExperienceTests(Integration2ATestCase):
         with SessionLocal() as db:
             schema = TenantVoiceContextSchema(
                 tenant_id=tenant_id or self.tenant.id,
-                agent_config_id=agent_id or self.agent_id,
+                agent_id=agent_id or self.agent_id,
                 schema_key=key,
                 version=1,
                 status=status,
@@ -127,7 +127,7 @@ class PublicVoiceExperienceTests(Integration2ATestCase):
         name: str = "Public experience",
     ) -> dict:
         return {
-            "agent_config_id": self.agent_id,
+            "agent_id": self.agent_id,
             "context_schema_id": schema_id or self.schema_id,
             "name": name,
             "default_locale": "es",
@@ -451,7 +451,7 @@ class PublicVoiceExperienceTests(Integration2ATestCase):
         for forbidden in (
             "tenant_id",
             "experience_id",
-            "agent_config_id",
+            "agent_id",
             "context_schema_id",
             "published_version_id",
             "created_by_user_id",

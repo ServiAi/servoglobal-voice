@@ -74,7 +74,7 @@ class VoiceContextSchemaTests(Integration2ATestCase):
             db.flush()
             agent.published_version_id = version.id
             db.commit()
-            return config.id
+            return agent.id
 
     def _create_schema(
         self,
@@ -122,7 +122,7 @@ class VoiceContextSchemaTests(Integration2ATestCase):
     @staticmethod
     def _experience_payload(schema_id: str, agent_id: str) -> dict:
         return {
-            "agent_config_id": agent_id,
+            "agent_id": agent_id,
             "context_schema_id": schema_id,
             "name": "Customer intake",
             "default_locale": "es",
@@ -400,7 +400,7 @@ class VoiceContextSchemaTests(Integration2ATestCase):
                 [
                     TenantVoiceContextSchema(
                         tenant_id=self.tenant.id,
-                        agent_config_id=self.agent_id,
+                        agent_id=self.agent_id,
                         schema_key="single_active",
                         version=1,
                         status="active",
@@ -408,7 +408,7 @@ class VoiceContextSchemaTests(Integration2ATestCase):
                     ),
                     TenantVoiceContextSchema(
                         tenant_id=self.tenant.id,
-                        agent_config_id=self.agent_id,
+                        agent_id=self.agent_id,
                         schema_key="single_active",
                         version=2,
                         status="active",
@@ -425,7 +425,7 @@ class VoiceContextSchemaTests(Integration2ATestCase):
                 [
                     TenantVoiceContextSchema(
                         tenant_id=self.tenant.id,
-                        agent_config_id=self.agent_id,
+                        agent_id=self.agent_id,
                         schema_key="single_draft",
                         version=1,
                         status="draft",
@@ -433,7 +433,7 @@ class VoiceContextSchemaTests(Integration2ATestCase):
                     ),
                     TenantVoiceContextSchema(
                         tenant_id=self.tenant.id,
-                        agent_config_id=self.agent_id,
+                        agent_id=self.agent_id,
                         schema_key="single_draft",
                         version=2,
                         status="draft",
@@ -716,7 +716,7 @@ class VoiceContextSchemaTests(Integration2ATestCase):
         error = self._integrity_error("unknown_constraint")
         schema = TenantVoiceContextSchema(
             tenant_id=self.tenant.id,
-            agent_config_id=self.agent_id,
+            agent_id=self.agent_id,
             schema_key="unknown_integrity",
             version=1,
             status="archived",
@@ -755,7 +755,7 @@ class VoiceContextSchemaTests(Integration2ATestCase):
         with SessionLocal() as db:
             schema = TenantVoiceContextSchema(
                 tenant_id=tenant_b.id,
-                agent_config_id=agent_b,
+                agent_id=agent_b,
                 schema_key="tenant_b_delete",
                 version=1,
                 status="archived",
@@ -812,7 +812,7 @@ class VoiceContextSchemaTests(Integration2ATestCase):
         with SessionLocal() as db:
             schema = TenantVoiceContextSchema(
                 tenant_id=tenant_b.id,
-                agent_config_id=agent_b,
+                agent_id=agent_b,
                 schema_key="private_schema",
                 version=1,
                 status="draft",

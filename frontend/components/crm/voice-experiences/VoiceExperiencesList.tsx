@@ -32,7 +32,7 @@ import { ActionDialog } from './ActionDialog';
 import { ShareEmbedDialog } from './ShareEmbedDialog';
 import { VoiceExperienceStatusBadge } from './VoiceExperienceStatusBadge';
 import { Button } from '@/components/ui/button';
-import type { VoiceAgentConfigResponse } from '@/types/crm';
+import type { AgentResponse } from '@/types/agents';
 import type {
   VoiceExperienceGateState,
   VoiceExperienceResponse,
@@ -42,7 +42,7 @@ type Props = {
   locale: string;
   canEdit: boolean;
   initialExperiences: VoiceExperienceResponse[];
-  agents: VoiceAgentConfigResponse[];
+  agents: AgentResponse[];
   versionCounts: Record<string, number | null>;
   gateState: VoiceExperienceGateState;
 };
@@ -60,7 +60,7 @@ export function VoiceExperiencesList({
   const [error, setError] = useState<string | null>(null);
   const [copiedExperienceId, setCopiedExperienceId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
-  const agentNames = new Map(agents.map((agent) => [agent.id, agent.display_name]));
+  const agentNames = new Map(agents.map((agent) => [agent.id, agent.name]));
 
   const mutate = (
     experienceId: string,
@@ -240,7 +240,7 @@ export function VoiceExperiencesList({
                     {experience.name}
                   </h2>
                   <p className="mt-1 truncate text-sm text-muted-foreground">
-                    {agentNames.get(experience.agent_config_id) ?? t('list.unknownAgent')}
+                    {agentNames.get(experience.agent_id) ?? t('list.unknownAgent')}
                   </p>
                   <dl className="mt-5 grid grid-cols-2 gap-3 text-xs">
                     <div className="rounded-md bg-muted/45 p-2.5">

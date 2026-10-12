@@ -201,7 +201,9 @@ class TenantVoiceRuntimeCall(Base):
     submission_id: Mapped[str] = mapped_column(ForeignKey("tenant_voice_experience_submissions.id", ondelete="CASCADE"), nullable=False)
     experience_id: Mapped[str] = mapped_column(ForeignKey("tenant_voice_experiences.id"), nullable=False)
     experience_version_id: Mapped[str] = mapped_column(ForeignKey("tenant_voice_experience_versions.id"), nullable=False)
-    agent_config_id: Mapped[str] = mapped_column(ForeignKey("tenant_voice_agent_configs.id"), nullable=False)
+    # Historical evidence only: rows created before PR #138 point at the legacy config that
+    # launched them. Nothing writes or reads it any more (new rows leave it NULL).
+    agent_config_id: Mapped[str | None] = mapped_column(ForeignKey("tenant_voice_agent_configs.id"), nullable=True)
     crm_voice_call_id: Mapped[str] = mapped_column(ForeignKey("crm_voice_calls.id", ondelete="CASCADE"), nullable=False)
     # Explicit rollout discriminator (never inferred from status/provider_call_id): rows created
     # before PR #135 are ``legacy_provider`` and are never promoted to a VoiceSession.

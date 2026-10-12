@@ -14,7 +14,7 @@ const FIELD_KEY_PATTERN = /^[a-z][a-z0-9_]*$/;
 export function createVoiceExperienceDefaults(locale: string): VoiceExperienceWriteRequest {
   const english = locale === 'en';
   return {
-    agent_config_id: '',
+    agent_id: '',
     context_schema_id: '',
     name: '',
     default_locale: english ? 'en' : 'es',
@@ -60,7 +60,7 @@ function requireText(
 
 export function validateVoiceExperience(form: VoiceExperienceWriteRequest): ValidationErrors {
   const errors: ValidationErrors = {};
-  requireText(errors, 'agent_config_id', form.agent_config_id, 36);
+  requireText(errors, 'agent_id', form.agent_id, 36);
   requireText(errors, 'context_schema_id', form.context_schema_id, 36);
   requireText(errors, 'name', form.name, 160);
   requireText(errors, 'content.title', form.content.title, 160);

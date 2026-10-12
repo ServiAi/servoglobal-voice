@@ -17,6 +17,7 @@ from app.modules.agents.infrastructure.models import TenantAgent, TenantAgentVer
 from app.modules.agents.domain.errors import AgentConflictError
 from app.modules.agents.wiring import agent_service
 from app.modules.voice_experiences.application.experience_service import VoiceExperienceService
+from app.modules.voice_experiences.application.context_service import VoiceContextService
 from app.modules.voice_experiences.infrastructure.experience_models import (
     TenantVoiceExperience,
     TenantVoiceExperienceVersion,
@@ -87,14 +88,14 @@ class VoiceExperienceTests(Integration2ATestCase):
             db.flush()
             canonical.published_version_id = version.id
             db.commit()
-            return agent.id
+            return canonical.id
 
     @staticmethod
     def _seed_schema(tenant_id: str, agent_id: str, status: str, key: str) -> str:
         with SessionLocal() as db:
             schema = TenantVoiceContextSchema(
                 tenant_id=tenant_id,
-                agent_config_id=agent_id,
+                agent_id=agent_id,
                 schema_key=key,
                 version=1,
                 status=status,
@@ -131,7 +132,7 @@ class VoiceExperienceTests(Integration2ATestCase):
         title: str = "Talk with us",
     ) -> dict:
         return {
-            "agent_config_id": agent_id or self.agent_id,
+            "agent_id": agent_id or self.agent_id,
             "context_schema_id": schema_id or self.active_schema_id,
             "name": name,
             "default_locale": "es",
@@ -163,16 +164,6 @@ class VoiceExperienceTests(Integration2ATestCase):
         return self.client.post(
             "/api/v1/voice/experiences", json=self._payload(**payload_overrides)
         )
-
-    def _canonical_agent_id(self, legacy_config_id: str) -> str:
-        with SessionLocal() as db:
-            version = (
-                db.query(TenantAgentVersion)
-                .filter(TenantAgentVersion.voice_agent_config_id == legacy_config_id)
-                .first()
-            )
-            assert version is not None
-            return version.agent_id
 
     def _assert_safe_event(self, event_type: str, experience_id: str) -> None:
         with SessionLocal() as db:
@@ -292,7 +283,7 @@ class VoiceExperienceTests(Integration2ATestCase):
             experience = db.get(TenantVoiceExperience, experience_id)
             first = db.get(TenantVoiceExperienceVersion, experience.published_version_id)
             agent = db.get(TenantAgent, first.agent_id)
-            self.assertEqual(first.agent_id, self._canonical_agent_id(self.agent_id))
+            self.assertEqual(first.agent_id, self.agent_id)
             self.assertEqual(first.agent_version_id, agent.published_version_id)
             v1_id = first.agent_version_id
             v1 = db.get(TenantAgentVersion, v1_id)
@@ -350,27 +341,38 @@ class VoiceExperienceTests(Integration2ATestCase):
             db.commit()
             self.assertEqual([item.agent_version_id for item in versions], [v1_id, v2_id])
 
-    def test_publish_rejects_changed_legacy_binding(self) -> None:
+    def test_publish_does_not_read_the_legacy_voice_config_link(self) -> None:
         self._enable_feature()
         response = self._create()
         self.assertEqual(response.status_code, 201, response.text)
-        with SessionLocal() as db:
-            agent_id = self._canonical_agent_id(self.agent_id)
+        with SessionLocal() as db:  # the provider-bound link may be rewritten or cleared freely
             current = (
                 db.query(TenantAgentVersion)
-                .filter(
-                    TenantAgentVersion.agent_id == agent_id,
-                    TenantAgentVersion.status == "published",
-                )
+                .filter(TenantAgentVersion.agent_id == self.agent_id, TenantAgentVersion.status == "published")
                 .one()
             )
-            current.voice_agent_config_id = self.other_agent_id
+            current.voice_agent_config_id = None
             db.commit()
-        result = self.client.post(
-            f"/api/v1/voice/experiences/{response.json()['id']}/publish"
-        )
-        self.assertEqual(result.status_code, 409, result.text)
-        self.assertIn("agent_binding_changed", result.text)
+        result = self.client.post(f"/api/v1/voice/experiences/{response.json()['id']}/publish")
+        self.assertEqual(result.status_code, 200, result.text)
+
+    def test_context_schema_of_another_agent_is_rejected_and_the_version_freezes_its_schema(self) -> None:
+        self._enable_feature()
+        other_schema = self._seed_schema(self.tenant.id, self.other_agent_id, "active", "other_only")
+        mismatched = self._create(schema_id=other_schema)
+        self.assertEqual(mismatched.status_code, 422, mismatched.text)
+
+        experience_id = self._create().json()["id"]
+        published = self.client.post(f"/api/v1/voice/experiences/{experience_id}/publish")
+        self.assertEqual(published.status_code, 200, published.text)
+        with SessionLocal() as db:
+            version = db.query(TenantVoiceExperienceVersion).one()
+            frozen_schema = version.context_schema_id
+            self.assertEqual(frozen_schema, self.active_schema_id)
+            # editing the lineage afterwards forks a NEW row; the published version keeps its own
+            fork = VoiceContextService(db).fork_new_version(self.tenant.id, frozen_schema, self.user.id)
+            self.assertNotEqual(fork.id, frozen_schema)
+            self.assertEqual(db.get(TenantVoiceExperienceVersion, version.id).context_schema_id, frozen_schema)
 
     def test_publish_versions_are_immutable_snapshots_and_unpublish_keeps_history(self) -> None:
         self._enable_feature()
@@ -453,7 +455,7 @@ class VoiceExperienceTests(Integration2ATestCase):
             ),
         )
         self.assertEqual(response.status_code, 200, response.text)
-        self.assertEqual(response.json()["agent_config_id"], self.other_agent_id)
+        self.assertEqual(response.json()["agent_id"], self.other_agent_id)
 
     def test_update_agent_with_history_is_rejected(self) -> None:
         self._enable_feature()
@@ -472,7 +474,7 @@ class VoiceExperienceTests(Integration2ATestCase):
         self.assertEqual(response.status_code, 409, response.text)
         self.assertEqual(
             self.client.get(f"/api/v1/voice/experiences/{experience_id}").json()[
-                "agent_config_id"
+                "agent_id"
             ],
             self.agent_id,
         )
@@ -707,7 +709,7 @@ class VoiceExperienceTests(Integration2ATestCase):
 
         self._enable_feature()
         self.assertEqual(self._create().status_code, 201)
-        agent_id = self._canonical_agent_id(self.agent_id)
+        agent_id = self.agent_id
         with SessionLocal() as db:
             agent = db.get(TenantAgent, agent_id)
             session = VoiceSession(

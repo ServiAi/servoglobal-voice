@@ -353,7 +353,7 @@ class VoiceExperiencesBoundaryTests(unittest.TestCase):
                         )
                     )
 
-    def test_ddl_is_unchanged_from_the_base(self) -> None:
+    def test_ddl_delta_is_exactly_the_canonical_context_schema_control_plane(self) -> None:
         import app.models
         from app.db.base import Base
         from app.modules.voice_experiences.infrastructure import models as voice_models  # noqa: F401
@@ -371,8 +371,30 @@ class VoiceExperiencesBoundaryTests(unittest.TestCase):
         self.assertTrue(ddl)
         base, branch = _base_snapshot()["ddl"], _ddl_snapshot()
         changed = {key for key in base.keys() | branch.keys() if base.get(key) != branch.get(key)}
-        # PR #137 retires the runtime, not the data: no table, column, constraint or index changes.
-        self.assertEqual(changed, set())
+        # PR #138: the Context Schema moves from the legacy config to the Agent and the Experience
+        # tables drop their legacy column; nothing else in the schema changes.
+        self.assertEqual(
+            changed,
+            {
+                "tenant_voice_context_schemas",
+                "tenant_voice_experiences",
+                "tenant_voice_experience_versions",
+                "tenant_voice_runtime_calls",
+                "index:ix_tenant_voice_context_schemas_tenant_agent",
+                "index:uq_tenant_voice_context_schemas_active_lineage",
+                "index:uq_tenant_voice_context_schemas_draft_lineage",
+                "index:ix_tenant_voice_experiences_tenant_agent",
+            },
+        )
+        schemas = Base.metadata.tables["tenant_voice_context_schemas"]
+        self.assertNotIn("agent_config_id", schemas.c)
+        self.assertFalse(schemas.c.agent_id.nullable)
+        self.assertEqual({fk.column.table.name for fk in schemas.c.agent_id.foreign_keys}, {"tenant_agents"})
+        self.assertEqual({fk.ondelete for fk in schemas.c.agent_id.foreign_keys}, {"CASCADE"})
+        for name in ("tenant_voice_experiences", "tenant_voice_experience_versions"):
+            self.assertNotIn("agent_config_id", Base.metadata.tables[name].c)
+        # Historical evidence of pre-#135 launches stays, but nothing is required to write it.
+        self.assertTrue(Base.metadata.tables["tenant_voice_runtime_calls"].c.agent_config_id.nullable)
         crm_calls = Base.metadata.tables["crm_voice_calls"]
         self.assertFalse(crm_calls.c.origin.nullable)
         self.assertIn("crm_outbound", str(crm_calls.c.origin.server_default.arg))
@@ -475,6 +497,31 @@ class VoiceExperiencesBoundaryTests(unittest.TestCase):
                 self.assertIsNone(legacy_launch.search(source), "new launch_runtime=legacy_provider writer")
                 self.assertIsNone(legacy_callback.search(source), "new legacy_voice_experience_callback writer")
 
+    def test_context_schema_control_plane_has_no_agent_config_id_or_legacy_config_dependency(self) -> None:
+        """PR #138: Voice Experiences / Context Schema / runtime resolve the canonical Agent. The only
+        production mention of the retired ``agent_config_id`` is the historical column of the runtime
+        launch ledger (no writer, no reader)."""
+        import re
+
+        pattern = re.compile(r"\bagent_config_id\b")
+        root = MODULE.parent
+        historical = root / "voice_experiences" / "infrastructure" / "submission_models.py"
+        forbidden_names = {"TenantVoiceAgentConfig", "VoiceLegacyFacade"}
+        for module in ("voice_experiences", "voice", "telephony", "tools", "crm", "analytics"):
+            for path in sorted((root / module).rglob("*.py")):
+                text = path.read_text(encoding="utf-8")
+                tree = ast.parse(text)
+                with self.subTest(path=str(path.relative_to(root))):
+                    if path != historical:
+                        self.assertIsNone(pattern.search(text), "agent_config_id")
+                    for imported in _imports(path):
+                        self.assertFalse(imported.startswith("app.modules.voice_legacy"), imported)
+                    used = {node.id for node in ast.walk(tree) if isinstance(node, ast.Name)}
+                    used |= {node.attr for node in ast.walk(tree) if isinstance(node, ast.Attribute)}
+                    used |= {alias.name for node in ast.walk(tree) if isinstance(node, ast.ImportFrom) for alias in node.names}
+                    self.assertFalse(used & forbidden_names, used & forbidden_names)
+        self.assertEqual(len(pattern.findall(historical.read_text(encoding="utf-8"))), 1)  # the one historical column
+
     def test_historical_settlement_is_a_ledger_only_component_not_a_runtime(self) -> None:
         path = MODULE / "application" / "historical_settlement.py"
         source = path.read_text(encoding="utf-8")
@@ -571,14 +618,47 @@ class VoiceExperiencesBoundaryTests(unittest.TestCase):
 
         self.assertTrue(inspect.iscoroutinefunction(public.VoiceCallbackWorkerPort.process_once))
 
-    def test_openapi_is_unchanged_from_the_base(self) -> None:
+    def test_openapi_delta_is_exactly_the_agent_id_rename(self) -> None:
         """PR #136 keeps every public contract: the full OpenAPI (paths, request bodies, responses,
         errors, component schemas) equals the base branch's, generated in this same environment."""
         from app.main import app
 
         base, branch = _base_snapshot()["openapi"], json.loads(json.dumps(app.openapi()))
-        self.assertEqual(branch["paths"], base["paths"])
-        self.assertEqual(branch["components"], base["components"])
+
+        def canonical(value):  # the legacy name, spelled the canonical way
+            return json.loads(json.dumps(value).replace("agent_config_id", "agent_id").replace("Agent Config Id", "Agent Id"))
+
+        legacy_paths = {path for path in base["paths"] if "{agent_config_id}" in path and "context-schemas" in path}
+        self.assertEqual(legacy_paths, {
+            "/api/v1/voice/agents/{agent_config_id}/context-schemas",
+            "/api/v1/voice/agents/{agent_config_id}/context-schemas/{schema_key}/versions",
+        })
+        self.assertEqual(set(branch["paths"]) - set(base["paths"]), {p.replace("agent_config_id", "agent_id") for p in legacy_paths})
+        for path in base["paths"]:
+            if path in legacy_paths:
+                self.assertEqual(canonical(base["paths"][path]), branch["paths"][path.replace("agent_config_id", "agent_id")])
+            else:
+                self.assertEqual(branch["paths"][path], base["paths"][path], path)
+        base_schemas, branch_schemas = base["components"]["schemas"], branch["components"]["schemas"]
+        self.assertEqual(set(branch_schemas), set(base_schemas))
+        renamed = {
+            "VoiceContextSchemaResponse", "VoiceContextSchemaSummaryResponse", "VoiceExperienceResponse",
+            "VoiceExperienceVersionResponse", "VoiceExperienceWriteRequest",
+        }
+        for name in base_schemas:
+            if name in renamed:
+                self.assertEqual(canonical(base_schemas[name]), branch_schemas[name], name)
+            elif name == "VoiceCallActionRequest":  # dead, ignored compatibility field removed
+                expected = json.loads(json.dumps(base_schemas[name]))
+                expected["properties"].pop("agent_config_id")
+                self.assertEqual(expected, branch_schemas[name])
+            else:
+                self.assertEqual(branch_schemas[name], base_schemas[name], name)
+        self.assertEqual(
+            {key: value for key, value in branch["components"].items() if key != "schemas"},
+            {key: value for key, value in base["components"].items() if key != "schemas"},
+        )
+        self.assertNotIn("agent_config_id", json.dumps({n: branch_schemas[n] for n in renamed}))
         self.assertEqual(
             {key: value for key, value in branch.items() if key not in ("paths", "components")},
             {key: value for key, value in base.items() if key not in ("paths", "components")},

@@ -72,7 +72,7 @@ class VoiceContextSchemaMetaUpdateRequest(BaseModel):
 
 class VoiceContextSchemaResponse(BaseModel):
     id: str
-    agent_config_id: str
+    agent_id: str
     schema_key: str
     version: int
     status: SchemaStatus
@@ -87,7 +87,7 @@ class VoiceContextSchemaResponse(BaseModel):
 
 class VoiceContextSchemaSummaryResponse(BaseModel):
     id: str
-    agent_config_id: str
+    agent_id: str
     schema_key: str
     version: int
     status: SchemaStatus

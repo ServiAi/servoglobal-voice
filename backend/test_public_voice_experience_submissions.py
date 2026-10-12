@@ -106,13 +106,13 @@ class PublicVoiceExperienceSubmissionTests(Integration2ATestCase):
             db.flush()
             agent.published_version_id = version.id
             db.commit()
-            return config.id
+            return agent.id
 
     def _seed_schema(self) -> str:
         with SessionLocal() as db:
             schema = TenantVoiceContextSchema(
                 tenant_id=self.tenant.id,
-                agent_config_id=self.agent_id,
+                agent_id=self.agent_id,
                 schema_key="submission-schema",
                 version=1,
                 status="active",
@@ -158,7 +158,7 @@ class PublicVoiceExperienceSubmissionTests(Integration2ATestCase):
 
     def _experience_payload(self) -> dict:
         return {
-            "agent_config_id": self.agent_id,
+            "agent_id": self.agent_id,
             "context_schema_id": self.schema_id,
             "name": "Submission experience",
             "default_locale": "es",
@@ -563,7 +563,7 @@ class PublicVoiceExperienceSubmissionTests(Integration2ATestCase):
             schema.status = "archived"
             alternate = TenantVoiceContextSchema(
                 tenant_id=self.tenant.id,
-                agent_config_id=self.agent_id,
+                agent_id=self.agent_id,
                 schema_key="alternate-schema",
                 version=1,
                 status="active",

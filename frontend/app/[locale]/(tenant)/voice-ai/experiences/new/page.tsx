@@ -4,7 +4,7 @@ import { redirect } from 'next/navigation';
 import { VoiceExperienceBuilder } from '@/components/crm/voice-experiences/VoiceExperienceBuilder';
 import { Button } from '@/components/ui/button';
 import { getAccessToken } from '@/lib/auth/server';
-import { fetchVoiceAgents } from '@/lib/api/crm';
+import { fetchAgents } from '@/lib/api/agents';
 import { fetchMeProfile } from '@/lib/api/me';
 import { canEditVoiceExperiences } from '@/lib/permissions/voice-experiences';
 
@@ -21,7 +21,7 @@ export default async function NewVoiceExperiencePage({
 
   const [profileResult, agentsResult] = await Promise.all([
     fetchMeProfile(accessToken),
-    fetchVoiceAgents(accessToken),
+    fetchAgents(accessToken),
   ]);
   const canEdit = profileResult.ok && canEditVoiceExperiences(profileResult.profile);
   if (!canEdit || !agentsResult.ok || agentsResult.data.length === 0) {

@@ -15,7 +15,6 @@ class TenantVoiceExperience(Base, TimestampMixin):
     __table_args__ = (
         UniqueConstraint("slug", name="uq_tenant_voice_experiences_slug"),
         Index("ix_tenant_voice_experiences_tenant_status", "tenant_id", "status"),
-        Index("ix_tenant_voice_experiences_tenant_agent", "tenant_id", "agent_config_id"),
         Index("ix_tenant_voice_experiences_tenant_agent_id", "tenant_id", "agent_id"),
         Index("ix_tenant_voice_experiences_slug", "slug"),
         sa.CheckConstraint(
@@ -27,9 +26,6 @@ class TenantVoiceExperience(Base, TimestampMixin):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
     tenant_id: Mapped[str] = mapped_column(
         ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
-    )
-    agent_config_id: Mapped[str] = mapped_column(
-        ForeignKey("tenant_voice_agent_configs.id"), nullable=False
     )
     agent_id: Mapped[str] = mapped_column(
         ForeignKey(
@@ -99,9 +95,6 @@ class TenantVoiceExperienceVersion(Base):
         ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
     )
     version: Mapped[int] = mapped_column(sa.Integer, nullable=False)
-    agent_config_id: Mapped[str] = mapped_column(
-        ForeignKey("tenant_voice_agent_configs.id"), nullable=False
-    )
     agent_id: Mapped[str] = mapped_column(
         ForeignKey(
             "tenant_agents.id",

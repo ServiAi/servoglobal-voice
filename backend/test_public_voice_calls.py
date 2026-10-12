@@ -151,7 +151,9 @@ class PublicVoiceCallTests(Integration2ATestCase):
     def _canonical_agent(self) -> tuple[str, str]:
         with SessionLocal() as db:
             version = db.scalars(
-                select(TenantAgentVersion).where(TenantAgentVersion.voice_agent_config_id == self.agent_id)
+                select(TenantAgentVersion).where(
+                    TenantAgentVersion.agent_id == self.agent_id, TenantAgentVersion.status == "published"
+                )
             ).one()
             return version.agent_id, version.id
 
@@ -182,7 +184,28 @@ class PublicVoiceCallTests(Integration2ATestCase):
             },
         )
 
+    def _drop_every_legacy_voice_config(self) -> None:
+        """The provider-bound config rows (and the Agent's link to them) are gone."""
+        from app.models.integrations import TenantVoiceAgentConfig
+
+        with SessionLocal() as db:
+            db.query(TenantAgentVersion).update({TenantAgentVersion.voice_agent_config_id: None})
+            db.query(TenantVoiceAgentConfig).delete()
+            db.commit()
+
     # -- canonical launch ------------------------------------------------------
+
+    def test_public_webrtc_needs_no_legacy_voice_config_and_never_writes_agent_config_id(self) -> None:
+        self._drop_every_legacy_voice_config()
+        response = self._launch(self._token())
+
+        self.assertEqual(response.status_code, 200, response.text)
+        with SessionLocal() as db:
+            runtime = db.scalars(select(TenantVoiceRuntimeCall)).one()
+            self.assertEqual(runtime.launch_runtime, LAUNCH_RUNTIME_CANONICAL)
+            self.assertIsNone(runtime.agent_config_id)  # historical column: new rows never carry it
+            self.assertIsNotNone(runtime.voice_session_id)
+
 
     def test_launch_creates_one_voice_session_and_returns_only_join_credentials(self) -> None:
         agent_id, version_id = self._canonical_agent()
@@ -249,7 +272,7 @@ class PublicVoiceCallTests(Integration2ATestCase):
                 timezone="America/Bogota", identity_json={"name": "Safe agent"},
                 instructions_json={"system_prompt": "v2"}, behavior_json={},
                 runtime_binding_json={"pipeline_type": "realtime", "realtime": {"provider": "ultravox"}},
-                voice_agent_config_id=self.agent_id, published_at=datetime.now(UTC),
+                voice_agent_config_id=v1_row.voice_agent_config_id, published_at=datetime.now(UTC),
             )
             db.add(v2)
             db.flush()

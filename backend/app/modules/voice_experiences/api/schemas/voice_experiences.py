@@ -69,7 +69,7 @@ class VoiceExperienceCallSettings(_StrictModel):
 
 
 class VoiceExperienceWriteRequest(_StrictModel):
-    agent_config_id: str = Field(min_length=1, max_length=36)
+    agent_id: str = Field(min_length=1, max_length=36)
     context_schema_id: str = Field(min_length=1, max_length=36)
     name: str = Field(min_length=1, max_length=160)
     default_locale: str = Field(
@@ -82,7 +82,7 @@ class VoiceExperienceWriteRequest(_StrictModel):
 
 class VoiceExperienceResponse(_StrictModel):
     id: str
-    agent_config_id: str
+    agent_id: str
     context_schema_id: str
     name: str
     slug: str
@@ -102,7 +102,7 @@ class VoiceExperienceVersionResponse(_StrictModel):
     id: str
     experience_id: str
     version: int
-    agent_config_id: str
+    agent_id: str
     context_schema_id: str
     name: str
     slug: str

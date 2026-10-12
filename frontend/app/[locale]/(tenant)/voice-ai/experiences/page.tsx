@@ -5,7 +5,7 @@ import { redirect } from 'next/navigation';
 import { VoiceExperiencesList } from '@/components/crm/voice-experiences/VoiceExperiencesList';
 import { Button } from '@/components/ui/button';
 import { getAccessToken } from '@/lib/auth/server';
-import { fetchVoiceAgents } from '@/lib/api/crm';
+import { fetchAgents } from '@/lib/api/agents';
 import { fetchMeProfile } from '@/lib/api/me';
 import {
   fetchVoiceExperiences,
@@ -32,7 +32,7 @@ export default async function VoiceExperiencesPage({
   const [profileResult, experiencesResult, agentsResult] = await Promise.all([
     fetchMeProfile(accessToken),
     fetchVoiceExperiences(accessToken),
-    fetchVoiceAgents(accessToken),
+    fetchAgents(accessToken),
   ]);
 
   const gateState = resolveVoiceExperienceGateState({

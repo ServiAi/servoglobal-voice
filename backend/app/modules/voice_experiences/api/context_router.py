@@ -68,27 +68,27 @@ def _raise_service_error(exc: Exception) -> NoReturn:
 
 
 @router.get(
-    "/agents/{agent_config_id}/context-schemas",
+    "/agents/{agent_id}/context-schemas",
     response_model=list[VoiceContextSchemaSummaryResponse],
 )
 def list_context_schemas(
-    agent_config_id: str,
+    agent_id: str,
     context: AuthContext = Depends(require_context_read),
     db: Session = Depends(get_db),
 ) -> Any:
     try:
-        return VoiceContextService(db).list_schemas(context.tenant.id, agent_config_id)
+        return VoiceContextService(db).list_schemas(context.tenant.id, agent_id)
     except Exception as exc:
         _raise_service_error(exc)
 
 
 @router.post(
-    "/agents/{agent_config_id}/context-schemas",
+    "/agents/{agent_id}/context-schemas",
     response_model=VoiceContextSchemaResponse,
     status_code=status.HTTP_201_CREATED,
 )
 def create_context_schema(
-    agent_config_id: str,
+    agent_id: str,
     body: VoiceContextSchemaCreateRequest,
     context: AuthContext = Depends(require_context_write),
     db: Session = Depends(get_db),
@@ -96,7 +96,7 @@ def create_context_schema(
     service = VoiceContextService(db)
     try:
         schema = service.create_schema(
-            context.tenant.id, agent_config_id, command_from_model(body), context.user.id
+            context.tenant.id, agent_id, command_from_model(body), context.user.id
         )
         return service.schema_response(schema)
     except Exception as exc:
@@ -104,18 +104,18 @@ def create_context_schema(
 
 
 @router.get(
-    "/agents/{agent_config_id}/context-schemas/{schema_key}/versions",
+    "/agents/{agent_id}/context-schemas/{schema_key}/versions",
     response_model=list[VoiceContextSchemaSummaryResponse],
 )
 def list_context_schema_versions(
-    agent_config_id: str,
+    agent_id: str,
     schema_key: str,
     context: AuthContext = Depends(require_context_read),
     db: Session = Depends(get_db),
 ) -> Any:
     try:
         return VoiceContextService(db).list_versions(
-            context.tenant.id, agent_config_id, schema_key
+            context.tenant.id, agent_id, schema_key
         )
     except Exception as exc:
         _raise_service_error(exc)

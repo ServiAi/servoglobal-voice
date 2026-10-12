@@ -105,7 +105,10 @@ class CanonicalCallbackTests(Integration2ATestCase):
             )
             db.add(provider)
             db.flush()
-            db.get(TenantVoiceAgentConfig, self.agent_id).provider_config_id = provider.id
+            legacy_config_id = db.scalar(
+                select(TenantAgentVersion.voice_agent_config_id).where(TenantAgentVersion.agent_id == self.agent_id)
+            )
+            db.get(TenantVoiceAgentConfig, legacy_config_id).provider_config_id = provider.id
             phone_field = db.scalar(
                 select(TenantVoiceContextField).where(
                     TenantVoiceContextField.schema_id == self.schema_id,
@@ -170,7 +173,9 @@ class CanonicalCallbackTests(Integration2ATestCase):
     def _canonical_agent(self) -> tuple[str, str]:
         with SessionLocal() as db:
             version = db.scalars(
-                select(TenantAgentVersion).where(TenantAgentVersion.voice_agent_config_id == self.agent_id)
+                select(TenantAgentVersion).where(
+                    TenantAgentVersion.agent_id == self.agent_id, TenantAgentVersion.status == "published"
+                )
             ).one()
             return version.agent_id, version.id
 
@@ -235,7 +240,7 @@ class CanonicalCallbackTests(Integration2ATestCase):
                 timezone="America/Bogota", identity_json={"name": "Safe agent"},
                 instructions_json={"system_prompt": "v2"}, behavior_json={},
                 runtime_binding_json={"pipeline_type": "realtime", "realtime": {"provider": "ultravox"}},
-                voice_agent_config_id=self.agent_id, published_at=datetime.now(UTC),
+                voice_agent_config_id=db.get(TenantAgentVersion, v1).voice_agent_config_id, published_at=datetime.now(UTC),
             )
             db.add(v2)
             db.flush()
@@ -429,6 +434,22 @@ class CanonicalCallbackTests(Integration2ATestCase):
         with SessionLocal() as db:
             self.assertEqual(db.scalars(select(VoiceSession)).one().id, crashed_session_id)
             self.assertEqual(db.scalars(select(CrmVoiceCall)).one().status, "answered")
+
+    def test_callback_needs_no_legacy_voice_config(self) -> None:
+        from app.models.integrations import TenantVoiceAgentConfig
+
+        with SessionLocal() as db:
+            db.query(TenantAgentVersion).update({TenantAgentVersion.voice_agent_config_id: None})
+            db.query(TenantVoiceAgentConfig).delete()
+            db.commit()
+        self._accepted_callback()
+        order: list[str] = []
+        sip = FakeSip(order)
+
+        self._run(self._worker(sip, ReadyBackend(order)))
+
+        self.assertEqual(sip.calls, 1)
+        self.assertEqual(self._call().status, "answered")
 
     def test_a_started_sip_attempt_is_never_redialed(self) -> None:
         self._accepted_callback()

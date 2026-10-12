@@ -11,9 +11,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.modules.agents.domain.views import (
+    AgentDisplay,
     AgentEvaluationSnapshot,
     AgentEvaluationSnapshotUnavailableError,
-    AgentDisplay,
+    AgentExperiencePublicationTarget,
     AgentRuntimeTarget,
     AgentRuntimeTargetUnavailableError,
     AgentToolBindingView,
@@ -28,50 +29,9 @@ class AgentQueries:
     def __init__(self, db: Session) -> None:
         self.db = db
 
-    def resolve_legacy_binding(
-        self, tenant_id: str, legacy_voice_agent_config_id: str
-    ) -> AgentLegacyBinding:
-        from app.modules.agents.domain.views import AgentLegacyBinding, LegacyAgentBindingError
-
-        agent_ids = set(
-            self.db.scalars(
-                select(TenantAgent.id)
-                .join(TenantAgentVersion, TenantAgentVersion.agent_id == TenantAgent.id)
-                .where(
-                    TenantAgent.tenant_id == tenant_id,
-                    TenantAgentVersion.tenant_id == tenant_id,
-                    TenantAgentVersion.voice_agent_config_id == legacy_voice_agent_config_id,
-                )
-                .distinct()
-            ).all()
-        )
-        if not agent_ids:
-            raise LegacyAgentBindingError("legacy_agent_binding_not_found")
-        if len(agent_ids) != 1:
-            raise LegacyAgentBindingError("legacy_agent_binding_ambiguous")
-        agent_id = next(iter(agent_ids))
-        status = self.db.scalar(
-            select(TenantAgent.status).where(
-                TenantAgent.id == agent_id, TenantAgent.tenant_id == tenant_id
-            )
-        )
-        if status is None:
-            raise LegacyAgentBindingError("legacy_agent_binding_not_found")
-        return AgentLegacyBinding(
-            tenant_id=tenant_id,
-            agent_id=agent_id,
-            legacy_voice_agent_config_id=legacy_voice_agent_config_id,
-            agent_status=status,
-        )
-
     def lock_experience_publication_target(
         self, tenant_id: str, agent_id: str
     ) -> AgentExperiencePublicationTarget:
-        from app.modules.agents.domain.views import (
-            AgentExperiencePublicationTarget,
-            PublishedAgentUnavailableError,
-        )
-
         agent = self.db.scalar(
             select(TenantAgent)
             .where(TenantAgent.id == agent_id, TenantAgent.tenant_id == tenant_id)
@@ -95,7 +55,6 @@ class AgentQueries:
             tenant_id=tenant_id,
             agent_id=agent.id,
             agent_version_id=version.id,
-            legacy_voice_agent_config_id=version.voice_agent_config_id,
             pipeline_type=runtime.get("pipeline_type"),
             realtime_provider=realtime.get("provider") if isinstance(realtime, dict) else None,
         )
